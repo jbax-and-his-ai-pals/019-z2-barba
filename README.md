@@ -46,6 +46,11 @@ arrows move, **X** jumps, **Z** attacks, **Enter** is Start, and **Left Shift** 
 Select. The launcher uses a separate play profile and persistent saves in
 `build/play-saves/`; automated test settings and temporary saves stay separate.
 
+For instant testing checkpoints, double-click **Test Barba.cmd**. **F1-F7** jump
+to the castle, combat, all-spells sandbox, lava ledge, lava surface, Barba boss,
+and sea crossing. See [the test pack guide](docs/TEST-PACK.md). Test progress uses
+a separate Mesen profile and never overwrites your normal play save.
+
 See [the refined design](docs/DESIGN.md), [build instructions](docs/BUILD.md),
 and [research notes](docs/RESEARCH.md).
 

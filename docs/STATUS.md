@@ -18,6 +18,7 @@ BUILD.md. Hardware sprite limits remain enabled.
 | Banked hitbox routine | Six cases execute assembled 6502 code in Mesen, covering both sides, screen-edge clipping, original vertical boxes, enemy-bank restoration and X preservation |
 | Hazard routine | All six world groups checked: palace groups gain support; other groups retain original water-death state |
 | Roar routine | Inferno consumes the original Thunder state, starts the envelope, and reaches a zero-volume override after 48 updates |
+| Human test pack | Seven native Mesen states generated for the exact build; every state reloads with a visible frame and survives 120 further frames; sea crossing completes on East Hyrule |
 
 Combat and palace scenarios intentionally create controlled fixtures (enemy
 positions or room entry and extra health). They exercise the original game

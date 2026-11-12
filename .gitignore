@@ -9,6 +9,8 @@
 *.sav
 *.srm
 *.state
+*.mss
+*.rgd
 *.mmo
 *.o
 *.pyc
