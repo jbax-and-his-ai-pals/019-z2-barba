@@ -1,0 +1,32 @@
+name: Source checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install assembler
+        run: sudo apt-get update && sudo apt-get install --yes cc65
+      - name: Check build tools
+        run: python -m unittest discover -s tests -v
+      - name: Assemble custom routines and compile original art
+        run: |
+          python - <<'PY'
+          import sys, tempfile
+          from pathlib import Path
+          sys.path.insert(0, 'tools')
+          from build import assemble
+          from assets import compile_assets
+          with tempfile.TemporaryDirectory() as directory:
+              assemble(Path(directory))
+          compile_assets(Path.cwd())
+          PY
+      - name: Ensure no game dumps or saves are tracked
+        run: |
+          files=$(git ls-files '*.nes' '*.fds' '*.sav' '*.srm' 'roms/*' '.tools/*' 'build/*')
+          test -z "$files" || { printf '%s\n' "$files"; exit 1; }

@@ -1,0 +1,14 @@
+{
+  "cc65": {
+    "url": "https://downloads.sourceforge.net/project/cc65/cc65-snapshot-win32.zip",
+    "sha256": "438b91e69273d48b873b503162594c2b402eea1426f42771ac628c142fbb0c6f",
+    "version": "V2.19 - Git eebf54a",
+    "folder": "cc65"
+  },
+  "mesen": {
+    "url": "https://github.com/SourMesen/Mesen2/releases/download/2.1.1/Mesen_2.1.1_Windows.zip",
+    "sha256": "23ccc2bc060b663c68dad3a8c5d6da7d23a50f872d04f135bafa2b04ff7d5cbe",
+    "version": "2.1.1",
+    "folder": "mesen"
+  }
+}

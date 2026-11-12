@@ -22,6 +22,10 @@ Implementation uses checked overlays against the original input. New code
 assembles into documented free space. Every replacement checks original bytes;
 the source hash, changed ranges, and output hash are recorded by the build.
 
+The upstream disassembly is deliberately kept only in the ignored local tools
+folder. This public repository contains the new routines and asset compiler,
+not a repackaged copy of the original game's full disassembled program.
+
 ## Relevant findings
 
 - Bank 0 has an annotated free region at CPU `$AA40` through `$BF6F`.
