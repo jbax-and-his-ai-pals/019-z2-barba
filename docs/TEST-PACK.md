@@ -48,3 +48,8 @@ consumption work normally: no invulnerability or unlimited-magic cheat runs.
 To regenerate manually: `python tools/create_test_pack.py --force`.
 To prepare everything without opening another window:
 `./tools/launch.ps1 -TestPack -PrepareOnly`.
+
+The first version's upgraded checkpoints had a stale next-level XP target and
+could loop in the upgrade menu after a small XP gain. Corrected states recompute
+that target from the ROM's level tables. Reload a freshly installed F2-F7 slot
+to replace an old in-memory checkpoint; this fix does not change normal saves.

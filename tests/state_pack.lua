@@ -25,7 +25,7 @@ local function nextState()
     age=0
 end
 emu.addEventCallback(function()
-    emu.setInput({start=false,select=false,a=false,b=false,up=false,down=false,left=false,right=false},0)
+    emu.setInput({start=index==2 and age>=90 and age<93,select=false,a=false,b=false,up=false,down=false,left=false,right=false},0)
 end,emu.eventType.inputPolled)
 emu.addEventCallback(function()
     frame=frame+1
@@ -34,6 +34,19 @@ emu.addEventCallback(function()
         return
     end
     age=age+1
+    if index==2 then
+        if age==10 then
+            check(r(0x770)*256+r(0x771)==2000,'upgraded combat checkpoint has correct next-level XP target')
+            emu.write(0x775,0,mem);emu.write(0x776,50,mem)
+        end
+        if age==30 then check(r(0x74C)==0,'small XP gain does not open an unaffordable upgrade menu') end
+        if age==40 then emu.write(0x775,7,mem);emu.write(0x776,0xD0,mem) end
+        if age==80 then check(r(0x74C)==1,'affordable XP gain opens level-up menu') end
+        if age==400 then
+            check(r(0x777)==5 and r(0x775)==0 and r(0x776)==0,'accepting upgrade raises attack and spends XP once')
+            check(r(0x74C)==0,'upgrade returns to normal gameplay without looping (dialog='..r(0x74C)..', menu='..r(0x524)..')')
+        end
+    end
     if age==3 then
         check(r(0xB5)==1,ids[index]..' player is alive after load')
         local pixels=emu.getScreenBuffer()
@@ -58,7 +71,7 @@ emu.addEventCallback(function()
         if index==7 then check(r(0x736)==24 and r(0x7A9)>0,'native raft crossing is active') end
     end
     if index==6 and age==90 then screenshot('test-pack-boss-active') end
-    if age==120 then
+    if age==(index==2 and 410 or 120) then
         check(r(0x774)>0 and r(0x76C)~=2,ids[index]..' remains playable for 120 frames')
         if index==7 then check(r(0x706)==2 and r(0x736)==5,'sea crossing ends on East Hyrule overworld') end
         pending=true

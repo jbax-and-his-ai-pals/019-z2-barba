@@ -19,6 +19,7 @@ BUILD.md. Hardware sprite limits remain enabled.
 | Hazard routine | All six world groups checked: palace groups gain support; other groups retain original water-death state |
 | Roar routine | Inferno consumes the original Thunder state, starts the envelope, and reaches a zero-volume override after 48 updates |
 | Human test pack | Seven native Mesen states generated for the exact build; every state reloads with a visible frame and survives 120 further frames; sea crossing completes on East Hyrule |
+| Checkpoint XP regression | Upgraded states now recompute the next-level target; 50 XP stays in gameplay, 2,000 XP permits one attack upgrade and returns to gameplay afterward |
 
 Combat and palace scenarios intentionally create controlled fixtures (enemy
 positions or room entry and extra health). They exercise the original game
@@ -29,6 +30,8 @@ Screenshots and detailed reports are generated in the ignored `build/` folder.
 Audio register/envelope validation is not a listening-quality review.
 
 ## Remaining work before a finished conversion
+
+The ordered next steps and latest human feedback are in [ROADMAP.md](ROADMAP.md).
 
 - Design dedicated up/down flame poses and plume art; currently their original
   damage shapes, unlocks and bounce behavior remain with the dragon body.

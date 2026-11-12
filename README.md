@@ -52,7 +52,7 @@ and sea crossing. See [the test pack guide](docs/TEST-PACK.md). Test progress us
 a separate Mesen profile and never overwrites your normal play save.
 
 See [the refined design](docs/DESIGN.md), [build instructions](docs/BUILD.md),
-and [research notes](docs/RESEARCH.md).
+[research notes](docs/RESEARCH.md), and [the next-work roadmap](docs/ROADMAP.md).
 
 This is an unofficial fan project. Zelda II and its original characters,
 graphics, music, and game data belong to their respective owners.

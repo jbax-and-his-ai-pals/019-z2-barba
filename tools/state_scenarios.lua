@@ -19,6 +19,17 @@ local function upgraded()
     for a=0x785,0x78C do w(a,1)end
     w(0x793,9);w(0x796,0x14)
     w(0x76F,0);w(0x749,7);w(0x74A,0)
+    -- Level edits must refresh the cached XP threshold. Otherwise 50 XP opens
+    -- a menu where no upgrade is affordable, trapping its selection loop.
+    local target=65535
+    for stat=0,2 do
+        local offset=stat*8+r(0x777+stat)
+        local cost=emu.read(0x1658+offset,emu.memType.nesPrgRom)*256
+                  +emu.read(0x1670+offset,emu.memType.nesPrgRom)
+        target=math.min(target,cost)
+    end
+    w(0x775,0);w(0x776,0)
+    w(0x770,math.floor(target/256));w(0x771,target%256)
 end
 local function palace(world,region,number,room,page)
     w(0x707,world);w(0x706,region);w(0x769,world==3 and 3 or 4)

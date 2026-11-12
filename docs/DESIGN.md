@@ -2,18 +2,22 @@
 
 ## Decisions confirmed November 12, 2026
 
-- Compact serpentine Barba, based on the boss's silhouette; no added wings required.
+- Serpentine Barba, based on the boss's silhouette; no added wings required.
 - Keep the original item, spell, palace, and overworld progression.
 - A convincing NES-native roar is sufficient; exact FDS restoration is optional.
 - Standard MMC1 output. No expansion-audio mapper or emulator-specific features.
 
 ## Playable form
 
-Fit the collision body inside Link's original movement footprint. Curled tail,
+The initial alpha fits the collision body inside Link's movement footprint. Curled tail,
 horns, gold underside, and an elongated snout establish Barba's identity.
 Coil/slither on the ground; lift the coil during jumps. Crouch lowers the head
 to the low attack lane. Defensive scales preserve the shield's directional role.
 Retain damage flashing, ducking, recoil, item holds, and death animation coverage.
+
+After the first playtest, closer fidelity to the original boss takes priority
+over keeping the sprite compact. Taller visual and physical bodies are allowed
+subject to clearance and hurtbox tests. See [the current roadmap](ROADMAP.md).
 
 Use a readable 16x16 overworld avatar, with two animation frames per direction.
 Water crossings remain tied to the raft unlock and its existing route; the
@@ -55,6 +59,8 @@ No redesigned palace routes are assumed in the first implementation.
 
 Any true glide is a later movement change requiring a gate/ceiling audit.
 Short menu labels must fit the existing menu; longer names can appear in docs.
+These names are provisional. Keep Scales/Wyrmling where their presentation is
+distinctive; original spell names are acceptable when behavior stays familiar.
 
 ## Audio and bosses
 
