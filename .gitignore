@@ -1,0 +1,19 @@
+# User-supplied game data and generated builds never belong in Git.
+/roms/
+/build/
+/dist/
+/.tools/
+/.cache/
+*.nes
+*.fds
+*.sav
+*.srm
+*.state
+*.mmo
+*.o
+*.pyc
+__pycache__/
+.venv/
+.env
+.env.*
+!.env.example
