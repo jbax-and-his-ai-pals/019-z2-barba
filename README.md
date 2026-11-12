@@ -40,6 +40,12 @@ Open `build/barba.nes` in a standard NES emulator. `build/barba.bps` is the
 source-specific patch; the build validates a complete patch round trip.
 The generated ROM is an alpha for testing, not a completed-game release.
 
+On Windows, double-click **Play Barba.cmd**, or run `./tools/launch.ps1`.
+It rebuilds the alpha and opens it in Mesen automatically. Keyboard controls:
+arrows move, **X** jumps, **Z** attacks, **Enter** is Start, and **Left Shift** is
+Select. The launcher uses a separate play profile and persistent saves in
+`build/play-saves/`; automated test settings and temporary saves stay separate.
+
 See [the refined design](docs/DESIGN.md), [build instructions](docs/BUILD.md),
 and [research notes](docs/RESEARCH.md).
 

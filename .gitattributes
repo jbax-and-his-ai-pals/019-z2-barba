@@ -4,6 +4,7 @@
 *.md text eol=lf
 *.json text eol=lf
 *.ps1 text eol=crlf
+*.cmd text eol=crlf
 *.lua text eol=lf
 *.png binary
 *.bps binary
