@@ -21,11 +21,12 @@ local function base(level)
     allocations=0;slotOneUpdates=0
     w(0x769,0);w(0x736,11);w(0xB5,1);w(0x76F,0x10)
     w(0x74C,0);w(0x524,0);w(0x726,0);w(0x13,0);w(0xDE,0)
-    w(0x777,level);w(0x774,80) -- damaged health must still emit Fire
+    w(0x777,level);w(0x784,4);w(0x774,80) -- damaged health must still emit Fire
     w(0x400,2);w(0x495,1);w(0x50A,5);w(0x17,0);w(0x80,6)
     w(0x9F,1);w(0xCC,100);w(0x29,100)
     w(0x4D,100);w(0x3B,0);w(0x72C,0);w(0x72A,0)
     w(0x8D,0);w(0x8E,0);w(0x5F7,0);w(0x5F8,0)
+    w(0x5FC,0);w(0x5FD,0);w(0x5FE,0);w(0x9D,0x38);w(0x9E,0x40)
 end
 local function fire(name,setup,verify)
     step(name,LABELS.BarbaFireSpell,setup,verify)
@@ -58,6 +59,10 @@ for _,level in ipairs({1,4})do
     for tick=1,24 do
         fire(label..' held '..tick,function()w(0x8D,0);w(0x8E,0)end,nil)
         update(label..' held update '..tick,nil,function()
+            if allocations~=2 then
+                report:write(string.format('TRACE %s held=%d allocations=%d state=%d delay=%d mode=%d attack=%d gate=%d HP=%d max=%d slots=%d,%d flags=%d,%d\n',
+                    label,tick,allocations,r(0x5F8),r(0x5F7),r(0x5FE),r(0x400),r(0x50A),r(0x774),r(0x784),r(0x8D),r(0x8E),r(0x5FC),r(0x5FD)))
+            end
             if tick==24 then check(allocations==2,label..': held attack cannot restart burst after slots free')end
         end)
     end
@@ -107,6 +112,59 @@ for _,test in ipairs(cancelCases)do
     end
 end
 
+-- Full-life volleys start even without spell dispatch. Fire empowers their
+-- damage class; ordinary full-life fireballs keep the original beam class.
+for _,level in ipairs({1,4})do
+    for _,direction in ipairs({1,2})do
+        for _,spell in ipairs({0,0x10})do
+            local name=string.format('full-life Attack %d facing %d Fire=%d',level,direction,spell)
+            local initial=level<4 and 0 or 1
+            update(name..' initial',function()
+                base(level);w(0x774,127);w(0x76F,spell);w(0x9F,direction)
+                -- Cross a world-page boundary to exercise screen-to-world carry.
+                w(0x72C,240);w(0x72A,1)
+            end,function()
+                check(allocations==1 and r(0x5FE)==1 and r(0x5F8)==1,
+                    name..': projectile hook starts full-life mode without spell dispatch')
+                check(r(0x5FC+initial)==1 and r(0x5CA+initial)==(spell==0 and 0xD2 or 0),
+                    name..': Fire spell controls diagonal fireball vulnerability class')
+                check(r(0x7D+initial)==(direction==1 and 0x20 or 0xE0),
+                    name..': horizontal velocity follows facing')
+                check(r(0x36+initial)==r(0x5F3)+2,
+                    name..': first update descends two pixels')
+                local world=r(0x5A+initial)+256*r(0x48+initial)
+                check(world==r(0x5F2)+240+256,name..': shared muzzle preserves world-page carry')
+                local oam=r(0x9D+initial)
+                check(r(0x201+oam)==0x84 and r(0x202+oam)%4==1,
+                    name..': volley renders as orange dragon fire')
+            end)
+            for tick=1,7 do
+                update(name..' continuation '..tick,nil,function()
+                    if tick==7 then
+                        check(allocations==2 and r(0x5F8)==2 and r(0x5FC)==1 and r(0x5FD)==1,
+                            name..': exactly two flagged fireballs after eight updates')
+                        check(r(0x36+initial)==r(0x5F3)+16 and r(0x36+1-initial)==r(0x5F3)+2,
+                            name..': both fireballs descend independently')
+                    end
+                end)
+            end
+            update(name..' bottom boundary',function()
+                w(0x36,0xDF);w(0x37,0xDF)
+            end,function()
+                check(r(0x8D)==0 and r(0x8E)==0 and r(0x5FC)==0 and r(0x5FD)==0,
+                    name..': fireballs and flags clear before wrapping below screen')
+            end)
+        end
+    end
+end
+update('full-life damage cancellation setup',function()
+    base(4);w(0x774,127);w(0x76F,0)
+end,nil)
+update('full-life damage cancellation',function()w(0x774,126)end,function()
+    check(allocations==1 and r(0x5F8)==0 and r(0x5F7)==0,
+        'taking damage cancels pending full-life follow-up without Fire')
+end)
+
 local function nextStep()
     current=current+1
     local test=steps[current]
@@ -123,7 +181,12 @@ local function nextStep()
     emu.setState({['cpu.pc']=0x600,['cpu.sp']=0xFD,['cpu.ps']=0x24})
 end
 emu.addMemoryCallback(function()
-    if running then allocations=allocations+1 end
+    if running then
+        allocations=allocations+1
+        report:write(string.format('ALLOC %s count=%d state=%d delay=%d mode=%d slots=%d,%d X=%d bank=%d\n',
+            steps[current].name,allocations,r(0x5F8),r(0x5F7),r(0x5FE),r(0x8D),r(0x8E),
+            emu.getState()['cpu.x'],emu.getState()['mapper.prgReg']))
+    end
 end,emu.callbackType.exec,0x981B)
 -- Replace updater execution with RTS without modifying ROM. The scheduler
 -- still selects its native update paths, which are counted separately.

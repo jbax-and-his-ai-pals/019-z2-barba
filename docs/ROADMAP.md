@@ -107,3 +107,15 @@ F4/F5 lava and F6 player/boss readability. Then refine the neck/coil and vertica
 flames, give Palace 6 a distinct Ice Barba, and audit elevators, towns, item
 holds, enemy shields, blocks and sprite crowding. Full progression and another
 emulator remain required before calling this a finished conversion.
+
+## Latest battle feedback
+
+Implemented the requested full-life bonus: two downward-diagonal fireballs from
+the mouth replace the straight sword beam. Fire upgrades their vulnerability
+class; below full life the spell retains its horizontal burst. Native two-slot
+limits and attack commitment remain. Tune the angle and burst spacing from
+human feedback before adding more projectile slots.
+
+HUD text shifting was reproduced in the Palace 1 timing fixture. Batched head
+checks and deferred spawning now keep all measured splits on line 31. Continue
+watching crowded rooms; ordinary NES sprite-limit flicker remains separate.

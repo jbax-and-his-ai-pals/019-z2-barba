@@ -1,5 +1,5 @@
 -- Controlled CPU harness for raised-head clearance and extra OAM ownership.
--- Execute the real bank-4 solid predicate through TerrainGateway. Tile $42
+-- Execute the real bank-4 solid predicate through TerrainBatch. Tile $42
 -- is empty and $4C is solid in this area's native false-wall table.
 dofile(TEST_DIR..'/newgame.lua')
 local mem=emu.memType.nesMemory

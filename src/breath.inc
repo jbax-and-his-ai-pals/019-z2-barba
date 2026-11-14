@@ -1,19 +1,34 @@
-; Barba's health-independent breath/projectile integration (BANK0).
+; Barba's melee/Fire/full-life volley integration (BANK0).
 ; BarbaGeometry supplies the attached plume's top-left in screen space and
 ; bit 0 of its validity flags. Both shots sample that geometry at spawn time.
-.export BarbaProjectiles, BarbaFireSpell, BarbaMuzzleScreen
+.export BarbaProjectiles, BarbaFireSpell, BarbaMuzzleScreen, BarbaSpellDeferred
 
 BREATH_MUZZLE_X = $05F2
 BREATH_MUZZLE_Y = $05F3
 BREATH_GEOMETRY_FLAGS = $05F6
 BREATH_BURST_DELAY = $05F7
 BREATH_BURST_STATE = $05F8 ; 0 ready, 1 pending, 2 attempted until attack ends
+VOLLEY_SLOT = $05FC ; two flags; non-Fire full-life projectiles
+BREATH_MODE = $05FE ; 0 Fire spell, 1 full-life diagonal volley
 
-; Native $9847 also creates the full-health sword beam. Its update-only tail
-; retains Fire movement, vulnerability class, disintegration and sound.
+; The spell dispatcher runs before the sprite-zero HUD split. Defer all
+; emission/geometry until BarbaProjectiles, after that timing-critical split.
+BarbaSpellDeferred:
+    rts
+
+; Replace the automatic straight sword beam with a bounded diagonal volley.
+; Native update-only tail retains collision, disintegration and sound.
 BarbaProjectiles:
+    ; Full life restores the beam's original attack gate, now as dragon fire.
+    ; The shared latch prevents repeated shots while an attack is held.
+    jsr BarbaFireSpell
     jsr BarbaBurstAllowed
     bcc @cancel
+    lda BREATH_MODE
+    beq @attack
+    jsr BarbaFullHealth
+    bcc @cancel
+@attack:
     lda $0400
     beq @cancel
     lda BREATH_BURST_STATE
@@ -42,6 +57,7 @@ BarbaProjectiles:
     sta BREATH_BURST_DELAY
     sta BREATH_BURST_STATE
 @update:
+    jsr BarbaAdvanceVolley
     ; Native code ignores slot 1 at Attack 1-3. Update it once here so the
     ; two-shot burst works at every attack level, still with only two slots.
     lda $0777
@@ -50,7 +66,58 @@ BarbaProjectiles:
     ldx #$01
     jsr $9888
 @native_update:
-    jmp $9878
+    jsr $9878
+    txa
+    pha
+    ldx #$01
+@draw:
+    lda VOLLEY_SLOT,x
+    beq @next
+    lda $8D,x
+    beq @next
+    bmi @next
+    ldy $9D,x
+    lda #$84
+    sta $0201,y
+    lda $0202,y
+    and #$C0
+    ora #$01
+    sta $0202,y
+@next:
+    dex
+    bpl @draw
+    pla
+    tax
+    rts
+
+; Native player fire has horizontal motion only. Full-life fireballs descend
+; two pixels per update before native movement/collision/drawing samples them.
+BarbaAdvanceVolley:
+    ldx #$01
+@slot:
+    lda VOLLEY_SLOT,x
+    beq @next
+    lda $8D,x
+    beq @clear
+    bmi @clear
+    lda $36,x
+    clc
+    adc #$02
+    bcs @kill
+    cmp #$E0
+    bcs @kill
+    sta $36,x
+    jmp @next
+@kill:
+    lda #$00
+    sta $8D,x
+@clear:
+    lda #$00
+    sta VOLLEY_SLOT,x
+@next:
+    dex
+    bpl @slot
+    rts
 
 ; Fire's first shot retains the original attack-animation/delay gate and
 ; allocator. A successful initial shot arms a single eight-frame follow-up.
@@ -59,6 +126,22 @@ BarbaFireSpell:
     bcc @done
     lda BREATH_BURST_STATE
     bne @done
+    ; Avoid head probes/bank switches on every idle Fire-spell frame. These
+    ; are the native first-shot gates and run again inside $97F1.
+    lda $0400
+    sec
+    sbc #$01
+    cmp $0495
+    bne @done
+    lda $050A
+    cmp #$05
+    bne @done
+    lda #$00
+    sta BREATH_MODE
+    jsr BarbaFullHealth
+    bcc :+
+    inc BREATH_MODE
+:
     jsr BarbaGeometry
     lda BREATH_GEOMETRY_FLAGS
     and #$01
@@ -112,9 +195,30 @@ BarbaBurstAllowed:
     ora $13
     ora $DE
     bne @no
+    jsr BarbaFullHealth
+    bcs @yes
     lda $076F
     and #$10
     beq @no
+@yes:
+    sec
+    rts
+@no:
+    clc
+    rts
+
+; Carry set only for the game's exact full-life value (containers*32 - 1).
+BarbaFullHealth:
+    lda $0784
+    asl
+    asl
+    asl
+    asl
+    asl
+    sec
+    sbc #$01
+    cmp $0774
+    bne @no
     sec
     rts
 @no:
@@ -145,6 +249,23 @@ BarbaPlaceNewFlame:
     ; Zero timeout means native Fire graphics and Fire-only vulnerability.
     lda #$00
     sta $05CA,x
+    sta VOLLEY_SLOT,x
+    lda BREATH_MODE
+    beq @placed
+    ; Without Fire, retain beam-class damage and its native timeout. Casting
+    ; Fire empowers the same diagonal volley to hit Fire-only enemies.
+    lda $076F
+    and #$10
+    bne :+
+    lda #$D2
+    sta $05CA,x
+:
+    lda #$01
+    sta VOLLEY_SLOT,x
+    ldy $6D,x
+    lda VolleySpeed,y
+    sta $7D,x
+@placed:
     sec
     rts
 @clipped:
@@ -156,3 +277,5 @@ BarbaPlaceNewFlame:
 ; Compatibility entry used by the per-frame diagnostic mirror.
 BarbaMuzzleScreen:
     jmp BarbaGeometry
+VolleySpeed:
+    .byte $00,$20,$E0

@@ -11,6 +11,9 @@ local cases={}
 local report=assert(io.open(OUTPUT_DIR..'/breath-height.txt','w'))
 local muzzleX,muzzleY=0x05F2,0x05F3
 local hit,projectile,fireClass,aligned=false,false,false,false
+local beamClass,descending,horizontal=false,false,false
+local lastShot={}
+local spawns=0
 local previousSlots={0,0}
 local startY=nil
 local jumped,landed,ducked,walked,world=false,false,false,false,false
@@ -43,12 +46,15 @@ local function caseStart(i)
     current=i
     local test=cases[i]
     hit,projectile,fireClass,aligned=false,false,false,false
+    beamClass,descending,horizontal=false,false,false
+    lastShot={}
+    spawns=0
     previousSlots={0,0}
     w(0x5F,test.dir);w(0x9F,test.dir);w(0x70,0);w(0x400,0)
     w(0x76F,test.fire and 0x10 or 0);w(0x774,test.full and 127 or 100);w(0x784,4)
     w(0x777,1);w(0x8D,0);w(0x8E,0);w(0x5CA,0);w(0x5CB,0)
     for address=0xB6,0xBB do w(address,0)end
-    if not test.fire then
+    if not test.fire and not test.full then
         w(0xB6,1);w(0xA1,4);w(0xC2,8);w(0xA8,0);w(0x1A,1)
         w(0x444,0);w(0x40E,0);w(0x518,0)
     end
@@ -83,9 +89,9 @@ local function tick()
         -- The mouth mirror updates during the game frame, so for one tick after
         -- caseStart it can still describe the previous case's facing. Park the
         -- enemy away until it matches; a stale mouth would knock the dragon back.
-        if not test.fire and (elapsed<2 or r(0x9F)~=test.dir) then
+        if not test.fire and not test.full and (elapsed<2 or r(0x9F)~=test.dir) then
             w(0x4E,(r(0x4D)+0x60)%256);w(0x3C,r(0x3B));w(0x2A,0x40)
-        elseif not test.fire then
+        elseif not test.fire and not test.full then
             -- Overlap the visible 8x16 breath sprite that starts at the mouth:
             -- damage must agree with what the player sees.
             local dx=test.dir==1 and 4 or -4
@@ -99,16 +105,36 @@ local function tick()
             local active=r(0x8D+slot)>0 and r(0x8D+slot)<0x80
             if active then projectile=true end
             if active and previousSlots[slot+1]==0 then
+                spawns=spawns+1
                 if r(0x5CA+slot)==0 then fireClass=true end
+                if r(0x5CA+slot)>0 then beamClass=true end
                 local x=r(0x5A+slot)+r(0x48+slot)*256-r(0x72C)-r(0x72A)*256
                 if math.abs(r(0x36+slot)-r(muzzleY))<=8 and math.abs(x-r(muzzleX))<=12 then aligned=true end
             end
+            if active then
+                local x=r(0x5A+slot)+r(0x48+slot)*256
+                local y=r(0x36+slot)
+                local old=lastShot[slot+1]
+                if old and previousSlots[slot+1]>0 then
+                    if y>old.y and y-old.y<=3 then descending=true end
+                    if (test.dir==1 and x>old.x) or (test.dir==2 and x<old.x) then horizontal=true end
+                end
+                lastShot[slot+1]={x=x,y=y}
+            else lastShot[slot+1]=nil end
             previousSlots[slot+1]=active and 1 or 0
         end
         if elapsed==24 then screenshot('breath-case-'..current)end
+        if elapsed==35 and test.full then screenshot('volley-case-'..current)end
         if elapsed==65 then
             local name=string.format('Fire=%s health=%s dir=%d crouch=%s',tostring(test.fire),test.full and 'full' or 'damaged',test.dir,tostring(test.duck))
-            if test.fire then
+            if test.full then
+                check(spawns==2,name..': emits exactly two fireballs')
+                check(projectile and (test.fire and fireClass or (not test.fire and beamClass)),
+                    name..': full-life volley uses spell-appropriate vulnerability class')
+                check(descending and horizontal,name..': fireballs travel downward and forward')
+                check(aligned,name..': volley begins at mouth')
+            elseif test.fire then
+                check(spawns==2,name..': emits exactly two Fire shots')
                 check(projectile and fireClass,name..': emits native Fire projectile')
                 check(aligned,name..': projectile begins at mouth')
             else

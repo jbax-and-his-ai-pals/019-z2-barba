@@ -101,13 +101,12 @@ BarbaInferno:
     sta ROAR_TIMER
     jmp $91E6 ; original Thunder effect, including Thunderbird interaction
 
-; Update projectiles without the full-health sword beam (see breath.inc) and
-; mirror the mouth position for tests. The short roar borrows only noise,
+; Update mouth-anchored breath and diagonal full-life volleys (breath.inc).
+; The short roar borrows only noise,
 ; leaving both pulse melodies and triangle intact. Last frame mutes the noise
 ; override; the game's audio driver resumes control on the following frame.
 BarbaUpdate:
     jsr BarbaProjectiles
-    jsr BarbaMuzzleScreen
     lda ROAR_TIMER
     beq @done
     dec ROAR_TIMER
@@ -158,11 +157,19 @@ HitboxGateway:
     jsr BarbaHitbox
     jmp $FFC9
 
-TerrainGateway:
-    pha
+.segment "TERRAIN"
+; All four corner tiles are collected before swapping. The area's native
+; predicate only changes A/Y, allowing one bank round-trip for the whole head.
+TerrainBatch:
     jsr $FFC9
-    pla
+    ldx #$03
+@corner:
+    lda $04,x
     jsr $850C
+    bcs @result
+    dex
+    bpl @corner
+@result:
     php
     jsr $FFC5
     plp

@@ -63,7 +63,7 @@ def build(source_path: Path, output: Path) -> dict:
     mapping, graphics, ow, _ = compile_assets(ROOT, source_path)
     labels = assemble(output)
     overlay = Overlay(source)
-    for filename, bank, address in [('code', 0, 0xAA40), ('lava', 7, 0xD39A), ('gateway', 7, 0xFEAA)]:
+    for filename, bank, address in [('code', 0, 0xAA40), ('lava', 7, 0xD39A), ('gateway', 7, 0xFEAA), ('terrain', 7, 0xFF4C)]:
         data = (output/f'barba-{filename}.bin').read_bytes()
         overlay.prg(bank, address, data, b'\xFF'*len(data), f'New {filename} routines')
     def hook(bank: int, address: int, label: str, opcode: int, expected: str, pad: int = 0):
@@ -77,8 +77,8 @@ def build(source_path: Path, output: Path) -> dict:
     hook(7, 0xD50D, 'BarbaUpdate', 0x20, '20 47 98')
     dest = labels['BarbaInferno']
     overlay.prg(0, 0x8E56, bytes([dest & 255, dest >> 8]), bytes.fromhex('e6 91'), 'Inferno spell pointer')
-    dest = labels['BarbaFireSpell']
-    overlay.prg(0, 0x8E50, bytes([dest & 255, dest >> 8]), bytes.fromhex('f1 97'), 'Fire spell mouth origin')
+    dest = labels['BarbaSpellDeferred']
+    overlay.prg(0, 0x8E50, bytes([dest & 255, dest >> 8]), bytes.fromhex('f1 97'), 'Defer Fire spawning until after HUD split')
 
     # Keep the raft route and item checks. Return after the new two-sprite avatar.
     overlay.prg(0, 0x81C0, b'\x60', b'\xA9', 'Sea crossing avatar')
@@ -111,6 +111,11 @@ def build(source_path: Path, output: Path) -> dict:
         overlay.put(offset, data, source[offset:offset+7], f'Spell menu: {name}')
 
     target = bytes(overlay.target)
+    # The FF byte at FF4B is the high operand of a live JMP, not filler.
+    # Keep its whole instruction untouched beside the new terrain allocation.
+    anchor = prg_offset(7, 0xFF49)
+    if source[anchor:anchor+3] != bytes.fromhex('4c c5 ff') or target[anchor:anchor+3] != source[anchor:anchor+3]:
+        raise ValueError('Terrain allocation overlaps the native room-loader return')
     if target[:16] != source[:16] or len(target) != len(source):
         raise ValueError('Mapper/header/size invariant failed')
     patch = encode(source, target, 'Zelda II - Barba Edition | development alpha',

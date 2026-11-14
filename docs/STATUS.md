@@ -3,7 +3,7 @@
 This is an initial playable implementation, not a completed total conversion.
 
 The current player uses boss-derived 24x48 poses, a shared mouth position and a
-bounded two-shot Fire burst. Terrain and enemy-contact collision retain the
+bounded two-shot Fire burst and full-life diagonal volley. Terrain and enemy-contact collision retain the
 native body: the raised head is visual, not a newly enlarged hurtbox. Solid
 ceilings fold the head into the original 32px height; crouch occupies 16px.
 The body now keeps the boss's narrow neck silhouette without the added belly
@@ -19,7 +19,7 @@ BUILD.md. Hardware sprite limits remain enabled.
 | --- | --- |
 | Build integrity | Source hash enforced; all replacements guarded; overlapping writes rejected; original header/mapper/size preserved; source unchanged after build |
 | Patch integrity | BPS output reconstructs the generated ROM exactly; wrong source and corrupted patch checksums rejected |
-| ROM-free tool tests | Six unit tests cover binary patch round trips, relocated source references, guards, overlaps, bank offsets and NES 2bpp encoding |
+| ROM-free tool tests | Eight unit tests cover binary patch round trips, relocated source references, guards, overlaps, bank offsets and NES 2bpp encoding |
 | New-game integration | Controller-driven name entry, castle gameplay, standing/crouched attack poses, jump, castle exit and overworld dragon renderer |
 | Enemy damage integration | Four controlled Bot fixtures take damage from horizontal flames: standing/crouched, left/right, below-full health with Fire inactive |
 | Actual palace room | Test enters original Palace 6 room `$33` through the normal room loader, walks into lava, remains supported without sinking, jumps out and returns alive; 112 hazard contacts during the scenario |
@@ -27,8 +27,9 @@ BUILD.md. Hardware sprite limits remain enabled.
 | Hazard routine | All six world groups checked: palace groups gain support; other groups retain original water-death state |
 | Roar routine | Inferno consumes the original Thunder state, starts the envelope, and reaches a zero-volume override after 48 updates |
 | Human test pack | Seven native Mesen states generated for the exact build; every state reloads with a visible frame and survives 120 further frames; sea crossing completes on East Hyrule |
-| Mouth-anchored breath | 16 cases (Fire on/off, full/damaged, left/right, standing/crouched): no automatic beam at any health; enemies take damage on the visible breath; Fire spawns at the mouth. See [BREATH-IMPLEMENTATION.md](BREATH-IMPLEMENTATION.md) |
+| Mouth-anchored breath | 16 cases (Fire on/off, full/damaged, left/right, standing/crouched): full life emits two forward/downward fireballs, Fire supplies horizontal shots below full life, and all shots begin at the mouth; attached breath damage is checked below full life. See [BREATH-IMPLEMENTATION.md](BREATH-IMPLEMENTATION.md) |
 | Tall geometry and renderer | Four-corner native solid probes, lower head row, world-page crossing, edge rejection, ceiling folding, crouch and extra OAM cleanup pass controlled CPU checks |
+| HUD split timing | 900 measured Palace 1 frames keep the split on line 31; previous build reached line 42. No upper-HUD scroll/address writes; native sprite-limit flicker remains possible |
 | Bounded Fire burst | Attack 1/4, eight-update follow-up, two-slot cap, dropped retries, held attack and cancellation states pass scheduling checks |
 | Checkpoint XP regression | Upgraded states now recompute the next-level target; 50 XP stays in gameplay, 2,000 XP permits one attack upgrade and returns to gameplay afterward |
 

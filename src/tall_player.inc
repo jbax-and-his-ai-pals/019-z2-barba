@@ -72,16 +72,12 @@ BarbaGeometry:
     ora $00
     tay
     lda ($0E),y
-    txa
-    pha
-    lda ($0E),y
-    jsr TerrainGateway
-    pla
-    tax
-    bcs @tuck
+    sta $04,x
     inx
     cpx #$04
     bne @probe
+    jsr TerrainBatch
+    bcs @tuck
     lda $29
     sec
     sbc #$0C

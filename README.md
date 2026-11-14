@@ -15,8 +15,11 @@ The local build currently includes:
   and a dedicated 16x16 overworld avatar with directional animation.
 - A two-part horizontal flame plume and a 16x10 melee region, including crouched
   attacks. Enemy damage and Fire-spell vulnerability rules retain their original roles.
-- One breath attack at every health level (no automatic full-health beam).
-  Fire adds a bounded two-shot burst from the same mouth position.
+- Short-range breath at every health level. Full life adds two downward-diagonal
+  fireballs in place of the sword beam. Fire empowers that volley against
+  Fire-only enemies and provides a horizontal two-shot burst below full life.
+- Head checks are batched and spawning runs after the HUD split to keep the
+  status text stable during battles.
 - A fiery attack sound.
 - Palace lava surface support with normal movement and jumping. Water outside
   palaces retains its original death behavior.

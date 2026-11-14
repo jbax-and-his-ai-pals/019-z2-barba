@@ -14,7 +14,7 @@ Press the same key again at any time to restart that test and refill its meters.
 | Key | Checkpoint | What to try |
 | --- | --- | --- |
 | F1 | Starting castle | Normal starting stats. Walk, turn, crouch, jump and attack. |
-| F2 | Palace 1 combat corridor | An enemy is close by. Fight standing and crouched in both directions; below-full health prevents beams from hiding melee problems. |
+| F2 | Palace 1 combat corridor | Fight in both directions. Full life adds diagonal fireballs; after taking damage, check the attached breath alone or cast Fire for ranged flames. |
 | F3 | All spells and techniques | Safe castle, full health/magic, all spells and both thrusts. Inferno is selected: Left Shift casts it. Use Enter for the spell menu; reload F3 to refill or leave the flying form. |
 | F4 | Palace 6 lava ledge | Walk right into the lava, stop, move, jump and return. |
 | F5 | Standing on lava | Already on the lava surface. Check for sinking and test jumps immediately. |
