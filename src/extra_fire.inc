@@ -464,4 +464,3 @@ BarbaExtraBlocks:
     rts
 ExtraOam:
     .byte $3C,$44,$48
-
