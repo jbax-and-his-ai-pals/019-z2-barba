@@ -4,11 +4,12 @@
 ; and an explicit outdoor room. Scripted actors, including walking actors
 ; with these same type numbers, always tail-call the untouched native routine.
 .segment "TOWN"
-.export TownUpdate, TownEligible, TownOutdoorRooms, TownEnd, TownDialog, TownFearText, TownFearPointers
+.export TownUpdate, TownEligible, TownOutdoorRooms, TownEnd, TownDialog, TownFearText, TownFearPointers, TownHide
 
 ; Native generator $96E0 clears AF before initializing each new actor.
 ; We borrow that actor's state only after the positive provenance gate:
-;   $00 normal; $01..$41 native door entry; $80 flee; $C0..$DF burning.
+;   $00 normal; $80 flee; $C0..$DF burning.
+; Old prototype door-entry states $01..$7F are immediately hidden on load.
 ; No extra RAM, persistent quest flags, NPC types, or conversation pointers.
 
 TownUpdate:
@@ -35,7 +36,7 @@ TownUpdate:
     lda $F5
     and #$08
     beq @projectile
-    jsr TownPlayerNearby
+    jsr TownCanTalk
     bcc @projectile
     stx $048B
     lda #$00
@@ -64,25 +65,24 @@ TownUpdate:
     sbc $4D
     lda $3C,x
     sbc $3B
-    lda #$20
+    lda #$10
     bcs @right
-    lda #$E0
+    lda #$F0
 @right:
     sta $71,x
 
 TownFlee:
     jsr $9A68                  ; original fractional movement and walk cycle
-    ; Native townsfolk recognize a real closed doorway by collision tile $8B.
-    ; Only enter a door actually under this actor; never manufacture a door
-    ; pointer or edit a house/quest flag. No door in the escape path: run away.
+    ; $8B is the native closed-door collision tile. Disappear when reaching
+    ; this real doorway, without borrowing the scripted NPC door animation.
+    ; Its entry animation assumes a door owner and can alter the wrong house
+    ; when used by a generated walker. This path never edits background RAM,
+    ; PPU commands, house/quest flags, or native door pointer fields.
     jsr $EA32
     lda $D9
     cmp #$8B
     bne @draw
-    lda #$01
-    sta $AF,x
-    jsr $98A1                  ; native save collision pointer + door position
-    jmp $9A8A
+    jmp TownHide
 @draw:
     ; AF=$80 is custom; native drawing hides AF >= $40. Temporarily render
     ; the normal walking pose, then restore the fleeing state.
@@ -95,20 +95,24 @@ TownFlee:
     rts
 
 TownDoor:
-    ; The native door sequence opens, walks into the house, then closes.
-    ; Finish at $41, immediately after the native $40 collision-door write.
-    ; Do not let its later $70 phase reopen the house and bring the NPC back.
-    jsr $9A8A
-    ldx $10
-    lda $AF,x
-    jsr $98BC
-    ldx $10
-    lda $AF,x
-    cmp #$41
-    bne @done
+    ; Compatibility with a test state saved during the old door animation.
+TownHide:
     lda #$00
     sta $B6,x
-@done:
+    sta $AF,x
+    sta $71,x
+    ldy $91,x
+    lda #$04
+    sta $00
+@sprite:
+    lda #$F8
+    sta $0200,y
+    tya
+    clc
+    adc #$04
+    tay
+    dec $00
+    bne @sprite
     rts
 
 TownBurning:
@@ -116,9 +120,7 @@ TownBurning:
     lda $AF,x
     cmp #$C0
     bne @draw
-    lda #$00
-    sta $B6,x
-    rts
+    jmp TownHide
 @draw:
     ; Reuse the NPC's original four 8x16 sprite slots, not extra OAM. Native
     ; drawing provides screen clipping and positions. Replace only tile and
@@ -229,12 +231,66 @@ TownProjectileHit:
 @next:
     dey
     bpl @slot
+    lda $05FF
+    cmp #$01
+    bne @miss
+    ldy #$20
+@extra:
+    lda $6400,y
+    cmp #$01
+    bne @extra_next
+    lda $6402,y
+    sec
+    sbc $4E,x
+    sta $00
+    lda $6403,y
+    sbc $3C,x
+    sta $01
+    lda $00
+    clc
+    adc #$08
+    sta $00
+    lda $01
+    adc #$00
+    bne @extra_next
+    lda $00
+    cmp #$20
+    bcs @extra_next
+    lda $6401,y
+    sec
+    sbc $2A,x
+    clc
+    adc #$08
+    cmp #$28
+    bcs @extra_next
+    lda #$00
+    sta $6400,y
+    sec
+    rts
+@extra_next:
+    tya
+    sec
+    sbc #$10
+    tay
+    bpl @extra
+@miss:
     clc
     rts
 
-TownPlayerNearby:
-    ; World-space distance, so actors across a scrolling page boundary work.
-    ; Panic radius64 normally,112 during a player attack. Same vertical floor.
+; Do not steal Up from a doorway/transition, jumping or an existing dialogue.
+; Talking requires a closer approach than the radius that triggers panic.
+TownCanTalk:
+    lda $0736
+    cmp #$0B
+    bne @no
+    lda $074C
+    ora $DE
+    ora $0726
+    ora $0479
+    bne @no
+    lda $C8
+    and #$06
+    bne @no
     lda $4E,x
     sec
     sbc $4D
@@ -242,10 +298,43 @@ TownPlayerNearby:
     lda $3C,x
     sbc $3B
     sta $01
-    ldy #$40
+    lda $00
+    clc
+    adc #$10
+    sta $00
+    lda $01
+    adc #$00
+    bne @no
+    lda $00
+    cmp #$21
+    bcs @no
+    lda $2A,x
+    sec
+    sbc $29
+    clc
+    adc #$10
+    cmp #$21
+    bcs @no
+    sec
+    rts
+@no:
+    clc
+    rts
+
+TownPlayerNearby:
+    ; World-space distance, so actors across a scrolling page boundary work.
+    ; Panic radius48 normally,80 during a player attack. Same vertical floor.
+    lda $4E,x
+    sec
+    sbc $4D
+    sta $00
+    lda $3C,x
+    sbc $3B
+    sta $01
+    ldy #$30
     lda $0400
     beq @radius
-    ldy #$70
+    ldy #$50
 @radius:
     tya
     clc

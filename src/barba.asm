@@ -2,6 +2,7 @@
 .setcpu "6502"
 .export BarbaOverworld, BarbaDisplay, BarbaUpdate, BarbaInferno
 .export LavaSurface
+.export EnemyFireGateway, ShieldFireGateway
 
 ROAR_TIMER = $05F0 ; cleared by the original $0500..$05FF reset loop; no original references
 
@@ -71,6 +72,7 @@ RoarPitch:
     .byte $0F,$0F,$0E,$0F,$0D,$0F,$0E,$0C,$0F,$0D,$0B,$0E
 
 .include "breath.inc"
+.include "extra_fire.inc"
 .include "tall_player.inc"
 .include "blocks.inc"
 .include "town.inc"
@@ -93,6 +95,39 @@ LavaSurface:
     lda #$10
     sta $050C
     inc $B5
+    rts
+
+; Execute the original shield handler with its first three bytes restored.
+; Player melee stays disabled, so its melee-only stack escape is unreachable.
+NativeShieldFire:
+    jsr $FFC9
+    lda $C8
+    asl
+    jsr $E61A
+    php
+    jsr $FFC5
+    plp
+    rts
+
+.segment "GATEWAY"
+EnemyFireGateway:
+    jsr $FFC5
+    jsr BarbaEnemyFire
+    jmp $FFC9
+ShieldFireGateway:
+    jsr $FFC5
+    jsr BarbaShieldFire
+    jmp $FFC9
+NativeEnemyFire:
+    jsr $FFC9
+    lda $B6,x
+    cmp #$01
+    bne @done
+    jsr $E491
+@done:
+    php
+    jsr $FFC5
+    plp
     rts
 
 .segment "TERRAIN"

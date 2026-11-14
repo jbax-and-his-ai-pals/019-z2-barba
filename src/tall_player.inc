@@ -92,7 +92,7 @@ BarbaGeometry:
 @duck:
     lda $29
     clc
-    adc #$14
+    adc #$0C
 @mouth_y:
     sta BREATH_MUZZLE_Y
     cmp #$20
@@ -131,9 +131,9 @@ HeadProbeY:
 BarbaDisplay:
     lda #$F8
     sta $0224
-    sta $0228
-    sta $022C
-    sta $0230
+    sta $0204
+    sta $024C
+    sta $02F8
     jsr $EBF0
     ; No sword collision survives the native renderer, including thrust poses.
     lda #$F8
@@ -248,7 +248,7 @@ BarbaDisplay:
     bne @sprite
     rts
 TallOam:
-    .byte $28,$2C,$30,$08,$0C,$10,$14,$18,$1C
+    .byte $04,$4C,$F8,$08,$0C,$10,$14,$18,$1C
 TallMirror:
     .byte 2,1,0,5,4,3,8,7,6
 TallColumn:

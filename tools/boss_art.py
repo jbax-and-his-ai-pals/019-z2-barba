@@ -50,7 +50,7 @@ def _blit(canvas: list[list[str]], rows: list[str], x: int, y: int) -> None:
 def make_frames(rom: bytes, width: int = 24) -> dict[str, list[str]]:
     """Return named pixel-row frames in a 16x48 or 24x48 LEFT-facing canvas.
 
-    Standing muzzle: visual row 11 (origin near x0). Crouched muzzle: row 43.
+    Standing muzzle: visual row 11 (origin near x0). Crouched muzzle: row 35.
     Head is assembled from real boss tiles and resampled only horizontally.
     The narrow continuous body uses the native A0/A2 neck strip throughout.
     The renderer must decide visual-height versus physical collision policy.
@@ -64,7 +64,7 @@ def make_frames(rom: bytes, width: int = 24) -> dict[str, list[str]]:
     def pose(jaw='closed', phase=0, crouch=False, hurt=False) -> list[str]:
         canvas = [['0']*width for _ in range(48)]
         head = resize_x(source_head(rom, jaw), width)
-        head_y = 32 if crouch else 0
+        head_y = 24 if crouch else 0
         # Alternating offsets provide a restrained source-like neck undulation.
         neck_x = width-neck_width
         for y in range(head_y+14, 48):
@@ -74,7 +74,8 @@ def make_frames(rom: bytes, width: int = 24) -> dict[str, list[str]]:
         # Keep the encounter's narrow segmented silhouette all the way to the
         # feet. No added coil or wider belly, including during the jump pose.
         # Draw the native jaw over the neck so its open-mouth silhouette stays
-        # intact. A tucked crouch is just the head in the physical duck lane.
+        # intact. Crouching leaves eight pixels of native neck below the jaw,
+        # retaining the narrow serpentine body rather than a detached head.
         _blit(canvas, head, 0, head_y)
         return [''.join(row) for row in canvas]
 
@@ -131,7 +132,7 @@ def make_study(root: Path = ROOT) -> Path:
     (root/'build/barba-boss-study.json').write_text(json.dumps({
         'order':names,'source_bank_4k':25,'palette_nes':['0F','16','27','30'],
         'native_head_size':[32,16],'head_pairs':HEAD_PAIRS,'neck_pairs':[160,162],
-        'muzzle_rows':{'standing':11,'crouched':43,'tucked':27},
+        'muzzle_rows':{'standing':11,'crouched':35,'tucked':27},
         'note':'Recipe-only source; pixels and previews are generated from the user ROM.'
     },indent=2)+'\n')
     return output

@@ -37,6 +37,9 @@ local function finishCase()
         if shot.classified then classified=classified+1 end
     end
     check(#shots==5,name..': held B emits exactly five shots, count='..#shots)
+    local even=true
+    for n=2,#shots do if shots[n].age-shots[n-1].age~=8 then even=false end end
+    check(even,name..': all five shots have even eight-frame spacing')
     check(aligned==5,name..': all five shots originate at current mouth, count='..aligned)
     check(classified==5 and classStable,name..': Fire class 0 or ordinary class D2 retained')
     check(movingX and movingY,name..': shots move forward and downward')
@@ -60,7 +63,7 @@ local function nextCase()
     w(0x5F,c.dir);w(0x9F,c.dir);w(0x70,0)
     w(0x76F,c.fire and 0x10 or 0);w(0x784,4);w(0x774,c.full and 127 or 100)
     w(0x777,index%2==0 and 4 or 1)
-    for _,address in ipairs({0x5F1,0x5F7,0x5F8,0x5FC,0x5FD,0x5FE})do w(address,0)end
+    for _,address in ipairs({0x5F1,0x5F7,0x5F8,0x5FC,0x5FD,0x5FE,0x5FF})do w(address,0)end
     for address=0xB6,0xBB do w(address,0)end
     report:write('BEGIN '..label()..' Attack='..r(0x777)..'\n');report:flush()
 end

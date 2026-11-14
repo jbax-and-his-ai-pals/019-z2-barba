@@ -25,8 +25,8 @@ def validate_layout(root: Path) -> bytes:
         tiles = [int(token[1:], 16) for token in tokens]
         if any(tile != 0xF5 and (tile % 2 or tile >= 0x64 or tile in {0x32,0x50,0x54}) for tile in tiles):
             raise ValueError(f'Tall layout {name} uses a reserved or invalid body pair')
-        if name in ('crouch', 'crouch-attack') and tiles[:6] != [0xF5]*6:
-            raise ValueError(f'Tall layout {name} exceeds the physical duck lane')
+        if name in ('crouch', 'crouch-attack') and tiles[:3] != [0xF5]*3:
+            raise ValueError(f'Tall layout {name} exceeds the compact crouch lane')
         layout.extend(tiles)
     return bytes(layout)
 
@@ -55,10 +55,13 @@ def compile_assets(root: Path, source_path: Path | None = None) -> tuple[bytes, 
         raise FileNotFoundError('Boss-derived assets require local roms/z2.nes; '
                                 'ROM-free CI should validate src/tall_layout.inc instead')
     named = make_frames(load_source(source_path), 24)
+    for name in ('crouch', 'crouch-attack'):
+        if any(set(row)-{'0'} for row in named[name][:24]):
+            raise ValueError(f'{name} must leave the first 24 canvas rows transparent')
     frames = [named[name] for name in TALL_POSES]
     # Indexed by the vanilla six-sprite record, preserving all nineteen states.
-    # Standing fallback packs the native head and coil into 32px. Duck poses
-    # retain the bottom-only native head; both reuse existing tall-frame pairs.
+    # Standing fallback packs the native head and narrow body into 32px. Duck
+    # poses retain their compact head/neck; both reuse existing tall-frame pairs.
     fallback_names = ('tuck', 'tuck', 'tuck', 'crouch', 'tuck', 'tuck',
                       'crouch-attack', 'crouch', 'crouch-attack', 'up',
                       'tuck', 'tuck', 'tuck', 'tuck', 'down', 'death',
@@ -131,9 +134,9 @@ def compile_assets(root: Path, source_path: Path | None = None) -> tuple[bytes, 
         'weapon_pairs': [0x32, 0x50, 0x54], 'wyrmling_pairs': [0x68, 0x6A],
         'mapping': [list(row) for row in tall_mapping],
         'fallback_mapping_bytes': len(mapping),
-        'muzzle_left_canvas': {'standing': [0,11], 'crouched': [0,43],
+        'muzzle_left_canvas': {'standing': [0,11], 'crouched': [0,35],
                                'tucked': [0,27]},
-        'muzzle_left_actor': {'standing': [0,-5], 'crouched': [0,27],
+        'muzzle_left_actor': {'standing': [0,-5], 'crouched': [0,19],
                               'tucked': [0,11]},
         'note': 'Actor-relative y assumes canvas starts actorY-16; right-facing x mirrors at 23.'
     }, indent=2)+'\n')

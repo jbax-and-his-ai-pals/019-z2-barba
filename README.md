@@ -10,13 +10,13 @@ and targets an ordinary MMC1 cartridge with NES-native audio.
 
 The local build currently includes:
 
-- Thin, boss-derived 24x48 side-view Barba with full-body jumps, jaw animation and ceiling folding,
+- Thin, boss-derived 24x48 side-view Barba with full-body jumps, a compact crouched neck, jaw animation and ceiling folding,
   an 8x16 flying wyrmling,
   and a dedicated 16x16 overworld avatar with directional animation.
-- Five-shot downward-diagonal fireball volleys at every health level, with no
+- Evenly spaced five-shot downward-diagonal volleys at every health level, with no
   sword, thrust damage or attached melee plume. Fire empowers projectile damage
   against Fire-only enemies. Fireballs retain glove-gated block breaking.
-- Random outdoor wanderers flee, enter doors they encounter, or burn briefly
+- Random outdoor wanderers flee at a catchable speed, vanish at existing doors, or burn briefly
   when hit. Indoor and scripted NPCs are protected. Press Up near a wanderer
   for a fearful plea; important characters keep their original conversations.
 - Head checks are batched and spawning runs after the HUD split to keep the

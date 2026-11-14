@@ -63,7 +63,7 @@ def build(source_path: Path, output: Path) -> dict:
     mapping, graphics, ow, _ = compile_assets(ROOT, source_path)
     labels = assemble(output)
     overlay = Overlay(source)
-    for filename, bank, address in [('code', 0, 0xAA40), ('lava', 7, 0xD39A), ('terrain', 7, 0xFF4C), ('town', 3, 0xB803)]:
+    for filename, bank, address in [('code', 0, 0xAA40), ('lava', 7, 0xD39A), ('terrain', 7, 0xFF4C), ('town', 3, 0xB803), ('gateway', 7, 0xFEAA)]:
         data = (output/f'barba-{filename}.bin').read_bytes()
         overlay.prg(bank, address, data, b'\xFF'*len(data), f'New {filename} routines')
     def hook(bank: int, address: int, label: str, opcode: int, expected: str, pad: int = 0):
@@ -75,6 +75,8 @@ def build(source_path: Path, output: Path) -> dict:
     hook(7, 0xE0A4, 'LavaSurface', 0x4C, 'a9 01 85')
     hook(7, 0xD535, 'BarbaBlocks', 0x20, '20 dd e1')
     hook(7, 0xD50D, 'BarbaUpdate', 0x20, '20 47 98')
+    hook(7, 0xE48B, 'EnemyFireGateway', 0x4C, 'b5 b6 c9 01', 1)
+    hook(7, 0xE617, 'ShieldFireGateway', 0x4C, 'a5 c8 0a')
     hook(3, 0xB5F8, 'TownDialog', 0x4C, '0a a8 ad 07 07', 2)
     for address in (0x94BF, 0x94C1, 0x94C3, 0x94C5):
         dest = labels['TownUpdate']

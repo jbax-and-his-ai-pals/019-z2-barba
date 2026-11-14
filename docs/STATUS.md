@@ -5,10 +5,10 @@ This is an initial playable implementation, not a completed total conversion.
 The current player uses boss-derived 24x48 poses, a shared mouth position and a
 five-shot diagonal volley at all health levels. Terrain and enemy-contact collision retain the
 native body: the raised head is visual, not a newly enlarged hurtbox. Solid
-ceilings fold the head into the original 32px height; crouch occupies 16px.
+ceilings fold the head into the original 32px height; crouch draws a 24px compact body over the native 16px physical lane.
 The body now keeps the boss's narrow neck silhouette without the added belly
 coil. Full-body jump rendering is checked during ascent and descent; grounded
-crouching remains compact.
+crouching retains a short neck beneath the head.
 
 ## Verified locally
 
@@ -29,9 +29,10 @@ BUILD.md. Hardware sprite limits remain enabled.
 | Human test pack | Eight native Mesen states generated for the exact build; every state reloads with a visible frame and survives 120 further frames; sea crossing completes on East Hyrule |
 | Tall geometry and renderer | Four-corner native solid probes, lower head row, world-page crossing, edge rejection, ceiling folding, crouch and extra OAM cleanup pass controlled CPU checks |
 | HUD split timing | 900 measured Palace 1 frames keep the split on line 31; previous build reached line 42. No upper-HUD scroll/address writes; native sprite-limit flicker remains possible |
-| Bounded volley | Five shots reuse two slots, continue beyond attack animation, respect the 120-update deadline and require release before rearming |
+| Bounded volley | Five logical slots keep exact eight-update spacing, preserve range, continue beyond attack animation and require release before rearming |
 | Town safety | 1,041 actor/world/room/origin gate cases plus dialogue fallback checks; indoor and scripted actors are excluded |
-| Town gameplay | Native Rauru generator, fleeing, real fireball burn/despawn, scripted-walker survival, fear dialogue and completed refuge-door animation |
+| Town gameplay | Native Rauru generator, fleeing, real fireball burn/despawn, scripted-walker survival, fear dialogue and immediate refuge despawn without background edits |
+| Left-facing and player doors | Busy-original-slot and world-page tests emit five shots; real doorway entry/return works with a nearby villager; F8 uses the correct street room |
 | Checkpoint XP regression | Upgraded states now recompute the next-level target; 50 XP stays in gameplay, 2,000 XP permits one attack upgrade and returns to gameplay afterward |
 
 Combat and palace scenarios intentionally create controlled fixtures (enemy

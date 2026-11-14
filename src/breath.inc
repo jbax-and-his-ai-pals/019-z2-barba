@@ -1,5 +1,5 @@
 ; Five-shot diagonal dragon breath. Runs after the sprite-zero HUD split.
-; Two native slots are reused; movement stays free while the volley drains.
+; Two native slots plus three backed slots preserve range at an even cadence.
 .export BarbaProjectiles, BarbaFireSpell, BarbaMuzzleScreen, BarbaSpellDeferred
 .export BarbaVolleyPlaced
 BREATH_MUZZLE_X = $05F2
@@ -19,6 +19,7 @@ BarbaProjectiles:
     jsr BarbaBurstAllowed
     bcs @allowed
     jsr BarbaCancelBurst
+    jsr BarbaExtraReset
     jmp @update
 @allowed:
     lda BREATH_BURST_STATE
@@ -44,19 +45,7 @@ BarbaProjectiles:
     dec BREATH_BURST_DELAY
     bne @update
 @find:
-    ldx #$01
-@slot:
-    lda $8D,x
-    beq @emit
-    dex
-    bpl @slot
-    ; Retry a full pool next update, bounded by BURST_DEADLINE. Never restart
-    ; the count or consume an unallocated shot.
-    jmp @update
-@emit:
-    clc ; native allocator's first ADC requires a cleared carry
-    jsr $981B
-    jsr BarbaPlaceNewFlame
+    jsr BarbaEmitOne
     bcc @update
     dec BREATH_REMAINING
     beq @cancel
@@ -95,7 +84,23 @@ BarbaProjectiles:
     bpl @draw
     pla
     tax
+    jsr BarbaExtraUpdate
     rts
+
+; The same five-slot allocation path handles both initial and queued shots.
+; Never index the native actor arrays with X >= 2: that aliases player state.
+BarbaEmitOne:
+    ldx #$01
+@slot:
+    lda $8D,x
+    beq @native
+    dex
+    bpl @slot
+    jmp BarbaExtraAllocate
+@native:
+    clc
+    jsr $981B
+    jmp BarbaPlaceNewFlame
 
 BarbaCancelBurst:
     lda #$00
@@ -137,7 +142,7 @@ BarbaAdvanceVolley:
     bpl @slot
     rts
 
-; The initial shot alone uses the native attack/delay gate and allocator.
+; The initial shot alone uses the native attack/delay gate.
 ; Subsequent shots continue after the animation ends, without locking input.
 BarbaFireSpell:
     jsr BarbaBurstAllowed
@@ -159,35 +164,16 @@ BarbaFireSpell:
     lda BREATH_GEOMETRY_FLAGS
     and #$01
     beq @done
-    lda $8D
-    pha
-    lda $8E
-    pha
-    jsr $97F1
-    pla
-    bne @slot_zero
-    lda $8E
-    cmp #$01
-    bne @slot_zero
-    ldx #$01
-    jsr BarbaPlaceNewFlame
-    bcc @slot_zero
-    jsr BarbaArmBurst
-@slot_zero:
-    pla
-    bne @done
-    lda $8D
-    cmp #$01
-    bne @done
-    ldx #$00
-    jsr BarbaPlaceNewFlame
+    jsr BarbaEmitOne
     bcc @done
     jsr BarbaArmBurst
 @done:
     rts
 
 BarbaArmBurst:
-    lda #$08
+    ; Initial emission and scheduler run in the same update. Nine compensates
+    ; for that first decrement, yielding eight full updates between all shots.
+    lda #$09
     sta BREATH_BURST_DELAY
     lda #$04
     sta BREATH_REMAINING

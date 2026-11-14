@@ -11,6 +11,17 @@ local steps,current={},0
 local running,ready=false,false
 local frame=0
 local expectedClass=0
+local updateNumber,shotFrames=0,{}
+local allocatingExtra=false
+local function active(v)return v>0 and v<128 end
+local function poolCount()
+    local count=0
+    for slot=0,1 do if active(r(0x8D+slot))then count=count+1 end end
+    if r(0x5FF)==1 then
+        for record=0x6400,0x6420,0x10 do if active(r(record))then count=count+1 end end
+    end
+    return count
+end
 local function check(ok,message)
     report:write((ok and 'PASS ' or 'FAIL ')..message..'\n');report:flush()
     if not ok then errors=errors+1 end
@@ -21,7 +32,8 @@ end
 local function update(name,setup,verify)step(name,LABELS.BarbaProjectiles,setup,verify)end
 local function fire(name,setup,verify)step(name,LABELS.BarbaFireSpell,setup,verify)end
 local function base(level,health,spell)
-    shots=0;maxSlots=0;expectedClass=spell==0 and 0xD2 or 0
+    shots=0;maxSlots=0;updateNumber=0;shotFrames={};allocatingExtra=false
+    expectedClass=spell==0 and 0xD2 or 0
     w(0x769,0);w(0x736,11);w(0xB5,1);w(0x76F,spell)
     w(0x74C,0);w(0x524,0);w(0x726,0);w(0x13,0);w(0xDE,0)
     w(0x777,level);w(0x784,4);w(0x774,health)
@@ -31,6 +43,8 @@ local function base(level,health,spell)
     w(0x8D,0);w(0x8E,0);w(0x5CA,0);w(0x5CB,0)
     w(0x5F1,0);w(0x5F7,0);w(0x5F8,0)
     w(0x5FC,0);w(0x5FD,0);w(0x5FE,0);w(0x9D,0x38);w(0x9E,0x40)
+    w(0x5FF,0)
+    for a=0x6400,0x642F do w(a,0)end
 end
 for _,level in ipairs({1,4})do
     for _,health in ipairs({80,127})do
@@ -44,13 +58,17 @@ for _,level in ipairs({1,4})do
                     -- The dragon remains free to move/finish its animation.
                     if tick==10 then w(0x400,0)end
                 end,function()
-                    if tick==8 then check(shots==2,name..': second shot at eight-update spacing')end
+                    if tick==9 then check(shots==2,name..': second shot eight updates after first')end
+                    if tick==33 then
+                        check(shots==5 and shotFrames[1]==1 and shotFrames[2]==9 and shotFrames[3]==17
+                            and shotFrames[4]==25 and shotFrames[5]==33,name..': all five shots have uniform eight-update spacing')
+                    end
                     if tick==80 then
                         check(shots==5 and r(0x5FE)==0 and r(0x5F8)==2,
                             name..': finite five-shot volley finishes after attack animation ends')
                     end
                     if tick==100 then
-                        check(shots==5 and maxSlots==2,name..': held B cannot restart; at most two active slots')
+                        check(shots==5 and maxSlots==5,name..': held B cannot restart; five logical slots retain full range')
                     end
                 end)
             end
@@ -63,7 +81,13 @@ end
 fire('blocked pool setup',function()base(1,80,0)end,nil)
 for tick=1,120 do
     update('blocked pool '..tick,function()
-        w(0x8D,1);w(0x8E,1);w(0x5FC,0);w(0x5FD,0)
+        w(0x8D,1);w(0x8E,1);w(0x5FC,255);w(0x5FD,255)
+        w(0x36,100);w(0x37,100);w(0x5FF,1)
+        for index=0,2 do
+            local a=0x6400+index*16
+            w(a,1);w(a+1,100);w(a+2,100);w(a+3,0);w(a+6,1)
+            w(a+7,0xD2);w(a+9,255);w(a+10,({0x3C,0x44,0x48})[index+1])
+        end
     end,function()
         if tick==119 then check(shots==1 and r(0x5F8)==1,'blocked pool remains bounded pending until deadline')end
         if tick==120 then
@@ -73,7 +97,10 @@ for tick=1,120 do
     end)
 end
 for tick=1,20 do
-    update('expired pool cleared '..tick,function()w(0x8D,0);w(0x8E,0)end,function()
+    update('expired pool cleared '..tick,function()
+        w(0x8D,0);w(0x8E,0)
+        for a=0x6400,0x6420,0x10 do w(a,0)end
+    end,function()
         if tick==20 then check(shots==1,'deadline cancellation never retries after slots become free')end
     end)
 end
@@ -82,6 +109,23 @@ update('release B and finish animation',function()w(0xF7,0);w(0x400,0)end,functi
 end)
 update('new B attack',function()w(0xF7,0x40);w(0x400,2);w(0x50A,5)end,function()
     check(shots==2 and r(0x5FE)==4 and r(0x5F8)==1,'fresh attack starts a new finite volley')
+end)
+
+local nativeFields={0x8D,0x36,0x5A,0x48,0x7D,0x6D,0x26,0x5CA,0x3E3,0x5FC,0x9D}
+local nativeBefore={}
+fire('occupied natives initial extra allocation',function()
+    base(1,80,0)
+    local values={1,90,0x55,2,0xE0,2,1,0xD2,0x7B,20,0x38}
+    for i,a in ipairs(nativeFields)do w(a,values[i]);nativeBefore[i]=values[i]end
+    w(0x8E,1)
+    for a=0x238,0x23B do w(a,a%256)end
+end,function()
+    check(shots==1 and r(0x6400)==1 and r(0x5FE)==4,
+        'an occupied native pool starts a new attack in the first extra record')
+    local preserved=true
+    for i,a in ipairs(nativeFields)do if r(a)~=nativeBefore[i]then preserved=false end end
+    for a=0x238,0x23B do if r(a)~=a%256 then preserved=false end end
+    check(preserved and r(0x8E)==1,'extra initial allocation preserves native slot zero, slot one and OAM')
 end)
 
 local cancellations={
@@ -126,6 +170,12 @@ end
 emu.addMemoryCallback(function()
     if running then
         shots=shots+1
+        shotFrames[#shotFrames+1]=updateNumber
+        local count=poolCount()
+        -- During extra allocation, the new shot occupies alias slot zero;
+        -- its original live occupant resides temporarily in the save record.
+        if allocatingExtra and active(r(0x6440))then count=count+1 end
+        maxSlots=math.max(maxSlots,count)
         local slot=emu.getState()['cpu.x']
         check(r(0x5CA+slot)==expectedClass,'shot '..shots..': spell selects vulnerability class')
         check(r(0x5FC+slot)==33 and r(0x7D+slot)==0x20,'shot '..shots..': finite lifetime and diagonal speed')
@@ -134,6 +184,12 @@ emu.addMemoryCallback(function()
             'shot '..shots..': shared muzzle carries across world page')
     end
 end,emu.callbackType.exec,LABELS.BarbaVolleyPlaced)
+emu.addMemoryCallback(function()if running then updateNumber=updateNumber+1 end end,
+    emu.callbackType.exec,LABELS.BarbaProjectiles)
+emu.addMemoryCallback(function()if running then allocatingExtra=false end end,
+    emu.callbackType.exec,LABELS.BarbaEmitOne)
+emu.addMemoryCallback(function()if running then allocatingExtra=true end end,
+    emu.callbackType.exec,LABELS.BarbaExtraAllocate)
 -- Native updates are parked without changing the ROM. Our real lifetime and
 -- vertical movement still execute before this update-only native tail.
 emu.addMemoryCallback(function()
@@ -144,9 +200,7 @@ emu.addMemoryCallback(function()
 end,emu.callbackType.exec,0x9888)
 emu.addMemoryCallback(function()
     if running then
-        local active=0
-        for slot=0,1 do if r(0x8D+slot)>0 and r(0x8D+slot)<128 then active=active+1 end end
-        maxSlots=math.max(maxSlots,active)
+        maxSlots=math.max(maxSlots,poolCount())
         local test=steps[current]
         if test.verify then test.verify()end
         nextStep()

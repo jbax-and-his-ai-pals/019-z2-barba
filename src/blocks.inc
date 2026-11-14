@@ -1,7 +1,10 @@
 ; Reuse the native glove-gated breakable-block handler at each live fireball,
 ; never at Barba's body. This keeps block gates usable after retiring melee.
-.export BarbaBlocks
+.export BarbaBlocks, BarbaNativeBlocks
 BarbaBlocks:
+    jsr BarbaNativeBlocks
+    jmp BarbaExtraBlocks
+BarbaNativeBlocks:
     lda $80
     pha
     lda $047E

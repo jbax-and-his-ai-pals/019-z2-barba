@@ -133,3 +133,13 @@ inside until room reset. Up opens a fearful plea. Indoor/scripted NPCs retain
 normal behavior and cannot be burned. Casualties are not persistent. Next town
 work is broader street/door/quest interaction review and more dialogue variety;
 there is no town reputation system or permanent population loss yet.
+
+## Current playtest fixes
+
+Crouch now includes a short segmented body. Five logical projectile slots
+replace the two-slot cadence bottleneck, preserving range while firing every
+eight updates. Left-facing occupied-slot and page-crossing checks pass.
+Wanderers flee at one pixel per update, panic at a smaller radius, and despawn
+immediately at existing doors without touching background tiles. Close Up
+conversations respect transitions. F8 uses the real Rauru street; player house
+entry and return are tested. Older checkpoints must be regenerated.

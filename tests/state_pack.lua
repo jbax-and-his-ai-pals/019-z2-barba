@@ -74,7 +74,7 @@ emu.addEventCallback(function()
             for slot=0,5 do
                 if r(0xB6+slot)==1 and r(0xBC+slot)==255 then random=true end
             end
-            check(r(0x736)==11 and r(0x707)==1 and r(0x561)==0 and random,
+            check(r(0x736)==11 and r(0x707)==1 and r(0x561)==1 and random,
                 'town checkpoint contains a native generated outdoor wanderer')
         end
     end

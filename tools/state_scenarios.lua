@@ -58,7 +58,7 @@ local scenes={
         w(0x7A9,0);w(0x7AA,0);w(0x7AC,0);w(0x7AD,0);w(0x726,1)
     end},
     {id='town',name='Rauru town street',frames=180,setup=function()
-        upgraded();w(0x707,1);w(0x706,0);w(0x769,3);w(0x561,0)
+        upgraded();w(0x707,1);w(0x706,0);w(0x769,3);w(0x561,1)
         w(0x701,0);w(0x75C,0);w(0x704,0);w(0x736,0);w(0x73D,0);w(0x726,1)
     end,capture=function()
         for slot=0,5 do

@@ -12,7 +12,7 @@ local function check(ok,msg)
 end
 local function fullBody()
     local head,tail=false,false
-    for _,a in ipairs({0x228,0x22C,0x230})do if r(a)<0xF0 then head=true end end
+    for _,a in ipairs({0x204,0x24C,0x2F8})do if r(a)<0xF0 then head=true end end
     for _,a in ipairs({0x214,0x218,0x21C})do if r(a)<0xF0 then tail=true end end
     return head and tail
 end

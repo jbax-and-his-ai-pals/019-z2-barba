@@ -20,7 +20,7 @@ Press the same key again at any time to restart that test and refill its meters.
 | F5 | Standing on lava | Already on the lava surface. Check for sinking and test jumps immediately. |
 | F6 | Palace 6 Barba encounter | Original Barba is above the lava. Test player/boss graphics, attacks and movement around the platforms. Ice Barba is not implemented. |
 | F7 | Sea crossing in progress | Watch the dragon complete the normal raft route to East Hyrule. Reload F7 to repeat. |
-| F8 | Rauru town street | Approach outdoor wanderers, watch fleeing/door entry, and test fireballs. Press Up nearby for fear dialogue. Scripted and indoor NPCs are protected. |
+| F8 | Rauru town street | Approach outdoor wanderers, watch slower fleeing/immediate door despawn, and test fireballs. Press Up nearby for fear dialogue. Scripted and indoor NPCs are protected. |
 
 Controls: arrows move, **X** jumps, **Z** attacks, **Enter** starts/pauses, and
 **Left Shift** is Select/cast. State-load keys work independently of the game menu.
@@ -54,3 +54,7 @@ The first version's upgraded checkpoints had a stale next-level XP target and
 could loop in the upgrade menu after a small XP gain. Corrected states recompute
 that target from the ROM's level tables. Reload a freshly installed F2-F7 slot
 to replace an old in-memory checkpoint; this fix does not change normal saves.
+
+The town checkpoint now uses Rauru's normal street room rather than its
+lookalike entrance copy. Load the newly prepared F8 state; old snapshots can
+retain fake door tiles made by the retired villager animation.
