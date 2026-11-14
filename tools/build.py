@@ -42,7 +42,7 @@ def assemble(output: Path) -> dict[str, int]:
         if not result:
             raise ValueError(f'{name} is missing. Install cc65; see docs/BUILD.md.')
         return result
-    subprocess.run([find('ca65'), str(ROOT/'src/barba.asm'), '-g', '-o', 'barba.o'], cwd=output, check=True)
+    subprocess.run([find('ca65'), str(ROOT/'src/barba.asm'), '-I', str(ROOT/'src'), '-g', '-o', 'barba.o'], cwd=output, check=True)
     subprocess.run([find('ld65'), '-C', str(ROOT/'src/barba.cfg'), 'barba.o',
                     '-Ln', 'barba.lbl', '-m', 'barba.map', '--dbgfile', 'barba.dbg'], cwd=output, check=True)
     labels = {}
@@ -74,6 +74,8 @@ def build(source_path: Path, output: Path) -> dict:
     hook(7, 0xD50D, 'BarbaUpdate', 0x20, '20 47 98')
     dest = labels['BarbaInferno']
     overlay.prg(0, 0x8E56, bytes([dest & 255, dest >> 8]), bytes.fromhex('e6 91'), 'Inferno spell pointer')
+    dest = labels['BarbaFireSpell']
+    overlay.prg(0, 0x8E50, bytes([dest & 255, dest >> 8]), bytes.fromhex('f1 97'), 'Fire spell mouth origin')
 
     # Keep the raft route and item checks. Return after the new two-sprite avatar.
     overlay.prg(0, 0x81C0, b'\x60', b'\xA9', 'Sea crossing avatar')

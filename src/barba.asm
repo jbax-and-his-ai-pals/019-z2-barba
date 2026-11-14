@@ -148,11 +148,13 @@ BarbaInferno:
     sta ROAR_TIMER
     jmp $91E6 ; original Thunder effect, including Thunderbird interaction
 
-; Preserve the normal projectile update. The short roar borrows only noise,
+; Update projectiles without the full-health sword beam (see breath.inc) and
+; mirror the mouth position for tests. The short roar borrows only noise,
 ; leaving both pulse melodies and triangle intact. Last frame mutes the noise
 ; override; the game's audio driver resumes control on the following frame.
 BarbaUpdate:
-    jsr $9847
+    jsr BarbaProjectiles
+    jsr BarbaMuzzleScreen
     lda ROAR_TIMER
     beq @done
     dec ROAR_TIMER
@@ -172,6 +174,8 @@ RoarVolume:
     .byte $30,$32,$34,$35,$36,$38,$39,$3A,$3C,$3D,$3F,$3B
 RoarPitch:
     .byte $0F,$0F,$0E,$0F,$0D,$0F,$0E,$0C,$0F,$0D,$0B,$0E
+
+.include "breath.inc"
 
 .segment "LAVA"
 ; Only palace groups use this new path. Water outside palaces retains its

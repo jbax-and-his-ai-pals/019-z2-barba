@@ -56,6 +56,7 @@ python tools/emulator_test.py tests/gameplay.lua
 python tools/emulator_test.py tests/combat.lua
 python tools/emulator_test.py tests/palace.lua
 python tools/emulator_test.py tests/routines.lua
+python tools/emulator_test.py tests/breath_height.lua
 ```
 
 The runner saves screenshots and logs locally. It does not open a GUI.

@@ -14,7 +14,9 @@ The local build currently includes:
   and a dedicated 16x16 overworld avatar with directional animation.
 - A two-part horizontal flame plume and a 22x10 melee region, including crouched
   attacks. Enemy damage and Fire-spell vulnerability rules retain their original roles.
-- Faster ranged shots and a fiery attack sound.
+- One breath attack at every health level (no automatic full-health beam).
+  Fire upgrades it with faster ranged flames that leave Barba's mouth.
+- A fiery attack sound.
 - Palace lava surface support with normal movement and jumping. Water outside
   palaces retains its original death behavior.
 - Dragon spell menu names and a short native noise-channel roar on Inferno.

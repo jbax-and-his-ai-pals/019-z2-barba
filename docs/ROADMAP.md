@@ -48,6 +48,10 @@ readable and navigable in the castle, combat corridor, lava and boss checkpoints
 
 ## 3. Rebuild the attack around Barba's mouth
 
+**In progress:** the automatic full-health beam is gone and Fire projectiles now
+spawn from a tunable mouth table ([details](BREATH-IMPLEMENTATION.md)). Still
+open: boss-derived windup/flare, plume art for the chosen sprite, any burst.
+
 Study the original boss's firing animation, spacing and projectile paths in F6.
 Prototype a short attached plume and a compact fireball burst against that
 reference before settling the combat feel.
@@ -91,7 +95,18 @@ ending behavior. Complete a full playthrough and a second-emulator check.
 
 ## Suggested next work
 
-With the checkpoint XP bug corrected, start milestone 2: a boss-derived Barba
-sprite study with two height options. Use its chosen mouth position for the
-milestone 3 breath prototype. Keep the current alpha and checkpoint recipe as
-the comparison baseline; do not quietly replace the combat model during art study.
+Fresh review, November 14: the first attack integration is playable and passes
+the 16-case health/Fire/facing/stance regression. Automatic full-health beams
+are suppressed; Fire uses a mouth-relative projectile origin. This does not yet
+implement the original boss's timed volley or a new tall player renderer.
+
+The boss-derived sprite study is available through `python tools/boss_art.py`.
+Its 24x48 version preserves substantially more facial detail than 16x48. Treat
+it as a study: improve the head/neck join, coil and vertical poses before use.
+
+Next implementation target: integrate a 24x48 normal-pose renderer, preserving
+the current physical movement box initially and documenting that distinction.
+Add a shared mouth calculation for drawing, melee and ranged shots, and check
+ceiling/head clipping before making the physical body taller. Then add the
+boss-derived jaw windup and bounded Fire volley. Keep the pre-change build and
+its matching checkpoints available for comparison.
