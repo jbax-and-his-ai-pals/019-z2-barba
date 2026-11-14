@@ -6,7 +6,7 @@ import json
 import shutil
 import subprocess
 from pathlib import Path
-from assets import compile_assets
+from assets import ASH_TILES, SHOUT_GLYPH_BANK, SHOUT_PAIR_SHA256, compile_assets, compile_shout_glyphs
 from bps import apply, encode
 from nes import CHR_OFFSET, SOURCE_SHA256, load_source, prg_offset
 
@@ -92,6 +92,9 @@ def build(source_path: Path, output: Path) -> dict:
     # Keep the raft route and item checks. Return after the new two-sprite avatar.
     overlay.prg(0, 0x81C0, b'\x60', b'\xA9', 'Sea crossing avatar')
     overlay.prg(0, 0x814F, b'\x1E', b'\x10', 'Dedicated overworld CHR pair')
+    # Vanilla Link's art sits left in its 16px box, so the game draws him at X=$84.
+    # Barba's overworld art is centered: draw at $80 so he sits on the tile.
+    overlay.prg(0, 0x8727, b'\x80', b'\x84', 'Center overworld dragon on tile')
     overlay.prg(0, 0x960B, bytes.fromhex('a9 40 85 ed'), bytes.fromhex('a9 20 85 ed'), 'Flame attack sound')
     overlay.prg(0, 0x9819, bytes.fromhex('30 d0'), bytes.fromhex('20 e0'), 'Faster ranged flame')
 
@@ -99,8 +102,22 @@ def build(source_path: Path, output: Path) -> dict:
     overlay.put(offset, mapping, source[offset:offset+len(mapping)], 'Dragon animation metasprites')
     for bank in range(0, 26, 2):
         for tile, pair in graphics.items():
+            # Ash is town-only (sprite bank 6). Tiles $64/$66 are shared sprites in
+            # the other banks (palaces, caves), so leave those untouched.
+            if tile in ASH_TILES and bank != 6:
+                continue
             offset = CHR_OFFSET + bank*4096 + tile*16
             overlay.put(offset, pair, source[offset:offset+32], f'CHR {bank:02X}: dragon tile {tile:02X}')
+    # Villager shout words: town CHR bank 7 only (odd 8x16 sprite tiles).
+    glyphs = compile_shout_glyphs(ROOT, source)
+    if set(glyphs) != set(SHOUT_PAIR_SHA256):
+        raise ValueError('Shout glyph pairs differ from the audited allocation')
+    for pair, data in sorted(glyphs.items()):
+        offset = CHR_OFFSET + SHOUT_GLYPH_BANK*4096 + pair*16
+        original = source[offset:offset+32]
+        if hashlib.sha256(original).hexdigest()[:16] != SHOUT_PAIR_SHA256[pair]:
+            raise ValueError(f'Shout glyph pair {pair:02X} is not the audited original')
+        overlay.put(offset, data, original, f'CHR {SHOUT_GLYPH_BANK:02X}: shout glyph pair {pair:02X}')
     # Last two CHR banks are filler in the guarded input; dedicate them to overworld.
     world = bytearray(source[CHR_OFFSET+16*4096:CHR_OFFSET+18*4096])
     world[:len(ow)] = ow

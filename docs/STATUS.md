@@ -36,6 +36,7 @@ BUILD.md. Hardware sprite limits remain enabled.
 | Passive panic text | Real PPU text appears within six frames without dialogue locks; automatically clears, preserves native queue prefixes and stays within 32 queued bytes |
 | Panic dialogue speed | Holding Up catches a fleeing villager; protected-NPC delays and caller registers retain original behavior |
 | Checkpoint XP regression | Upgraded states now recompute the next-level target; 50 XP stays in gameplay, 2,000 XP permits one attack upgrade and returns to gameplay afterward |
+| Battle performance | `perf_volley.lua` (Palace 1 corridor, repeated volleys): lag frames 137 -> 0 of 900; peak NMI work 29.6k cycles. Vanilla on the same fixture: 0 lag, peak 26.6k. Frames with >8 sprites on a line: 131 (vanilla sword play: 112) |
 
 Combat and palace scenarios intentionally create controlled fixtures (enemy
 positions or room entry and extra health). They exercise the original game

@@ -404,6 +404,11 @@ TownRequestShout:
     sec
     sbc #$18
     sta SHOUT_REQUEST
+    ; The same villager also carries a short sprite word (shouts.inc).
+    sta SHOUT_WORD
+    stx SHOUT_SLOT
+    lda #SHOUT_WORD_TIME
+    sta SHOUT_WORD_TIMER
 @done:
     rts
 

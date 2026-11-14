@@ -45,6 +45,8 @@ BarbaProjectiles:
     dec BREATH_BURST_DELAY
     bne @update
 @find:
+    jsr BarbaLoadOk
+    bcc @update ; busy room: hold this shot; the 120-update deadline still applies
     jsr BarbaEmitOne
     bcc @update
     dec BREATH_REMAINING
@@ -101,6 +103,53 @@ BarbaEmitOne:
     clc
     jsr $981B
     jmp BarbaPlaceNewFlame
+
+; Frame-budget governor for queued shots (not the attack's first shot).
+; Measured in tests/perf_volley.lua: vanilla peaks near 26.6k cycles with six
+; enemies; each live shot adds ~1.2-1.7k, and lag began once enemies plus live
+; shots reached seven. Carry set when another shot may spawn.
+BarbaLoadOk:
+    lda #$00
+    sta $00
+    ldx #$05
+@enemy:
+    lda $B6,x
+    beq :+
+    inc $00
+:
+    dex
+    bpl @enemy
+    ldx #$01
+@native:
+    lda $8D,x
+    beq :+
+    bmi :+
+    inc $00
+:
+    dex
+    bpl @native
+    ldx #$00
+@extra:
+    lda $6400,x
+    beq :+
+    bmi :+
+    inc $00
+:
+    txa
+    clc
+    adc #$10
+    tax
+    cpx #$30
+    bcc @extra
+    lda $00
+    cmp #LOAD_LIMIT
+    bcs @deny
+    sec
+    rts
+@deny:
+    clc
+    rts
+LOAD_LIMIT = 6
 
 BarbaCancelBurst:
     lda #$00

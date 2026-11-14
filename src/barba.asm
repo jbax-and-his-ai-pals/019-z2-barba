@@ -112,7 +112,16 @@ NativeShieldFire:
     rts
 
 .segment "GATEWAY"
+; Fast path: with no backed shot alive, run the original E48B test in place
+; (no bank switches). Original bytes at E48B were LDA $B6,X / CMP #$01;
+; E48F continues with BNE/rts and the native two-slot loop.
 EnemyFireGateway:
+    lda EXTRA_LIVE
+    bne @slow
+    lda $B6,x
+    cmp #$01
+    jmp $E48F
+@slow:
     jsr $FFC5
     jsr BarbaEnemyFire
     jmp $FFC9
@@ -120,17 +129,6 @@ ShieldFireGateway:
     jsr $FFC5
     jsr BarbaShieldFire
     jmp $FFC9
-NativeEnemyFire:
-    jsr $FFC9
-    lda $B6,x
-    cmp #$01
-    bne @done
-    jsr $E491
-@done:
-    php
-    jsr $FFC5
-    plp
-    rts
 
 .segment "TERRAIN"
 ; All four corner tiles are collected before swapping. The area's native
@@ -145,6 +143,15 @@ TerrainBatch:
     dex
     bpl @corner
 @result:
+    php
+    jsr $FFC5
+    plp
+    rts
+
+; Caller (BarbaEnemyFire, bank 0) has already required $B6,X = 1.
+NativeEnemyFire:
+    jsr $FFC9
+    jsr $E491
     php
     jsr $FFC5
     plp

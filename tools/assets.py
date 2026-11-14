@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from nes import encode_tile, load_source, write_png
+from nes import CHR_OFFSET, decode_tile, encode_tile, load_source, write_png
 from boss_art import make_frames
 
 COLORS = [(20, 22, 28), (194, 43, 25), (255, 168, 57), (255, 243, 205)]
@@ -28,6 +28,63 @@ def compile_ash(root: Path) -> tuple[dict[int, bytes], list[str]]:
         if not re.search(rf'^{name}\s*=\s*\${tile:02X}\s*$', include, re.MULTILINE):
             raise ValueError(f'Ash layout {name} does not match allocated tile ${tile:02X}')
     return dict(zip(ASH_TILES, sprite_pairs(rows+['0'*16]*8))), rows
+
+
+SHOUT_FONT_BANK = 7          # town BG pattern table (4K CHR bank)
+SHOUT_GLYPH_BANK = 7         # odd sprite tiles read the same $1000 table
+SHOUT_FONT_A = 0xDA          # native font: 'A'..'Z' are consecutive tiles
+# Truncated SHA-256 of each original 32-byte pair replaced in bank 7. These
+# decorative pairs appeared in no town room ($00..$3E) nametable census.
+SHOUT_PAIR_SHA256 = {
+    0x80: '893a0325cdc7cf39', 0x82: '42de53a38d178b20', 0x84: 'af85fa03d8808ac1',
+    0x86: '3e0dffed3d26d014', 0x88: '55dc69973efa250d', 0x8A: '431ab247f511fe1d',
+    0x8C: 'c644321081be6393', 0x92: 'cab870c820270963', 0x94: '13ea6b95d58a4960',
+    0x9C: '8d5f82fc987a6193', 0x9E: 'f9523c2896786a4b', 0xA0: '56c8c7c281e4177f',
+}
+
+
+def compile_shout_glyphs(root: Path, source: bytes) -> dict[int, bytes]:
+    """Build 8x16 shout-word glyph pairs from the user's own ROM font.
+
+    Returns {even pair index: 32 bytes} for town CHR bank 7 only. Letters
+    are recolored from the BG font at build time, so no ROM pixels are
+    committed. Each glyph sits in the lower tile; the upper tile is blank
+    apart from the outline row above the letter.
+    """
+    spec = json.loads((root / 'assets/shout_glyphs.json').read_text())
+    letter, outline = str(spec['letter_index']), str(spec['outline_index'])
+    include = (root / 'src/shout_layout.inc').read_text()
+    tiles = {m.group(1): int(m.group(2), 16) for m in
+             re.finditer(r'^ShoutTile_(\w+)\s*=\s*\$([0-9A-F]{2})\s*$', include, re.MULTILINE)}
+    names = {'Bang': '!'}
+    result: dict[int, bytes] = {}
+    for name, tile in tiles.items():
+        char = names.get(name, name)
+        if not tile % 2:
+            raise ValueError(f'Shout glyph {char} must be an odd ($1000 table) 8x16 tile')
+        if char in spec['authored']:
+            rows = [row.replace('.', '0') for row in spec['authored'][char]]
+        elif len(char) == 1 and 'A' <= char <= 'Z':
+            offset = CHR_OFFSET + SHOUT_FONT_BANK*4096 + (SHOUT_FONT_A+ord(char)-ord('A'))*16
+            rows = [''.join(str(v) for v in row) for row in decode_tile(source[offset:offset+16])]
+        else:
+            raise ValueError(f'No shout glyph source for {char!r}')
+        if len(rows) != 8 or any(len(row) != 8 or set(row)-set('012') for row in rows):
+            raise ValueError(f'Shout glyph {char!r} must be 8x8 using 0..2')
+        canvas = [['0']*8 for _ in range(8)] + [list(row) for row in rows]
+        body = {(y, x) for y in range(16) for x in range(8) if canvas[y][x] == '1'}
+        out = [['0']*8 for _ in range(16)]
+        for y in range(16):
+            for x in range(8):
+                if (y, x) in body:
+                    out[y][x] = letter
+                elif canvas[y][x] == '2' or any((y+dy, x+dx) in body
+                        for dy in (-1, 0, 1) for dx in (-1, 0, 1)):
+                    out[y][x] = outline
+        if tile & 0xFE in result:
+            raise ValueError(f'Shout glyph {char} reuses an allocated pair')
+        result[tile & 0xFE] = sprite_pairs([''.join(row) for row in out])[0]
+    return result
 
 
 def validate_layout(root: Path) -> bytes:

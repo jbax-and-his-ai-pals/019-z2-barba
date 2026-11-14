@@ -21,4 +21,4 @@ if ($TestPack) {
 if ($PrepareOnly) { Write-Output 'Prepared without opening or changing a running emulator.'; return }
 Start-Process -FilePath $taskMesen -ArgumentList ('"' + $taskRom + '"') -WorkingDirectory (Split-Path -Parent $taskMesen) -WindowStyle Normal
 Write-Output 'Opened Barba Edition in Mesen. Arrows: move; X: jump; Z: flame; Enter: Start; Left Shift: Select.'
-if ($TestPack) { Write-Output 'Test checkpoints: F1 castle, F2 combat, F3 all spells, F4 lava ledge, F5 lava surface, F6 Barba, F7 sea crossing, F8 town.' }
+if ($TestPack) { Write-Output 'Test checkpoints: F1 castle, F2 combat, F3 all spells, F4 lava ledge, F5 lava surface, F6 Barba, F7 sea crossing, F8 town, F9 before Palace 6 boss (max stats).' }

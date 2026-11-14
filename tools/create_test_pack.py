@@ -16,7 +16,8 @@ SCENES=[
     ('lava-surface','Standing on palace lava','Already on lava. Test moving, jumping and standing still.'),
     ('barba','Palace 6 boss encounter','Test the playable dragon against the original Palace 6 boss. Ice Barba is not implemented.'),
     ('raft','Sea crossing','Observe the dragon crossing on the original raft route; no free-flight cheat.'),
-    ('town','Rauru town street','Approach random outdoor wanderers, watch them flee, and test fireballs. Important and indoor NPCs are protected.')
+    ('town','Rauru town street','Approach random outdoor wanderers, watch them flee, and test fireballs. Important and indoor NPCs are protected.'),
+    ('boss-door','Before Palace 6 boss','Left edge of the Palace 6 boss room with max stats, all spells and full meters. Walk right to start the fight.')
 ]
 RECIPE_FILES=['tools/state_scenarios.lua','tests/newgame.lua','tests/state_pack.lua']
 

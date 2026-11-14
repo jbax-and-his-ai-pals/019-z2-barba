@@ -69,7 +69,10 @@ local skips={
 }
 for _,c in ipairs(skips)do
     add(c.name,'enemy',LABELS.BarbaEnemyFire,function()base();c.apply()end,function(name)
-        check(helperCalls==1,name..': avoids all extra native bank round trips')
+        -- An inactive enemy now skips the native helper entirely (the original
+        -- E48B returns immediately for it too); others call it exactly once.
+        local expected=c.name=='inactive enemy' and 0 or 1
+        check(helperCalls==expected,name..': avoids all extra native bank round trips')
         preserved(name)
     end)
 end

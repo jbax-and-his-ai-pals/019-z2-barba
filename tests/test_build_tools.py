@@ -80,5 +80,16 @@ class PatchTests(unittest.TestCase):
                 assets.assert_called_once_with(builder.ROOT, source)
                 assembler.assert_not_called()
 
+    def test_shout_glyph_layout_matches_audited_pairs(self):
+        import re
+        from assets import SHOUT_PAIR_SHA256
+        root = Path(__file__).resolve().parents[1]
+        text = (root/'src/shout_layout.inc').read_text()
+        tiles = [int(v, 16) for v in re.findall(r'^ShoutTile_\w+\s*=\s*\$([0-9A-F]{2})', text, re.MULTILINE)]
+        self.assertTrue(all(tile % 2 for tile in tiles), 'glyphs must use the odd ($1000) table')
+        self.assertEqual(sorted(tile & 0xFE for tile in tiles), sorted(SHOUT_PAIR_SHA256))
+        # Never the native font/dialog range or sprite 0's $C4/$C5 pair.
+        self.assertTrue(all((tile & 0xFE) < 0xC4 for tile in tiles))
+
 
 if __name__=='__main__':unittest.main()

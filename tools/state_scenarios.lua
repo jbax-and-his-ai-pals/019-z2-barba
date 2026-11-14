@@ -68,7 +68,14 @@ local scenes={
                 and x>=24 and x<=200 then return true end
         end
         return false
-    end}
+    end},
+    -- Left edge of the Palace 6 boss room before the boss rises; max stats.
+    {id='boss-door',name='Before Palace 6 boss',frames=60,setup=function()
+        upgraded();palace(4,2,6,0x3A,0)
+        -- Max attack too. Every stat is at level 8, so park the next-level
+        -- XP target out of reach rather than reading past the cost tables.
+        w(0x777,8);w(0x770,0xFF);w(0x771,0xFF)
+    end,capture=function()return r(0x736)==11 and r(0x499)~=2 end}
 }
 local function finish()
     local f=assert(io.open(PACK_DIR..'/capture-log.txt','w'))

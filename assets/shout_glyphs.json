@@ -1,0 +1,17 @@
+{
+  "description": "Speech-word glyphs for villager shouts. Letters are NOT stored here: tools/assets.py builds them from the user's own ROM font (BG bank 7, tile $DA + letter index) at build time. Only glyphs missing from that font are authored below, in the font's own style: 1 letter, 2 drop shadow, 0 transparent. Every glyph is recolored at build time to sprite indexes (letter -> 'letter', shadow and a 1-px outline -> 'outline') and placed in the bottom half of an 8x16 sprite pair whose top half is blank.",
+  "letter_index": 3,
+  "outline_index": 1,
+  "authored": {
+    "!": [
+      "..112...",
+      "..112...",
+      "..112...",
+      "..112...",
+      "..222...",
+      "..112...",
+      "..112...",
+      "..222..."
+    ]
+  }
+}

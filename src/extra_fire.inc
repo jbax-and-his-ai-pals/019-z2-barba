@@ -11,6 +11,7 @@ EXTRA_OLD8E = $6453
 EXTRA_KIND = $6454
 EXTRA_OLD11 = $6455
 EXTRA_DELTA = $6456
+EXTRA_LIVE = $645C ; nonzero while any backed record may be alive (fixed-bank fast path)
 EXTRA_READY = $05FF
 
 BarbaExtraEnsure:
@@ -24,6 +25,7 @@ BarbaExtraEnsure:
     rts
 BarbaExtraReset:
     lda #$00
+    sta EXTRA_LIVE
     sta EXTRA_BASE
     sta EXTRA_BASE+$10
     sta EXTRA_BASE+$20
@@ -183,6 +185,8 @@ BarbaExtraAllocate:
     jsr $981B
     jsr BarbaPlaceNewFlame
     php
+    lda #$01
+    sta EXTRA_LIVE
     jsr ExtraStoreRecord
     jsr ExtraRestoreZero
     plp
@@ -198,6 +202,23 @@ BarbaExtraUpdate:
     lda $CF
     pha
     jsr BarbaExtraEnsure
+    ; Idle fast path: with no backed record alive, only hide the extra OAM
+    ; slots. Skips the slot-0 save/restore copies on most frames.
+    lda EXTRA_BASE
+    ora EXTRA_BASE+$10
+    ora EXTRA_BASE+$20
+    bne @busy
+    lda #$F8
+    ldy ExtraOam
+    sta $0200,y
+    ldy ExtraOam+1
+    sta $0200,y
+    ldy ExtraOam+2
+    sta $0200,y
+    lda #$00
+    sta EXTRA_LIVE
+    jmp @idle
+@busy:
     jsr ExtraSaveZero
     lda #$00
     sta EXTRA_INDEX
@@ -270,6 +291,11 @@ BarbaExtraUpdate:
     jmp @slot
 :
     jsr ExtraRestoreZero
+    lda EXTRA_BASE
+    ora EXTRA_BASE+$10
+    ora EXTRA_BASE+$20
+    sta EXTRA_LIVE
+@idle:
     pla
     sta $CF
     pla
@@ -283,7 +309,11 @@ BarbaExtraUpdate:
 ; Root fixed helpers reconstruct the original entry prefixes and return in
 ; BANK0. Run originals once for the two real slots, then each backed slot.
 BarbaEnemyFire:
+    lda $B6,x
+    cmp #$01
+    bne :+
     jsr NativeEnemyFire
+:
     php
     pha
     tya
@@ -338,9 +368,9 @@ ExtraCollision:
     lda $8E
     sta EXTRA_OLD8E
     jsr BarbaExtraEnsure
-    jsr ExtraSaveZero
+    ; Save slot 0 lazily: most enemies are far from every backed shot.
     lda #$00
-    sta $8E
+    sta EXTRA_KIND+$03 ; $6457: 1 once slot 0 has been saved this call
     sta EXTRA_INDEX
 @slot:
     ldy EXTRA_INDEX
@@ -350,6 +380,14 @@ ExtraCollision:
     ldx EXTRA_ENEMY_X
     jsr ExtraNearEnemy
     bcc @next
+    lda EXTRA_KIND+$03
+    bne :+
+    jsr ExtraSaveZero
+    lda #$00
+    sta $8E
+    lda #$01
+    sta EXTRA_KIND+$03
+:
     jsr ExtraLoadRecord
     ldx EXTRA_ENEMY_X
     stx $10
@@ -368,7 +406,10 @@ ExtraCollision:
     sta EXTRA_INDEX
     cmp #$30
     bcc @slot
+    lda EXTRA_KIND+$03
+    beq :+
     jsr ExtraRestoreZero
+:
     lda EXTRA_OLD8E
     sta $8E
     lda EXTRA_OLD10
@@ -427,6 +468,12 @@ BarbaExtraBlocks:
     tya
     pha
     jsr BarbaExtraEnsure
+    lda EXTRA_BASE
+    ora EXTRA_BASE+$10
+    ora EXTRA_BASE+$20
+    bne :+
+    jmp @idle
+:
     jsr ExtraSaveZero
     lda $10
     pha
@@ -455,6 +502,7 @@ BarbaExtraBlocks:
     sta $8E
     pla
     sta $10
+@idle:
     pla
     tay
     pla
