@@ -22,7 +22,9 @@ untouched. The code occupies verified filler starting at bank 3 `$B803`.
   reuses its own OAM slots before removing the actor. No extra sprites or quest
   flags are allocated. Ordinary room resets/generation can repopulate the town;
   casualties are not permanent.
-- Press Up near an eligible wanderer for “PLEASE / NO FIRE.” B remains attack.
+- Press Up near an eligible wanderer for one of four panicked messages, including
+  “OH SHIT. / IT IS BARBA. / RUN.” and “FUCK THAT. / I AM OUT / OF HERE.”
+  Different wandering types get different lines. B remains attack.
   The native conversation engine handles text, cancellation and movement lock.
   The guarded dialogue hook preserves original selection for every other NPC.
 
@@ -31,7 +33,7 @@ clears it on spawn. Conversations already in progress finish normally.
 
 ## Validation and limits
 
-`tests/town_safety.lua` checks 1,041 eligibility combinations plus five dialogue
+`tests/town_safety.lua` checks 1,041 eligibility combinations plus eight dialogue
 fallback cases, including indoor rooms, scripted origins, important types,
 non-town worlds and inactive actors. `tests/town.lua` uses the native Rauru room
 loader and generator, then controlled positions to verify fleeing, a real

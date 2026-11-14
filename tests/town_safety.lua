@@ -16,6 +16,9 @@ for origin=0,254 do add(1,0,0x19,origin)end
 add(1,0,0x19,255,0);add(1,0,0x19,255,2)
 for _,c in ipairs({
     {world=1,room=0,kind=0x19,origin=255,fear=true},
+    {world=1,room=0,kind=0x1A,origin=255,fear=true},
+    {world=1,room=0,kind=0x1B,origin=255,fear=true},
+    {world=2,room=0,kind=0x1C,origin=255,fear=true},
     {world=1,room=0,kind=0x19,origin=5,fear=false},
     {world=1,room=0x1C,kind=0x19,origin=255,fear=false},
     {world=1,room=0,kind=0x0F,origin=255,fear=false},
@@ -40,7 +43,8 @@ emu.addMemoryCallback(function()
     if not running then return end
     local c=cases[current]
     if c.dialog then
-        local expected=LABELS.TownFearText
+        local pointer=LABELS.TownFearPointers+(c.kind-0x19)*2
+        local expected=c.fear and (r(pointer)+256*r(pointer+1)) or 0
         if not c.fear then
             local base=r(0xB421+c.world*2)+256*r(0xB422+c.world*2)
             expected=r(base)+256*r(base+1)

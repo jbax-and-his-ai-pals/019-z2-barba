@@ -4,7 +4,7 @@
 ; and an explicit outdoor room. Scripted actors, including walking actors
 ; with these same type numbers, always tail-call the untouched native routine.
 .segment "TOWN"
-.export TownUpdate, TownEligible, TownOutdoorRooms, TownEnd, TownDialog, TownFearText
+.export TownUpdate, TownEligible, TownOutdoorRooms, TownEnd, TownDialog, TownFearText, TownFearPointers
 
 ; Native generator $96E0 clears AF before initializing each new actor.
 ; We borrow that actor's state only after the positive provenance gate:
@@ -278,9 +278,14 @@ TownDialog:
     jsr TownEligible
     bcc @original
     pla
-    lda #<TownFearText
+    lda $A1,x
+    sec
+    sbc #$19
+    asl
+    tay
+    lda TownFearPointers,y
     sta $0569
-    lda #>TownFearText
+    lda TownFearPointers+1,y
     sta $056A
     jmp $B614
 @original:
@@ -289,7 +294,5 @@ TownDialog:
     tay
     lda $0707
     jmp $B5FD
-TownFearText:
-    ; PLEASE / NO FIRE. Native character codes, line/end controls.
-    .byte $E9,$E5,$DE,$DA,$EC,$DE,$FD,$E7,$E8,$F4,$DF,$E2,$EB,$DE,$CF,$FF
+.include "town_dialogue.inc"
 TownEnd:

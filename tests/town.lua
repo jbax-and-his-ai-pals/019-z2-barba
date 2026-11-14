@@ -21,6 +21,7 @@ local function setup()
     w(0xB6+slot,1);w(0x4E+slot,112);w(0x3C+slot,0);w(0x2A+slot,176)
     w(0xAF+slot,phase==1 and 0 or 0x80);w(0x71+slot,0);w(0x5C3+slot,0)
     if phase==3 then w(0xBC+slot,5);w(0xAF+slot,0)end
+    if phase==4 then w(0xA1+slot,0x19)end
     for x=0,5 do if r(0xA1+x)==0x23 then w(0xB6+x,0)end end
     if phase==5 then
         for page=0,3 do
@@ -43,12 +44,15 @@ emu.addEventCallback(function()
     if frame>=1000 then
         b={start=false,select=false,a=false,b=false,up=false,down=false,left=false,right=false}
         if phase==2 or phase==3 then b.b=age>=8 and age<11 end
-        if phase==4 then b.up=age>=8 and age<11;b.b=age>=180 and age<183 end
+        if phase==4 then b.up=age>=8 and age<11;b.b=age>=400 and age<403 end
     end
     emu.setInput(b,0)
 end,emu.eventType.inputPolled)
 emu.addMemoryCallback(function()
-    if phase==4 and r(0x569)+256*r(0x56A)==LABELS.TownFearText then dialog=true end
+    if phase==4 then
+        local pointer=LABELS.TownFearPointers+(r(0xA1+slot)-0x19)*2
+        if r(0x569)+256*r(0x56A)==r(pointer)+256*r(pointer+1) then dialog=true end
+    end
 end,emu.callbackType.exec,0xB614)
 emu.addMemoryCallback(function()
     if not pending then return end
@@ -88,11 +92,11 @@ emu.addEventCallback(function()
         end
     end
     if phase==4 then
-        if age==140 then screenshot('town-fear-dialogue')end
-        if dialog and age>185 and r(0x74C)==0 and r(0xDE)==0 then closed=true end
+        if age==380 then screenshot('town-fear-dialogue')end
+        if dialog and age>405 and r(0x74C)==0 and r(0xDE)==0 then closed=true end
     end
     if phase==5 and r(0xAF+slot)>0 and r(0xAF+slot)<0x42 then enteredDoor=true end
-    local limit=phase==4 and 240 or 90
+    local limit=phase==4 and 460 or 90
     if age==limit then
         if phase==1 then check(fled,'random outdoor wanderer flees from Barba');screenshot('town-fleeing')end
         if phase==2 then
