@@ -58,6 +58,9 @@ def build(source_path: Path, output: Path) -> dict:
     if output.resolve() == source_path.parent.resolve():
         raise ValueError('Output must not be the source ROM directory')
     output.mkdir(parents=True, exist_ok=True)
+    # Asset compilation emits the tile-index include consumed by ca65. Complete
+    # it before assembling so the ROM and renderer always share one layout.
+    mapping, graphics, ow, _ = compile_assets(ROOT, source_path)
     labels = assemble(output)
     overlay = Overlay(source)
     for filename, bank, address in [('code', 0, 0xAA40), ('lava', 7, 0xD39A), ('gateway', 7, 0xFEAA)]:
@@ -83,7 +86,6 @@ def build(source_path: Path, output: Path) -> dict:
     overlay.prg(0, 0x960B, bytes.fromhex('a9 40 85 ed'), bytes.fromhex('a9 20 85 ed'), 'Flame attack sound')
     overlay.prg(0, 0x9819, bytes.fromhex('30 d0'), bytes.fromhex('20 e0'), 'Faster ranged flame')
 
-    mapping, graphics, ow, _ = compile_assets(ROOT)
     offset = prg_offset(7, 0xEB25)
     overlay.put(offset, mapping, source[offset:offset+len(mapping)], 'Dragon animation metasprites')
     for bank in range(0, 26, 2):

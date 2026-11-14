@@ -39,63 +39,16 @@ BarbaOverworld:
 OverworldBase:
     .byte 0, 0, 8, 0, 16, 0, 0, 0, 24
 
-; The original renderer still supplies facing, body placement, attack origin,
-; recoil, clipping, item holds and the six body sprites. Add one plume tip.
-BarbaDisplay:
-    lda #$F8
-    sta $0224
-    jsr $EBF0
-    lda $13
-    bne @done
-    lda $80
-    cmp #$05
-    beq @flame
-    cmp #$07
-    bne @done
-@flame:
-    lda $0220
-    cmp #$F8
-    bcs @done
-    sta $0224
-    lda #$50
-    sta $0225
-    lda $020A
-    and #$43
-    sta $0222
-    sta $0226
-    ldx $9F
-    lda $0223
-    cpx #$01
-    bne @left
-    cmp #$F8
-    bcs @hide
-    clc
-    adc #$08
-    bcc @position
-@left:
-    cmp #$08
-    bcc @hide
-    sec
-    sbc #$08
-@position:
-    sta $0227
-@done:
-    rts
-@hide:
-    lda #$F8
-    sta $0224
-    rts
-
 ; Called through a fixed-bank gateway while enemies' PRG bank is mapped.
 ; Preserve the original vertical thrust collision shape and damage rules.
-; Horizontal flame: 22x10 pixels, clipped at the screen edge.
+; Horizontal flame: 16x10 pixels, clipped at the screen edge.
 BarbaHitbox:
     lda $80
     cmp #$08
     beq @vertical
     cmp #$09
     beq @vertical
-    lda #$16
+    lda #$10
     sta $02
     lda $047E
     sec
@@ -176,6 +129,7 @@ RoarPitch:
     .byte $0F,$0F,$0E,$0F,$0D,$0F,$0E,$0C,$0F,$0D,$0B,$0E
 
 .include "breath.inc"
+.include "tall_player.inc"
 
 .segment "LAVA"
 ; Only palace groups use this new path. Water outside palaces retains its
@@ -203,3 +157,13 @@ HitboxGateway:
     jsr $FFC5
     jsr BarbaHitbox
     jmp $FFC9
+
+TerrainGateway:
+    pha
+    jsr $FFC9
+    pla
+    jsr $850C
+    php
+    jsr $FFC5
+    plp
+    rts

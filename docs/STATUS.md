@@ -2,10 +2,10 @@
 
 This is an initial playable implementation, not a completed total conversion.
 
-The playable body is still the original 16x32 alpha design. Boss-derived 16x48
-and 24x48 frames are generated studies only; they are not yet used by the game.
-The breath/height scenario tests current movement and attacks, not tall-body
-ceiling clearance.
+The current player uses boss-derived 24x48 poses, a shared mouth position and a
+bounded two-shot Fire burst. Terrain and enemy-contact collision retain the
+native body: the raised head is visual, not a newly enlarged hurtbox. Solid
+ceilings fold the head into the original 32px height; crouch occupies 16px.
 
 ## Verified locally
 
@@ -25,6 +25,8 @@ BUILD.md. Hardware sprite limits remain enabled.
 | Roar routine | Inferno consumes the original Thunder state, starts the envelope, and reaches a zero-volume override after 48 updates |
 | Human test pack | Seven native Mesen states generated for the exact build; every state reloads with a visible frame and survives 120 further frames; sea crossing completes on East Hyrule |
 | Mouth-anchored breath | 16 cases (Fire on/off, full/damaged, left/right, standing/crouched): no automatic beam at any health; enemies take damage on the visible breath; Fire spawns at the mouth. See [BREATH-IMPLEMENTATION.md](BREATH-IMPLEMENTATION.md) |
+| Tall geometry and renderer | Four-corner native solid probes, lower head row, world-page crossing, edge rejection, ceiling folding, crouch and extra OAM cleanup pass controlled CPU checks |
+| Bounded Fire burst | Attack 1/4, eight-update follow-up, two-slot cap, dropped retries, held attack and cancellation states pass scheduling checks |
 | Checkpoint XP regression | Upgraded states now recompute the next-level target; 50 XP stays in gameplay, 2,000 XP permits one attack upgrade and returns to gameplay afterward |
 
 Combat and palace scenarios intentionally create controlled fixtures (enemy

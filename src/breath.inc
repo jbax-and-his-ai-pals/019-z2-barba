@@ -1,35 +1,68 @@
-; Barba's health-independent breath/projectile integration.
-; Included in BANK0 by src/barba.asm.
-;
-; The mouth is derived from the same player state the spawn code reads in this
-; frame (world X $4D/$3B, Y $29, facing $9F, shield/duck $17), so there is no
-; one-frame lag from waiting for the renderer. Retune the four table entries
-; when the playable sprite changes; tests read the mirrored screen position.
+; Barba's health-independent breath/projectile integration (BANK0).
+; BarbaGeometry supplies the attached plume's top-left in screen space and
+; bit 0 of its validity flags. Both shots sample that geometry at spawn time.
 .export BarbaProjectiles, BarbaFireSpell, BarbaMuzzleScreen
 
-BREATH_MUZZLE_X = $05F2 ; diagnostic mirror: screen X, left edge of 8x16 shot
-BREATH_MUZZLE_Y = $05F3 ; diagnostic mirror: screen Y, top of 8x16 shot
+BREATH_MUZZLE_X = $05F2
+BREATH_MUZZLE_Y = $05F3
+BREATH_GEOMETRY_FLAGS = $05F6
+BREATH_BURST_DELAY = $05F7
+BREATH_BURST_STATE = $05F8 ; 0 ready, 1 pending, 2 attempted until attack ends
 
-; Offsets from the player's position to the top-left of an 8x16 fire sprite
-; leaving the mouth. They match the attached breath sprite on the 16x32 alpha:
-; right-facing flame starts at +$20, left-facing flame ends at the body edge.
-; Index: facing $9F (1 right, 2 left). Signed, two's complement.
-MuzzleOffsetX:
-    .byte $00, $20, $F8
-; Index: $17 (0 ducked, 1 standing).
-MuzzleOffsetY:
-    .byte $10, $00
-
-; Native $9847 also spawns the full-health sword beam. Enter at the update-only
-; tail instead: existing spell flames retain native motion, lifetime, enemy
-; filtering, disintegration, graphics scheduling and the two-slot ceiling.
+; Native $9847 also creates the full-health sword beam. Its update-only tail
+; retains Fire movement, vulnerability class, disintegration and sound.
 BarbaProjectiles:
+    jsr BarbaBurstAllowed
+    bcc @cancel
+    lda $0400
+    beq @cancel
+    lda BREATH_BURST_STATE
+    cmp #$01
+    bne @update
+    dec BREATH_BURST_DELAY
+    bne @update
+    ; Exactly one attempt: a full pool consumes the follow-up, never retries.
+    lda #$02
+    sta BREATH_BURST_STATE
+    ldx #$01
+@find_slot:
+    lda $8D,x
+    beq @followup
+    dex
+    bpl @find_slot
+    bmi @update
+@followup:
+    ; $981B uses ADC without CLC; no comparison carry may leak into spawn X.
+    clc
+    jsr $981B
+    jsr BarbaPlaceNewFlame
+    jmp @update
+@cancel:
+    lda #$00
+    sta BREATH_BURST_DELAY
+    sta BREATH_BURST_STATE
+@update:
+    ; Native code ignores slot 1 at Attack 1-3. Update it once here so the
+    ; two-shot burst works at every attack level, still with only two slots.
+    lda $0777
+    cmp #$04
+    bcs @native_update
+    ldx #$01
+    jsr $9888
+@native_update:
     jmp $9878
 
-; Replaces only the Fire spell's dispatch pointer at CPU $8E50. The original
-; routine decides attack timing, available slots and attack-level slot count,
-; and marks a newly allocated slot with exactly 1 (INC from 0).
+; Fire's first shot retains the original attack-animation/delay gate and
+; allocator. A successful initial shot arms a single eight-frame follow-up.
 BarbaFireSpell:
+    jsr BarbaBurstAllowed
+    bcc @done
+    lda BREATH_BURST_STATE
+    bne @done
+    jsr BarbaGeometry
+    lda BREATH_GEOMETRY_FLAGS
+    and #$01
+    beq @done
     lda $8D
     pha
     lda $8E
@@ -42,6 +75,8 @@ BarbaFireSpell:
     bne @slot_zero
     ldx #$01
     jsr BarbaPlaceNewFlame
+    bcc @slot_zero
+    jsr BarbaArmBurst
 @slot_zero:
     pla
     bne @done
@@ -50,51 +85,74 @@ BarbaFireSpell:
     bne @done
     ldx #$00
     jsr BarbaPlaceNewFlame
+    bcc @done
+    jsr BarbaArmBurst
 @done:
     rts
 
-; X = projectile slot. Preserves X.
-BarbaPlaceNewFlame:
-    ldy $17
-    lda $29
-    clc
-    adc MuzzleOffsetY,y
-    sta $36,x
-    ldy $9F
-    lda MuzzleOffsetX,y
-    bmi @behind
-    clc
-    adc $4D
-    sta $5A,x
-    lda $3B
-    adc #$00
-    sta $48,x
-    jmp @class
-@behind:
-    clc
-    adc $4D
-    sta $5A,x
-    lda $3B
-    adc #$FF
-    sta $48,x
-@class:
-    ; Always a Fire-spell flame, never a full-health beam. Zero timeout keeps
-    ; the native $84 fireball graphics and Fire-only enemy vulnerability.
-    lda #$00
-    sta $05CA,x
+BarbaArmBurst:
+    lda #$08
+    sta BREATH_BURST_DELAY
+    lda #$01
+    sta BREATH_BURST_STATE
     rts
 
-; Mirror the current mouth in screen space ($CC = player screen X) for tests
-; and for future renderer use. Called during the per-frame projectile update.
-BarbaMuzzleScreen:
-    ldy $17
-    lda $29
-    clc
-    adc MuzzleOffsetY,y
-    sta BREATH_MUZZLE_Y
-    ldy $9F
-    lda $CC
-    clc
-    adc MuzzleOffsetX,y
-    sta BREATH_MUZZLE_X
+; Carry set only while a queued Fire attack is safe to continue. Scene fade,
+; dialog/level-up, spell menu, death and wyrmling form all cancel the queue.
+BarbaBurstAllowed:
+    lda $0736
+    cmp #$0B
+    bne @no
+    lda $B5
+    cmp #$01
+    bne @no
+    lda $074C
+    ora $0524
+    ora $0726
+    ora $13
+    ora $DE
+    bne @no
+    lda $076F
+    and #$10
+    beq @no
+    sec
     rts
+@no:
+    clc
+    rts
+
+; X = newly allocated projectile slot. Preserve X across shared geometry;
+; invalidate a clipped spawn rather than letting its world coordinate wrap.
+; Carry reports whether a projectile was placed.
+BarbaPlaceNewFlame:
+    txa
+    pha
+    jsr BarbaGeometry
+    pla
+    tax
+    lda BREATH_GEOMETRY_FLAGS
+    and #$01
+    beq @clipped
+    lda BREATH_MUZZLE_Y
+    sta $36,x
+    lda BREATH_MUZZLE_X
+    clc
+    adc $072C
+    sta $5A,x
+    lda $072A
+    adc #$00
+    sta $48,x
+    ; Zero timeout means native Fire graphics and Fire-only vulnerability.
+    lda #$00
+    sta $05CA,x
+    sec
+    rts
+@clipped:
+    lda #$00
+    sta $8D,x
+    clc
+    rts
+
+; Compatibility entry used by the per-frame diagnostic mirror.
+BarbaMuzzleScreen:
+    jmp BarbaGeometry

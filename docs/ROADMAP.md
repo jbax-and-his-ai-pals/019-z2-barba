@@ -26,8 +26,8 @@ remain part of the progression audit.
 
 ## 2. Establish a more authentic playable Barba
 
-Next implementation milestone: a sprite/height study using the actual boss's
-tiles, colors and proportions extracted locally from the supplied ROM.
+**Playable prototype implemented:** 24x48 frames now adapt the actual boss's
+head and neck from the supplied ROM. The following remain review criteria:
 
 - Preserve the recognizable snout, horns, eye, open jaw, long neck and segmented
   underside; adapt these features directly rather than extending the current
@@ -48,9 +48,10 @@ readable and navigable in the castle, combat corridor, lava and boss checkpoints
 
 ## 3. Rebuild the attack around Barba's mouth
 
-**In progress:** the automatic full-health beam is gone and Fire projectiles now
-spawn from a tunable mouth table ([details](BREATH-IMPLEMENTATION.md)). Still
-open: boss-derived windup/flare, plume art for the chosen sprite, any burst.
+**Playable prototype implemented:** the automatic full-health beam is gone.
+Boss-derived jaws, attached plume and bounded Fire burst share one mouth
+calculation ([details](BREATH-IMPLEMENTATION.md)). Vertical flames and broader
+combat interactions still need work.
 
 Study the original boss's firing animation, spacing and projectile paths in F6.
 Prototype a short attached plume and a compact fireball burst against that
@@ -66,7 +67,7 @@ Recommended direction:
 - Remove the distracting distinction between a reskinned sword beam and breath.
   Prefer dropping the automatic full-health beam, or integrating a full-health
   bonus into the same breath animation if playtesting favors that behavior.
-  This is a design proposal; the current ROM's beam rule is unchanged.
+  The automatic full-health beam has now been removed.
 - Preserve attack commitment and directional defense. Avoid unlimited rapid
   fire or repeatedly damaging an enemy on every animation frame by accident.
 - Give up/down attacks dedicated fire art, retaining unlocks, down-thrust bounce
@@ -93,20 +94,16 @@ sprite direction settle. Review Dark Link's shared graphics deliberately.
 Then audit spells and item gates, towns, all palaces, hazards, save/continue and
 ending behavior. Complete a full playthrough and a second-emulator check.
 
-## Suggested next work
+## Current playable milestone (November 14)
 
-Fresh review, November 14: the first attack integration is playable and passes
-the 16-case health/Fire/facing/stance regression. Automatic full-health beams
-are suppressed; Fire uses a mouth-relative projectile origin. This does not yet
-implement the original boss's timed volley or a new tall player renderer.
+Implemented: 24x48 boss-derived player, three slither frames, jaw windup/open
+attack, shared mouth calculation, 16x10 attached flame damage, ceiling folding,
+16px crouch and a bounded two-shot Fire burst eight updates apart. Existing
+movement and enemy-contact boxes remain unchanged. This visual/physical height
+distinction needs human review, especially when enemies pass near the head.
 
-The boss-derived sprite study is available through `python tools/boss_art.py`.
-Its 24x48 version preserves substantially more facial detail than 16x48. Treat
-it as a study: improve the head/neck join, coil and vertical poses before use.
-
-Next implementation target: integrate a 24x48 normal-pose renderer, preserving
-the current physical movement box initially and documenting that distinction.
-Add a shared mouth calculation for drawing, melee and ranged shots, and check
-ceiling/head clipping before making the physical body taller. Then add the
-boss-derived jaw windup and bounded Fire volley. Keep the pre-change build and
-its matching checkpoints available for comparison.
+Next: human review of F1/F2 movement and attacks, F3 Fire and vertical techniques,
+F4/F5 lava and F6 player/boss readability. Then refine the neck/coil and vertical
+flames, give Palace 6 a distinct Ice Barba, and audit elevators, towns, item
+holds, enemy shields, blocks and sprite crowding. Full progression and another
+emulator remain required before calling this a finished conversion.

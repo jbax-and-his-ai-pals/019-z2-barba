@@ -1,10 +1,34 @@
 """Compile editable pixel rows into native NES tiles and player metasprites."""
 from __future__ import annotations
 import json
+import re
 from pathlib import Path
-from nes import encode_tile, write_png
+from nes import encode_tile, load_source, write_png
+from boss_art import make_frames
 
 COLORS = [(20, 22, 28), (194, 43, 25), (255, 168, 57), (255, 243, 205)]
+TALL_POSES = ('walk0', 'walk1', 'walk2', 'idle', 'windup', 'attack',
+              'crouch', 'crouch-attack', 'up', 'down', 'hurt', 'death')
+
+
+def validate_layout(root: Path) -> bytes:
+    """Validate the distributable index recipe without loading original CHR."""
+    text = (root / 'src/tall_layout.inc').read_text()
+    rows = re.findall(r'^\s*\.byte\s+([^;\n]+);\s*(\S+)\s*$', text, re.MULTILINE)
+    if [name for _, name in rows] != list(TALL_POSES):
+        raise ValueError('Tall layout must contain the twelve ordered player poses')
+    layout = bytearray()
+    for values, name in rows:
+        tokens = [token.strip() for token in values.split(',')]
+        if len(tokens) != 9 or any(not re.fullmatch(r'\$[0-9A-F]{2}', token) for token in tokens):
+            raise ValueError(f'Tall layout {name} requires nine byte indexes')
+        tiles = [int(token[1:], 16) for token in tokens]
+        if any(tile != 0xF5 and (tile % 2 or tile >= 0x64 or tile in {0x32,0x50,0x54}) for tile in tiles):
+            raise ValueError(f'Tall layout {name} uses a reserved or invalid body pair')
+        if name in ('crouch', 'crouch-attack') and tiles[:6] != [0xF5]*6:
+            raise ValueError(f'Tall layout {name} exceeds the physical duck lane')
+        layout.extend(tiles)
+    return bytes(layout)
 
 
 def sprite_pairs(rows: list[str]) -> list[bytes]:
@@ -16,43 +40,38 @@ def sprite_pairs(rows: list[str]) -> list[bytes]:
             for top in range(0, len(rows), 16) for x in range(0, width, 8)]
 
 
-def compile_assets(root: Path) -> tuple[bytes, dict[int, bytes], bytes, list[list[str]]]:
+def compile_assets(root: Path, source_path: Path | None = None) -> tuple[bytes, dict[int, bytes], bytes, list[list[str]]]:
     art = json.loads((root / 'assets/barba.json').read_text())
-    body, small = art['body'], art['small']
+    small = art['small']
     for name in ('body', 'small', 'front', 'back'):
         for row in art[name]:
             if len(row) != 16 or set(row) - set('0123'):
                 raise ValueError(f'Invalid pixel row in {name}: {row!r}')
-    # Indexed by the original six-sprite record number, not by animation ID.
-    frames = []
-    for record in range(19):
-        rows = list(body)
-        if record in (0, 1, 2):
-            delta = (0, 1, -1)[record]
-            for y in range(20, 31):
-                row = rows[y]
-                rows[y] = (('0'+row[:-1]) if delta > 0 else (row[1:]+'0')) if delta else row
-        if record in (3, 7, 8, 9, 10, 11, 12):
-            rows = ['0'*16]*16 + list(small)
-        if record in (6, 8):
-            # Mouth opening in the standing/crouched attack lane.
-            for y in (8, 9):
-                at = y + (16 if record == 8 else 0)
-                rows[at] = rows[at][:10] + '000000'
-        if record == 13:  # Hit reaction: coil tightens.
-            rows = ['0'*16]*4 + rows[:-4]
-        if record == 15:  # Death: collapsed coil, retain full state coverage.
-            rows = ['0'*16]*16 + [r[::-1] for r in small]
-        # The game's side-view renderer flips stored LEFT-facing art for right.
-        frames.append(['0'*8+r[::-1] for r in rows])
+    # Original pixels come exclusively from the user's verified local ROM.
+    # ROM-free CI can assemble the checked-in layout indexes, but must not call
+    # this extraction function: substituting fake art would mask build errors.
+    source_path = source_path if source_path is not None else root / 'roms/z2.nes'
+    if not source_path.exists():
+        raise FileNotFoundError('Boss-derived assets require local roms/z2.nes; '
+                                'ROM-free CI should validate src/tall_layout.inc instead')
+    named = make_frames(load_source(source_path), 24)
+    frames = [named[name] for name in TALL_POSES]
+    # Indexed by the vanilla six-sprite record, preserving all nineteen states.
+    # Standing fallback packs the native head and coil into 32px. Duck poses
+    # retain the bottom-only native head; both reuse existing tall-frame pairs.
+    fallback_names = ('tuck', 'tuck', 'tuck', 'crouch', 'tuck', 'tuck',
+                      'crouch-attack', 'crouch', 'crouch-attack', 'up',
+                      'tuck', 'tuck', 'tuck', 'tuck', 'down', 'death',
+                      'tuck', 'tuck', 'tuck')
+    fallback = [named[name][16:] for name in fallback_names]
 
     # Reserve weapon tiles used by existing renderer immediates and the new tip.
     reserved = {0x32, 0x50, 0x54}
     slots = iter(i for i in range(0, 0x64, 2) if i not in reserved)
     pairs: dict[bytes, int] = {bytes(32): 0xF5}
     graphics: dict[int, bytes] = {}
-    mapping = bytearray()
-    for rows in frames:
+    def allocate(rows):
+        result = bytearray()
         for pair in sprite_pairs(rows):
             if pair not in pairs:
                 try:
@@ -61,7 +80,21 @@ def compile_assets(root: Path) -> tuple[bytes, dict[int, bytes], bytes, list[lis
                     raise ValueError('Player graphics exceed the reserved tile budget') from exc
                 pairs[pair] = tile
                 graphics[tile] = pair
-            mapping.append(pairs[pair])
+            result.append(pairs[pair])
+        return result
+
+    tall_mapping = [allocate(rows) for rows in frames]
+    mapping = b''.join(allocate(rows) for rows in fallback)
+    # This file contains indexes only, never extracted CHR pixels. Keeping it
+    # checked in lets ca65 validate the renderer without redistributing a ROM.
+    include = '; Generated by tools/assets.py from the local verified ROM.\n'
+    include += '; Nine 8x16 pairs per pose: three rows, left to right.\n'
+    include += 'BarbaTallTiles:\n'
+    for name, tiles in zip(TALL_POSES, tall_mapping):
+        include += '    .byte ' + ', '.join(f'${v:02X}' for v in tiles) + f' ; {name}\n'
+    include_path = root / 'src/tall_layout.inc'
+    if not include_path.exists() or include_path.read_text() != include:
+        include_path.write_text(include, encoding='ascii')
 
     flame = ['00000000']*3 + [
         '10000000','12100000','12211010','12322121','12333222',
@@ -82,14 +115,26 @@ def compile_assets(root: Path) -> tuple[bytes, dict[int, bytes], bytes, list[lis
             animated = rows if step == 0 else ['0'*16] + rows[:-1]
             ow.extend(b''.join(sprite_pairs(animated)))
 
-    # Preview only original pixel art; no source ROM data in this artifact.
+    # Local-only preview contains the extracted boss face and native texture.
     preview_rows = []
     for top in range(0, len(frames), 5):
-        for y in range(32):
+        for y in range(48):
             row = []
             for frame in frames[top:top+5]:
                 row += [COLORS[int(v)] for v in frame[y]] + [(40, 44, 52)]*4
             preview_rows.append(row + [COLORS[0]] * (140-len(row)))
         preview_rows += [[COLORS[0]]*140 for _ in range(4)]
     write_png(root / 'build/barba-sprites.png', preview_rows, 4)
+    (root / 'build/barba-assets.json').write_text(json.dumps({
+        'poses': list(TALL_POSES), 'size': [24, 48],
+        'body_pairs': len(pairs)-1, 'available_body_pairs': 47,
+        'weapon_pairs': [0x32, 0x50, 0x54], 'wyrmling_pairs': [0x68, 0x6A],
+        'mapping': [list(row) for row in tall_mapping],
+        'fallback_mapping_bytes': len(mapping),
+        'muzzle_left_canvas': {'standing': [0,11], 'crouched': [0,43],
+                               'tucked': [0,27]},
+        'muzzle_left_actor': {'standing': [0,-5], 'crouched': [0,27],
+                              'tucked': [0,11]},
+        'note': 'Actor-relative y assumes canvas starts actorY-16; right-facing x mirrors at 23.'
+    }, indent=2)+'\n')
     return bytes(mapping), graphics, bytes(ow), frames

@@ -1,12 +1,16 @@
 """Validate patch integrity and build safety without requiring a Nintendo ROM."""
 import random
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'tools'))
 from bps import apply, encode
 from build import Overlay
+from assets import TALL_POSES, validate_layout
+import build as builder
 from nes import decode_tile, encode_tile, load_source, prg_offset
 
 
@@ -49,6 +53,32 @@ class PatchTests(unittest.TestCase):
         rows=['01230123','32103210']*4
         self.assertEqual(decode_tile(encode_tile(rows)),[[int(c) for c in row] for row in rows])
         with self.assertRaises(ValueError):encode_tile(['00000004']*8)
+
+    def test_distributable_tall_layout_without_rom(self):
+        root = Path(__file__).resolve().parents[1]
+        layout = validate_layout(root)
+        self.assertEqual(len(layout), len(TALL_POSES)*9)
+        # The recipe must reject an accidental weapon-slot overwrite even in
+        # public CI, which deliberately has no original game pixels available.
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Path(directory)
+            (fixture/'src').mkdir()
+            text = (root/'src/tall_layout.inc').read_text()
+            (fixture/'src/tall_layout.inc').write_text(text.replace('$00', '$32', 1))
+            with self.assertRaisesRegex(ValueError, 'reserved'):
+                validate_layout(fixture)
+
+    def test_build_generates_layout_before_assembly_and_forwards_rom(self):
+        with tempfile.TemporaryDirectory() as directory:
+            location = Path(directory)
+            source = location/'custom-source.nes'
+            with patch.object(builder, 'load_source', return_value=b'original'), \
+                 patch.object(builder, 'compile_assets', side_effect=ValueError('asset sentinel')) as assets, \
+                 patch.object(builder, 'assemble') as assembler:
+                with self.assertRaisesRegex(ValueError, 'asset sentinel'):
+                    builder.build(source, location/'output')
+                assets.assert_called_once_with(builder.ROOT, source)
+                assembler.assert_not_called()
 
 
 if __name__=='__main__':unittest.main()

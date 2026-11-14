@@ -10,17 +10,21 @@ and targets an ordinary MMC1 cartridge with NES-native audio.
 
 The local build currently includes:
 
-- Coiled side-view Barba with animation remapping, an 8x16 flying wyrmling,
+- Boss-derived 24x48 side-view Barba with jaw animation and ceiling folding,
+  an 8x16 flying wyrmling,
   and a dedicated 16x16 overworld avatar with directional animation.
-- A two-part horizontal flame plume and a 22x10 melee region, including crouched
+- A two-part horizontal flame plume and a 16x10 melee region, including crouched
   attacks. Enemy damage and Fire-spell vulnerability rules retain their original roles.
 - One breath attack at every health level (no automatic full-health beam).
-  Fire upgrades it with faster ranged flames that leave Barba's mouth.
+  Fire adds a bounded two-shot burst from the same mouth position.
 - A fiery attack sound.
 - Palace lava surface support with normal movement and jumping. Water outside
   palaces retains its original death behavior.
 - Dragon spell menu names and a short native noise-channel roar on Inferno.
 - Dragon sea crossings on the existing raft route and unlock.
+
+The tall head is visual: terrain and enemy contact retain the native collision
+body. Crouching fits the original low lane; stone ceilings fold the head down.
 
 **Not a finished conversion.** Vertical attacks still need dedicated flame art;
 Palace 6's boss has not yet received the Ice Barba treatment. Title/story text,

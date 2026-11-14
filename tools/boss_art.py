@@ -7,7 +7,6 @@ required by Zelda II's side-view renderer, and use the original palette indices.
 from __future__ import annotations
 
 import json
-import math
 from pathlib import Path
 
 from nes import CHR_OFFSET, decode_tile, load_source, write_png
@@ -51,7 +50,7 @@ def _blit(canvas: list[list[str]], rows: list[str], x: int, y: int) -> None:
 def make_frames(rom: bytes, width: int = 24) -> dict[str, list[str]]:
     """Return named pixel-row frames in a 16x48 or 24x48 LEFT-facing canvas.
 
-    Standing muzzle: visual row 11 (origin near x0). Crouched muzzle: row 27.
+    Standing muzzle: visual row 11 (origin near x0). Crouched muzzle: row 43.
     Head is assembled from real boss tiles and resampled only horizontally.
     Neck strip is native A0/A2; bottom coils are masked native neck textures.
     The renderer must decide visual-height versus physical collision policy.
@@ -65,15 +64,12 @@ def make_frames(rom: bytes, width: int = 24) -> dict[str, list[str]]:
     def pose(jaw='closed', phase=0, crouch=False, hurt=False) -> list[str]:
         canvas = [['0']*width for _ in range(48)]
         head = resize_x(source_head(rom, jaw), width)
-        head_y = 16 if crouch else 0
-        if hurt:
-            head_y += 2
-        _blit(canvas, head, 0, head_y)
+        head_y = 32 if crouch else 0
         # Alternating offsets provide a restrained source-like neck undulation.
         neck_x = width-neck_width
-        for y in range(head_y+16, 42):
+        for y in range(head_y+14, 42):
             sway = (0, -1, 0, 1)[((y-head_y)//8+phase)%4]
-            row = neck[(y-head_y-16)%16]
+            row = neck[max(0, y-head_y-16)%16]
             _blit(canvas, [row], neck_x+sway, y)
         # Curl the native segmented belly into a grounded coil. The elliptical
         # mask is new geometry; its color/segment texture comes from boss CHR.
@@ -81,10 +77,13 @@ def make_frames(rom: bytes, width: int = 24) -> dict[str, list[str]]:
         for y in range(32, 48):
             for x in range(width):
                 outer = ((x-cx)/(width/2))**2 + ((y-40)/7.1)**2
-                inner = ((x-cx)/(width/3.8))**2 + ((y-39)/2.5)**2
-                if outer <= 1 and (inner >= 1 or x >= width-7):
-                    sample = neck[(y+phase*2)%16][int(x*neck_width/width)]
+                inner = ((x-cx)/(width/3.8))**2 + ((y-39)/1.7)**2
+                if not crouch and outer <= 1 and (inner >= 1 or x >= width-7):
+                    sample = neck[y%16][int(x*neck_width/width)]
                     canvas[y][x] = sample if sample != '0' else '1'
+        # Draw the native jaw over the neck so its open-mouth silhouette stays
+        # intact. A tucked crouch is just the head in the physical duck lane.
+        _blit(canvas, head, 0, head_y)
         return [''.join(row) for row in canvas]
 
     frames = {name: pose(jaw, phase, crouch, hurt) for name,jaw,phase,crouch,hurt in [
@@ -97,7 +96,7 @@ def make_frames(rom: bytes, width: int = 24) -> dict[str, list[str]]:
         ('jump','closed',2,False,False),
         ('crouch','closed',0,True,False),
         ('crouch-attack','open',0,True,False),
-        ('hurt','half',0,False,True),
+        ('hurt','half',1,False,True),
         ('item','closed',0,False,False),
     ]}
     # Vertical poses turn the native head instead of inventing a different face.
@@ -108,11 +107,13 @@ def make_frames(rom: bytes, width: int = 24) -> dict[str, list[str]]:
         canvas = [['0']*width for _ in range(48)]
         base = frames['idle']
         for at in (range(32,48) if name=='up' else range(0,16)):
-            source_y = at if name=='up' else at+32
+            source_y = at if name=='up' else at+16
             canvas[at] = list(base[source_y])
         _blit(canvas, rows, (width-16)//2, y)
         frames[name] = [''.join(row) for row in canvas]
     frames['death'] = ['0'*width]*16 + frames['crouch'][16:]
+    # Compact 32px fallback for the original renderer's item/Dark Link paths.
+    frames['tuck'] = ['0'*width]*16 + frames['idle'][:16] + frames['idle'][32:]
     return frames
 
 
@@ -138,7 +139,7 @@ def make_study(root: Path = ROOT) -> Path:
     (root/'build/barba-boss-study.json').write_text(json.dumps({
         'order':names,'source_bank_4k':25,'palette_nes':['0F','16','27','30'],
         'native_head_size':[32,16],'head_pairs':HEAD_PAIRS,'neck_pairs':[160,162],
-        'muzzle_rows':{'standing':11,'crouched':27},
+        'muzzle_rows':{'standing':11,'crouched':43,'tucked':27},
         'note':'Recipe-only source; pixels and previews are generated from the user ROM.'
     },indent=2)+'\n')
     return output

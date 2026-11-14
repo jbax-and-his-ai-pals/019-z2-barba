@@ -35,11 +35,13 @@ local function tick()
         local test=cases[current]
         -- Keep the Bot fixture stationary; its vulnerability and damage handlers
         -- run unchanged. Place it near the extended end of the flame plume.
-        local offset=test.dir==1 and 36 or -24
-        w(0x4E,(r(0x4D)+offset)%256);w(0x3C,r(0x3B))
-        w(0x2A,r(0x29)+(test.duck and 20 or 4));w(0x71,0);w(0x57E,0)
-        if r(0xC2)<8 or r(0x40E)>0 then hit=true end
         local elapsed=frame-(1000+(current-1)*100)
+        local screenX=r(0x5F2)+(test.dir==1 and 8 or -8)
+        local worldX=r(0x4D)+r(0x3B)*256+screenX-r(0xCC)
+        if elapsed<2 then worldX=r(0x4D)+r(0x3B)*256+96 end
+        w(0x4E,worldX%256);w(0x3C,math.floor(worldX/256)%256)
+        w(0x2A,elapsed<2 and 64 or r(0x5F3)+4);w(0x71,0);w(0x57E,0)
+        if r(0xC2)<8 or r(0x40E)>0 then hit=true end
         if elapsed==30 then
             screenshot('combat-'..current)
             report:write((hit and 'PASS ' or 'FAIL ')..'flame damages enemy: direction '..test.dir..' crouch '..tostring(test.duck)..' HP '..r(0xC2)..'\n')

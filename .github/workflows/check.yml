@@ -14,19 +14,19 @@ jobs:
         run: sudo apt-get update && sudo apt-get install --yes cc65
       - name: Check build tools
         run: python -m unittest discover -s tests -v
-      - name: Assemble custom routines and compile original art
+      - name: Validate asset indexes and assemble without a game ROM
         run: |
           python - <<'PY'
           import sys, tempfile
           from pathlib import Path
           sys.path.insert(0, 'tools')
           from build import assemble
-          from assets import compile_assets
+          from assets import validate_layout
+          validate_layout(Path.cwd())
           with tempfile.TemporaryDirectory() as directory:
               assemble(Path(directory))
-          compile_assets(Path.cwd())
           PY
       - name: Ensure no game dumps or saves are tracked
         run: |
-          files=$(git ls-files '*.nes' '*.fds' '*.sav' '*.srm' 'roms/*' '.tools/*' 'build/*')
+          files=$(git ls-files '*.nes' '*.fds' '*.sav' '*.srm' '*.mss' '*.rgd' 'roms/*' '.tools/*' 'build/*')
           test -z "$files" || { printf '%s\n' "$files"; exit 1; }
