@@ -10,7 +10,7 @@ and targets an ordinary MMC1 cartridge with NES-native audio.
 
 The local build currently includes:
 
-- Boss-derived 24x48 side-view Barba with jaw animation and ceiling folding,
+- Thin, boss-derived 24x48 side-view Barba with full-body jumps, jaw animation and ceiling folding,
   an 8x16 flying wyrmling,
   and a dedicated 16x16 overworld avatar with directional animation.
 - A two-part horizontal flame plume and a 16x10 melee region, including crouched

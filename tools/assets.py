@@ -8,7 +8,7 @@ from boss_art import make_frames
 
 COLORS = [(20, 22, 28), (194, 43, 25), (255, 168, 57), (255, 243, 205)]
 TALL_POSES = ('walk0', 'walk1', 'walk2', 'idle', 'windup', 'attack',
-              'crouch', 'crouch-attack', 'up', 'down', 'hurt', 'death')
+              'crouch', 'crouch-attack', 'up', 'down', 'hurt', 'death', 'jump')
 
 
 def validate_layout(root: Path) -> bytes:
@@ -16,7 +16,7 @@ def validate_layout(root: Path) -> bytes:
     text = (root / 'src/tall_layout.inc').read_text()
     rows = re.findall(r'^\s*\.byte\s+([^;\n]+);\s*(\S+)\s*$', text, re.MULTILINE)
     if [name for _, name in rows] != list(TALL_POSES):
-        raise ValueError('Tall layout must contain the twelve ordered player poses')
+        raise ValueError('Tall layout must contain the ordered player poses')
     layout = bytearray()
     for values, name in rows:
         tokens = [token.strip() for token in values.split(',')]

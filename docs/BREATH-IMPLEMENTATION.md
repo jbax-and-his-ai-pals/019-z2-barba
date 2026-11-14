@@ -1,9 +1,15 @@
 # Mouth-anchored breath
 
-`src/tall_player.inc` renders twelve boss-derived 24x48 poses. Six original body
+`src/tall_player.inc` renders thirteen boss-derived 24x48 poses. Six original body
 OAM slots hold the lower rows; three spare slots hold the head. The native
 renderer retains item poses, invisibility and flying form. Extracted pixels
 stay in local ignored outputs.
+
+The body repeats the boss's narrow segmented neck without an added belly coil.
+Vanilla reuses crouch frame 6 during ascent; the renderer selects a separate
+full-body jump pose while airborne, leaving native animation and physics state
+intact. Airborne low attacks also retain the whole body. Only grounded crouch
+uses the head-only low pose.
 
 ## Shared geometry
 

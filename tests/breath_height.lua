@@ -15,6 +15,17 @@ local previousSlots={0,0}
 local startY=nil
 local jumped,landed,ducked,walked,world=false,false,false,false,false
 local peak=nil
+local wholeAscent,wholeDescent=false,false
+local function fullBodyVisible()
+    local head,body=false,false
+    for _,a in ipairs({0x228,0x22C,0x230})do
+        if r(a)<0xF0 then head=true end
+    end
+    for _,a in ipairs({0x214,0x218,0x21C})do
+        if r(a)<0xF0 then body=true end
+    end
+    return head and body
+end
 local function check(ok,message)
     report:write((ok and 'PASS ' or 'FAIL ')..message..'\n');report:flush()
     if not ok then errors=errors+1 end
@@ -113,12 +124,18 @@ local function tick()
     end
     if frame>=movement+30 and frame<movement+130 then
         if r(0x479)>0 then jumped=true end
+        if r(0x479)==2 and r(0x80)==6 and fullBodyVisible() then
+            wholeAscent=true
+        end
+        if r(0x479)>0 and r(0x57D)<0x80 and fullBodyVisible() then wholeDescent=true end
         peak=math.min(peak,r(0x29))
         if jumped and r(0x479)==0 and math.abs(r(0x29)-startY)<=1 then landed=true end
+        if frame==movement+48 then screenshot('breath-height-jump')end
     end
     if frame>=movement+130 and frame<movement+160 and r(0x80)==6 then ducked=true end
     if frame==movement+170 then
         check(jumped and landed and peak<startY-8,'jump rises and returns to original floor')
+        check(wholeAscent and wholeDescent,'head and lower body remain visible through jump ascent and descent')
         check(ducked,'crouch state still available after attack tests')
         screenshot('breath-height-idle')
     end

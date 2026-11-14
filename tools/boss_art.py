@@ -52,7 +52,7 @@ def make_frames(rom: bytes, width: int = 24) -> dict[str, list[str]]:
 
     Standing muzzle: visual row 11 (origin near x0). Crouched muzzle: row 43.
     Head is assembled from real boss tiles and resampled only horizontally.
-    Neck strip is native A0/A2; bottom coils are masked native neck textures.
+    The narrow continuous body uses the native A0/A2 neck strip throughout.
     The renderer must decide visual-height versus physical collision policy.
     """
     if width not in (16, 24):
@@ -67,20 +67,12 @@ def make_frames(rom: bytes, width: int = 24) -> dict[str, list[str]]:
         head_y = 32 if crouch else 0
         # Alternating offsets provide a restrained source-like neck undulation.
         neck_x = width-neck_width
-        for y in range(head_y+14, 42):
+        for y in range(head_y+14, 48):
             sway = (0, -1, 0, 1)[((y-head_y)//8+phase)%4]
             row = neck[max(0, y-head_y-16)%16]
             _blit(canvas, [row], neck_x+sway, y)
-        # Curl the native segmented belly into a grounded coil. The elliptical
-        # mask is new geometry; its color/segment texture comes from boss CHR.
-        cx = (width-1)/2
-        for y in range(32, 48):
-            for x in range(width):
-                outer = ((x-cx)/(width/2))**2 + ((y-40)/7.1)**2
-                inner = ((x-cx)/(width/3.8))**2 + ((y-39)/1.7)**2
-                if not crouch and outer <= 1 and (inner >= 1 or x >= width-7):
-                    sample = neck[y%16][int(x*neck_width/width)]
-                    canvas[y][x] = sample if sample != '0' else '1'
+        # Keep the encounter's narrow segmented silhouette all the way to the
+        # feet. No added coil or wider belly, including during the jump pose.
         # Draw the native jaw over the neck so its open-mouth silhouette stays
         # intact. A tucked crouch is just the head in the physical duck lane.
         _blit(canvas, head, 0, head_y)

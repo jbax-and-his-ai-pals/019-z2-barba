@@ -33,7 +33,13 @@ BarbaGeometry:
     jmp @done
 :
     lda $17
-    beq @duck
+    bne @standing
+    ; A low shield in the air is not a grounded crouch. Match the full-body
+    ; airborne drawing for both the attached flame and new Fire shots.
+    lda $0479
+    bne @standing
+    jmp @duck
+@standing:
     ; Check both edges of the raised head against the area's solid-tile
     ; predicate. Its bank switch lives in fixed ROM, never in swapped code.
     lda $29
@@ -151,11 +157,25 @@ BarbaDisplay:
     and #$43
     sta DRAW_ATTR
     lda $80
+    ; Vanilla reuses crouch frame 6 on ascent. Select an independent full-body
+    ; jump pose without changing its physics, shield state or technique gates.
+    ldx $0479
+    beq @pose
+    cmp #$06
+    bne @air_attack
+    lda #$0C
+    bne @pose
+@air_attack:
+    cmp #$07
+    bne @pose
+    lda #$05
+@pose:
+    sta DRAW_FRAME
     asl
     asl
     asl
     clc
-    adc $80
+    adc DRAW_FRAME
     sta DRAW_FRAME
     lda #$00
     sta DRAW_INDEX

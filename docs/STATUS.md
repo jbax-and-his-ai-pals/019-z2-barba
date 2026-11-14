@@ -6,6 +6,9 @@ The current player uses boss-derived 24x48 poses, a shared mouth position and a
 bounded two-shot Fire burst. Terrain and enemy-contact collision retain the
 native body: the raised head is visual, not a newly enlarged hurtbox. Solid
 ceilings fold the head into the original 32px height; crouch occupies 16px.
+The body now keeps the boss's narrow neck silhouette without the added belly
+coil. Full-body jump rendering is checked during ascent and descent; grounded
+crouching remains compact.
 
 ## Verified locally
 
