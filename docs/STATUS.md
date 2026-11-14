@@ -31,8 +31,10 @@ BUILD.md. Hardware sprite limits remain enabled.
 | HUD split timing | 900 measured Palace 1 frames keep the split on line 31; previous build reached line 42. No upper-HUD scroll/address writes; native sprite-limit flicker remains possible |
 | Bounded volley | Five logical slots keep exact eight-update spacing, preserve range, continue beyond attack animation and require release before rearming |
 | Town safety | 1,041 actor/world/room/origin gate cases plus dialogue fallback checks; indoor and scripted actors are excluded |
-| Town gameplay | Native Rauru generator, fleeing, real fireball burn/despawn, scripted-walker survival, fear dialogue and immediate refuge despawn without background edits |
+| Town gameplay | Native Rauru generator, fleeing, real fireball burn/ash/expiry, scripted-walker survival, reachable held-Up dialogue and immediate refuge despawn without background edits |
 | Left-facing and player doors | Busy-original-slot and world-page tests emit five shots; real doorway entry/return works with a nearby villager; F8 uses the correct street room |
+| Passive panic text | Real PPU text appears within six frames without dialogue locks; automatically clears, preserves native queue prefixes and stays within 32 queued bytes |
+| Panic dialogue speed | Holding Up catches a fleeing villager; protected-NPC delays and caller registers retain original behavior |
 | Checkpoint XP regression | Upgraded states now recompute the next-level target; 50 XP stays in gameplay, 2,000 XP permits one attack upgrade and returns to gameplay afterward |
 
 Combat and palace scenarios intentionally create controlled fixtures (enemy

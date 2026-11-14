@@ -16,9 +16,9 @@ The local build currently includes:
 - Evenly spaced five-shot downward-diagonal volleys at every health level, with no
   sword, thrust damage or attached melee plume. Fire empowers projectile damage
   against Fire-only enemies. Fireballs retain glove-gated block breaking.
-- Random outdoor wanderers flee at a catchable speed, vanish at existing doors, or burn briefly
-  when hit. Indoor and scripted NPCs are protected. Press Up near a wanderer
-  for a fearful plea; important characters keep their original conversations.
+- Random outdoor wanderers flee at a catchable speed, vanish at existing doors, or burn into temporary ash piles
+  when hit. Indoor and scripted NPCs are protected. Panic shouts appear automatically without pausing. Hold Up near a wanderer
+  for faster direct dialogue; important characters keep their original conversations.
 - Head checks are batched and spawning runs after the HUD split to keep the
   status text stable during battles.
 - A fiery attack sound.

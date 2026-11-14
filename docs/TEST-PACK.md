@@ -20,7 +20,7 @@ Press the same key again at any time to restart that test and refill its meters.
 | F5 | Standing on lava | Already on the lava surface. Check for sinking and test jumps immediately. |
 | F6 | Palace 6 Barba encounter | Original Barba is above the lava. Test player/boss graphics, attacks and movement around the platforms. Ice Barba is not implemented. |
 | F7 | Sea crossing in progress | Watch the dragon complete the normal raft route to East Hyrule. Reload F7 to repeat. |
-| F8 | Rauru town street | Approach outdoor wanderers, watch slower fleeing/immediate door despawn, and test fireballs. Press Up nearby for fear dialogue. Scripted and indoor NPCs are protected. |
+| F8 | Rauru town street | Approach outdoor wanderers, watch slower fleeing/immediate door despawn, and test fireballs. Watch automatic shouts and ash piles; hold Up while approaching for faster dialogue. Scripted and indoor NPCs are protected. |
 
 Controls: arrows move, **X** jumps, **Z** attacks, **Enter** starts/pauses, and
 **Left Shift** is Select/cast. State-load keys work independently of the game menu.

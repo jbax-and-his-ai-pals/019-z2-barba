@@ -51,6 +51,7 @@ BarbaInferno:
 ; override; the game's audio driver resumes control on the following frame.
 BarbaUpdate:
     jsr BarbaProjectiles
+    jsr BarbaShouts
     lda ROAR_TIMER
     beq @done
     dec ROAR_TIMER
@@ -75,6 +76,7 @@ RoarPitch:
 .include "extra_fire.inc"
 .include "tall_player.inc"
 .include "blocks.inc"
+.include "shouts.inc"
 .include "town.inc"
 
 .segment "LAVA"

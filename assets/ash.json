@@ -1,0 +1,13 @@
+{
+  "description": "Original temporary 16x8 ash mound. 0 transparent, 1 charcoal, 2 gray, 3 pale ash grain. Draw at NPC Y+24; the lower 8 sprite rows are transparent.",
+  "rows": [
+    "0000002000000000",
+    "0000201120000000",
+    "0000112311200000",
+    "0011211221112000",
+    "0112111311121100",
+    "1121112112111210",
+    "0011121111321000",
+    "0000100010000000"
+  ]
+}

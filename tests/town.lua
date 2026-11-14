@@ -6,6 +6,8 @@ local function w(a,v)emu.write(a,v,m)end
 local frame,age,phase,errors=0,0,0,0
 local base,slot,pending=nil,nil,false
 local fled,burned,flame,dialog,closed=false,false,false,false,false
+local ashes=false
+local requests,fastComplete=0,false
 local startX=0
 local doorAddress=nil
 local enteredDoor=false
@@ -23,8 +25,11 @@ local function setup()
     w(0xB6+slot,1);w(0x4E+slot,112);w(0x3C+slot,0);w(0x2A+slot,176)
     w(0xAF+slot,phase==1 and 0 or 0x80);w(0x71+slot,0);w(0x5C3+slot,0)
     if phase==3 then w(0xBC+slot,5);w(0xAF+slot,0)end
-    if phase==2 then w(0xAF+slot,0)end
-    if phase==4 then w(0xA1+slot,0x19);w(0x4E+slot,92)end
+    if phase==2 then
+        w(0xAF+slot,0)
+        for x=0,5 do if x~=slot then w(0xB6+x,0)end end
+    end
+    if phase==4 then w(0xA1+slot,0x19);w(0x4E+slot,140);w(0x71+slot,0x10)end
     for x=0,5 do if r(0xA1+x)==0x23 then w(0xB6+x,0)end end
     if phase==5 then
         for page=0,3 do
@@ -49,16 +54,17 @@ emu.addEventCallback(function()
     if frame>=1000 then
         b={start=false,select=false,a=false,b=false,up=false,down=false,left=false,right=false}
         if phase==2 or phase==3 then b.b=age>=8 and age<11 end
-        if phase==4 then b.up=age>=8 and age<11;b.b=age>=400 and age<403 end
+        if phase==4 then b.up=age<220;b.right=age<70;b.b=age>=180 and age<183 end
     end
     emu.setInput(b,0)
 end,emu.eventType.inputPolled)
 emu.addMemoryCallback(function()
     if phase==4 then
+        requests=requests+1
         local pointer=LABELS.TownFearPointers+(r(0xA1+slot)-0x19)*2
         if r(0x569)+256*r(0x56A)==r(pointer)+256*r(pointer+1) then dialog=true end
     end
-end,emu.callbackType.exec,0xB614)
+end,emu.callbackType.exec,LABELS.TownFastDialogReady)
 emu.addMemoryCallback(function()
     if not pending then return end
     pending=false
@@ -89,6 +95,10 @@ emu.addEventCallback(function()
     age=age+1
     if phase==1 and r(0xAF+slot)==0x80 and r(0x4E+slot)>startX then fled=true end
     if phase==2 then
+        if r(0xAF+slot)>=0xA0 and r(0xAF+slot)<0xC0 then
+            if not ashes then screenshot('town-ash')end
+            ashes=true
+        end
         if r(0xAF+slot)>=0xC0 then
             burned=true
             local oam=r(0x91+slot)
@@ -96,24 +106,34 @@ emu.addEventCallback(function()
             if age==30 then screenshot('town-burning')end
         end
     end
+    if phase==2 and age==110 then screenshot('town-ash')end
     if phase==4 then
-        if age==380 then screenshot('town-fear-dialogue')end
-        if dialog and age>405 and r(0x74C)==0 and r(0xDE)==0 then closed=true end
+        local pointer=r(0x569)+256*r(0x56A)
+        if age<=150 and dialog and pointer>=0xB803 and pointer<0xBF70
+            and emu.read(3*0x4000+pointer-0x8000,emu.memType.nesPrgRom)==0xFF then fastComplete=true end
+        if age==130 then screenshot('town-fear-dialogue')end
+        if dialog and age>230 and r(0x74C)==0 and r(0xDE)==0 then closed=true end
     end
     if phase==5 and r(0xB6+slot)==0 and not enteredDoor then
         enteredDoor=true;hiddenAtDoor=true
         local oam=r(0x91+slot)
         for offset=0,12,4 do if r(0x200+oam+offset)~=0xF8 then hiddenAtDoor=false end end
     end
-    local limit=phase==4 and 460 or 90
+    local limit=phase==4 and 280 or (phase==2 and 190 or 90)
     if age==limit then
         if phase==1 then check(fled,'random outdoor wanderer flees from Barba');screenshot('town-fleeing')end
         if phase==2 then
             check(burned and flame,'real player fireball ignites random wanderer using native OAM')
-            check(r(0xB6+slot)==0,'burning ends by despawning the random wanderer')
+            check(ashes,'burning leaves a temporary ash pile')
+            check(r(0xB6+slot)==0,'ash pile expires and releases its actor slot')
         end
         if phase==3 then check(r(0xB6+slot)==1 and r(0xAF+slot)<0xC0,'same walking type with scripted origin survives fire')end
-        if phase==4 then check(dialog,'Up conversation selects fear text only for generated wanderer');check(closed,'fear dialogue closes and restores gameplay')end
+        if phase==4 then
+            check(dialog,'held Up catches a fleeing villager from outside the old talk radius')
+            check(fastComplete,'complete panic message renders within 150 frames of approach')
+            check(requests==1,'holding Up does not repeatedly reopen dialogue')
+            check(closed,'fear dialogue closes and restores gameplay')
+        end
         if phase==5 then
             check(enteredDoor and hiddenAtDoor,'wanderer immediately despawns and hides at the real doorway')
             local unchanged=true

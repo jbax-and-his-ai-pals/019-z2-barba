@@ -9,6 +9,25 @@ from boss_art import make_frames
 COLORS = [(20, 22, 28), (194, 43, 25), (255, 168, 57), (255, 243, 205)]
 TALL_POSES = ('walk0', 'walk1', 'walk2', 'idle', 'windup', 'attack',
               'crouch', 'crouch-attack', 'up', 'down', 'hurt', 'death', 'jump')
+ASH_TILES = (0x64, 0x66)
+
+
+def compile_ash(root: Path) -> tuple[dict[int, bytes], list[str]]:
+    """Compile authored ash independently of the private source ROM.
+
+    The caller chooses the native charcoal/ember sprite palette. Place both 8x16 sprites at
+    NPC Y+24: the eight visible rows then sit at the original NPC's feet.
+    """
+    rows = json.loads((root / 'assets/ash.json').read_text())['rows']
+    if len(rows) != 8 or any(len(row) != 16 or set(row)-set('0123') for row in rows):
+        raise ValueError('Ash art requires eight 16-pixel rows using indexes 0..3')
+    # Keep fixed IDs in a ROM-free include so the town renderer can assemble
+    # without copying or extracting any game pixels.
+    include = (root / 'src/ash_layout.inc').read_text()
+    for name, tile in zip(('AshTileLeft', 'AshTileRight'), ASH_TILES):
+        if not re.search(rf'^{name}\s*=\s*\${tile:02X}\s*$', include, re.MULTILINE):
+            raise ValueError(f'Ash layout {name} does not match allocated tile ${tile:02X}')
+    return dict(zip(ASH_TILES, sprite_pairs(rows+['0'*16]*8))), rows
 
 
 def validate_layout(root: Path) -> bytes:
@@ -111,6 +130,10 @@ def compile_assets(root: Path, source_path: Path | None = None) -> tuple[bytes, 
     hatchling = [row[::2] for row in small]
     graphics[0x68] = sprite_pairs(hatchling)[0]
     graphics[0x6A] = sprite_pairs(hatchling[1:]+['00000000'])[0]
+    ash_graphics, ash_rows = compile_ash(root)
+    if graphics.keys() & ash_graphics.keys():
+        raise ValueError('Ash sprites overlap another graphics allocation')
+    graphics.update(ash_graphics)
 
     ow = bytearray()
     for rows in (small, [r[::-1] for r in small], art['front'], art['back']):
@@ -128,10 +151,15 @@ def compile_assets(root: Path, source_path: Path | None = None) -> tuple[bytes, 
             preview_rows.append(row + [COLORS[0]] * (140-len(row)))
         preview_rows += [[COLORS[0]]*140 for _ in range(4)]
     write_png(root / 'build/barba-sprites.png', preview_rows, 4)
+    ash_colors = [(20,22,28), (55,55,55), (112,112,112), (182,182,182)]
+    write_png(root / 'build/ash-sprite.png',
+              [[ash_colors[int(pixel)] for pixel in row] for row in ash_rows], 12)
     (root / 'build/barba-assets.json').write_text(json.dumps({
         'poses': list(TALL_POSES), 'size': [24, 48],
         'body_pairs': len(pairs)-1, 'available_body_pairs': 47,
         'weapon_pairs': [0x32, 0x50, 0x54], 'wyrmling_pairs': [0x68, 0x6A],
+        'ash_pairs': list(ASH_TILES), 'ash_visible_size': [16,8],
+        'ash_sprite_npc_y_offset': 24,
         'mapping': [list(row) for row in tall_mapping],
         'fallback_mapping_bytes': len(mapping),
         'muzzle_left_canvas': {'standing': [0,11], 'crouched': [0,35],

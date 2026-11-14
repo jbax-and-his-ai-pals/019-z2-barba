@@ -21,8 +21,9 @@ jobs:
           from pathlib import Path
           sys.path.insert(0, 'tools')
           from build import assemble
-          from assets import validate_layout
+          from assets import validate_layout, compile_ash
           validate_layout(Path.cwd())
+          compile_ash(Path.cwd())
           with tempfile.TemporaryDirectory() as directory:
               assemble(Path(directory))
           PY

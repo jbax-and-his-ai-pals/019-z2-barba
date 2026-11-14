@@ -5,12 +5,14 @@
 ; with these same type numbers, always tail-call the untouched native routine.
 .segment "TOWN"
 .export TownUpdate, TownEligible, TownOutdoorRooms, TownEnd, TownDialog, TownFearText, TownFearPointers, TownHide
+.export TownFastDialogReady, TownLetterDelay, TownLineDelay, TownAsh
+.include "ash_layout.inc"
 
 ; Native generator $96E0 clears AF before initializing each new actor.
 ; We borrow that actor's state only after the positive provenance gate:
-;   $00 normal; $80 flee; $C0..$DF burning.
+;   $00 normal; $80 flee; $A0..$BF ashes; $C0..$DF burning.
 ; Old prototype door-entry states $01..$7F are immediately hidden on load.
-; No extra RAM, persistent quest flags, NPC types, or conversation pointers.
+; No extra per-NPC RAM or quest flags. Shared subtitle state is in shouts.inc.
 
 TownUpdate:
     jsr TownEligible
@@ -27,18 +29,26 @@ TownUpdate:
     bcc :+
     jmp TownBurning
 :
+    cmp #$A0
+    bcc :+
+    jmp TownAsh
+:
     cmp #$80
     beq @canHit
     cmp #$00
     bne TownDoor
 @canHit:
     ; Up talks to a nearby frightened wanderer. B remains the fire attack.
-    lda $F5
+    lda TALK_LATCH
+    bne @projectile
+    lda $F7
     and #$08
     beq @projectile
     jsr TownCanTalk
     bcc @projectile
     stx $048B
+    lda #$01
+    sta TALK_LATCH
     lda #$00
     sta $AF,x
     jsr $9A33
@@ -46,6 +56,7 @@ TownUpdate:
 @projectile:
     jsr TownProjectileHit
     bcc @unhit
+    jsr TownRequestShout
     lda #$DF
     sta $AF,x
     lda #$00
@@ -72,6 +83,7 @@ TownUpdate:
     sta $71,x
 
 TownFlee:
+    jsr TownRequestShout
     jsr $9A68                  ; original fractional movement and walk cycle
     ; $8B is the native closed-door collision tile. Disappear when reaching
     ; this real doorway, without borrowing the scripted NPC door animation.
@@ -120,7 +132,9 @@ TownBurning:
     lda $AF,x
     cmp #$C0
     bne @draw
-    jmp TownHide
+    lda #$BF
+    sta $AF,x
+    jmp TownAsh
 @draw:
     ; Reuse the NPC's original four 8x16 sprite slots, not extra OAM. Native
     ; drawing provides screen clipping and positions. Replace only tile and
@@ -154,6 +168,54 @@ TownBurning:
     dec $00
     bne @flame
     rts
+
+; Charcoal and ember pile remains about two seconds. It is not a living NPC:
+; no fleeing, conversations, further damage or background edits occur here.
+TownAsh:
+    lda $12
+    and #$03
+    bne @draw
+    dec $AF,x
+    lda $AF,x
+    cmp #$A0
+    bne @draw
+    jmp TownHide
+@draw:
+    lda $4E,x
+    sec
+    sbc $072C
+    sta $00
+    lda $3C,x
+    sbc $072A
+    bne @hide
+    lda $00
+    cmp #$F0
+    bcs @hide
+    ldy $91,x
+    lda #$F8
+    sta $0208,y
+    sta $020C,y
+    lda $2A,x
+    clc
+    adc #$18
+    sta $0200,y
+    sta $0204,y
+    lda #AshTileLeft
+    sta $0201,y
+    lda #AshTileRight
+    sta $0205,y
+    ; Town palette 2 supplies charcoal, glowing embers and pale flecks.
+    lda #$02
+    sta $0202,y
+    sta $0206,y
+    lda $00
+    sta $0203,y
+    clc
+    adc #$08
+    sta $0207,y
+    rts
+@hide:
+    jmp TownHide
 
 ; Carry set iff this is a live, positively identified random outdoor walker.
 ; X is always preserved. The room table is audited from the verified source
@@ -278,7 +340,7 @@ TownProjectileHit:
     rts
 
 ; Do not steal Up from a doorway/transition, jumping or an existing dialogue.
-; Talking requires a closer approach than the radius that triggers panic.
+; Holding Up while approaching is allowed, so fleeing targets are reachable.
 TownCanTalk:
     lda $0736
     cmp #$0B
@@ -300,13 +362,13 @@ TownCanTalk:
     sta $01
     lda $00
     clc
-    adc #$10
+    adc #$30
     sta $00
     lda $01
     adc #$00
     bne @no
     lda $00
-    cmp #$21
+    cmp #$61
     bcs @no
     lda $2A,x
     sec
@@ -319,6 +381,30 @@ TownCanTalk:
     rts
 @no:
     clc
+    rts
+
+TownRequestShout:
+    lda SHOUT_READY
+    cmp #$01
+    bne @done
+    lda SHOUT_COOLDOWN
+    ora SHOUT_REQUEST
+    bne @done
+    lda $4E,x
+    sec
+    sbc $072C
+    sta $00
+    lda $3C,x
+    sbc $072A
+    bne @done
+    lda $00
+    cmp #$F0
+    bcs @done
+    lda $A1,x
+    sec
+    sbc #$18
+    sta SHOUT_REQUEST
+@done:
     rts
 
 TownPlayerNearby:
@@ -365,7 +451,7 @@ TownDialog:
     pha
     ldx $048B
     jsr TownEligible
-    bcc @original
+    bcc TownOriginalDialog
     pla
     lda $A1,x
     sec
@@ -376,12 +462,68 @@ TownDialog:
     sta $0569
     lda TownFearPointers+1,y
     sta $056A
-    jmp $B614
-@original:
+    lda #$02
+    sta $0566
+    lda #$00
+    sta $0489
+    sta $048A
+TownFastDialogReady:
+    inc $0524
+    rts
+TownOriginalDialog:
     pla
     asl
     tay
     lda $0707
     jmp $B5FD
+
+; Only generated outdoor wanderers get faster typewriting and line breaks.
+TownLetterDelay:
+    php
+    txa
+    pha
+    tya
+    pha
+    ldx $048B
+    jsr TownEligible
+    lda #$05
+    bcc :+
+    lda #$01
+:
+    sta $0566
+    pla
+    tay
+    pla
+    tax
+    plp
+    lda $0566
+    rts
+TownLineDelay:
+    php
+    pha
+    txa
+    pha
+    tya
+    pha
+    ldx $048B
+    jsr TownEligible
+    bcc @native
+    lda #$01
+    sta $0566
+    jmp @restore
+@native:
+    pla
+    tay
+    tya
+    pha
+    sta $0566
+@restore:
+    pla
+    tay
+    pla
+    tax
+    pla
+    plp
+    rts
 .include "town_dialogue.inc"
 TownEnd:

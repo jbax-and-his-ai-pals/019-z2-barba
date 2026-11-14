@@ -78,6 +78,8 @@ def build(source_path: Path, output: Path) -> dict:
     hook(7, 0xE48B, 'EnemyFireGateway', 0x4C, 'b5 b6 c9 01', 1)
     hook(7, 0xE617, 'ShieldFireGateway', 0x4C, 'a5 c8 0a')
     hook(3, 0xB5F8, 'TownDialog', 0x4C, '0a a8 ad 07 07', 2)
+    hook(3, 0xB74D, 'TownLetterDelay', 0x20, 'a9 05 8d 66 05', 2)
+    hook(3, 0xB65E, 'TownLineDelay', 0x20, '8c 66 05')
     for address in (0x94BF, 0x94C1, 0x94C3, 0x94C5):
         dest = labels['TownUpdate']
         overlay.prg(3, address, dest.to_bytes(2, 'little'), bytes.fromhex('78 98'),
