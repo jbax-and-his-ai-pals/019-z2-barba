@@ -1,71 +1,78 @@
-; Barba's melee/Fire/full-life volley integration (BANK0).
-; BarbaGeometry supplies the attached plume's top-left in screen space and
-; bit 0 of its validity flags. Both shots sample that geometry at spawn time.
+; Five-shot diagonal dragon breath. Runs after the sprite-zero HUD split.
+; Two native slots are reused; movement stays free while the volley drains.
 .export BarbaProjectiles, BarbaFireSpell, BarbaMuzzleScreen, BarbaSpellDeferred
-
+.export BarbaVolleyPlaced
 BREATH_MUZZLE_X = $05F2
 BREATH_MUZZLE_Y = $05F3
 BREATH_GEOMETRY_FLAGS = $05F6
+BURST_DEADLINE = $05F1 ; finite 120-update lifetime, including blocked spawns
 BREATH_BURST_DELAY = $05F7
-BREATH_BURST_STATE = $05F8 ; 0 ready, 1 pending, 2 attempted until attack ends
-VOLLEY_SLOT = $05FC ; two flags; non-Fire full-life projectiles
-BREATH_MODE = $05FE ; 0 Fire spell, 1 full-life diagonal volley
+BREATH_BURST_STATE = $05F8 ; 0 ready, 1 active, 2 wait for release/attack idle
+VOLLEY_SLOT = $05FC ; two independent projectile lifetime counters (33 updates)
+BREATH_REMAINING = $05FE ; pending shots, initially four after first allocation
 
-; The spell dispatcher runs before the sprite-zero HUD split. Defer all
-; emission/geometry until BarbaProjectiles, after that timing-critical split.
+; Spell dispatch precedes the timing-critical HUD split. Do not emit here.
 BarbaSpellDeferred:
     rts
 
-; Replace the automatic straight sword beam with a bounded diagonal volley.
-; Native update-only tail retains collision, disintegration and sound.
 BarbaProjectiles:
-    ; Full life restores the beam's original attack gate, now as dragon fire.
-    ; The shared latch prevents repeated shots while an attack is held.
-    jsr BarbaFireSpell
     jsr BarbaBurstAllowed
-    bcc @cancel
-    lda BREATH_MODE
-    beq @attack
-    jsr BarbaFullHealth
-    bcc @cancel
-@attack:
-    lda $0400
-    beq @cancel
+    bcs @allowed
+    jsr BarbaCancelBurst
+    jmp @update
+@allowed:
+    lda BREATH_BURST_STATE
+    cmp #$02
+    bne @start
+    ; B=$40 in held-controller state. Neither a held button nor another
+    ; animation frame may turn the finite volley into an automatic stream.
+    lda $F7
+    and #$40
+    ora $0400
+    bne @update
+    lda #$00
+    sta BREATH_BURST_STATE
+@start:
+    jsr BarbaFireSpell
     lda BREATH_BURST_STATE
     cmp #$01
     bne @update
+    dec BURST_DEADLINE
+    beq @cancel
+    lda BREATH_BURST_DELAY
+    beq @find
     dec BREATH_BURST_DELAY
     bne @update
-    ; Exactly one attempt: a full pool consumes the follow-up, never retries.
-    lda #$02
-    sta BREATH_BURST_STATE
+@find:
     ldx #$01
-@find_slot:
+@slot:
     lda $8D,x
-    beq @followup
+    beq @emit
     dex
-    bpl @find_slot
-    bmi @update
-@followup:
-    ; $981B uses ADC without CLC; no comparison carry may leak into spawn X.
-    clc
+    bpl @slot
+    ; Retry a full pool next update, bounded by BURST_DEADLINE. Never restart
+    ; the count or consume an unallocated shot.
+    jmp @update
+@emit:
+    clc ; native allocator's first ADC requires a cleared carry
     jsr $981B
     jsr BarbaPlaceNewFlame
+    bcc @update
+    dec BREATH_REMAINING
+    beq @cancel
+    lda #$08
+    sta BREATH_BURST_DELAY
     jmp @update
 @cancel:
-    lda #$00
-    sta BREATH_BURST_DELAY
-    sta BREATH_BURST_STATE
+    jsr BarbaCancelBurst
 @update:
     jsr BarbaAdvanceVolley
-    ; Native code ignores slot 1 at Attack 1-3. Update it once here so the
-    ; two-shot burst works at every attack level, still with only two slots.
     lda $0777
     cmp #$04
-    bcs @native_update
+    bcs @native
     ldx #$01
     jsr $9888
-@native_update:
+@native:
     jsr $9878
     txa
     pha
@@ -90,8 +97,17 @@ BarbaProjectiles:
     tax
     rts
 
-; Native player fire has horizontal motion only. Full-life fireballs descend
-; two pixels per update before native movement/collision/drawing samples them.
+BarbaCancelBurst:
+    lda #$00
+    sta BREATH_REMAINING
+    sta BREATH_BURST_DELAY
+    sta BURST_DEADLINE
+    lda #$02
+    sta BREATH_BURST_STATE
+    rts
+
+; Both classes descend and expire identically. Fire changes vulnerability,
+; not the lifetime, which guarantees that a two-slot pool can emit five shots.
 BarbaAdvanceVolley:
     ldx #$01
 @slot:
@@ -100,6 +116,8 @@ BarbaAdvanceVolley:
     lda $8D,x
     beq @clear
     bmi @clear
+    dec VOLLEY_SLOT,x
+    beq @kill
     lda $36,x
     clc
     adc #$02
@@ -119,15 +137,13 @@ BarbaAdvanceVolley:
     bpl @slot
     rts
 
-; Fire's first shot retains the original attack-animation/delay gate and
-; allocator. A successful initial shot arms a single eight-frame follow-up.
+; The initial shot alone uses the native attack/delay gate and allocator.
+; Subsequent shots continue after the animation ends, without locking input.
 BarbaFireSpell:
     jsr BarbaBurstAllowed
     bcc @done
     lda BREATH_BURST_STATE
     bne @done
-    ; Avoid head probes/bank switches on every idle Fire-spell frame. These
-    ; are the native first-shot gates and run again inside $97F1.
     lda $0400
     sec
     sbc #$01
@@ -136,12 +152,9 @@ BarbaFireSpell:
     lda $050A
     cmp #$05
     bne @done
-    lda #$00
-    sta BREATH_MODE
-    jsr BarbaFullHealth
-    bcc :+
-    inc BREATH_MODE
-:
+    ; Consume this attack's gate even if its mouth or pool is unavailable.
+    lda #$02
+    sta BREATH_BURST_STATE
     jsr BarbaGeometry
     lda BREATH_GEOMETRY_FLAGS
     and #$01
@@ -176,12 +189,15 @@ BarbaFireSpell:
 BarbaArmBurst:
     lda #$08
     sta BREATH_BURST_DELAY
+    lda #$04
+    sta BREATH_REMAINING
+    lda #$78
+    sta BURST_DEADLINE
     lda #$01
     sta BREATH_BURST_STATE
     rts
 
-; Carry set only while a queued Fire attack is safe to continue. Scene fade,
-; dialog/level-up, spell menu, death and wyrmling form all cancel the queue.
+; Health and the Fire spell never gate basic dragon breath.
 BarbaBurstAllowed:
     lda $0736
     cmp #$0B
@@ -195,39 +211,13 @@ BarbaBurstAllowed:
     ora $13
     ora $DE
     bne @no
-    jsr BarbaFullHealth
-    bcs @yes
-    lda $076F
-    and #$10
-    beq @no
-@yes:
     sec
     rts
 @no:
     clc
     rts
 
-; Carry set only for the game's exact full-life value (containers*32 - 1).
-BarbaFullHealth:
-    lda $0784
-    asl
-    asl
-    asl
-    asl
-    asl
-    sec
-    sbc #$01
-    cmp $0774
-    bne @no
-    sec
-    rts
-@no:
-    clc
-    rts
-
-; X = newly allocated projectile slot. Preserve X across shared geometry;
-; invalidate a clipped spawn rather than letting its world coordinate wrap.
-; Carry reports whether a projectile was placed.
+; Fresh shared geometry per shot; X is the allocated native slot.
 BarbaPlaceNewFlame:
     txa
     pha
@@ -236,7 +226,7 @@ BarbaPlaceNewFlame:
     tax
     lda BREATH_GEOMETRY_FLAGS
     and #$01
-    beq @clipped
+    beq BarbaClipped
     lda BREATH_MUZZLE_Y
     sta $36,x
     lda BREATH_MUZZLE_X
@@ -246,35 +236,28 @@ BarbaPlaceNewFlame:
     lda $072A
     adc #$00
     sta $48,x
-    ; Zero timeout means native Fire graphics and Fire-only vulnerability.
     lda #$00
     sta $05CA,x
-    sta VOLLEY_SLOT,x
-    lda BREATH_MODE
-    beq @placed
-    ; Without Fire, retain beam-class damage and its native timeout. Casting
-    ; Fire empowers the same diagonal volley to hit Fire-only enemies.
     lda $076F
     and #$10
     bne :+
     lda #$D2
     sta $05CA,x
 :
-    lda #$01
+    lda #$21
     sta VOLLEY_SLOT,x
     ldy $6D,x
     lda VolleySpeed,y
     sta $7D,x
-@placed:
-    sec
+BarbaVolleyPlaced:
+    sec ; exported callback point: X identifies a successfully placed shot
     rts
-@clipped:
+BarbaClipped:
     lda #$00
     sta $8D,x
+    sta VOLLEY_SLOT,x
     clc
     rts
-
-; Compatibility entry used by the per-frame diagnostic mirror.
 BarbaMuzzleScreen:
     jmp BarbaGeometry
 VolleySpeed:

@@ -135,6 +135,16 @@ BarbaDisplay:
     sta $022C
     sta $0230
     jsr $EBF0
+    ; No sword collision survives the native renderer, including thrust poses.
+    lda #$F8
+    sta $0480
+    lda $80
+    cmp #$0C
+    bcs :+
+    lda #$F8
+    sta $0220
+    sta $0224
+:
     lda $13
     beq :+
     rts
@@ -236,55 +246,6 @@ BarbaDisplay:
     lda DRAW_INDEX
     cmp #$09
     bne @sprite
-    lda $80
-    cmp #$05
-    beq @flame
-    cmp #$07
-    bne @done
-@flame:
-    lda $0220
-    cmp #$F8
-    bcs @done
-    lda GEOMETRY
-    and #$01
-    beq @hide_flame
-    lda BREATH_MUZZLE_Y
-    sta $0220
-    sta $0224
-    sta $0480
-    lda BREATH_MUZZLE_X
-    sta $0223
-    sta $047E
-    lda $9F
-    cmp #$01
-    bne @left
-    lda BREATH_MUZZLE_X
-    clc
-    adc #$08
-    sta $047E
-    bcs @hide_tip
-    jmp @tip
-@left:
-    lda BREATH_MUZZLE_X
-    sec
-    sbc #$08
-    bcc @hide_tip
-@tip:
-    sta $0227
-    lda #$50
-    sta $0225
-    lda DRAW_ATTR
-    sta $0222
-    sta $0226
-@done:
-    rts
-@hide_flame:
-    lda #$F8
-    sta $0220
-    sta $0480
-@hide_tip:
-    lda #$F8
-    sta $0224
     rts
 TallOam:
     .byte $28,$2C,$30,$08,$0C,$10,$14,$18,$1C

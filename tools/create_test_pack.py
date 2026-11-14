@@ -10,12 +10,13 @@ from emulator_test import run
 ROOT=Path(__file__).resolve().parents[1]
 SCENES=[
     ('castle','Starting castle','Walk, turn, duck, jump and attack with the normal starting stats.'),
-    ('combat','Palace 1 combat corridor','Fight normal enemies. Health is below full so beams do not mask melee hits.'),
+    ('combat','Palace 1 combat corridor','Fight normal enemies with the five-shot diagonal volley at damaged health.'),
     ('spells','All spells and techniques','Safe castle with all eight spells, up/down thrust, full meters and level 4 attack. Inferno is selected; Shift casts it. Reload F3 to refill.'),
     ('lava-ledge','Palace 6 lava ledge','Walk right off the ledge and into the lava; stop, jump and return.'),
     ('lava-surface','Standing on palace lava','Already on lava. Test moving, jumping and standing still.'),
     ('barba','Palace 6 boss encounter','Test the playable dragon against the original Palace 6 boss. Ice Barba is not implemented.'),
-    ('raft','Sea crossing','Observe the dragon crossing on the original raft route; no free-flight cheat.')
+    ('raft','Sea crossing','Observe the dragon crossing on the original raft route; no free-flight cheat.'),
+    ('town','Rauru town street','Approach random outdoor wanderers, watch them flee, and test fireballs. Important and indoor NPCs are protected.')
 ]
 RECIPE_FILES=['tools/state_scenarios.lua','tests/newgame.lua','tests/state_pack.lua']
 

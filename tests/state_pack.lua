@@ -8,7 +8,7 @@ local index=0
 local pending=false
 local failures=0
 local file=assert(io.open(PACK_DIR..'/validation.txt','w'))
-local ids={'castle','combat','spells','lava-ledge','lava-surface','barba','raft'}
+local ids={'castle','combat','spells','lava-ledge','lava-surface','barba','raft','town'}
 local function check(ok,text)
     file:write((ok and 'PASS ' or 'FAIL ')..text..'\n');file:flush()
     if not ok then failures=failures+1 end
@@ -69,6 +69,14 @@ emu.addEventCallback(function()
             check(boss and r(0x561)==0x3A and r(0x76E)==24,'native Palace 6 boss and graphics present')
         end
         if index==7 then check(r(0x736)==24 and r(0x7A9)>0,'native raft crossing is active') end
+        if index==8 then
+            local random=false
+            for slot=0,5 do
+                if r(0xB6+slot)==1 and r(0xBC+slot)==255 then random=true end
+            end
+            check(r(0x736)==11 and r(0x707)==1 and r(0x561)==0 and random,
+                'town checkpoint contains a native generated outdoor wanderer')
+        end
     end
     if index==6 and age==90 then screenshot('test-pack-boss-active') end
     if age==(index==2 and 410 or 120) then

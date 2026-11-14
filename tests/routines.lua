@@ -19,23 +19,22 @@ end
 local function add(name,kind,setup,verify)
     tests[#tests+1]={name=name,kind=kind,setup=setup,verify=verify}
 end
-local function box(pose,origin,x,y,width,height,bank)
-    add('hitbox pose '..pose..' origin '..origin..' bank '..bank,'hitbox',function()
-        w(0x80,pose);w(0x47E,origin);w(0x480,y-(pose==5 and 3 or 0));w(0xCC,100)
-        w(0x769,bank)
+for _,pose in ipairs({5,7,8,9})do
+    add('projectile-only rendering pose '..pose,'display',function()
+        for address=0x6000,0x633F do w(address,0x42)end
+        for address=0x200,0x23F,4 do w(address,0xF8)end
+        w(0x769,4);w(0x707,4);w(0x13,0);w(0x80,pose)
+        w(0x17,pose==7 and 0 or 1);w(0x479,pose>=8 and 2 or 0)
+        w(0xCC,0x50);w(0x4D,0x48);w(0x3B,0);w(0x29,0x90);w(0x9F,1)
+        w(0x72A,0);w(0x72C,0);w(0xC8,0);w(0x48D,0);w(0x50C,0)
+        w(0x70E,0);w(0x752,0);w(0x480,0x80);w(0x47E,0x60)
     end,function()
-        check(r(0)==x and r(1)==y and r(2)==width and r(3)==height,
-            string.format('box %d,%d %dx%d',r(0),r(1),r(2),r(3)))
-        check(emu.getState()['mapper.prgReg']==bank,'enemy PRG bank restored')
-        check(emu.getState()['cpu.x']==3,'enemy slot X preserved')
+        check(r(0x480)==0xF8,'pose '..pose..' disables native sword/thrust collision')
+        check(r(0x220)==0xF8 and r(0x224)==0xF8,'pose '..pose..' hides both attached-flame sprites')
+        check(r(0x80)==pose,'renderer preserves native attack pose')
+        check(emu.getState()['mapper.prgReg']==0,'renderer retains player PRG bank')
     end)
 end
-box(5,124,116,83,16,10,4)
-box(5,92,84,83,16,10,3)
-box(5,4,0,83,12,10,1)
-box(5,250,242,83,13,10,5)
-box(8,112,104,76,14,3,4)
-box(9,92,94,117,14,3,5)
 
 for group=0,5 do
     add('hazard group '..group,'lava',function()
@@ -78,12 +77,15 @@ local function nextTest()
     phase=test.kind
     report:write('START '..test.name..'\n');report:flush()
     test.setup()
-    local entry=0xE9A2
+    local entry=nil
+    if phase=='display' then entry=LABELS.BarbaDisplay end
     if phase=='lava' then entry=0xE0A4 end
     if phase=='inferno' then entry=LABELS.BarbaInferno end
     if phase=='update' then entry=LABELS.BarbaUpdate end
-    -- Area-bank switch, call, then park at $0606 until the exec callback.
-    local program={0x20,0xC9,0xFF,0x20,entry%256,math.floor(entry/256),0x4C,0x06,0x06}
+    assert(entry,'missing routine entry for '..phase)
+    -- Display/update/spells run in player PRG0; hazards use the area bank.
+    local swap=phase=='lava' and 0xC9 or 0xC5
+    local program={0x20,swap,0xFF,0x20,entry%256,math.floor(entry/256),0x4C,0x06,0x06}
     for i,value in ipairs(program) do w(0x5FF+i,value) end
     emu.setState({['cpu.pc']=0x0600,['cpu.sp']=0xFD,['cpu.x']=3,['cpu.ps']=0x24})
 end

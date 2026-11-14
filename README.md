@@ -13,11 +13,12 @@ The local build currently includes:
 - Thin, boss-derived 24x48 side-view Barba with full-body jumps, jaw animation and ceiling folding,
   an 8x16 flying wyrmling,
   and a dedicated 16x16 overworld avatar with directional animation.
-- A two-part horizontal flame plume and a 16x10 melee region, including crouched
-  attacks. Enemy damage and Fire-spell vulnerability rules retain their original roles.
-- Short-range breath at every health level. Full life adds two downward-diagonal
-  fireballs in place of the sword beam. Fire empowers that volley against
-  Fire-only enemies and provides a horizontal two-shot burst below full life.
+- Five-shot downward-diagonal fireball volleys at every health level, with no
+  sword, thrust damage or attached melee plume. Fire empowers projectile damage
+  against Fire-only enemies. Fireballs retain glove-gated block breaking.
+- Random outdoor wanderers flee, enter doors they encounter, or burn briefly
+  when hit. Indoor and scripted NPCs are protected. Press Up near a wanderer
+  for a fearful plea; important characters keep their original conversations.
 - Head checks are batched and spawning runs after the HUD split to keep the
   status text stable during battles.
 - A fiery attack sound.
@@ -29,7 +30,7 @@ The local build currently includes:
 The tall head is visual: terrain and enemy contact retain the native collision
 body. Crouching fits the original low lane; stone ceilings fold the head down.
 
-**Not a finished conversion.** Vertical attacks still need dedicated flame art;
+**Not a finished conversion.** Vertical technique presentation needs review;
 Palace 6's boss has not yet received the Ice Barba treatment. Title/story text,
 some menu graphics, lava pose polish, and full-game compatibility testing remain.
 See [validation and remaining work](docs/STATUS.md) for exact coverage.
@@ -55,13 +56,14 @@ arrows move, **X** jumps, **Z** attacks, **Enter** is Start, and **Left Shift** 
 Select. The launcher uses a separate play profile and persistent saves in
 `build/play-saves/`; automated test settings and temporary saves stay separate.
 
-For instant testing checkpoints, double-click **Test Barba.cmd**. **F1-F7** jump
+For instant testing checkpoints, double-click **Test Barba.cmd**. **F1-F8** jump
 to the castle, combat, all-spells sandbox, lava ledge, lava surface, Barba boss,
-and sea crossing. See [the test pack guide](docs/TEST-PACK.md). Test progress uses
+sea crossing, and a Rauru town street. See [the test pack guide](docs/TEST-PACK.md). Test progress uses
 a separate Mesen profile and never overwrites your normal play save.
 
 See [the refined design](docs/DESIGN.md), [build instructions](docs/BUILD.md),
-[research notes](docs/RESEARCH.md), and [the next-work roadmap](docs/ROADMAP.md).
+[town reactions](docs/TOWNS.md), [research notes](docs/RESEARCH.md), and
+[the next-work roadmap](docs/ROADMAP.md).
 
 This is an unofficial fan project. Zelda II and its original characters,
 graphics, music, and game data belong to their respective owners.

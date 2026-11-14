@@ -31,12 +31,14 @@ local function tick()
     if frame>1000 and frame<1250 then
         local pose=read(0x80)
         if pose==5 and not seenStand then
-            seenStand=true; captures[frame+2]='barba-standing-flame'
-            check(read(0x225)==0x50 and read(0x224)<0xF8,'standing plume tip is rendered')
+            seenStand=true; captures[frame+2]='barba-standing-volley'
+            check(read(0x480)==0xF8,'standing attack disables melee collision')
+            check(read(0x220)==0xF8 and read(0x224)==0xF8,'standing attack has no attached plume')
         end
         if pose==7 and not seenCrouch then
-            seenCrouch=true; captures[frame+2]='barba-crouched-flame'
-            check(read(0x224)==read(0x220),'crouched plume halves share a Y position')
+            seenCrouch=true; captures[frame+2]='barba-crouched-volley'
+            check(read(0x480)==0xF8,'crouched attack disables melee collision')
+            check(read(0x220)==0xF8 and read(0x224)==0xF8,'crouched attack has no attached plume')
         end
         if frame>=1170 and read(0x479)>0 then seenJump=true end
     end

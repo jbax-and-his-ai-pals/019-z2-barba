@@ -13,10 +13,10 @@ uses the head-only low pose.
 
 ## Shared geometry
 
-`BarbaGeometry` publishes the attached 8x16 plume origin in `$05F2/$05F3` and
-validity/tuck flags in `$05F6`. Body drawing, melee and new Fire shots use this
+`BarbaGeometry` publishes the 8x16 fireball origin in `$05F2/$05F3` and
+validity/tuck flags in `$05F6`. Body drawing and new fireball shots use this
 geometry. Screen X is actor screen X +28 facing right, or -4 facing left.
-Plume Y is actor Y -12 standing, +4 folded, or +20 crouched. World projectile X
+Fireball Y is actor Y -12 standing, +4 folded, or +20 crouched. World projectile X
 adds the 16-bit scroll with carry. Clipped origins suppress new shots.
 
 Four head corners use the area's native solid-tile predicate through a
@@ -25,25 +25,29 @@ middle neck row disappears. Crouch occupies only the bottom 16px lane.
 Movement and enemy-contact collision retain their native sizes: the extra
 head height is visual and needs human review.
 
-Horizontal melee covers the two-part plume with a 16x10 box. Native vertical
-shapes, technique unlocks and bounce remain; vertical flame art needs work.
+All native melee origins are hidden after rendering, including up/down thrusts.
+There is no attached plume. Item-holding and Wyrmling drawing remain native.
+`BarbaBlocks` samples each live fireball's center using the original glove-gated
+block handler. It restores player pose and velocity, avoiding sword recoil or
+bouncing Barba when a remote fireball breaks a brick.
 
-## Bounded full-life volley and Fire upgrade
+## Five-shot volley at every health level
 
-Full life replaces the straight beam with two forward/downward fireballs.
-Each travels two pixels horizontally and two downward per update, mirrored
-with facing. Without Fire, these retain beam-class damage and the native
-timeout, so they cannot bypass Fire-only enemies. With Fire active, the same
-volley gains the spell's vulnerability class. Below full life, Fire supplies
-the horizontal burst. Both modes retain the native attack-animation gate and
-schedule exactly one follow-up eight updates later. Attack 1 and Attack 4 support two slots.
-A full pool drops the follow-up without retry. Holding an attack cannot
-repeatedly arm bursts. Menus, scene changes, death, flying form, freezes and
-disabling Fire below full life cancel the queue. Taking damage cancels a pending
-full-life follow-up. Delay/latch live at `$05F7/$05F8`, cleared by
-the native reset loop with no original references found. Two slot flags at
-`$05FC/$05FD` select diagonal movement; `$05FE` records the burst mode. Projectiles
-are cleared at the bottom of the screen before their Y coordinate can wrap.
+Every attack emits five forward/downward fireballs: two pixels horizontally and
+two downward per update. Two native slots stream the volley with eight-update
+spacing when capacity permits. The volley continues after the attack animation
+without locking movement. Holding B does not restart it; B release and an idle
+attack state are required before rearming.
+
+A full pool retries only until the 120-update burst deadline. Each projectile
+has a 33-update maximum lifetime and is cleared before its Y coordinate wraps.
+Menus, transitions, death and Wyrmling cancel queued shots. Health is never an
+eligibility test. Fire changes vulnerability class, allowing Fire-only enemy
+hits; ordinary breath retains the native beam class and progression rules.
+
+State: `$05F1` deadline, `$05F7` spacing, `$05F8` latch, `$05FC/$05FD` projectile
+lifetimes and `$05FE` pending-shot count. These locations have no original
+references and are cleared by the native reset loop.
 
 ## HUD timing correction
 
@@ -64,15 +68,15 @@ two-slot pool; it does not copy aimed enemy-projectile code.
 
 ## Validation
 
-- `breath_height.lua`: 16 real-loop health/Fire/facing/stance cases, damage at
-  the visible plume, mouth spawns, jump, crouch and castle exit.
-- `combat.lua`: native Bot damage near the flame tip in four stances.
-- `burst.lua`: controlled CPU harness checks timing, capacity, held attacks,
-  dropped retries and cancellation. Projectile movement is parked deliberately
-  so slot lifetime cannot obscure scheduling errors.
-- `tall_geometry.lua`: controlled geometry and renderer-clearance checks.
-- `hud_timing.lua`: actual PPU scroll/address writes, split scanline, mapper
-  traffic and NMI duration in four Palace 1 phases; CSV stays in local build output.
+- `projectile_only.lua`: 16 real-loop health/Fire/facing/stance cases, exactly
+  five shots each, muzzle alignment, direction, class and no attached melee.
+- `burst.lua`: capacity, lifetime, deadline, held-input/rearm and cancellation.
+- `combat.lua`: glove-gated fireball brick breaking and restored player state.
+- `damage.lua`: real native Bot damage from ordinary and Fire-empowered shots
+  in both directions.
+- `gameplay.lua`, `tall_geometry.lua`, `routines.lua`: movement, jumps, ceilings,
+  item/Fairy cleanup, disabled thrust collisions, lava and roar.
+- `hud_timing.lua`: 900 Palace 1 frames with a stable line-31 split.
 
-Remaining: vertical flames, shield/block interactions, scroll-boundary
-fixtures, crowded-room flicker review and broader human playtesting.
+Remaining: shield/boss balance, projectile walls, vertical-technique redesign,
+crowded-room sprite review and complete human playtesting.

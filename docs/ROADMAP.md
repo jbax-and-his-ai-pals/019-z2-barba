@@ -119,3 +119,17 @@ human feedback before adding more projectile slots.
 HUD text shifting was reproduced in the Palace 1 timing fixture. Batched head
 checks and deferred spawning now keep all measured splits on line 31. Continue
 watching crowded rooms; ordinary NES sprite-limit flicker remains separate.
+
+## Current direction: five-shot breath and reactive towns
+
+The latest user decision supersedes the health-dependent beam/plume proposals:
+Barba attacks only with a five-shot diagonal volley at any health. Native melee
+and thrust collisions are removed; Fire changes projectile vulnerability, and
+fireballs preserve the glove gate for breakable bricks.
+
+Town prototype: native generated outdoor wanderers alone can panic or burn.
+They flee away from Barba, enter a real doorway when encountered, and stay
+inside until room reset. Up opens a fearful plea. Indoor/scripted NPCs retain
+normal behavior and cannot be burned. Casualties are not persistent. Next town
+work is broader street/door/quest interaction review and more dialogue variety;
+there is no town reputation system or permanent population loss yet.

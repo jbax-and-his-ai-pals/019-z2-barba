@@ -14,12 +14,13 @@ Press the same key again at any time to restart that test and refill its meters.
 | Key | Checkpoint | What to try |
 | --- | --- | --- |
 | F1 | Starting castle | Normal starting stats. Walk, turn, crouch, jump and attack. |
-| F2 | Palace 1 combat corridor | Fight in both directions. Full life adds diagonal fireballs; after taking damage, check the attached breath alone or cast Fire for ranged flames. |
+| F2 | Palace 1 combat corridor | Fight in both directions. Every health level has five diagonal fireballs; cast Fire to test Fire-only enemies. |
 | F3 | All spells and techniques | Safe castle, full health/magic, all spells and both thrusts. Inferno is selected: Left Shift casts it. Use Enter for the spell menu; reload F3 to refill or leave the flying form. |
 | F4 | Palace 6 lava ledge | Walk right into the lava, stop, move, jump and return. |
 | F5 | Standing on lava | Already on the lava surface. Check for sinking and test jumps immediately. |
 | F6 | Palace 6 Barba encounter | Original Barba is above the lava. Test player/boss graphics, attacks and movement around the platforms. Ice Barba is not implemented. |
 | F7 | Sea crossing in progress | Watch the dragon complete the normal raft route to East Hyrule. Reload F7 to repeat. |
+| F8 | Rauru town street | Approach outdoor wanderers, watch fleeing/door entry, and test fireballs. Press Up nearby for fear dialogue. Scripted and indoor NPCs are protected. |
 
 Controls: arrows move, **X** jumps, **Z** attacks, **Enter** starts/pauses, and
 **Left Shift** is Select/cast. State-load keys work independently of the game menu.
@@ -33,15 +34,15 @@ consumption work normally: no invulnerability or unlimited-magic cheat runs.
 - The test profile is `.tools/mesen-scenarios/`. It does not reuse a running
   normal-play Mesen window.
 - Test battery saves and states live under `build/test-pack/<ROM hash>/`.
-  Generated master `.mss` files stay separate from the disposable F1-F7 slots.
-- Launching the test pack restores those seven slots from their masters. Use
+  Generated master `.mss` files stay separate from the disposable F1-F8 slots.
+- Launching the test pack restores those eight slots from their masters. Use
   **Save State to File** if you want to keep your own additional test checkpoint.
 - Each pack records its exact ROM SHA-256. After a code/art change, the launcher
   creates a new pack for that build. Old states should not be mixed with a new ROM.
 - These are constructed test fixtures, not an authentic completed-game save.
   Room entry and upgrades are injected during generation; ordinary game logic
   controls the resulting scene, enemies, damage, physics and crossing.
-- All seven states are reloaded and checked in Mesen 2.1.1 before being marked
+- All eight states are reloaded and checked in Mesen 2.1.1 before being marked
   ready. Screenshots, capture logs and reload validation remain alongside them.
 - No state files, screenshots or test ROMs are committed to the public repository.
 

@@ -56,6 +56,18 @@ local scenes={
         upgraded();w(0x707,0);w(0x706,0);w(0x769,1)
         w(0x73,0x4D);w(0x74,0x3C);w(0x562,1);w(0x736,2)
         w(0x7A9,0);w(0x7AA,0);w(0x7AC,0);w(0x7AD,0);w(0x726,1)
+    end},
+    {id='town',name='Rauru town street',frames=180,setup=function()
+        upgraded();w(0x707,1);w(0x706,0);w(0x769,3);w(0x561,0)
+        w(0x701,0);w(0x75C,0);w(0x704,0);w(0x736,0);w(0x73D,0);w(0x726,1)
+    end,capture=function()
+        for slot=0,5 do
+            local code=r(0xA1+slot)
+            local x=r(0x4E+slot)+r(0x3C+slot)*256-r(0x72C)-r(0x72A)*256
+            if r(0xB6+slot)==1 and r(0xBC+slot)==255 and code>=0x19 and code<=0x1C
+                and x>=24 and x<=200 then return true end
+        end
+        return false
     end}
 }
 local function finish()

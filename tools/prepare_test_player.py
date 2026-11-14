@@ -33,15 +33,15 @@ def prepare() -> dict:
     preferences.update({'SingleInstance':False,'AutoLoadPatches':False,
                         'OverrideSaveDataFolder':True,'SaveDataFolder':str(folder/'play-saves'),
                         'OverrideSaveStateFolder':True,'SaveStateFolder':str(slots)})
-    # Reserve F1-F7 for the seven test checkpoints, preserving other bindings.
+    # Reserve one F-key per test checkpoint, preserving other bindings.
     shortcuts=preferences.setdefault('ShortcutKeys',[])
-    for slot in range(1,8):
+    for slot in range(1,len(manifest['states'])+1):
         name=f'LoadStateSlot{slot}'
         shortcuts[:]=[s for s in shortcuts if s.get('Shortcut')!=name]
         shortcuts.append({'Shortcut':name,'KeyCombination':{'Key1':89+slot,'Key2':0,'Key3':0}})
     config.setdefault('Debug',{}).setdefault('ScriptWindow',{})['AllowIoOsAccess']=False
     settings.write_text(json.dumps(config,indent=2)+'\n')
-    print(f"Test profile ready: {player}\nF1-F7 load the seven checkpoints.")
+    print(f"Test profile ready: {player}\nF1-F{len(manifest['states'])} load the checkpoints.")
     return manifest
 
 

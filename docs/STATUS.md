@@ -3,7 +3,7 @@
 This is an initial playable implementation, not a completed total conversion.
 
 The current player uses boss-derived 24x48 poses, a shared mouth position and a
-bounded two-shot Fire burst and full-life diagonal volley. Terrain and enemy-contact collision retain the
+five-shot diagonal volley at all health levels. Terrain and enemy-contact collision retain the
 native body: the raised head is visual, not a newly enlarged hurtbox. Solid
 ceilings fold the head into the original 32px height; crouch occupies 16px.
 The body now keeps the boss's narrow neck silhouette without the added belly
@@ -21,16 +21,17 @@ BUILD.md. Hardware sprite limits remain enabled.
 | Patch integrity | BPS output reconstructs the generated ROM exactly; wrong source and corrupted patch checksums rejected |
 | ROM-free tool tests | Eight unit tests cover binary patch round trips, relocated source references, guards, overlaps, bank offsets and NES 2bpp encoding |
 | New-game integration | Controller-driven name entry, castle gameplay, standing/crouched attack poses, jump, castle exit and overworld dragon renderer |
-| Enemy damage integration | Four controlled Bot fixtures take damage from horizontal flames: standing/crouched, left/right, below-full health with Fire inactive |
+| Projectile-only attack | 16 real-game health/Fire/facing/stance cases each emit exactly five mouth-aligned diagonal fireballs with no melee/plume |
 | Actual palace room | Test enters original Palace 6 room `$33` through the normal room loader, walks into lava, remains supported without sinking, jumps out and returns alive; 112 hazard contacts during the scenario |
-| Banked hitbox routine | Six cases execute assembled 6502 code in Mesen, covering both sides, screen-edge clipping, original vertical boxes, enemy-bank restoration and X preservation |
+| Block progression | Six CPU cases verify native glove-gated brick breaking at either projectile, no player-body block damage and restored player pose/speed |
 | Hazard routine | All six world groups checked: palace groups gain support; other groups retain original water-death state |
 | Roar routine | Inferno consumes the original Thunder state, starts the envelope, and reaches a zero-volume override after 48 updates |
-| Human test pack | Seven native Mesen states generated for the exact build; every state reloads with a visible frame and survives 120 further frames; sea crossing completes on East Hyrule |
-| Mouth-anchored breath | 16 cases (Fire on/off, full/damaged, left/right, standing/crouched): full life emits two forward/downward fireballs, Fire supplies horizontal shots below full life, and all shots begin at the mouth; attached breath damage is checked below full life. See [BREATH-IMPLEMENTATION.md](BREATH-IMPLEMENTATION.md) |
+| Human test pack | Eight native Mesen states generated for the exact build; every state reloads with a visible frame and survives 120 further frames; sea crossing completes on East Hyrule |
 | Tall geometry and renderer | Four-corner native solid probes, lower head row, world-page crossing, edge rejection, ceiling folding, crouch and extra OAM cleanup pass controlled CPU checks |
 | HUD split timing | 900 measured Palace 1 frames keep the split on line 31; previous build reached line 42. No upper-HUD scroll/address writes; native sprite-limit flicker remains possible |
-| Bounded Fire burst | Attack 1/4, eight-update follow-up, two-slot cap, dropped retries, held attack and cancellation states pass scheduling checks |
+| Bounded volley | Five shots reuse two slots, continue beyond attack animation, respect the 120-update deadline and require release before rearming |
+| Town safety | 1,041 actor/world/room/origin gate cases plus dialogue fallback checks; indoor and scripted actors are excluded |
+| Town gameplay | Native Rauru generator, fleeing, real fireball burn/despawn, scripted-walker survival, fear dialogue and completed refuge-door animation |
 | Checkpoint XP regression | Upgraded states now recompute the next-level target; 50 XP stays in gameplay, 2,000 XP permits one attack upgrade and returns to gameplay afterward |
 
 Combat and palace scenarios intentionally create controlled fixtures (enemy
@@ -45,8 +46,8 @@ Audio register/envelope validation is not a listening-quality review.
 
 The ordered next steps and latest human feedback are in [ROADMAP.md](ROADMAP.md).
 
-- Design dedicated up/down flame poses and plume art; currently their original
-  damage shapes, unlocks and bounce behavior remain with the dragon body.
+- Redesign vertical techniques around projectile-only combat; old thrust damage
+  and bounce are retired. Glove-gated fireball block breaking is implemented.
 - Give Palace 6's boss a distinct Ice Barba appearance and verify the encounter.
 - Audit sprite states and CHR sharing in every town, palace, menu, ending and
   the Dark Link encounter; the current replacement covers 13 side-view sprite banks.

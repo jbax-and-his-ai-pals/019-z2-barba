@@ -1,7 +1,7 @@
 ; Original Barba Edition routines. CPU addresses refer to the guarded source ROM.
 .setcpu "6502"
-.export BarbaOverworld, BarbaDisplay, BarbaHitbox, BarbaUpdate, BarbaInferno
-.export LavaSurface, HitboxGateway
+.export BarbaOverworld, BarbaDisplay, BarbaUpdate, BarbaInferno
+.export LavaSurface
 
 ROAR_TIMER = $05F0 ; cleared by the original $0500..$05FF reset loop; no original references
 
@@ -39,63 +39,6 @@ BarbaOverworld:
 OverworldBase:
     .byte 0, 0, 8, 0, 16, 0, 0, 0, 24
 
-; Called through a fixed-bank gateway while enemies' PRG bank is mapped.
-; Preserve the original vertical thrust collision shape and damage rules.
-; Horizontal flame: 16x10 pixels, clipped at the screen edge.
-BarbaHitbox:
-    lda $80
-    cmp #$08
-    beq @vertical
-    cmp #$09
-    beq @vertical
-    lda #$10
-    sta $02
-    lda $047E
-    sec
-    sbc #$08
-    bcs @horizontal_x
-    clc
-    adc $02
-    sta $02
-    lda #$00
-@horizontal_x:
-    sta $00
-    lda $0480
-    clc
-    adc #$03
-    sta $01
-    lda #$0A
-    sta $03
-    jmp @clip
-@vertical:
-    ldy #$00
-    lda $047E
-    cmp $CC
-    bcs @offset
-    iny
-@offset:
-    clc
-    adc VerticalOffset,y
-    sta $00
-    lda #$0E
-    sta $02
-    lda $0480
-    sta $01
-    lda #$03
-    sta $03
-@clip:
-    lda $00
-    clc
-    adc $02
-    bcc @done
-    lda $00
-    eor #$FF
-    sta $02
-@done:
-    rts
-VerticalOffset:
-    .byte $F8, $02
-
 BarbaInferno:
     lda #$30
     sta ROAR_TIMER
@@ -129,6 +72,8 @@ RoarPitch:
 
 .include "breath.inc"
 .include "tall_player.inc"
+.include "blocks.inc"
+.include "town.inc"
 
 .segment "LAVA"
 ; Only palace groups use this new path. Water outside palaces retains its
@@ -149,13 +94,6 @@ LavaSurface:
     sta $050C
     inc $B5
     rts
-
-.segment "GATEWAY"
-; Swap helpers preserve X/Y. Return with the original area bank mapped.
-HitboxGateway:
-    jsr $FFC5
-    jsr BarbaHitbox
-    jmp $FFC9
 
 .segment "TERRAIN"
 ; All four corner tiles are collected before swapping. The area's native
