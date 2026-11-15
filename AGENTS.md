@@ -19,6 +19,7 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
 - Each scenario has a 30 s timeout. For longer probes call `emulator_test.run(path, rom, timeout=N)`.
 - The producer plays via `play/Play Barba.cmd` and uses checkpoints via `play/Test Barba.cmd`.
   Hand them a playable build (`play/barba.nes` + `build/barba.nes`) plus a regenerated test pack.
+- Far-call regression: `python tools/emulator_test.py tests/farcall.lua` (all 8 banks, flags/registers, nesting, boundaries).
 - Full suite: boot, gameplay, combat, palace, routines, tall_geometry, projectile_only, burst,
   extra_fire, left_fire, damage, hud_timing, breath_height, town, town_safety, shouts,
   shout_queue, shout_follow, doors, dialogue_speed, perf_volley, plus `state_pack` via create_test_pack.
@@ -52,9 +53,12 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
 
 ## Free space and RAM in use (check before allocating)
 
-- ROM: bank 0 `$AA40-$BF6F` (BANK0; about $9B0 used), bank 3 `$B803-$BF6F` (TOWN),
-  fixed bank 7: `$D39A` LAVA (5 bytes left), `$FEAA` GATEWAY (about 8 left), `$FF4C-$FF6F` TERRAIN (about 3 left).
-  **The fixed bank is essentially full.** See `build/barba.map` for exact use.
+- ROM: bank 0 `$AA40-$BF6F` (BANK0; $109F used, 1169 bytes free), bank 3 `$B803-$BF6F` (TOWN; 283 free).
+  Fixed bank 7: LAVA `$D39A-$D3C4` used / `$D3C5-$D3C9` free (5), GATEWAY `$FEC8-$FECF` free (8),
+  TERRAIN `$FF6D-$FF6F` free (3): **16 bytes total free, formerly 11**. `FarCall0` provides cold bank-0
+  hooks at 5 fixed bytes/call (6 with standalone RTS), 369-482 bridge cycles plus target work;
+  see `docs/BUILD.md` for ABI/recipe and `docs/FIXED-BANK-AUDIT.md` for ownership/padding evidence.
+  No new padding region was claimed. Never allocate live JMP operands `$FF4B` or `$E02C`.
 - RAM `$05EA`, `$05EB` (lava contact), `$05F0-$05FF` (roar, breath, tall renderer, extra guard). Cleared by the native reset loop.
 - WRAM `$6400-$642F` extra projectile records; `$6440-$645F` scratch (`$6457` lazy-save flag,
   `$6458-$645F` geometry terrain cache, `$645C` EXTRA_LIVE); `$6460-$6468` shouts (`$6465` actor, `$6467` word, `$6468` timer). Don't touch collision/room/save regions elsewhere in `$6000-$7FFF`.
@@ -66,10 +70,12 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
 ## Performance facts (from tests/perf_volley.lua)
 
 The game logic runs in NMI. Over about 29.7k cycles the next frame lags. Vanilla peaks near 26.6k
-with 6 enemies. `BarbaDisplay` bypasses `$EBF0` on normal frames (using `$F27D` + unrolled 9-sprite
+with 6 enemies. Fixed-bank-headroom baseline/final Palace 1 probe: idle avg/peak 15,370/15,378 cycles,
+volley 19,931/30,119, lag 0/300 idle and 1/900 volley (unchanged). `BarbaDisplay` bypasses
+`$EBF0` on normal frames (using `$F27D` + unrolled 9-sprite
 draw) and `BarbaGeometry` caches `TerrainBatch` in `$6458-$645F`, cutting display cost from ~4.0k
 to ~1.2k cycles/frame. `BarbaLoadOk` uses `LOAD_LIMIT = 7` (allows 2 simultaneous shots in 6-enemy
-overworld fights with 0 lag frames, max 28,941 cycles, and 4/900 lag frames in Palace 1 volley).
+overworld fights with 0 lag frames, max 28,941 cycles; the older Palace 1 measurement was 4/900 lag).
 
 ## Status and docs (read only what you need)
 

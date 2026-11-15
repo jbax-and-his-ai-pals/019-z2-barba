@@ -10,6 +10,26 @@ The body now keeps the boss's narrow neck silhouette without the added belly
 coil. Full-body jump rendering is checked during ascent and descent; grounded
 crouching retains a short neck beneath the head.
 
+## Fixed-bank headroom branch (2026-11-14)
+
+`FarCall0` is a cold-hook ABI with exact caller-bank restoration; the lava body
+moves to bank0. Fixed padding free increases from 11 to 16 bytes; no new
+unproven region is used. See BUILD.md for 5-byte hook recipe/cycles and
+FIXED-BANK-AUDIT.md for every owned fixed-bank byte. Hot enemy/terrain paths
+are unchanged. Baseline/final idle avg/peak: 15,370/15,378 cycles; volley:
+19,931/30,119, with lag unchanged at 0/300 idle and 1/900 volley.
+
+The required full-suite acceptance is **not green**: `town_safety`, `shouts`,
+`shout_queue`, and `dialogue_speed` also fail on the exact starting-commit ROM.
+The old subtitle/queue expectations and dialogue cases need a separate test/
+behavior reconciliation; this branch does not change towns or silence them.
+`routines` had a stale pose-9 no-thrust assertion despite the already-existing
+downstab; it now checks the precise foot hitbox and passes on both builds.
+Full logs and baseline comparisons are local under build/. No gates advanced.
+
+Human spot check: F4/F5 lava checkpoints, walk/jump on lava and exit normally;
+then F9 into the boss fight. Expect no gameplay or visual changes.
+
 ## Verified locally
 
 Validation performed with portable Mesen 2.1.1 and the exact source hash in

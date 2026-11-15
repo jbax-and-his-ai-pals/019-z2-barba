@@ -92,27 +92,18 @@ RoarPitch:
 .include "blocks.inc"
 .include "shouts.inc"
 .include "town.inc"
+.include "farcall.inc"
 
 .segment "LAVA"
 ; Only palace groups use this new path. Water outside palaces retains its
 ; exact original death state. Below-collision lets normal landing/jump code
 ; snap to the lava surface, preventing a fall below the level.
 LavaSurface:
-    lda $0707
-    cmp #$03
+    jsr FarCall0
+    .word LavaSurfaceBody
     bcc @water
-    lda #$04
-    sta LAVA_CONTACT
-    lda $A7
-    ora #$04
-    sta $A7
     jmp $E12B
 @water:
-    lda #$01
-    sta $E9
-    lda #$10
-    sta $050C
-    inc $B5
     rts
 
 ; Execute the original shield handler with its first three bytes restored.
@@ -122,10 +113,7 @@ NativeShieldFire:
     lda $C8
     asl
     jsr $E61A
-    php
-    jsr $FFC5
-    plp
-    rts
+    jmp NativeReturn0
 
 .segment "GATEWAY"
 ; Fast path: with no backed shot alive, run the original E48B test in place
@@ -168,6 +156,7 @@ TerrainBatch:
 NativeEnemyFire:
     jsr $FFC9
     jsr $E491
+NativeReturn0:
     php
     jsr $FFC5
     plp
