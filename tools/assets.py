@@ -280,7 +280,7 @@ def compile_assets(root: Path, source_path: Path | None = None) -> tuple[bytes, 
     # Standing fallback packs the native head and narrow body into 32px. Duck
     # poses retain their compact head/neck; both reuse existing tall-frame pairs.
     fallback_names = ('tuck', 'tuck', 'tuck', 'crouch', 'tuck', 'tuck',
-                      'crouch-attack', 'crouch', 'crouch-attack', 'up',
+                      'crouch-attack', 'crouch', 'crouch-attack', 'tuck',
                       'tuck', 'tuck', 'tuck', 'tuck', 'down', 'death',
                       'tuck', 'tuck', 'tuck')
     fallback = [named[name][16:] for name in fallback_names]

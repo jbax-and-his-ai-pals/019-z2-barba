@@ -47,6 +47,41 @@ def _blit(canvas: list[list[str]], rows: list[str], x: int, y: int) -> None:
                 canvas[y+iy][x+ix] = pixel
 
 
+UP_SHEAR = 0.5  # 2:1 pixel-art slope; snout rises (width-1)/2 px
+
+
+def shear_up(rows: list[str], slope: float = UP_SHEAR) -> list[str]:
+    """Tilt a LEFT-facing head snout-up by shifting each column vertically.
+
+    Columns stay intact, so the jaw, eye and horns keep their native pixels;
+    outlines become clean 2:1 diagonals instead of rotation noise.
+    """
+    width = len(rows[0])
+    lift = round((width-1)*slope)
+    out = [['0']*width for _ in range(len(rows)+lift)]
+    for x in range(width):
+        dy = lift - round((width-1-x)*slope)
+        for y, row in enumerate(rows):
+            out[y+dy][x] = row[x]
+    return [''.join(row) for row in out]
+
+
+def looking_up(rom: bytes, width: int, neck: list[str], neck_width: int) -> list[str]:
+    """Open-jaw head tilted up-and-forward; snout tip at canvas top-left.
+
+    Upward shots spawn 12 px above the standing muzzle (canvas row 11), i.e.
+    right at this snout tip. The neck starts lower, the feet stay at row 47.
+    """
+    head = shear_up(resize_x(source_head(rom, 'open'), width))
+    canvas = [['0']*width for _ in range(48)]
+    top = len(head) - 4
+    for y in range(top, 48):
+        sway = (0, -1, 0, 1)[((y-top)//8) % 4]
+        _blit(canvas, [neck[(y-top) % 16]], width-neck_width+sway, y)
+    _blit(canvas, head, 0, 0)
+    return [''.join(row) for row in canvas]
+
+
 def make_frames(rom: bytes, width: int = 24) -> dict[str, list[str]]:
     """Return named pixel-row frames in a 16x48 or 24x48 LEFT-facing canvas.
 
@@ -92,11 +127,11 @@ def make_frames(rom: bytes, width: int = 24) -> dict[str, list[str]]:
         ('hurt','half',1,False,True),
         ('item','closed',0,False,False),
     ]}
-    # Vertical poses turn the native head instead of inventing a different face.
+    # Down turns the native head instead of inventing a different face.
     head = source_head(rom, 'open')
-    up = [''.join(head[15-x][y] for x in range(16)) for y in range(32)]
-    down = [row[::-1] for row in up[::-1]]
-    for name, rows, y in [('up', up, 0), ('down', down, 16)]:
+    turned = [''.join(head[15-x][y] for x in range(16)) for y in range(32)]
+    down = [row[::-1] for row in turned[::-1]]
+    for name, rows, y in [('down', down, 16)]:
         canvas = [['0']*width for _ in range(48)]
         base = frames['idle']
         for at in (range(32,48) if name=='up' else range(0,16)):
@@ -104,6 +139,7 @@ def make_frames(rom: bytes, width: int = 24) -> dict[str, list[str]]:
             canvas[at] = list(base[source_y])
         _blit(canvas, rows, (width-16)//2, y)
         frames[name] = [''.join(row) for row in canvas]
+    frames['up'] = looking_up(rom, width, neck, neck_width)
     frames['death'] = ['0'*width]*16 + frames['crouch'][16:]
     # Compact 32px fallback for the original renderer's item/Dark Link paths.
     frames['tuck'] = ['0'*width]*16 + frames['idle'][:16] + frames['idle'][32:]

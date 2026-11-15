@@ -13,8 +13,8 @@ crouching retains a short neck beneath the head.
 ## Playthrough checkpoint sets (2026-11-14)
 
 Core keeps its existing F1-F10 fixtures. Four selectable local sets add ten palace
-entrance/pre-boss states, seven endgame approaches, ten town/world states and six
-movement fixtures. See [TEST-PACK.md](TEST-PACK.md) for the explicit standard-route
+entrance/pre-boss states, seven endgame approaches, ten town/world states and seven
+movement fixtures (44 states with Core; duplicates and elevator starts fixed in `836b8c4`). See [TEST-PACK.md](TEST-PACK.md) for the explicit standard-route
 assumptions, levels, spells, items, techniques, zero spare keys, crystals and quest
 flags. Native container meter limits and next-level XP targets are recomputed;
 no persistent cheats or game-code changes. Test profiles now live under build/,
@@ -23,12 +23,17 @@ not the read-only shared .tools/ junction.
 All 29 retained emulator scenarios pass sequentially; 16 ROM-free unit tests pass.
 The 43-state pack reload checks include visible frames and 120-frame survival;
 new states also assert progression, native meter capacity and controller response.
-All five launcher selections pass PrepareOnly. Screenshots are generated for every
-state, but **visual acceptance is blocked**: this session could not open worktree
-images and had no connected desktop-control node. No artistic/HUD visual sign-off
-is claimed. Ending/crystal-placement and mid-pit/long-shaft snapshots are omitted,
+All five launcher selections pass PrepareOnly. Claude reviewed every screenshot (Codex
+could not open images): right rooms, Barba visible, elevators under Barba, no duplicates. Ending/crystal-placement and mid-pit/long-shaft snapshots are omitted,
 not faked; boss/shaft approaches are supplied instead. Full details and remaining
 acceptance limits: build/CHECKPOINTS-REPORT.md. No gates advanced.
+
+## Looking-up head (2026-11-14, `feat/look-up-head`)
+
+Tall frame 8 is the boss open-jaw head sheared 2:1 snout-up (build-time recipe in `tools/boss_art.py`,
+no ROM pixels committed), replacing the broken 90-degree rotation. Drawn while rising with Up held, during
+an airborne Up+B windup, and for an upward-latched volley; forward air/ground attacks keep frames 4/5.
+`tests/look_up.lua` PASS; body pairs 43/47; upward perf 27,837 peak, 0/900 lag.
 
 ## Upward breath and rising head-butt (2026-11-14)
 
@@ -120,7 +125,7 @@ Audio register/envelope validation is not a listening-quality review.
 
 The ordered next steps and latest human feedback are in [ROADMAP.md](ROADMAP.md).
 
-- Tune upward breath/head-butt feel by hand and draw the deferred looking-up attack head.
+- Tune upward breath/head-butt feel by hand (looking-up head drawn 2026-11-14).
   Up/down thrusts and glove-gated fireball block breaking are implemented.
 - Palace 6's boss is now **Lava Link** (`tests/link_boss.lua` PASS); full defeat-to-crystal playthrough remains to be tested by hand.
 - Audit sprite states and CHR sharing in every town, palace, menu, ending and
