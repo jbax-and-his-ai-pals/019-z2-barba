@@ -125,8 +125,9 @@ Audio register/envelope validation is not a listening-quality review.
 
 The ordered next steps and latest human feedback are in [ROADMAP.md](ROADMAP.md).
 
-- Tune upward breath/head-butt feel by hand (looking-up head drawn 2026-11-14).
-  Up/down thrusts and glove-gated fireball block breaking are implemented.
+- Upward breath, head-butt, downstab and their fireball behaviors were playtested and
+  accepted by the producer (2026-11-14), including the looking-up head. Glove-gated
+  fireball block breaking is implemented.
 - Palace 6's boss is now **Lava Link** (`tests/link_boss.lua` PASS); full defeat-to-crystal playthrough remains to be tested by hand.
 - Audit sprite states and CHR sharing in every town, palace, menu, ending and
   the Dark Link encounter; the current replacement covers 13 side-view sprite banks.
