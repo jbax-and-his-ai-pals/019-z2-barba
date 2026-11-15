@@ -39,10 +39,10 @@ SHOUT_PAIR_SHA256 = {
     0x80: '893a0325cdc7cf39', 0x82: '42de53a38d178b20', 0x84: 'af85fa03d8808ac1',
     0x86: '3e0dffed3d26d014', 0x88: '55dc69973efa250d', 0x8A: '431ab247f511fe1d',
     0x8C: 'c644321081be6393', 0x92: 'cab870c820270963', 0x94: '13ea6b95d58a4960',
-    0x9C: '8d5f82fc987a6193', 0x9E: 'f9523c2896786a4b', 0xA0: '56c8c7c281e4177f',
-    0xA2: '904a335528773b88', 0xA8: '8a67b0ac638f1721', 0xAA: '28d9e3968e5dce9e',
-    0xAC: '1e50cd57abf29a43', 0xBA: '77125f6e91a0dc9e', 0xBC: '14f9bfc9ad98c854',
-    0xBE: '5155a7a4143a9e04',
+    0x98: 'f822b6a32d262016', 0x9C: '8d5f82fc987a6193', 0x9E: 'f9523c2896786a4b',
+    0xA0: '56c8c7c281e4177f', 0xA2: '904a335528773b88', 0xA8: '8a67b0ac638f1721',
+    0xAA: '28d9e3968e5dce9e', 0xAC: '1e50cd57abf29a43', 0xAE: '66351072a813d5f7',
+    0xBA: '77125f6e91a0dc9e', 0xBC: '14f9bfc9ad98c854', 0xBE: '5155a7a4143a9e04',
 }
 
 

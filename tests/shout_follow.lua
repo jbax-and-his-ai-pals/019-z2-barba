@@ -13,20 +13,22 @@ local function check(ok,msg)
     f:write((ok and 'PASS ' or 'FAIL ')..msg..'\n');f:flush()
     if not ok then errors=errors+1 end
 end
-local lengths={5,4,5,5,4,4,6,5}
+local oamSlots={0x2DC,0x2E0,0x2E4,0x2E8,0x2EC,0x2F0,0x2F4}
+local lengths={8,8,4,6,7,5,8,3,6}
 local words={
-    {0,1,2,3,4},       -- 1 SHIT!
-    {0,1,2,3},         -- 2 RUN!
-    {0,1,2,3,4},       -- 3 FUCK!
-    {0,1,3,4},         -- 4 OH NO (space at 2)
-    {0,1,2,3},         -- 5 OMG!
-    {0,1,2,3},         -- 6 WTF!
-    {0,1,3,4,5},       -- 7 OH GOD (space at 2)
-    {0,1,2,3,4},       -- 8 HELP!
+    {0,1,3,4,5,6,7},   -- 1 OH SHIT!
+    {0,1,3,4,5,6,7},   -- 2 OH FUCK!
+    {0,1,2,3},         -- 3 RUN!
+    {0,1,3,4,5},       -- 4 OH NO!
+    {0,1,3,4,5,6},     -- 5 OH GOD!
+    {0,1,2,3,4},       -- 6 HELP!
+    {0,1,2,3,5,6,7},   -- 7 SAVE ME!
+    {0,1,2},           -- 8 NO!
+    {0,1,2,3,4,5},     -- 9 BARBA!
 }
 local function glyphsVisible()
     local n=0
-    for i=0,4 do if r(OAM+i*4)<0xEF then n=n+1 end end
+    for _,a in ipairs(oamSlots) do if r(a)<0xEF then n=n+1 end end
     return n
 end
 -- Actor's own sprite box from its native OAM block this same frame.
@@ -54,7 +56,7 @@ local placedAt=nil
 local glyphBg=false
 -- Background tiles replaced by the glyph pairs (bank 7, odd tiles $81..$A1).
 local replaced={}
-for _,pair in ipairs({0x80,0x82,0x84,0x86,0x88,0x8A,0x8C,0x92,0x94,0x9C,0x9E,0xA0,0xA2,0xA8,0xAA,0xAC,0xBA,0xBC,0xBE}) do
+for _,pair in ipairs({0x80,0x82,0x84,0x86,0x88,0x8A,0x8C,0x92,0x94,0x98,0x9C,0x9E,0xA0,0xA2,0xA8,0xAA,0xAC,0xAE,0xBA,0xBC,0xBE}) do
     replaced[pair]=true;replaced[pair+1]=true
 end
 function glyphTilesOnScreen()
@@ -154,14 +156,14 @@ emu.addEventCallback(function()
                 local left=ax+8-4*len
                 local err=0
                 for idx,col in ipairs(cols) do
-                    local a=OAM+(idx-1)*4
+                    local a=oamSlots[idx]
                     local gx=left+8*col
                     if gx>=4 and gx<252 then
-                        err=math.max(err,math.abs(r(a)-(ay-18)),math.abs(r(a+3)-gx))
+                        err=math.max(err,math.abs(r(a)-(ay-32)),math.abs(r(a+3)-gx))
                         if r(a+1)%2~=1 or r(a+2)~=2 then err=999 end
                     end
                 end
-                for i=#cols,4 do if r(OAM+i*4)<0xEF then err=999 end end
+                for idx=#cols+1,#oamSlots do if r(oamSlots[idx])<0xEF then err=999 end end
                 if err>maxErr then maxErr=err;f:write(string.format('note new max error=%d age=%d ax=%d ay=%d g0=%d,%d\n',err,age,ax,ay,r(OAM+3),r(OAM))) end
                 tracked=tracked+1
                 if not startScroll then startScroll=r(0x72C) end
@@ -274,13 +276,13 @@ emu.addEventCallback(function()
         end
         if age==4 then
             local ok=true
-            local left=sx+8-20
-            for i=0,4 do
-                local a=OAM+i*4
-                local gx=left+8*i
+            local left=sx+8-4*lengths[1]
+            for idx,col in ipairs(words[1]) do
+                local a=oamSlots[idx]
+                local gx=left+8*col
                 if gx<0 or gx>255 then
                     if r(a)<0xEF then ok=false end
-                elseif r(a)~=r(0x2A+slot)-18 or r(a+3)~=gx then ok=false end
+                elseif r(a)~=r(0x2A+slot)-32 or r(a+3)~=gx then ok=false end
             end
             check(ok and r(WORD)==1,(phase==8 and 'left' or 'right')..' edge clips glyphs one by one without wraparound')
             pending=true

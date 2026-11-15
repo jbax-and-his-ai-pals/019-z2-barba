@@ -626,13 +626,22 @@ TownRequestShout:
     sbc #$19
     clc
     adc SHOUT_CYCLE
-    and #$07
+    cmp #$09
+    bcc :+
+    sbc #$09
+:
     clc
     adc #$01
     sta SHOUT_REQUEST
     ; The same villager also carries a short sprite word (shouts.inc).
     sta SHOUT_WORD
     inc SHOUT_CYCLE
+    lda SHOUT_CYCLE
+    cmp #$09
+    bcc :+
+    lda #$00
+    sta SHOUT_CYCLE
+:
     stx SHOUT_SLOT
     lda #SHOUT_WORD_TIME
     sta SHOUT_WORD_TIMER

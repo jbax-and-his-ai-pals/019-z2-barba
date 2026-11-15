@@ -15,11 +15,10 @@ TALK_LATCH = $6466
 SHOUT_WORD = $6467          ; 0 none, else word 1..8 drawn above SHOUT_SLOT
 SHOUT_WORD_TIMER = $6468    ; frames left for the word
 SHOUT_CYCLE = $6469         ; rotating offset so repeated shouts cycle phrases
-; Five OAM entries $E0..$F0. Natively these are enemy-projectile windows
-; (bases $E0/$E8/$F0 in the $D59B rotation); town streets never fill them.
-; They are written only while a word is live in town play, and the word
-; yields any frame an enemy projectile ($87..$8C) exists.
-SHOUT_OAM = $E0
+; Seven consecutive OAM entries $DC..$F4. Natively enemy-projectile windows
+; ($E0/$E8/$F0 in $D59B); town streets never fill them. Written only while
+; a word is live in town play, yielding to any enemy projectile ($87..$8C).
+SHOUT_OAM = $DC
 SHOUT_WORD_TIME = $64
 
 BarbaShouts:
@@ -134,11 +133,12 @@ ShoutWord:
     bne @hide
     dey
     bpl :-
-    ; Glyphs sit in the lower half of each 8x16 pair: sprite Y = top - 18
-    ; puts the letters 2 px above the head, entirely clear of the body rows.
+    ; Glyphs sit in the lower half of each 8x16 pair: sprite Y = top - 32
+    ; puts the letters at Y-24..Y-17, clear of Barba's 48px head so 7-glyph
+    ; shouts don't hit the 8-sprites-per-scanline limit when Barba stands nearby.
     lda $2A,x
     sec
-    sbc #$12
+    sbc #$20
     bcc @hide
     cmp #$20                    ; keep clear of the HUD above the split
     bcc @hide
@@ -206,7 +206,7 @@ ShoutWord:
     iny
     iny
     iny
-    cpy #SHOUT_OAM+$14
+    cpy #SHOUT_OAM+$1C
     beq @word_done
 @advance_x:
     lda $01
@@ -226,7 +226,7 @@ ShoutWord:
     iny
     iny
     iny
-    cpy #SHOUT_OAM+$14
+    cpy #SHOUT_OAM+$1C
     bne @hide_loop
 @word_done:
     rts
@@ -245,24 +245,25 @@ ShoutWordHide:
     iny
     iny
     iny
-    cpy #SHOUT_OAM+$14
+    cpy #SHOUT_OAM+$1C
     bne :-
 ShoutWordDone:
     rts
 
-; Fear phrases per shout word 1..8, up to five visible glyphs plus optional space.
-; ShoutWordTiles comes from shout_layout.inc: six bytes per phrase, $FF space, $00 end.
+; Fear phrases per shout word 1..9, up to seven visible glyphs plus optional space.
+; ShoutWordTiles comes from shout_layout.inc: eight bytes per phrase, $FF space, $00 end.
 ShoutTile_Space = $FF
 ShoutWordLength:
-    .byte 5, 4, 5, 5, 4, 4, 6, 5
+    .byte 8, 8, 4, 6, 7, 5, 8, 3, 6
 ShoutWordStart:
-    .byte 0, 6, 12, 18, 24, 30, 36, 42
+    .byte 0, 8, 16, 24, 32, 40, 48, 56, 64
 ShoutWordTiles:
-    .byte ShoutTile_S, ShoutTile_H, ShoutTile_I, ShoutTile_T, ShoutTile_Bang, $00             ; 1 SHIT!
-    .byte ShoutTile_R, ShoutTile_U, ShoutTile_N, ShoutTile_Bang, $00, $00                     ; 2 RUN!
-    .byte ShoutTile_F, ShoutTile_U, ShoutTile_C, ShoutTile_K, ShoutTile_Bang, $00             ; 3 FUCK!
-    .byte ShoutTile_O, ShoutTile_H, ShoutTile_Space, ShoutTile_N, ShoutTile_O, $00            ; 4 OH NO
-    .byte ShoutTile_O, ShoutTile_M, ShoutTile_G, ShoutTile_Bang, $00, $00                     ; 5 OMG!
-    .byte ShoutTile_W, ShoutTile_T, ShoutTile_F, ShoutTile_Bang, $00, $00                     ; 6 WTF!
-    .byte ShoutTile_O, ShoutTile_H, ShoutTile_Space, ShoutTile_G, ShoutTile_O, ShoutTile_D    ; 7 OH GOD
-    .byte ShoutTile_H, ShoutTile_E, ShoutTile_L, ShoutTile_P, ShoutTile_Bang, $00             ; 8 HELP!
+    .byte ShoutTile_O, ShoutTile_H, ShoutTile_Space, ShoutTile_S, ShoutTile_H, ShoutTile_I, ShoutTile_T, ShoutTile_Bang ; 1 OH SHIT!
+    .byte ShoutTile_O, ShoutTile_H, ShoutTile_Space, ShoutTile_F, ShoutTile_U, ShoutTile_C, ShoutTile_K, ShoutTile_Bang ; 2 OH FUCK!
+    .byte ShoutTile_R, ShoutTile_U, ShoutTile_N, ShoutTile_Bang, $00, $00, $00, $00                                     ; 3 RUN!
+    .byte ShoutTile_O, ShoutTile_H, ShoutTile_Space, ShoutTile_N, ShoutTile_O, ShoutTile_Bang, $00, $00               ; 4 OH NO!
+    .byte ShoutTile_O, ShoutTile_H, ShoutTile_Space, ShoutTile_G, ShoutTile_O, ShoutTile_D, ShoutTile_Bang, $00       ; 5 OH GOD!
+    .byte ShoutTile_H, ShoutTile_E, ShoutTile_L, ShoutTile_P, ShoutTile_Bang, $00, $00, $00                           ; 6 HELP!
+    .byte ShoutTile_S, ShoutTile_A, ShoutTile_V, ShoutTile_E, ShoutTile_Space, ShoutTile_M, ShoutTile_E, ShoutTile_Bang ; 7 SAVE ME!
+    .byte ShoutTile_N, ShoutTile_O, ShoutTile_Bang, $00, $00, $00, $00, $00                                           ; 8 NO!
+    .byte ShoutTile_B, ShoutTile_A, ShoutTile_R, ShoutTile_B, ShoutTile_A, ShoutTile_Bang, $00, $00                   ; 9 BARBA!
