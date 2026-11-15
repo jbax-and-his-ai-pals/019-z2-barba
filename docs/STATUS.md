@@ -91,7 +91,7 @@ BUILD.md. Hardware sprite limits remain enabled.
 | ROM-free tool tests | Eight unit tests cover binary patch round trips, relocated source references, guards, overlaps, bank offsets and NES 2bpp encoding |
 | New-game integration | Controller-driven name entry, castle gameplay, standing/crouched attack poses, jump, castle exit and overworld dragon renderer |
 | Projectile-only attack | 16 real-game health/Fire/facing/stance cases each emit exactly five mouth-aligned diagonal fireballs with no melee/plume |
-| Actual palace room | Test enters original Palace 6 room `$33` through the normal room loader, walks into lava, remains supported without sinking, jumps out (with lava-launch `$FA` boost to prevent pit softlocks) and returns alive; 112 hazard contacts during the scenario |
+| Actual palace room | Test enters original Palace 6 room `$33` through the normal room loader, walks into lava, settles in the partly submerged lava pose (`GEOMETRY` bit 2, 16px lower with bottom row omitted and sprites kept in front of background), crouches in lava with full head/horns visible, jumps out (with lava-launch `$FA` boost to prevent pit softlocks) and returns alive; 99 hazard contacts during the scenario |
 | Block progression | Six CPU cases verify native glove-gated brick breaking at either projectile, no player-body block damage and restored player pose/speed |
 | Shielded enemies | `shield_enemies.lua` verifies Orange Ironknuckle (`$18`) high shield blocks standing shots and yields to crouching shots (shallow 0.5 px/frame drift from `$29+$0A`), while low shield blocks crouching shots and yields to standing shots |
 | Hazard routine | All six world groups checked: palace groups gain support; other groups retain original water-death state |
@@ -99,7 +99,7 @@ BUILD.md. Hardware sprite limits remain enabled.
 | Human test pack | Eight native Mesen states generated for the exact build; every state reloads with a visible frame and survives 120 further frames; sea crossing completes on East Hyrule |
 | Tall geometry and renderer | Four-corner native solid probes, lower head row, world-page crossing, edge rejection, ceiling folding, crouch and extra OAM cleanup pass controlled CPU checks |
 | HUD split timing | 900 measured Palace 1 frames keep the split on line 31; previous build reached line 42. No upper-HUD scroll/address writes; native sprite-limit flicker remains possible |
-| Bounded volley | Five logical slots keep exact eight-update spacing, preserve range, continue beyond attack animation, require release before rearming, and trigger Zelda II's native Barba/Flame fireball sound (`$ED |= $40` in `BarbaBreathSfx`) once per attack |
+| Bounded volley | Five logical slots keep exact eight-update spacing, preserve range, continue beyond attack animation, require release before rearming, and sustain Zelda II's native Barba/Flame fireball sound (`$ED |= $40` in `BarbaBreathSfx`) every frame while any volley fireball is live at all spell levels |
 | Weak-enemy stomp & item pickup | `BarbaPreEnemy` (`$D4FE` -> `stomp.inc`) lets descending Barba stomp-kill weak enemies (`$C2,x` 1..4) via native `$E880` with an upward bounce (`$057D = $FC`) and no contact damage, and lets Barba pick up keys, jars, P-bags, and 1-Ups (`$A1 = $01`, `$AF & $7F` in `$08..$0D, $10, $11`) by touching them via native `$E771` without requiring a crouched fireball |
 | Post-flash palette | Strided WRAM flash-restore table (`$A9FA`/`$AA00`/`$AA06` -> `$69D2`/`$69D8`/`$69DE`) and side-view init (`$90DA`) patched to `$16/$27/$30` so `$074B` flash sequences (spells, item pickups, crystal flashes) restore Barba's red/orange/white palette instead of vanilla green/beige (`$18/$36/$2A`) |
 | Downstab | `BarbaSetThrusts` (`src/tall_player.inc`) preserves `$0480`/`$047E` when `$80 == $09` (Downstab) while keeping horizontal melee disabled (`$F8`); hitbox widened to 18x12 px (`$E9B5`, `$E9A1`) centered under Barba (`$29+$1C`, `$CC+$0B`) |
@@ -109,9 +109,9 @@ BUILD.md. Hardware sprite limits remain enabled.
 | Floating shout words | Floating sprite words above fleeing villagers (`OH SHIT!`, `OH FUCK!`, `RUN!`, `OH NO!`, `OH GOD!`, `HELP!`, `SAVE ME!`, `NO!`, `BARBA!`) rotate every ~2 s (`SHOUT_COOLDOWN = $78`) in 7 OAM slots (`$DC-$F4`) with 6 px compacted glyph bodies (`1..6`) for full 1 px black left/right borders, 8 px space skipping (`$FF`), edge clipping, and doorway/burn/dialogue/menu hiding; top-HUD subtitle text removed |
 | Panic dialogue speed | Holding Up catches a fleeing villager; protected-NPC delays and caller registers retain original behavior |
 | Checkpoint XP regression | Upgraded states now recompute the next-level target; 50 XP stays in gameplay, 2,000 XP permits one attack upgrade and returns to gameplay afterward |
-| Battle performance | `BarbaDisplay` fast path (`$F27D` + unrolled 9-sprite draw) + `BarbaGeometry` `TerrainBatch` cache (`$6458-$645F`) cut display cost from ~4,016 to ~1,186–1,531 cycles/frame; `LOAD_LIMIT = 7` + 3-shot busy-room cap (`enemies >= 2`) allows 2 live shots in 6-enemy overworld Bit/Bot fights (0 lag frames of 600, avg 25,103 / peak 28,941 cycles, `splitRange=31..31`) and up to 3 shots in busy rooms (`perf_volley.lua`: idle avg 15,179 cycles, volley avg 20,659 / peak 30,865 cycles, `nearBudget(>27000)=54`, 4/900 lag frames) |
+| Battle performance | `BarbaDisplay` fast path (`$F27D` + unrolled 9-sprite draw) + `BarbaGeometry` `TerrainBatch` cache (`$6458-$645F`) cut display cost; `BarbaExtraUpdate` direct fast path + tightened `ExtraNearEnemy` (`-32 <= dx < +48`, `-32 <= dy < +64`) cut `extraAvg`/`extraMax` from 594/1,433 to 287/544 cycles; odd-frame OAM priority swap (`$0204 <-> $02F8`, `$0214..$021F <-> $02C8..$02D3` outside towns) balances 8-sprite drops across Barba's head/body and enemies (`perf_volley.lua`: idle avg 15,638 / peak 15,867, volley avg 19,820 / peak 28,411 cycles, `nearBudget(>27000)=8`, **0/900 lag frames**, `maxSpritesOnLine=11`, `framesOver8=64`) |
 | Title, File Select, Game Over & NPCs | `BARBA I / THE ADVENTURE OF / BARBA` replaces `ZELDA II` and `LINK` (`$AFC6` + redraw tables `$AB65`/`$AEEA`); title water replaced with molten lava + 24x48 Barba (`$A7DD..$A828`, `$AF48`) that periodically opens its jaw (`windup`/`attack` head tiles via `$A8CF` -> `$A54F`) and triggers the fireball SFX (`$ED |= $40`); scrolling title story (`$A932`); File Select save-slot dolls (`CHR 00` `$D0/$D1`) show 8x16 Barba heads/busts; Game Over subtitle reads `LINK KEEPS LAVA` (`$8010`); Wise Men (`$0F`), Healing Ladies (`$17`), and Magic Women (`$18`) react to Barba while keeping their spell/heal logic; spell menu reads `SCALES`, `JUMP`, `LIFE`, `WYRMLNG`, `FIRE`, `REFLECT`, `SPELL`, `INFERNO` |
-| Palace 6 Lava Link boss | `tests/link_boss.lua` verifies Palace 6 boss (`$21`) switches Sprite Palette 1 to Link (`18 36 2A` via `$A765` PPU packet), renders hand-drawn 16x16 Link heads and the button-down tunic neck in `CHR 25` (`14..2E`, `A0/A2`, sword beam `52` from `CHR 2` `32`), neck stops at the lava (5 pieces, `$B294`), plays Link's hurt sound once per hit (`$A795`), breathes Spear/sword beams (`$05` at `$B19B`) instead of flames (`$04`), and takes damage from Barba's fireballs |
+| Palace 6 Lava Link boss | `tests/link_boss.lua` verifies Palace 6 boss (`$21`) switches Sprite Palette 1 to Link (`18 36 2A` via `$A765` PPU packet), renders hand-drawn 16x16 Link heads and the button-down tunic neck in `CHR 25` (`14..2E`, `A0/A2`, sword beam `52` from `CHR 2` `32`), centers the head over the body (`$B286` `02 FE`), neck stops at the lava (5 pieces, `$B294`), plays Link's hurt sound once per hit (`$A795`), breathes 2 Spear/sword beams per attack (`$05` at `$B19B`, `$B18C` mask `$37`) instead of 6 flames (`$04`), and takes damage from Barba's fireballs |
 
 Combat and palace scenarios intentionally create controlled fixtures (enemy
 positions or room entry and extra health). They exercise the original game
@@ -125,14 +125,13 @@ Audio register/envelope validation is not a listening-quality review.
 
 The ordered next steps and latest human feedback are in [ROADMAP.md](ROADMAP.md).
 
-- Upward breath, head-butt, downstab and their fireball behaviors were playtested and
-  accepted by the producer (2026-11-14), including the looking-up head. Glove-gated
+- Upward breath and rising head-butt have producer signoff (2026-11-14). Glove-gated
   fireball block breaking is implemented.
 - Palace 6's boss is now **Lava Link** (`tests/link_boss.lua` PASS); full defeat-to-crystal playthrough remains to be tested by hand.
 - Audit sprite states and CHR sharing in every town, palace, menu, ending and
   the Dark Link encounter; the current replacement covers 13 side-view sprite banks.
 - Replace residual Link references and item/menu art where appropriate (title screen logo now reads `BARBA`).
-- Refine the lava pose to appear partly submerged, and audit all lava rooms,
+- Partially submerged lava pose is implemented (`tall_player.inc`: `GEOMETRY` bit 2 shifts standing sprites 16px down and omits the bottom row while keeping all sprites in front of background bricks); audit all lava rooms,
   bottomless pits, water hazards, elevators, low tunnels and collapsing floors.
 - Listen to and tune the roar with music, pause/unpause and scene transitions.
   Additional milestone triggers are not implemented yet.

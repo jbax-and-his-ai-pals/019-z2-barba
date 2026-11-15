@@ -72,8 +72,7 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
 ## Performance facts (from tests/perf_volley.lua)
 
 The game logic runs in NMI. Over about 29.7k cycles the next frame lags. Vanilla peaks near 26.6k
-with 6 enemies. Fixed-bank-headroom baseline/final Palace 1 probe: idle avg/peak 15,370/15,378 cycles,
-volley 19,931/30,119, lag 0/300 idle and 1/900 volley (unchanged). `BarbaDisplay` bypasses
+with 6 enemies. Palace 1 `perf_volley.lua` probe (after `BarbaExtraUpdate` fast path, tightened `ExtraNearEnemy`, and odd-frame OAM priority rotation): idle avg/peak 15,638/15,867 cycles, volley 19,820/28,411, lag 0/300 idle and **0/900 volley**, `extraAvg`/`extraMax` 287/544, `nearBudget(>27000)=8`. `BarbaDisplay` bypasses
 `$EBF0` on normal frames (using `$F27D` + unrolled 9-sprite
 draw) and `BarbaGeometry` caches `TerrainBatch` in `$6458-$645F`, cutting display cost from ~4.0k
 to ~1.2k cycles/frame. `BarbaLoadOk` uses `LOAD_LIMIT = 7` (allows 2 simultaneous shots in 6-enemy

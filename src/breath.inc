@@ -99,6 +99,12 @@ BarbaProjectiles:
     tax
 @extra:
     jsr BarbaExtraUpdate
+    lda VOLLEY_SLOT
+    ora VOLLEY_SLOT+1
+    ora EXTRA_LIVE
+    beq @no_sfx
+    jsr BarbaBreathSfx
+@no_sfx:
     rts
 
 ; The same five-slot allocation path handles both initial and queued shots.

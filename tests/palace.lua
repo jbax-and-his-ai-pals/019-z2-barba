@@ -10,6 +10,7 @@ local contacts=0
 local standingY=nil
 local stable=true
 local jumped=false
+local airCleared=false
 local errors=0
 local function check(ok,message)
     report:write((ok and 'PASS ' or 'FAIL ')..message..'\n')
@@ -19,6 +20,7 @@ emu.addMemoryCallback(function()if frame>1000 then contacts=contacts+1 end end,e
 emu.addEventCallback(function()
     local buttons=newGameInput(frame)
     buttons.right=(frame>=1300 and frame<1430)
+    buttons.down=(frame>=1486 and frame<1490)
     buttons.a=buttons.a or (frame>=1490 and frame<1510)
     emu.setInput(buttons,0)
 end,emu.eventType.inputPolled)
@@ -51,11 +53,20 @@ emu.addEventCallback(function()
         screenshot('barba-on-lava')
         check(contacts>10 and r(0xB5)==1,'repeated lava contact leaves player alive')
         check(stable and r(0x479)==0,'dragon settles on lava surface without sinking')
+        check((r(0x5F6)&4)~=0,'standing on lava sets submerged geometry bit')
+        check((r(0x20E)&0x20)==0,'standing lava neck stays in front of background bricks')
     end
-    if frame>=1490 and frame<1530 and r(0x29)<standingY-4 then jumped=true end
+    if frame==1489 then
+        screenshot('barba-lava-crouch')
+        check((r(0x5F6)&6)==0 and r(0x20C)<0xF8,'crouching on lava keeps full head row above lava')
+    end
+    if frame>=1490 and frame<1530 and r(0x29)<standingY-4 then
+        jumped=true
+        if (r(0x5F6)&4)==0 then airCleared=true end
+    end
     if frame==1580 then
         screenshot('barba-lava-after-jump')
-        check(jumped,'jump lifts dragon out of lava')
+        check(jumped and airCleared,'jump lifts dragon out of lava and clears submerged pose')
         check(r(0xB5)==1 and r(0x736)==11,'player survives jump and return to lava')
         report:write('hazard contacts '..contacts..'\nRESULT '..(errors==0 and 'PASS' or 'FAIL')..'\n')
         report:close();stopScenario(errors==0 and 0 or 1)

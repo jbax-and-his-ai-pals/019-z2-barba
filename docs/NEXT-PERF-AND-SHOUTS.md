@@ -71,21 +71,11 @@ in a room with enemies. On the NES that means the main loop overruns a frame
 - Last resort, a design change for the producer: fewer extra shots (3 total), or a
   shorter lifetime (33 updates now).
 
-## 2. Flicker in battle
+## 2. Flicker and busy-battle CPU: IMPROVED 2026-11-14
 
-Hypothesis: the NES 8-sprites-per-scanline limit. The tall player is 24 px wide
-(3 sprites per line, 9 sprites total). Enemies are usually 2 or 3 wide. The
-fireballs descend diagonally, so several share lines with the player's lower body
-and with enemies. Zelda II's OAM rotation turns that overflow into flicker.
-
-Measure: in the same perf scenario, count sprites per scanline from OAM each frame
-(max and number of lines over 8). Mesen's sprite viewer also shows it.
-
-Options: draw the 3 head sprites only when needed (they're above the body, so the
-lines don't overlap and that doesn't help much). Narrow the body to 16 px during
-volleys. Keep backed fireballs out of OAM slots that the rotation always drops.
-Cap simultaneous on-screen shots at 3–4. Any choice of fewer shots is the
-producer's decision.
+Measured with `tests/perf_volley.lua` before vs after:
+- **CPU / lag:** `BarbaExtraUpdate` now runs a direct fast path on `EXTRA_BASE,x` for normal integer-velocity fireballs (`$8D > 0`, `vx & $0F == 0`) without `ExtraSaveZero`/`ExtraLoadRecord`/`$9888`/`ExtraStoreRecord`/`ExtraRestoreZero`, and `ExtraNearEnemy` tightens the broad phase from `±128 px` to `-32 <= dx < +48`, `-32 <= dy < +64`. In `perf_volley.lua`: `lagFrames` 1 -> **0/900**, `nmiMax` 30,162 -> **28,411** cycles, `nearBudget(>27000)` 33 -> **8** frames, `extraAvg`/`extraMax` 594/1,433 -> **287/544** cycles.
+- **OAM priority rotation:** In `BarbaDisplay` (`src/tall_player.inc`), odd frames (`$12 & 1`, outside towns `$0707 == 1, 2`) swap Barba's outer head slots (`$0204 <-> $02F8`) so `$02F8` never drops permanently, and swap Barba's lower body (`$0214..$021F`) with enemy slot 5 (`$02C8..$02D3`) when enemies are active so Barba, fireballs, and enemies share 8-sprites-per-line drops evenly instead of enemies always losing (or `$02F8` always losing). Note: `maxSpritesOnLine` (11 in Palace 1) is unchanged because total visible sprites on overlapping scanlines is a hardware PPU limit; rotation converts permanent dropout into 30 Hz alternating flicker.
 
 ## 3. Villager shouts near the speaker
 

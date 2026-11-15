@@ -219,8 +219,8 @@ BarbaExtraUpdate:
     sta EXTRA_LIVE
     jmp @idle
 @busy:
-    jsr ExtraSaveZero
     lda #$00
+    sta EXTRA_KIND+$03
     sta EXTRA_INDEX
 @slot:
     lda EXTRA_INDEX
@@ -233,9 +233,136 @@ BarbaExtraUpdate:
     tay
     lda #$F8
     sta $0200,y
-    ldy EXTRA_INDEX
-    lda EXTRA_BASE,y
-    beq @next
+    ldx EXTRA_INDEX
+    lda EXTRA_BASE,x
+    bne :+
+    jmp @next
+:
+    bpl :+
+    jmp @slow_slot
+:
+    lda EXTRA_BASE+$04,x
+    and #$0F
+    beq :+
+    jmp @slow_slot
+:
+    lda EXTRA_BASE+$07,x
+    beq @fast_step_y
+    cmp #$F2
+    bne :+
+    jmp @kill_slot
+:
+    clc
+    adc #$01
+    sta EXTRA_BASE+$07,x
+@fast_step_y:
+    dec EXTRA_BASE+$09,x
+    lda EXTRA_BASE+$09,x
+    and #$3F
+    bne :+
+    jmp @kill_slot
+:
+    lda EXTRA_BASE+$09,x
+    and #$40
+    bne @fast_up_y
+    lda EXTRA_BASE+$09,x
+    bpl @fast_steep_y
+    and #$01
+    beq @fast_move_x
+    lda #$01
+    bne @fast_add_y
+@fast_steep_y:
+    lda #$02
+@fast_add_y:
+    clc
+    adc EXTRA_BASE+$01,x
+    bcs @kill_slot_near
+    cmp #$E0
+    bcc :+
+@kill_slot_near:
+    jmp @kill_slot
+:
+    sta EXTRA_BASE+$01,x
+    jmp @fast_move_x
+@fast_up_y:
+    lda EXTRA_BASE+$01,x
+    sec
+    sbc #$03
+    bcc @kill_slot_near
+    cmp #$10
+    bcc @kill_slot_near
+    sta EXTRA_BASE+$01,x
+@fast_move_x:
+    lda EXTRA_BASE+$04,x
+    lsr
+    lsr
+    lsr
+    lsr
+    cmp #$08
+    bcc :+
+    ora #$F0
+:
+    ldy #$00
+    cmp #$00
+    bpl :+
+    dey
+:
+    clc
+    adc EXTRA_BASE+$02,x
+    sta EXTRA_BASE+$02,x
+    tya
+    adc EXTRA_BASE+$03,x
+    sta EXTRA_BASE+$03,x
+    lda EXTRA_BASE+$02,x
+    sec
+    sbc $072C
+    tay
+    lda EXTRA_BASE+$03,x
+    sbc $072A
+    bne @kill_slot
+    cpy #$F8
+    bcs @kill_slot
+    lda EXTRA_BASE+$05,x
+    lsr
+    lda #$00
+    ror
+    ror
+    sta $00
+    lda $12
+    asl
+    asl
+    asl
+    asl
+    asl
+    and #$80
+    ora $00
+    ora #$01
+    pha
+    tya
+    pha
+    lda EXTRA_BASE+$0A,x
+    tay
+    pla
+    sta $0203,y
+    pla
+    sta $0202,y
+    lda #$84
+    sta $0201,y
+    lda EXTRA_BASE+$01,x
+    sta $0200,y
+    jmp @next
+@kill_slot:
+    lda #$00
+    sta EXTRA_BASE,x
+    sta EXTRA_BASE+$09,x
+    jmp @next
+@slow_slot:
+    lda EXTRA_KIND+$03
+    bne :+
+    jsr ExtraSaveZero
+    lda #$01
+    sta EXTRA_KIND+$03
+:
     jsr ExtraLoadRecord
     lda $8D
     bmi @native
@@ -278,7 +405,10 @@ BarbaExtraUpdate:
     bcs :+
     jmp @slot
 :
+    lda EXTRA_KIND+$03
+    beq :+
     jsr ExtraRestoreZero
+:
     lda EXTRA_BASE
     ora EXTRA_BASE+$10
     ora EXTRA_BASE+$20
@@ -411,8 +541,8 @@ ExtraCollision:
     plp
     rts
 
-; Conservative broad phase in world space. Actual native AABB/shield tests
-; still decide contact; +/-128px covers the largest native boss hurtboxes.
+; Tight broad phase in world space (-32 <= dx < +48, -32 <= dy < +64).
+; Covers every native enemy and boss hurtbox while skipping distant enemies.
 ; Y=record offset, X=enemy. Carry set when both axes can plausibly overlap.
 ExtraNearEnemy:
     lda EXTRA_BASE+$02,y
@@ -425,21 +555,21 @@ ExtraNearEnemy:
     cmp #$FF
     bne @far
     lda EXTRA_DELTA
-    bpl @far
-    jmp @y
+    cmp #$E0
+    bcc @far
+    bcs @y
 @positive_x:
     lda EXTRA_DELTA
-    bmi @far
+    cmp #$30
+    bcs @far
 @y:
     lda EXTRA_BASE+$01,y
     sec
     sbc $2A,x
-    bcc @negative_y
-    bmi @far
-    sec
-    rts
-@negative_y:
-    bpl @far
+    clc
+    adc #$20
+    cmp #$60
+    bcs @far
     sec
     rts
 @far:

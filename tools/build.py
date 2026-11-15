@@ -356,6 +356,10 @@ def build(source_path: Path, output: Path) -> dict:
         bytes.fromhex('a9 e8 38 e5 00 90 69 4a 4a 4a 4a 29 07'),
         'Lava Link neck stops at lava',
     )
+    overlay.prg(4, 0xB286, b'\x02\xfe', b'\x10\xf0', 'Lava Link head centered over body')
+    # Cut Lava Link sword beams per attack from 6 (every 2 frames in $4F..$40) to 2 ($48 and $40, 8 frames apart).
+    overlay.prg(4, 0xB18C, b'\x29\x37', b'\x29\x30', 'Lava Link beam cadence mask ($37 -> $48/$40)')
+    overlay.prg(4, 0xB190, b'\xea' * 5, bytes.fromhex('a5 12 4a 90 29'), 'Lava Link beam cadence no parity skip')
 
     target = bytes(overlay.target)
     for bank, expected in enumerate(fingerprints):

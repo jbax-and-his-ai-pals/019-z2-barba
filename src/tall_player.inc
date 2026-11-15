@@ -45,6 +45,20 @@ BarbaGeometry:
     bne @standing
     jmp @duck
 @standing:
+    ; When grounded on palace lava, submerge the lower body: shift the head
+    ; and upper neck down 16px into the native box and omit the bottom row.
+    lda LAVA_CONTACT
+    beq @not_lava
+    lda $0479
+    bne @not_lava
+    lda #$04
+    sta GEOMETRY
+    lda $29
+    sta DRAW_TOP
+    clc
+    adc #$04
+    jmp @mouth_y
+@not_lava:
     ; Check both edges of the raised head against the area's solid-tile
     ; predicate. Its bank switch lives in fixed ROM, never in swapped code.
     lda $29
@@ -389,6 +403,9 @@ BarbaDisplay:
     TALL_SPRITE 4, $020C, 8
     TALL_SPRITE 5, $0210, 16
 @l_bot:
+    lda GEOMETRY
+    and #$04
+    bne @done_draw
     lda DRAW_TOP
     clc
     adc #$20
@@ -403,6 +420,44 @@ BarbaDisplay:
     TALL_SPRITE 7, $0218, 8
     TALL_SPRITE 8, $021C, 16
 @done_draw:
+    lda $12
+    and #$01
+    beq @no_rot
+    lda $0707
+    cmp #$01
+    beq @no_rot
+    cmp #$02
+    beq @no_rot
+    ; Alternate OAM priority on odd frames in combat/palaces: swap outer head
+    ; tiles ($0204 <-> $02F8) and swap lower body ($0214..$021F) with enemy
+    ; slot 5 ($02C8..$02D3) when enemies are active so Barba, fireballs, and
+    ; enemies share 8-sprite drops.
+    ldx #$03
+@rot_head:
+    lda $0204,x
+    ldy $02F8,x
+    sta $02F8,x
+    tya
+    sta $0204,x
+    dex
+    bpl @rot_head
+    lda $B6
+    ora $B7
+    ora $B8
+    ora $B9
+    ora $BA
+    ora $BB
+    beq @no_rot
+    ldx #$0B
+@rot_body:
+    lda $0214,x
+    ldy $02C8,x
+    sta $02C8,x
+    tya
+    sta $0214,x
+    dex
+    bpl @rot_body
+@no_rot:
     rts
 
 @draw_right:
@@ -442,6 +497,9 @@ BarbaDisplay:
     TALL_SPRITE 4, $020C, 8
     TALL_SPRITE 3, $0210, 16
 @r_bot:
+    lda GEOMETRY
+    and #$04
+    bne @r_done
     lda DRAW_TOP
     clc
     adc #$20
@@ -456,7 +514,7 @@ BarbaDisplay:
     TALL_SPRITE 7, $0218, 8
     TALL_SPRITE 6, $021C, 16
 @r_done:
-    rts
+    jmp @done_draw
 ; No horizontal melee. Downstab sits under the feet; upward thrust uses the
 ; native head top, never the visually raised 48px head. Both are centered.
 BarbaSetThrusts:
