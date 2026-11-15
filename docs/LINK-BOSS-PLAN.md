@@ -101,5 +101,13 @@ session with art iteration. The art is the long pole.
 Keep this fight as Barba's pattern wearing Link (rise, sword beams, sink). Beams at every health level, no weakening
 phase, difficulty not a goal. Next: experiment with a shield mechanic, and play Link's hurt sound when Lava Link is hit.
 The hurt sound is for the boss only: Barba keeps her current hurt sound (producer, 2026-11-14).
+**Shield experiment (2026-11-14, `feat/look-up-head`):** the closed head (shown while rising, sinking and
+holding outside the beam window) carries Link's shield (`compile_lava_link`, original pixels). `$B1F3`
+`JSR $DE40` -> `LavaLinkShield` (bank 4 `$A7A9-$A7E8`): code `$21` outside hold-phase timer `$30-$5F`
+lifts HP to `$FF` around `$DE40` (no kill possible), restores HP, clears the `$30` flash, drops the
+enemy-hit SFX bit and plays the shield clank `$EC = 2`. Inside the window (half/open heads) hits are
+normal. Window = 48 of ~350 frames per cycle, so the fight is longer; widen the window (e.g. also rise/sink)
+if it drags. `tests/link_shield.lua`.
+
 **Done:** `LavaLinkHurt` (bank 4 `$A795`, chained after the palette helper) starts Link's hurt SFX (`$E9 = 1`) on the
 boss update that sees a fresh hit (`$040E,X == $30`) and drops the enemy-hit SFX bit. `link_boss.lua` checks one sound per hit.

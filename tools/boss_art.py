@@ -202,8 +202,31 @@ def compile_lava_link(rom: bytes) -> dict[int, bytes]:
     # The collar sweeps back to the right edge, where the top neck piece starts 14 px over.
     collar = ['...3333333331...', '..3333333333331.', '.33333333333333.']
 
-    def make_head(mouth_open: int) -> list[str]:
-        return [row.replace('.', '0') for row in head_top + head_bottom[mouth_open] + collar]
+    # Shield experiment (producer, 2026-11-14): the closed head holds Link's shield
+    # up in front of the face, eyes peeking over it. The game shows the closed head
+    # whenever the boss is not in its beam window, and exactly then the shield
+    # blocks Barba's fire (bank 4 LavaLinkShield). Half/open heads drop it.
+    shield = [
+        '1111111',
+        '1222221',
+        '1223221',
+        '1233321',
+        '1223221',
+        '1222221',
+        '.12221.',
+        '..121..',
+        '...1...',
+    ]
+    SHIELD_TOP = 7
+
+    def make_head(mouth_open: int, with_shield: bool = False) -> list[str]:
+        rows = [list(row) for row in head_top + head_bottom[mouth_open] + collar]
+        if with_shield:
+            for dy, line in enumerate(shield):
+                for x, pixel in enumerate(line):
+                    if pixel != '.':
+                        rows[SHIELD_TOP+dy][x] = pixel
+        return [''.join(row).replace('.', '0') for row in rows]
 
     # Clean green tunic + brown belt column (16x16) using Link's tunic palette (1=brown, 2=gold/skin, 3=green).
     # Derived from Link's tunic color indices in bank 2 pairs 0x00/0x02.
@@ -226,7 +249,8 @@ def compile_lava_link(rom: bytes) -> dict[int, bytes]:
     pairs: dict[int, bytes] = {}
     for state, mouth_open in (('closed', 0), ('half', 2), ('open', 4)):
         tile_ids = HEAD_PAIRS[state]
-        compiled = pairs_from_rows([h + n for h, n in zip(make_head(mouth_open), neck_rows)])
+        head = make_head(mouth_open, with_shield=(state == 'closed'))
+        compiled = pairs_from_rows([h + n for h, n in zip(head, neck_rows)])
         for tile_id, pair_bytes in zip(tile_ids, compiled):
             pairs[tile_id] = pair_bytes
 

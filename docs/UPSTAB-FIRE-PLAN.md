@@ -119,5 +119,9 @@ chat, iterating on screenshots.
 - Bank 0 uses $1122 bytes (+131), 1,038 bytes free; fixed-bank space unchanged at 16 bytes.
 - No checkpoint added; regenerated all 10 existing states. F3 is the control-feel scene.
   Looking-up art remains deferred as approved. No gates advanced.
+- **Looking-up head (2026-11-14, `feat/look-up-head`):** frame 8 = boss open-jaw head sheared 2:1 snout-up
+  (`shear_up`/`looking_up` in `tools/boss_art.py`); snout tip sits at the up-muzzle (canvas row -1).
+  `BarbaDisplay` pose select: rising Up keeps 8; airborne windup with Up + tech -> 8; attack frame 5 ->
+  8 when airborne with `BREATH_UP` and an active burst. Fallback state 9 uses the tuck frame. `tests/look_up.lua`.
 
 Rollback: revert this feature commit and rebuild/regenerate the pack; no save-format change.
