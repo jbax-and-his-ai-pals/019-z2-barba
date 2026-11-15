@@ -80,6 +80,7 @@ overworld fights with 0 lag frames, max 28,941 cycles, and 4/900 lag frames in P
 | Towns, villagers, shouts | docs/TOWNS.md |
 | Perf/flicker/shout follow-ups | docs/NEXT-PERF-AND-SHOUTS.md |
 | Palace 6 "Lava Link" boss plan | docs/LINK-BOSS-PLAN.md |
+| Upward fire / upstab design (draft) | docs/UPSTAB-FIRE-PLAN.md |
 | Build/tooling, ROM research | docs/BUILD.md, docs/RESEARCH.md |
 | Checkpoints | docs/TEST-PACK.md (F1-F9; F9 = before Palace 6 boss, max stats) |
 
