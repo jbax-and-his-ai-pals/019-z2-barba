@@ -345,31 +345,6 @@ def build(source_path: Path, output: Path) -> dict:
         b'\xff' * 20,
         'Lava Link hurt sound',
     )
-    # Lava Link shield experiment (producer, 2026-11-14). The boss hit check at $B1F3 (JSR $DE40, shared
-    # with other bank-4 enemies) now calls LavaLinkShield ($A7A9). Code $21 (Lava Link) is vulnerable only
-    # in the hold phase ($0499 = 2) while its timer is $30-$5F: the half/open-mouth heads around the beam
-    # window ($40-$4F). Otherwise the closed head holds the shield up: HP is lifted to $FF around $DE40, so a
-    # hit can never kill, then HP is restored, the hit flash ($040E = $30) is cleared, the enemy-hit SFX bit
-    # dropped and the shield clank ($EC = 2, as bank 7 $E654) plays. Other enemies JMP $DE40 unchanged.
-    overlay.prg(4, 0xB1F3, bytes.fromhex('20 a9 a7'), bytes.fromhex('20 40 de'), 'Lava Link shield hook')
-    overlay.prg(
-        4, 0xA7A9,
-        bytes.fromhex(
-            'b5 a1 c9 21 d0 37'          # LDA $A1,X / CMP #$21 / BNE open
-            'ad 99 04 c9 02 d0 0a'       # LDA $0499 / CMP #$02 / BNE shielded
-            'bd 04 05 38 e9 30 c9 30 90 26'  # LDA $0504,X / SEC / SBC #$30 / CMP #$30 / BCC open
-            'b5 c2 48 a9 ff 95 c2'       # shielded: save HP, HP = $FF
-            '20 40 de a6 10 68 95 c2'    # JSR $DE40 / LDX $10 / restore HP
-            'bd 0e 04 c9 30 d0 0f'       # fresh hit? ($040E,X == $30)
-            'a9 00 9d 0e 04'             # no flash
-            'a5 ed 29 ef 85 ed'          # drop enemy-hit SFX
-            'a9 02 85 ec'                # shield clank
-            '60'                         # RTS
-            '4c 40 de'                   # open: JMP $DE40
-        ),
-        b'\xff' * 64,
-        'Lava Link shield',
-    )
     # Neck stops at the lava surface (producer, 2026-11-14): fewer sprites, and it reads as rising out of the
     # lava. Vanilla counted pieces down to Y=$E8 and skipped the whole neck below it (which also skips the
     # $049A head/beam X update). Now: count down to $D0, and below it draw a single piece instead of none, so

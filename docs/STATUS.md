@@ -10,19 +10,6 @@ The body now keeps the boss's narrow neck silhouette without the added belly
 coil. Full-body jump rendering is checked during ascent and descent; grounded
 crouching retains a short neck beneath the head.
 
-## Looking-up head and Lava Link shield (2026-11-14, `feat/look-up-head`)
-
-- **Looking-up head:** tall frame 8 is the boss open-jaw head sheared 2:1 snout-up (build-time recipe in
-  `tools/boss_art.py`, no ROM pixels committed), replacing the broken 90-degree rotation. Drawn while rising
-  with Up held, during an airborne Up+B windup, and for an upward-latched volley. Forward air and ground
-  attacks keep frames 4/5. `tests/look_up.lua` PASS. Body pairs 43/47.
-- **Lava Link shield (experiment):** the closed Link head now holds a shield; fire that reaches it clanks
-  (`$EC = 2`) and does no damage. Lava Link is vulnerable only around its beam window (hold phase, timer
-  `$30-$5F`, half/open heads). Hook `$B1F3` -> bank 4 `$A7A9` (64 bytes, code `$21` only).
-  `tests/link_shield.lua` PASS (5 clanks / 0 HP lost, 2 window hits with hurt sound).
-- Full suite (31 scenarios) and 10 unit tests pass. Volley peak 30,162 (+4), 1/900 lag; lava 21,710 (+11), 0 lag;
-  upward 27,837, 0/900.
-
 ## Upward breath and rising head-butt (2026-11-14)
 
 Implemented the approved [upstab plan](UPSTAB-FIRE-PLAN.md). With Upward Thrust learned,
@@ -113,7 +100,7 @@ Audio register/envelope validation is not a listening-quality review.
 
 The ordered next steps and latest human feedback are in [ROADMAP.md](ROADMAP.md).
 
-- Tune upward breath/head-butt feel by hand (looking-up head drawn 2026-11-14).
+- Tune upward breath/head-butt feel by hand and draw the deferred looking-up attack head.
   Up/down thrusts and glove-gated fireball block breaking are implemented.
 - Palace 6's boss is now **Lava Link** (`tests/link_boss.lua` PASS); full defeat-to-crystal playthrough remains to be tested by hand.
 - Audit sprite states and CHR sharing in every town, palace, menu, ending and
