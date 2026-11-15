@@ -19,19 +19,29 @@ BarbaSpellDeferred:
 BarbaProjectiles:
     jsr BarbaBurstAllowed
     bcs @allowed
+    lda #$00
+    sta INFERNO_TIMER
+    sta INFERNO_AIM
     jsr BarbaCancelBurst
     jsr BarbaExtraReset
     jmp @update
 @allowed:
+    jsr BarbaInfernoTick
     lda BREATH_BURST_STATE
     cmp #$02
     bne @start
     ; B=$40 in held-controller state. Neither a held button nor another
     ; animation frame may turn the finite volley into an automatic stream.
+    ; Treat $0400 == 4 (standing post-slash recovery) as idle so standing
+    ; cancel-slashes can re-arm without moving first.
     lda $F7
     and #$40
-    ora $0400
     bne @update
+    lda $0400
+    beq @rearm
+    cmp #$04
+    bne @update
+@rearm:
     lda #$00
     sta BREATH_BURST_STATE
 @start:
@@ -174,7 +184,7 @@ BarbaLoadOk:
     cmp #$02
     bcc @total
     lda $01
-    cmp #$03
+    cmp #$02
     bcs @deny
 @total:
     lda $00
@@ -358,15 +368,28 @@ BarbaPlaceNewFlame:
 BarbaPlaceNewFlameCached:
     lda BREATH_GEOMETRY_FLAGS
     and #$01
-    beq BarbaClipped
+    bne @geom_ok
+    lda INFERNO_AIM
+    bne :+
+    jmp BarbaClipped
+:
+    lda #$50
+    sta BREATH_MUZZLE_Y
+@geom_ok:
     lda BREATH_MUZZLE_Y
     ldy BREATH_UP
-    beq :+
+    bne @up_y
+    bit INFERNO_AIM
+    bvc @set_y
+@up_y:
     sec
     sbc #$0C ; folded or raised head top
     cmp #$10
-    bcc BarbaClipped
-:
+    bcs @set_y
+    ldy INFERNO_AIM
+    beq BarbaClipped
+    lda #$10
+@set_y:
     sta $36,x
     lda BREATH_MUZZLE_X
     clc
@@ -383,6 +406,18 @@ BarbaPlaceNewFlameCached:
     lda #$D2
     sta $05CA,x
 :
+    lda INFERNO_AIM
+    beq @normal_aim
+    and #$03
+    sta $6D,x
+    lda INFERNO_AIM
+    and #$40
+    bne @up_life
+    lda INFERNO_AIM
+    and #$80
+    ora #$21
+    bne @store_slot
+@normal_aim:
     lda BREATH_UP
     bne @up_life
     lda #$21
@@ -392,6 +427,7 @@ BarbaPlaceNewFlameCached:
     bne :+
     ora #$80            ; grounded crouch: shallow 0.5 px/frame descent
 :
+@store_slot:
     sta VOLLEY_SLOT,x
     ldy $6D,x
     lda VolleySpeed,y
@@ -418,3 +454,49 @@ VolleySpeed:
     .byte $00,$20,$E0
 VolleyUpSpeed:
     .byte $00,$10,$F0
+
+; Multi-wave Inferno firestorm: 4 waves at timer = $30, $20, $10, $00.
+; Runs after the HUD split so projectile allocation never disturbs split timing.
+BarbaInfernoTick:
+    lda INFERNO_TIMER
+    beq @done
+    dec INFERNO_TIMER
+    ldx INFERNO_TIMER
+    txa
+    and #$0F
+    bne @done
+    cpx #$10
+    bne :+
+    lda #$98
+    sta $074B           ; extend decor palette flash through the firestorm
+:
+    ldy #$00
+@emit_loop:
+    sty $02
+    jsr BarbaLoadOk
+    bcc @stop
+    ldy $02
+    lda InfernoWaveDirs,y
+    ldx INFERNO_TIMER
+    cpx #$10
+    beq @shallow
+    cpx #$30
+    bne @emit
+@shallow:
+    cmp #$40
+    bcs @emit
+    ora #$80
+@emit:
+    sta INFERNO_AIM
+    jsr BarbaEmitOne
+    ldy $02
+    iny
+    cpy #$04
+    bcc @emit_loop
+@stop:
+    lda #$00
+    sta INFERNO_AIM
+@done:
+    rts
+InfernoWaveDirs:
+    .byte $01, $02, $41, $42 ; R, L, up-R, up-L

@@ -24,7 +24,9 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
   extra_fire, left_fire, damage, hud_timing, breath_height, town, town_safety, shouts,
   shout_follow, doors, dialogue_speed, perf_volley, perf_lava, link_boss, dark_link,
   shield_enemies, title_roar, overworld_side, farcall, town_fire, town_combo,
-  castle_zelda_burn, upstab, perf_upward, look_up, ending, checkpoint_features, plus `state_pack` via create_test_pack.
+  castle_zelda_burn, upstab, perf_upward, look_up, ending, horsehead, helmethead, rebonack, carock,
+  gooma, lava_link_kill, checkpoint_features, plus `state_pack` via create_test_pack.
+  (`boss_fight.lua` is the shared fireball-only boss driver, not a scenario.)
 
 ## Hard rules
 
@@ -56,7 +58,9 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
 
 ## Free space and RAM in use (check before allocating)
 
-- ROM: bank 0 `$AA40-$BF6F` (BANK0), bank 3 `$B803-$BF6F` (TOWN; 245 free), bank 6 `$BA00-$BF6F` (BANK6; `shouts.inc` + `combo.inc`).
+- ROM: bank 0 `$A89E-$A97D` (BANK0_OW; `BarbaSplitBurnForest`) + `$AA40-$BF6F` (BANK0), bank 3 `$B803-$BF6F` (TOWN; 245 free), bank 6 `$BA00-$BF6F` (BANK6; `shouts.inc` + `combo.inc`).
+  Bank 4 `$A765-$A8FF` is vanilla `$FF` pad patched by raw bytes in `build.py`: Lava Link helpers `$A765-$A7A8`,
+  `CarockHit` `$A7B0-$A7BE`; `$A7BF-$A8FF` free.
   Fixed bank 7: LAVA `$D39A-$D3C9` (0 free), GATEWAY `$FEAA-$FECF` (0 free),
   TERRAIN `$FF4C-$FF6E` (1 free). `FarCall0` provides cold bank-0
   hooks at 5 fixed bytes/call (6 with standalone RTS), 369-482 bridge cycles plus target work;
@@ -64,21 +68,27 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
   No new padding region was claimed. Never allocate live JMP operands `$FF4B` or `$E02C`.
 - RAM `$05EA`, `$05EB` (lava contact), `$05F0-$05FF` (roar, breath, tall renderer, extra guard). Cleared by the native reset loop.
 - WRAM `$6400-$642F` extra projectile records; `$6440-$645F` scratch (`$6457` lazy-save flag,
-  `$6458-$645F` geometry terrain cache, `$645C` EXTRA_LIVE); `$6460-$6469` shouts (`$6465` actor, `$6467` word, `$6468` timer, `$6469` cycle); `$646A` + `$6470-$6487` town scorch ring; `$646B` volley aim latch (0 forward / $40 upward); `$646C-$646F` + `$6488` town combo banner. Don't touch collision/room/save regions elsewhere in `$6000-$7FFF`.
+  `$6458-$645F` geometry terrain cache, `$645C` EXTRA_LIVE); `$6460-$6469` shouts (`$6465` actor, `$6467` word, `$6468` timer, `$6469` cycle); `$646A` + `$6490-$64D0` town scorch ring (16-slot FIFO + head/page); `$646B` volley aim latch (0 forward / $40 upward); `$646C-$646F` + `$6488` town combo banner; `$6470-$6473` Inferno firestorm (`$6470` timer, `$6473` wave aim) and overworld flame (`$6471` timer, `$6472` dir). Don't touch collision/room/save regions elsewhere in `$6000-$7FFF`.
 - OAM in use: tall head `$04/$4C/$F8`, extra fireballs `$3C/$44/$48`; enemy projectiles use `$28/$2C/$30`;
-  town shout word `$DC-$F4` (7 glyphs, only while a word is live and no enemy projectile exists).
-- CHR: player art in even sprite banks 0-24; ash `$64/$66` **bank 6 only** (shared sprites elsewhere);
-  shout glyphs in town BG bank 7 pairs `$80-$A0` (used as odd 8x16 sprite tiles); town scorch art in bank 7
-  tiles `$02/$04/$0E/$16` (flame) and `$25/$96/$A7/$B9` (char).
+  town shout word `$DC-$F4` (7 glyphs, only while a word is live and no enemy projectile exists); overworld flame `$FC` (`$02FC-$02FF`).
+- CHR: player art in even sprite banks 0-24; overworld flame pairs `$60/$62` in dedicated overworld bank 30; ash `$7E/$80` **bank 6 only** (shared sprites elsewhere);
+  shout glyphs in town BG bank 7 pairs `$32/$7E/$80,$84-$BE` (odd 8x16 bytes) plus `H` (`$7C`) and combo X/1-9/B in town sprite
+  bank 6 pairs `$6C-$AE` (even bytes); town scorch art in bank 7 tiles `$34/$A4/$AC/$C0` (flame) and
+  `$C1/$35/$A7/$C2` (char). Bank 7 `$00-$27` are villager 8x16 sprites (a byte draws both tiles of its pair):
+  never allocate there; `TOWN_SPRITE_PAIRS` in `tools/assets.py` guards them. Bank 7 has no free pair left.
 
 ## Performance facts (from tests/perf_volley.lua)
 
 The game logic runs in NMI. Over about 29.7k cycles the next frame lags. Vanilla peaks near 26.6k
-with 6 enemies. Palace 1 `perf_volley.lua` probe (after `BarbaExtraUpdate` fast path, tightened `ExtraNearEnemy`, and odd-frame OAM priority rotation): idle avg/peak 15,638/15,867 cycles, volley 19,820/28,411, lag 0/300 idle and **0/900 volley**, `extraAvg`/`extraMax` 287/544, `nearBudget(>27000)=8`. `BarbaDisplay` bypasses
+with 6 enemies. Palace 1 `perf_volley.lua` probe (with direct `BarbaExtraBlocks` and `BarbaLoadOk`
+2-shot cap for `>= 2` enemies): idle avg/peak 15,769/15,993 cycles, volley 18,890/24,992,
+lag 0/300 idle and **0/900 volley**, `nearBudget(>27000)=0`. Palace 3 room `$0D` (2 Ironknuckles
++ breakable blocks) drops from 28,095 avg / 30,049+ peak (4 lag frames) to 25,338 avg / 28,155
+peak (0 lag frames). `BarbaDisplay` bypasses
 `$EBF0` on normal frames (using `$F27D` + unrolled 9-sprite
 draw) and `BarbaGeometry` caches `TerrainBatch` in `$6458-$645F`, cutting display cost from ~4.0k
-to ~1.2k cycles/frame. `BarbaLoadOk` uses `LOAD_LIMIT = 7` (allows 2 simultaneous shots in 6-enemy
-overworld fights with 0 lag frames, max 28,941 cycles; the older Palace 1 measurement was 4/900 lag).
+to ~1.2k cycles/frame. `BarbaLoadOk` uses `LOAD_LIMIT = 7` and caps queued shots at 2 live shots
+when 2+ enemies are active.
 
 ## Status and docs (read only what you need)
 

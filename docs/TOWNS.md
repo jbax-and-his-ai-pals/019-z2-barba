@@ -87,9 +87,16 @@ request therefore leaves no visible word. Up-to-talk is unchanged.
   OAM, because the new scene may own `$E0`.
 - **Tiles:** odd 8x16 tile bytes select the `$1000` table. In towns that table
   is 4K CHR bank 7, the town background bank, which native sprite 0 already
-  uses for `$C5`. Nineteen decorative BG pairs (`$80..$8C`, `$92`, `$94`,
-  `$9C..$A2`, `$A8..$AC`, `$BA..$BE`) appeared in no town room's nametables in that census. They are
-  replaced in bank 7 only. Letters are recolored at build time from the
+  uses for `$C5`. Even bytes select `$0000`, town sprite bank 6. An 8x16 byte
+  `T` draws **both** tiles `T&$FE` and `T|1`, so a pair is free only if neither
+  tile is town BG, no villager sprite byte selects it, and no menu pane draws it.
+  Bank 7 `$00..$27` are villager sprites (River Guard `$01-$07`, Spear Knight
+  `$09-$0F`, Fat Woman `$11-$1F`, indoor NPC `$21-$27` in rooms `$2E/$2F`); the
+  build refuses to touch them (`TOWN_SPRITE_PAIRS`). Bank-7 glyph pairs: `$32`
+  (D), `$7E` (V), `$80`, `$84..$8C`, `$92`, `$94`, `$9C..$A2`, `$A8`, `$AA`, `$BA..$BE`.
+  Bank-6 glyph pairs (even bytes, unused Link-only art): `$6C` (X), `$78..$7A`, `$7C` (H),
+  `$9C..$A6`, `$AA` (digits 1-9), `$AE` (B). Bank 7 has no free pair left. These
+  are replaced in their bank only. Letters are recolored at build time from the
   user's own ROM font (`$DA` + letter). `!` is authored in
   `assets/shout_glyphs.json`. The build checks a hash of each original pair
   before writing it (`SHOUT_PAIR_SHA256` in `tools/assets.py`).
@@ -119,7 +126,7 @@ scene identity, cooldown, request, actor, Up latch, word, timer and cycle,
 outside the backed projectile records. Shouts do not append to native PPU queues.
 
 Ash uses generated-actor states `$A0..$BF`, two authored sprite pairs at
-`$64/$66`, and the town's charcoal/ember NPC palette. It draws only at the
+`$7E/$80`, and the town's charcoal/ember NPC palette. It draws only at the
 original actor's feet. Ash cannot talk, flee, be damaged again, or alter a
 background tile. It expires after roughly two seconds; room reset still clears
 actors normally. The art recipe is `assets/ash.json`.
@@ -127,30 +134,42 @@ actors normally. The art recipe is `assets/ash.json`.
 The prototype borrows each generated actor's `$AF` state. The native generator
 clears it on spawn. Conversations already in progress finish normally.
 
-## Scorched buildings
+## Scorched buildings & ground fires
 
-Fireballs no longer delete town buildings. Each live fireball still samples the
+Fireballs no longer delete town buildings. Each live fireball samples the
 16x16 metatile at its center through the native lookup (`$EAE8`, via
-`BarbaTownBurn` in `src/blocks.inc`). Walls, roofs, windows, signs and bushes
-qualify. Sky `$40`, ground `$50..$5F`, doorways `$89..$8C`/`$91` and clouds
-`$C4..$C6` never do. The room's metatile buffer (`$6000+`, which is also its
-collision) is never written. Instead the hit queues a 2x2 **flame** into the
-nametable through the native PPU buffer (`$0362`, at most one 10-byte entry per
-hit, skipped when the buffer is past `$28`). After `SCORCH_FLAME` (24) updates,
-`BarbaScorchTick` rewrites the same spot as **char** with glowing embers.
+`BarbaTownBurn` in `src/blocks.inc`). Walls, roofs, windows, signs, bushes and
+street ground (`$50..$5F`, `Y < $C0`) qualify; when a fireball passes through
+sky (`$40`) just above ground (`Y + $10`), the ground metatile below it also
+ignites. Sky `$40`, doorways `$89..$8C`/`$91`, clouds `$C4..$C6`, and sub-street
+rows (`Y >= $C0`) never do. The room's metatile buffer (`$6000+`, which is also
+its collision) is never written. Instead the hit registers a 16x16 **flame** in
+the ring, drawn each frame as two fiery 8x16 OAM sprites (`ScorchDrawTown` in
+bank 3, tile `$84`, sprite palette 1, mirrored columns animating every 8 frames)
+using free OAM slots (`ScorchOam`: `$28..$34, $60..$C0, $FC, $DC..$F4`, yielding
+to any active shout/combo sprite). Because active flames are OAM sprites rather
+than BG nametable writes, they keep true red/orange fire colors on grass, stone,
+and brick alike without BG attribute bleed. In towns, flames stay lit for
+`SCORCH_TOWN_TIME * 4` = 600 updates (~10 s) before `BarbaScorchTick` writes
+**char** into the nametable through the native PPU buffer (`$0362`, skipped when
+past `$28`) (North Palace Zelda keeps the BG flame -> char progression).
 
-- **State:** WRAM ring of eight entries: PPU address high/low `$6470/$6478` and
-  timer `$6480`, plus `SCORCH_ROOM` `$646A`. The timer starts at `$FF`. Char is
-  queued at `$E7`, and the entry frees at 0 (about 4 s), which also stops a slow
-  fireball re-igniting the metatile it is crossing. With eight flames already
-  burning, a new hit is skipped. A room change (`$0561`) or
-  `BarbaExtraReset` clears the ring.
+- **State:** 16-entry WRAM FIFO ring (`SCORCH_MAX = 16`): PPU address high/low
+  `$6490/$64A0`, timer `$64B0`, head index `$64C0`, world page `$64C1`, plus
+  `SCORCH_ROOM` `$646A`. When all 16 slots are burning, a new ignition evicts
+  the oldest slot (`SCORCH_HEAD`) to **char** immediately (requiring `$0362 < $1E`)
+  and reuses it. `ScorchOnScreen` skips PPU char writes for entries that have
+  scrolled offscreen (`[-16, +255]` px from `$072A/$072C`) so nametable wraparound
+  never corrupts later screens. A room change (`$0561`) or `BarbaExtraReset`
+  clears the ring.
 - **Lifetime:** marks live in the nametable only. They vanish when that column
   is redrawn (scrolling about two screens away) or the room reloads. The producer approved this as
   final (2026-11-14): no scorch or casualty persistence after leaving a town.
 - **Art:** `assets/town_fire.json` (original 16x16 art, palette indices). It
-  goes into eight town BG tiles in CHR bank 7: flame `$02/$0E/$04/$16`, char
-  `$25/$A7/$96/$B9`. Index 1 reads orange on brick and white on stone or
+  goes into eight town BG tiles in CHR bank 7: flame `$34/$AC/$A4/$C0`, char
+  `$C1/$A7/$35/$C2` (flame and `$C1` moved 2026-11-14 off `$02/$0E/$04/$16/$25`,
+  which were halves of villager sprite pairs; `$35/$C2` moved 2026-11-15 off
+  `$96/$B9` so the native pause/spell menu icons stay clean). Index 1 reads orange on brick and white on stone or
   bushes, index 2 brown or gray, index 3 black. The build hash-checks each
   original tile (`TOWN_FIRE_TILE_SHA256`) and that `ScorchTiles` matches the
   JSON. Allocation evidence: none of the eight is in a bank-3 town tile table,
@@ -162,6 +181,9 @@ hit, skipped when the buffer is past `$28`). After `SCORCH_FLAME` (24) updates,
 - **Test:** `tests/town_fire.lua` walks to the Rauru brick house and jump-attacks
   it. It checks that the metatiles are unchanged, flames appear and then become
   char, no tile is blanked to sky, and nothing else in the nametable changes.
+  Both West Hyrule (`$0707 = 1`, `$0706 = 0`) and East Hyrule (`$0707 = 2`,
+  `$0706 = 2`) towns scorch; `$0706 == 0` is only required for North Palace
+  (`$0707 = 0`).
 
 ### North Palace sleeping princess scorch & Barba shout
 
@@ -186,16 +208,22 @@ hit, skipped when the buffer is past `$28`). After `SCORCH_FLAME` (24) updates,
 - **Scoring (`src/combo.inc`, `src/town.inc`, `src/blocks.inc`):** Igniting an eligible
   villager adds `+3` (`COMBO_ADD` `$646C`) and scorching a fresh building metatile in a
   town adds `+1`, refreshing the 180-frame (~3.0 s) decay timer (`COMBO_TIMER` `$646F`).
-- **Tiers:** `6` `DOUBLE KILL!`, `9` `MULTI KILL!`, `12` `MEGA KILL!`, `15` `ULTRA KILL!`,
-  `18` `MONSTER KILL!`, `21+` `GODLIKE!`.
-- **Escalation:** Tiers 1–2 use 8 px spacing and pale palette 2; tiers 3–4 use 9 px
-  spacing, fire palette 1, and tier-up jitter; tiers 5–6 use 10 px spacing, palette 1/2
+- **Tiers:** `12` `MULTI KILL!`, `24` `MEGA KILL!`, `40` `ULTRA KILL!`, `60` `MONSTER KILL!`,
+  `85+` `GODLIKE!`. (`DOUBLE KILL!` removed to reduce noise.)
+- **Escalation:** Tier 1 uses 8 px spacing and pale palette 2; tiers 2–3 use 9 px
+  spacing, fire palette 1, and tier-up jitter; tiers 4–5 use 10 px spacing, palette 1/2
   strobe, continuous `±1`/`±2 px` shake, and two flanking `$84` flame sprites on `GODLIKE!`.
   New tiers trigger `$ED |= $10` SFX and an 8-frame drop-in slam (`COMBO_SLAM` `$6488`).
-- **OAM & lifecycle:** Uses 12 town-free OAM slots (`$DC..$F4, $FC, $28..$34`) on 2 rows
-  to stay within 8 sprites/scanline, suppressing villager `ShoutWord` while active,
+- **OAM & lifecycle:** Uses 16 town-free OAM slots (`$DC..$F4, $FC, $28..$34, $D8, $C4, $AC, $94`) on disjoint
+  rows (`+$10` for `KILL!` on tiers 1–4; `+$20` for the centered `X<pts>` combo counter on tiers 1–4, or `+$10`
+  directly under `GODLIKE!`, so 8x16 scanlines never overlap; on
+  `GODLIKE!`, the two flanking `$84` flames sit at `+$03` to align vertically with the
+  glyphs and alternate OAM priority with `E!` on odd frames under the 8-sprite limit),
+  suppressing villager `ShoutWord` while active,
   blinking during the final 45 frames, and hiding on pause/dialogue/scene change.
-- **Test:** `tests/town_combo.lua` verifies tiers 1/3/5/6, strobe/flames, pause hiding,
+  The `X` and `1`–`9` counter glyphs are even bytes in town sprite bank 6 (see Tiles above); `0` reuses
+  the letter `O` glyph (1 px taller than a native `0`) because no pair was left for it. Producer accepted this (2026-11-15).
+- **Test:** `tests/town_combo.lua` verifies `<12` inactivity, tiers 1/2/4/5, 2–3 digit `X<pts>` counters, strobe/flames, pause hiding,
   decay warning blink, and expiry cleanup.
 
 ## Validation and limits

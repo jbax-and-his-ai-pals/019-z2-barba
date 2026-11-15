@@ -585,8 +585,7 @@ ExtraNearEnemy:
     clc
     rts
 
-; Root's ordinary block loop already handles the real slots. Alias each
-; backed slot once for exactly the same glove-gated collision behavior.
+; Read backed slot coordinates directly without aliasing native slot 0.
 BarbaExtraBlocks:
     php
     pha
@@ -598,43 +597,61 @@ BarbaExtraBlocks:
     lda EXTRA_BASE
     ora EXTRA_BASE+$10
     ora EXTRA_BASE+$20
-    bne :+
-    jmp @idle
-:
-    jsr ExtraSaveZero
+    beq @idle
     lda $80
     pha
     lda $047E
     pha
     lda $057D
     pha
-    lda $10
-    pha
-    lda $8E
-    pha
-    lda #$00
-    sta $8E
-    sta EXTRA_INDEX
+    ldx #$00
 @slot:
-    ldy EXTRA_INDEX
-    lda EXTRA_BASE,y
+    lda EXTRA_BASE,x
     beq @next
     bmi @next
-    jsr ExtraLoadRecord
-    ldx #$00
-    jsr BarbaBlockSlot
-    jsr ExtraStoreRecord
+    lda EXTRA_BASE+$02,x
+    sec
+    sbc $072C
+    sta $047E
+    lda EXTRA_BASE+$03,x
+    sbc $072A
+    bne @next
+    lda EXTRA_BASE+$01,x
+    cmp #$20
+    bcc @next
+    cmp #$D8
+    bcs @next
+    clc
+    adc #$05
+    sta $0480
+    txa
+    pha
+    lda $0707
+    beq @castle_slot
+    cmp #$03
+    bcs @native_block
+    bcc @town_burn
+@castle_slot:
+    lda $0561
+    ora $0706
+    beq @town_burn
+@native_block:
+    lda #$09
+    sta $80
+    jsr $E1DD
+    jmp @slot_done
+@town_burn:
+    jsr BarbaTownBurn
+@slot_done:
+    pla
+    tax
 @next:
-    lda EXTRA_INDEX
+    txa
     clc
     adc #$10
-    sta EXTRA_INDEX
+    tax
     cmp #$30
     bcc @slot
-    pla
-    sta $8E
-    pla
-    sta $10
     pla
     sta $057D
     pla
@@ -643,7 +660,6 @@ BarbaExtraBlocks:
     sta $80
     lda #$F8
     sta $0480
-    jsr ExtraRestoreZero
 @idle:
     pla
     tay

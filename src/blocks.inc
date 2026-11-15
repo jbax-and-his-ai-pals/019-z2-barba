@@ -7,19 +7,20 @@ BarbaBlocks:
     cmp #$03
     beq @done
     bcs @blocks
-    ; Outdoor town ($0707 = 1/2, $0706 = 0) or North Palace ($0707 = 0, $0706 = 0, $0561 = 0):
+    ; Town ($0707 = 1/2) or North Palace ($0707 = 0, $0706 = 0, $0561 = 0):
     ; advance scorch marks first.
     bcc @town
 @castle:
     lda $0561
+    ora $0706
     bne @blocks
 @town:
-    lda $0706
-    bne @blocks
     jsr BarbaExtraEnsure
     jsr BarbaScorchTick
 @blocks:
     jsr BarbaNativeBlocks
+    lda EXTRA_LIVE
+    beq @done
     lda $0707
     bne @extra
     lda $0706
@@ -82,12 +83,10 @@ BarbaBlockSlot:
     beq @castle_slot
     cmp #$03
     bcs @native_block
-    bcc @check_town
+    bcc BarbaTownBurn
 @castle_slot:
     lda $0561
-    bne @native_block
-@check_town:
-    lda $0706
+    ora $0706
     beq BarbaTownBurn
 @native_block:
     lda #$09
@@ -96,20 +95,25 @@ BarbaBlockSlot:
 @done:
     rts
 
-; Scorch outdoor town props, bushes, signs, walls, windows and roofs. Buildings
-; stay intact: the room's metatile (collision) buffer is never written. Only the
-; on-screen nametable gets a 2x2 flame, which turns to char SCORCH_FLAME updates
-; later. Ground ($50..$5F), sky ($40), clouds ($C4..$C6), doorways ($89..$8C,
-; $91) and anything below the street ($B0+ offsets) are never touched. Marks
-; last until that column is redrawn (scrolling about two screens away, or
-; leaving the room). Up to eight recent marks are tracked in WRAM so a slow
-; fireball does not re-ignite the metatile it is still crossing.
+; Scorch outdoor town props, bushes, signs, walls, windows, roofs and ground.
+; Buildings and ground stay intact: the room's metatile (collision) buffer is
+; never written. Only the on-screen nametable gets a 2x2 flame, which lasts up
+; to SCORCH_TOWN_TIME*4 updates (~10s) or until evicted as the oldest of 16
+; active fires, then turns to char. Sky ($40), clouds ($C4..$C6), doorways
+; ($89..$8C, $91) and anything below the street ($C0+ offsets) are never
+; touched. When a fireball flies through sky just above ground ($50..$5F), the
+; ground below it ignites. Marks last until that column is redrawn or the room
+; changes.
+SCORCH_MAX = 16
+SCORCH_MASK = SCORCH_MAX - 1
 SCORCH_ROOM = $646A        ; room ($0561) the ring belongs to
-SCORCH_HI = $6470          ; 8 PPU address high bytes
-SCORCH_LO = $6478          ; 8 PPU address low bytes
-SCORCH_TIME = $6480        ; 8 timers: $FF at ignition, 0 = free
-SCORCH_FLAME = $18         ; updates of flame before char
-SCORCH_CHAR_AT = $FF - SCORCH_FLAME
+SCORCH_HI = $6490          ; 16 PPU address high bytes
+SCORCH_LO = $64A0          ; 16 PPU address low bytes
+SCORCH_TIME = $64B0        ; 16 timers: 0 = free, >0 = active flame
+SCORCH_HEAD = $64C0        ; next FIFO slot (0..15)
+SCORCH_PAGE = $64C1        ; 16 world X high bytes (page 0..3)
+SCORCH_TOWN_TIME = $96     ; 150 ticks * 4 updates = 600 updates (~10s)
+SCORCH_PALACE_TIME = $18   ; 24 updates (~0.4s) for North Palace Zelda
 BarbaTownBurn:
     lda $0480
     clc
@@ -136,17 +140,12 @@ BarbaTownBurn:
     rts
 @town_filter:
     ldy $02
-    cpy #$B0
+    cpy #$C0
     bcs @skip
     cmp #$40
-    beq @skip
+    beq @check_ground_below
     cmp #$91
     beq @skip
-    cmp #$50
-    bcc @check_door
-    cmp #$60
-    bcc @skip
-@check_door:
     cmp #$89
     bcc @check_cloud
     cmp #$8D
@@ -158,6 +157,21 @@ BarbaTownBurn:
     bcs @burn
 @skip:
     rts
+@check_ground_below:
+    lda $39
+    clc
+    adc #$10
+    sta $39
+    ldx #$10
+    ldy #$1C
+    jsr $EAE8
+    ldy $02
+    cpy #$C0
+    bcs @skip
+    cmp #$50
+    bcc @skip
+    cmp #$60
+    bcs @skip
 @burn:
     lda $0362
     cmp #$28
@@ -192,8 +206,8 @@ BarbaTownBurn:
     pla
     ora $00
     sta $00
-    ; Already burning or recently charred: leave it.
-    ldx #$07
+    ; Already burning: leave it.
+    ldx #SCORCH_MAX-1
 @find:
     lda SCORCH_TIME,x
     beq @next_find
@@ -206,34 +220,68 @@ BarbaTownBurn:
 @next_find:
     dex
     bpl @find
-    ; Take a free entry, else the oldest one already past its flame stage.
-    ldx #$07
+    ; Take a free slot from SCORCH_HEAD, else evict the oldest fire to char.
+    ldx SCORCH_HEAD
+    ldy #SCORCH_MAX
 @free:
     lda SCORCH_TIME,x
     beq @take
-    dex
-    bpl @free
-    ldx #$07
-@aged:
-    lda SCORCH_TIME,x
-    cmp #SCORCH_CHAR_AT
+    inx
+    txa
+    and #SCORCH_MASK
+    tax
+    dey
+    bne @free
+    lda $0362
+    cmp #$1E
+    bcc :+
+    rts
+:
+    ldx SCORCH_HEAD
+    jsr ScorchOnScreen
     bcc @take
-    dex
-    bpl @aged
-    rts                     ; eight flames already burning: skip this one
+    lda $00
+    pha
+    lda $01
+    pha
+    lda SCORCH_HI,x
+    sta $00
+    lda SCORCH_LO,x
+    sta $01
+    txa
+    pha
+    ldy #$04
+    jsr ScorchQueue
+    pla
+    tax
+    pla
+    sta $01
+    pla
+    sta $00
 @take:
     lda $00
     sta SCORCH_HI,x
     lda $01
     sta SCORCH_LO,x
-    lda #$FF
+    lda $4B
+    sta SCORCH_PAGE,x
+    txa
+    clc
+    adc #$01
+    and #SCORCH_MASK
+    sta SCORCH_HEAD
+    lda #SCORCH_TOWN_TIME
+    ldy $0707
+    bne :+
+    lda #SCORCH_PALACE_TIME
+:
     sta SCORCH_TIME,x
     lda #$04
     sta $ED
     lda $0707
     beq @castle_scorch
     inc COMBO_ADD
-    bne @queue_flame
+    rts                     ; Towns: active flames render as OAM sprites, not BG tiles
 @castle_scorch:
     jsr CastleZeldaShout
 @queue_flame:
@@ -279,8 +327,37 @@ ScorchQueue:
     sta $0725
     rts
 
-; Once per update in outdoor towns: turn finished flames into char and age
-; entries out. A room change drops every entry (their addresses are stale).
+; Carry set if slot X's metatile is within [-16, +255] px of the camera ($072A/$072C).
+; Clobbers A; preserves X, Y, $00, $01.
+ScorchOnScreen:
+    lda SCORCH_LO,x
+    and #$1E
+    asl
+    asl
+    asl
+    sec
+    sbc $072C
+    pha
+    lda SCORCH_PAGE,x
+    sbc $072A
+    beq @in_range
+    cmp #$FF
+    bne @offscreen
+    pla
+    cmp #$F0
+    rts
+@in_range:
+    pla
+    sec
+    rts
+@offscreen:
+    pla
+    clc
+    rts
+
+; Once per update in outdoor towns or North Palace: count down active flames
+; and turn expired ones into char (if still on screen). A room change drops
+; every entry (their addresses are stale).
 BarbaScorchTick:
     lda $0561
     cmp SCORCH_ROOM
@@ -288,25 +365,32 @@ BarbaScorchTick:
     sta SCORCH_ROOM
 BarbaScorchClear:
     lda #$00
-    ldx #$07
+    sta SCORCH_HEAD
+    ldx #SCORCH_MAX-1
 @clear:
     sta SCORCH_TIME,x
     dex
     bpl @clear
     rts
 ScorchRun:
-    ldx #$07
+    lda $0707
+    beq @tick               ; North Palace: tick every update
+    lda $12
+    and #$03
+    bne @draw_town          ; Towns: tick every 4th update (~10s for 150 ticks)
+@tick:
+    ldx #SCORCH_MAX-1
 @entry:
     lda SCORCH_TIME,x
     beq @next
     dec SCORCH_TIME,x
-    lda SCORCH_TIME,x
-    cmp #SCORCH_CHAR_AT
     bne @next
+    jsr ScorchOnScreen
+    bcc @next
     lda $0362
     cmp #$28
     bcc @char
-    inc SCORCH_TIME,x       ; PPU queue full: retry next update
+    inc SCORCH_TIME,x       ; PPU queue full: retry next tick
     bne @next
 @char:
     lda SCORCH_HI,x
@@ -322,12 +406,132 @@ ScorchRun:
 @next:
     dex
     bpl @entry
+    lda $0707
+    bne @draw_town
     rts
+@draw_town:
+    lda #>(ScorchDrawTown-1)
+    pha
+    lda #<(ScorchDrawTown-1)
+    pha
+    lda #$03
+    jmp $FFCC
 
 ; Column order per stage: top-left, bottom-left, top-right, bottom-right.
 ; Tile ids must match assets/town_fire.json (checked by tools/assets.py).
 ScorchTiles:
-    .byte $02,$0E,$04,$16   ; town flame (CHR bank 7)
-    .byte $25,$A7,$96,$B9   ; town char (CHR bank 7)
+    .byte $34,$AC,$A4,$C0   ; town flame A (CHR bank 7)
+    .byte $C1,$A7,$35,$C2   ; town char (CHR bank 7)
     .byte $56,$57,$58,$59   ; North Palace flame (CHR bank 3)
     .byte $5A,$5B,$5C,$5D   ; North Palace char (CHR bank 3)
+    .byte $A4,$C0,$34,$AC   ; town flame B (CHR bank 7, mirrored columns)
+
+.segment "TOWN"
+; Draw active town flames as fiery OAM sprites (tile $84, sprite palette 1)
+; using free OAM slots so flames keep their true red/orange palette on grass,
+; stone, and brick without BG attribute bleed.
+SCORCH_OAM_COUNT = 19
+ScorchDrawTown:
+    lda $0561
+    cmp SCORCH_ROOM
+    beq :+
+    jmp $FFC5
+:
+    lda #$00
+    ldy $12
+    tya
+    and #$08
+    beq :+
+    lda #$40
+:
+    ora #$01
+    sta $02                 ; $02 = sprite attr ($01 or $41)
+    tya
+    and #SCORCH_MASK
+    sta $03                 ; rotating start slot in SCORCH ring
+    lda #SCORCH_MAX
+    sta $04                 ; remaining slots to check
+    lda #$00
+    sta $05                 ; index into ScorchOam
+@draw_loop:
+    ldx $03
+    lda SCORCH_TIME,x
+    beq @draw_next
+    ; Compute screen_X = world_X_lo - $072C; check world_X_hi == $072A.
+    lda SCORCH_LO,x
+    and #$1E
+    asl
+    asl
+    asl
+    sec
+    sbc $072C
+    sta $01
+    lda SCORCH_PAGE,x
+    sbc $072A
+    bne @draw_next
+    ; Reconstruct OAM_Y = ((SCORCH_HI & 3) << 6) | (SCORCH_LO & $C0) - 1.
+    lda SCORCH_LO,x
+    and #$C0
+    sta $00
+    lda SCORCH_HI,x
+    lsr
+    ror $00
+    lsr
+    ror $00
+    dec $00
+    ; Left 8x16 flame sprite at screen_X.
+    jsr @find_free_oam
+    bcs @draw_done
+    lda $00
+    sta $0200,y
+    lda #$84
+    sta $0201,y
+    lda $02
+    sta $0202,y
+    lda $01
+    sta $0203,y
+    ; Right 8x16 flame sprite at screen_X + 8 (skip if wrapping past $FF).
+    clc
+    adc #$08
+    bcs @draw_next
+    sta $01
+    jsr @find_free_oam
+    bcs @draw_done
+    lda $00
+    sta $0200,y
+    lda #$84
+    sta $0201,y
+    lda $02
+    eor #$40
+    sta $0202,y
+    lda $01
+    sta $0203,y
+@draw_next:
+    inc $03
+    lda $03
+    and #SCORCH_MASK
+    sta $03
+    dec $04
+    bne @draw_loop
+@draw_done:
+    jmp $FFC5
+
+@find_free_oam:
+    ldy $05
+    cpy #SCORCH_OAM_COUNT
+    bcs @oam_full
+    lda ScorchOam,y
+    inc $05
+    tay
+    lda $0200,y
+    cmp #$F8
+    bne @find_free_oam
+    clc
+    rts
+@oam_full:
+    sec
+    rts
+
+ScorchOam:
+    .byte $28,$2C,$30,$34,$60,$64,$78,$7C,$90,$A8,$C0,$FC,$DC,$E0,$E4,$E8,$EC,$F0,$F4
+.segment "BANK0"

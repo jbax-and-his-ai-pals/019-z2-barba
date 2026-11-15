@@ -8,7 +8,7 @@ import subprocess
 from pathlib import Path
 from assets import (ASH_TILES, CASTLE_FIRE_BANK, CASTLE_FIRE_TILE_SHA256,
                     CASTLE_SHOUT_BANK, CASTLE_SHOUT_PAIR_SHA256,
-                    SHOUT_GLYPH_BANK, SHOUT_PAIR_SHA256,
+                    SHOUT_PAIR_SHA256, TOWN_SPRITE_PAIRS,
                     TITLE_CHR_BANK, TITLE_TILE_SHA256,
                     TOWN_FIRE_BANK, TOWN_FIRE_TILE_SHA256,
                     compile_assets, compile_castle_fire,
@@ -78,7 +78,7 @@ def build(source_path: Path, output: Path) -> dict:
         offset = prg_offset(bank, 0x8506 if bank < 7 else 0xC506)
         if source[offset] != expected:
             raise ValueError(f'FarCall0 bank fingerprint changed: {bank}')
-    for filename, bank, address in [('code', 0, 0xAA40), ('lava', 7, 0xD39A), ('terrain', 7, 0xFF4C), ('town', 3, 0xB803), ('gateway', 7, 0xFEAA), ('bank6', 6, 0xBA00), ('bank5', 5, 0xBDE0)]:
+    for filename, bank, address in [('code', 0, 0xAA40), ('bank0-ow', 0, 0xA89E), ('lava', 7, 0xD39A), ('terrain', 7, 0xFF4C), ('town', 3, 0xB803), ('gateway', 7, 0xFEAA), ('bank6', 6, 0xBA00), ('bank5', 5, 0xBDE0)]:
         data = (output/f'barba-{filename}.bin').read_bytes()
         overlay.prg(bank, address, data, b'\xFF'*len(data), f'New {filename} routines')
     def hook(bank: int, address: int, label: str, opcode: int, expected: str, pad: int = 0):
@@ -86,6 +86,7 @@ def build(source_path: Path, output: Path) -> dict:
         data = bytes([opcode, dest & 255, dest >> 8]) + b'\xEA'*pad
         overlay.prg(bank, address, data, bytes.fromhex(expected), label+' hook')
     hook(0, 0x877C, 'BarbaOverworld', 0x20, 'a2 0e a0 00', 1)
+    hook(0, 0x84F2, 'BarbaOverworldA', 0x4C, 'a5 f5 29 80 f0 1a', 3)
     hook(7, 0xD52D, 'BarbaDisplay', 0x20, '20 f0 eb')
     hook(7, 0xE0A4, 'LavaSurface', 0x4C, 'a9 01 85')
     hook(7, 0xD4FE, 'BarbaPreEnemy', 0x20, '20 25 99')
@@ -152,7 +153,7 @@ def build(source_path: Path, output: Path) -> dict:
     overlay.put(q_off, question_tile, b'\x00' * 16, 'CHR 0F: ending question mark tile 0F')
     # Ending ash tiles ($5E/$62, replacing unused Link-only tiles across matching even CHR banks).
     for bank in (0, 2, 4, 8, 10, 12, 14, 18, 20, 24):
-        for dst_tile, src_tile in ((0x5E, 0x64), (0x62, 0x66)):
+        for dst_tile, src_tile in ((0x5E, ASH_TILES[0]), (0x62, ASH_TILES[1])):
             ash_off = CHR_OFFSET + bank*4096 + dst_tile*16
             overlay.put(ash_off, graphics[src_tile], source[ash_off:ash_off+32], f'CHR {bank:02X}: ending ash tile {dst_tile:02X}')
     # File Select & 1-Up dolls: CHR bank 0 $D0/$D1 and all 13 even side-view banks $A8/$A9.
@@ -162,16 +163,17 @@ def build(source_path: Path, output: Path) -> dict:
     for bank in range(0, 26, 2):
         oneup_offset = CHR_OFFSET + bank*4096 + 0xA8*16
         overlay.put(oneup_offset, doll, source[oneup_offset:oneup_offset+32], f'CHR {bank:02X}: 1-Up Barba doll')
-    # Villager shout words: town CHR bank 7 only (odd 8x16 sprite tiles).
+    # Villager shout words & combo counter: town CHR bank 7 (odd 8x16 bytes) or
+    # town sprite bank 6 (even bytes), towns only.
     glyphs = compile_shout_glyphs(ROOT, source)
     if set(glyphs) != set(SHOUT_PAIR_SHA256):
         raise ValueError('Shout glyph pairs differ from the audited allocation')
-    for pair, data in sorted(glyphs.items()):
-        offset = CHR_OFFSET + SHOUT_GLYPH_BANK*4096 + pair*16
+    for (bank, pair), data in sorted(glyphs.items()):
+        offset = CHR_OFFSET + bank*4096 + pair*16
         original = source[offset:offset+32]
-        if hashlib.sha256(original).hexdigest()[:16] != SHOUT_PAIR_SHA256[pair]:
-            raise ValueError(f'Shout glyph pair {pair:02X} is not the audited original')
-        overlay.put(offset, data, original, f'CHR {SHOUT_GLYPH_BANK:02X}: shout glyph pair {pair:02X}')
+        if hashlib.sha256(original).hexdigest()[:16] != SHOUT_PAIR_SHA256[(bank, pair)]:
+            raise ValueError(f'Shout glyph pair {bank:02X}:{pair:02X} is not the audited original')
+        overlay.put(offset, data, original, f'CHR {bank:02X}: shout glyph pair {pair:02X}')
     # Town scorch marks: flame and char 2x2 BG art in town CHR bank 7 (ScorchTiles in src/blocks.inc).
     for tile, data in sorted(compile_town_fire(ROOT).items()):
         offset = CHR_OFFSET + TOWN_FIRE_BANK*4096 + tile*16
@@ -340,6 +342,34 @@ def build(source_path: Path, output: Path) -> dict:
     # Last two CHR banks are filler in the guarded input; dedicate them to overworld.
     world = bytearray(source[CHR_OFFSET+16*4096:CHR_OFFSET+18*4096])
     world[:len(ow)] = ow
+    # Two 8x16 overworld flame frames at tile pairs $60 and $62 (empty in vanilla bank 16).
+    if world[0x60*16:0x64*16] != b'\x00'*64:
+        raise ValueError('Overworld flame sprite slots $60-$63 are not empty')
+    def _chr_8x16(rows):
+        out = bytearray(32)
+        for y in range(16):
+            p0 = p1 = 0
+            for x, ch in enumerate(rows[y]):
+                v = {'.': 0, 'o': 1, '+': 2, '#': 3}[ch]
+                bit = 7 - x
+                p0 |= (v & 1) << bit
+                p1 |= ((v >> 1) & 1) << bit
+            base = (y // 8) * 16 + (y % 8)
+            out[base] = p0
+            out[base + 8] = p1
+        return bytes(out)
+    world[0x60*16:0x62*16] = _chr_8x16([
+        '....o...', '...oo...', '...o+o..', '..oo+o..',
+        '..o++oo.', '.oo+o+o.', '.o++o+o.', 'oo+o++oo',
+        'o+oooo+o', 'o++oo++o', '+o++++o+', '#+o++o+#',
+        '##+##+##', '.######.', '..####..', '........',
+    ])
+    world[0x62*16:0x64*16] = _chr_8x16([
+        '..o.....', '..oo..o.', '..o+o.oo', '.oo+o.o.',
+        '.o++oo+o', 'oo+o++o.', 'o+oo+oo.', 'o++o++oo',
+        '+oooooo+', 'o+oooo+o', '+o++++o+', '#+o++o+#',
+        '##+##+##', '.######.', '..####..', '........',
+    ])
     offset = CHR_OFFSET+30*4096
     overlay.put(offset, world, b'\xFF'*8192, 'Dedicated overworld graphics')
 
@@ -406,6 +436,22 @@ def build(source_path: Path, output: Path) -> dict:
     # Cut Lava Link sword beams per attack from 6 (every 2 frames in $4F..$40) to 2 ($48 and $40, 8 frames apart).
     overlay.prg(4, 0xB18C, b'\x29\x37', b'\x29\x30', 'Lava Link beam cadence mask ($37 -> $48/$40)')
     overlay.prg(4, 0xB190, b'\xea' * 5, bytes.fromhex('a5 12 4a 90 29'), 'Lava Link beam cadence no parity skip')
+
+    # Carock takes fireball damage (producer, 2026-11-14). Vanilla's shared boss helper ($B1E9) skips the
+    # projectile/sword checks for enemy $22, so beams and fireballs pass through and only Reflect hurts him.
+    # In his visible window ($AF $E0-$EF, $AEB2) the $E4D9 call goes to CarockHit ($A7B0, bank-4 pad):
+    # JSR $DE63 runs the native projectile check ($E48B, Barba's fireball gateway), the sword check, then
+    # the same $E4D9. A kill there leaves the generic death state ($B6 = 2), which would draw Carock into
+    # OAM 0 (the HUD sprite-0 split) and hang the NMI; so on a kill call $B1F6, the native boss-death
+    # bookkeeping that $B1E9 runs after a Reflect kill. Teleport/fade phases stay untouchable; Reflect path unchanged.
+    overlay.prg(
+        4, 0xA7B0,
+        # JSR $DE63 / LDX $10 / LDA $B6,X / CMP #1 / BEQ +3 / JSR $B1F6 / RTS
+        bytes.fromhex('20 63 de a6 10 b5 b6 c9 01 f0 03 20 f6 b1 60'),
+        b'\xff' * 15,
+        'CarockHit helper',
+    )
+    overlay.prg(4, 0xAEB4, bytes.fromhex('20 b0 a7'), bytes.fromhex('20 d9 e4'), 'Carock fireball hit check')
 
     # Ending sequence (PRG bank 5): replace Link & half-Link chimera with full 24x48 Barba + Zelda,
     # update Zelda's wake-up dialogue, and add Barba Edition credits.
@@ -635,8 +681,15 @@ def build(source_path: Path, output: Path) -> dict:
         raise ValueError('Terrain allocation overlaps the native room-loader return')
     if target[:16] != source[:16] or len(target) != len(source):
         raise ValueError('Mapper/header/size invariant failed')
+    # 8x16 byte T draws tiles T&$FE and T|1: town villager pairs must stay vanilla.
+    for bank, pairs in TOWN_SPRITE_PAIRS.items():
+        for pair in pairs:
+            offset = CHR_OFFSET + bank*4096 + pair*16
+            if target[offset:offset+32] != source[offset:offset+32]:
+                raise ValueError(f'Patch overwrote town sprite pair CHR {bank:02X}:{pair:02X}')
     patch = encode(source, target, 'Zelda II - Barba Edition | development alpha',
-                   [(CHR_OFFSET+30*4096+len(ow), CHR_OFFSET+16*4096+len(ow), 8192-len(ow))])
+                   [(CHR_OFFSET+30*4096+len(ow), CHR_OFFSET+16*4096+len(ow), 0x60*16-len(ow)),
+                    (CHR_OFFSET+30*4096+0x64*16, CHR_OFFSET+16*4096+0x64*16, 8192-0x64*16)])
     if apply(source, patch) != target:
         raise ValueError('BPS patch round-trip failed')
     # Independent post-application source check protects the original file.

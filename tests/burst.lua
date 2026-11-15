@@ -110,6 +110,15 @@ end)
 update('new B attack',function()w(0xF7,0x40);w(0x400,2);w(0x50A,5)end,function()
     check(shots==2 and r(0x5FE)==4 and r(0x5F8)==1,'fresh attack starts a new finite volley')
 end)
+update('mid-slash cannot re-arm when B released',function()w(0x5F8,2);w(0x5FE,0);w(0xF7,0);w(0x400,2);w(0x50A,6)end,function()
+    check(r(0x5F8)==2,'mid-slash $0400==2 stays latched')
+end)
+update('release B during standing recovery $0400==4',function()w(0xF7,0);w(0x400,4);w(0x50A,20)end,function()
+    check(r(0x5F8)==0,'release plus standing recovery $0400==4 re-arms scheduler')
+end)
+update('standing cancel-slash B attack',function()w(0xF7,0x40);w(0x400,2);w(0x50A,5)end,function()
+    check(shots==3 and r(0x5FE)==4 and r(0x5F8)==1,'standing cancel-slash starts a new finite volley')
+end)
 
 local nativeFields={0x8D,0x36,0x5A,0x48,0x7D,0x6D,0x26,0x5CA,0x3E3,0x5FC,0x9D}
 local nativeBefore={}

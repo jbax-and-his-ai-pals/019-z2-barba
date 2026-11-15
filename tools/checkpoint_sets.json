@@ -21,20 +21,20 @@
   },
   "sets": {
     "palaces": [
-      {"id":"p1-entrance","name":"Palace 1 entrance","profile":"p1","world":3,"region":0,"number":1,"room":0,"page":0,"instructions":"Check movement, head clearance, combat and HUD."},
-      {"id":"p1-before-boss","name":"Before Horsehead","profile":"p1boss","world":3,"region":0,"number":1,"room":12,"page":0,"instructions":"Check movement, head clearance, combat and HUD."},
-      {"id":"p2-entrance","name":"Palace 2 entrance","profile":"p2","world":3,"region":0,"number":2,"room":14,"page":0,"instructions":"Check movement, head clearance, combat and HUD."},
+      {"id":"p1-entrance","name":"Palace 1 entrance","profile":"p1","world":3,"region":0,"number":1,"room":0,"page":0,"position":{"x":64,"y":176},"instructions":"Check movement, head clearance, combat and HUD."},
+      {"id":"p1-before-boss","name":"Before Horsehead","profile":"p1boss","world":3,"region":0,"number":1,"room":12,"page":0,"position":{"x":112,"y":176},"instructions":"Check movement, head clearance, combat and HUD."},
+      {"id":"p2-entrance","name":"Palace 2 entrance","profile":"p2","world":3,"region":0,"number":2,"room":14,"page":0,"position":{"x":64,"y":176},"instructions":"Check movement, head clearance, combat and HUD."},
       {"id":"p2-before-boss","name":"Before Helmethead","profile":"p2boss","world":3,"region":0,"number":2,"room":33,"page":0,"instructions":"Check movement, head clearance, combat and HUD."},
-      {"id":"p3-entrance","name":"Palace 3 entrance","profile":"p3","world":4,"region":0,"number":3,"room":0,"page":0,"instructions":"Check movement, head clearance, combat and HUD."},
+      {"id":"p3-entrance","name":"Palace 3 entrance","profile":"p3","world":4,"region":0,"number":3,"room":0,"page":0,"position":{"x":64,"y":176},"instructions":"Check movement, head clearance, combat and HUD."},
       {"id":"p3-before-boss","name":"Before Rebonack","profile":"p3boss","world":4,"region":0,"number":3,"room":13,"page":0,"instructions":"Check movement, head clearance, combat and HUD."},
-      {"id":"p4-entrance","name":"Palace 4 entrance","profile":"p4","world":4,"region":1,"number":4,"room":15,"page":0,"instructions":"Check movement, head clearance, combat and HUD."},
+      {"id":"p4-entrance","name":"Palace 4 entrance","profile":"p4","world":4,"region":1,"number":4,"room":15,"page":0,"position":{"x":64,"y":176},"instructions":"Check movement, head clearance, combat and HUD."},
       {"id":"p4-before-boss","name":"Before Carock","profile":"p4boss","world":4,"region":1,"number":4,"room":27,"page":0,"instructions":"Check movement, head clearance, combat and HUD."},
-      {"id":"p5-entrance","name":"Palace 5 entrance","profile":"p5","world":3,"region":2,"number":5,"room":35,"page":0,"instructions":"Check movement, head clearance, combat and HUD."},
+      {"id":"p5-entrance","name":"Palace 5 entrance","profile":"p5","world":3,"region":2,"number":5,"room":35,"page":0,"position":{"x":64,"y":176},"instructions":"Check movement, head clearance, combat and HUD."},
       {"id":"p5-before-boss","name":"Before Gooma","profile":"p5boss","world":3,"region":2,"number":5,"room":40,"page":1,"instructions":"Check movement, head clearance, combat and HUD."}
     ],
     "endgame": [
-      {"id":"p6-entrance","name":"Palace 6 entrance","profile":"p6","world":4,"region":2,"number":6,"room":36,"page":0,"instructions":"Check movement, head clearance, combat and HUD."},
-      {"id":"gp-entrance","name":"Great Palace entrance","profile":"gp","world":5,"region":2,"number":7,"room":0,"page":0,"instructions":"Check movement, head clearance, combat and HUD."},
+      {"id":"p6-entrance","name":"Palace 6 entrance","profile":"p6","world":4,"region":2,"number":6,"room":36,"page":0,"position":{"x":64,"y":176},"instructions":"Check movement, head clearance, combat and HUD."},
+      {"id":"gp-entrance","name":"Great Palace entrance","profile":"gp","world":5,"region":2,"number":7,"room":0,"page":0,"position":{"x":64,"y":176},"instructions":"Check movement, head clearance, combat and HUD."},
       {"id":"gp-elevator","name":"Great Palace elevator","profile":"gp","world":5,"region":2,"number":7,"room":1,"page":0,"instructions":"Start on the native elevator. Hold Down to descend; Up to return.","position":{"x":112,"y":160},"feature":"elevator"},
       {"id":"gp-tunnel","name":"Great Palace low tunnel","profile":"gp","world":5,"region":2,"number":7,"room":44,"page":0,"instructions":"Walk through the 32-pixel-high lane; the raised head must fold under stone.","position":{"x":64,"y":176},"feature":"ceiling"},
       {"id":"thunderbird","name":"Before Thunderbird","profile":"gp","world":5,"region":2,"number":7,"room":53,"page":0,"instructions":"Check movement, head clearance, combat and HUD."},
@@ -59,7 +59,7 @@
       {"id":"p1-shaft","name":"Palace 1 elevator shaft","profile":"p1","world":3,"region":0,"number":1,"room":1,"page":0,"instructions":"Start on the native elevator. Hold Down to descend; Up to return.","position":{"x":112,"y":160},"feature":"elevator"},
       {"id":"p2-floor","name":"Palace 2 floor corridor","profile":"p2boss","world":3,"region":0,"number":2,"room":20,"page":1,"instructions":"Inspect floor and jump clearance."},
       {"id":"west-water","name":"West Hyrule water bridge","profile":"saria","world":0,"region":0,"number":0,"room":1,"page":0,"entry":{"1801":0,"1864":19,"1897":1},"instructions":"Cross the bridge, test jumps and crouch clearance; water remains lethal."},
-      {"id":"medicine-bridge","name":"Medicine cave collapsing bridge","profile":"p3","world":0,"region":0,"number":0,"room":14,"page":0,"entry":{"1801":0,"1864":15,"1897":1},"instructions":"Cross the collapsing bridge above lava; non-palace lava is lethal."},
+      {"id":"medicine-bridge","name":"Medicine cave collapsing bridge","profile":"p3","world":0,"region":0,"number":0,"room":14,"page":0,"position":{"x":112,"y":128},"entry":{"1801":0,"1864":15,"1897":1},"instructions":"Cross the collapsing bridge above lava; non-palace lava is lethal."},
       {"id":"p6-drop-shaft","name":"Palace 6 drop-shaft edge","profile":"p6boss","world":4,"region":2,"number":6,"room":40,"page":1,"position":{"x":300,"y":176},"feature":"pit","instructions":"Stand safely at the gap; jump across or fall to the lower room. This is not a lethal bottomless pit."}
     ]
   }

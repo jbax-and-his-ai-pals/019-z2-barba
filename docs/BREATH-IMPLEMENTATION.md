@@ -37,7 +37,7 @@ Every attack emits five forward/downward fireballs: two pixels horizontally and
 two downward per update. Five logical slots now keep an exact eight-update cadence in both stances.
 The original two slots and three backed slots retain full projectile range. The volley continues after the attack animation
 without locking movement. Holding B does not restart it; B release and an idle
-attack state are required before rearming.
+attack state (`$0400 == 0` or standing post-slash recovery `$0400 == 4`) are required before rearming.
 
 A full pool retries only until the 120-update burst deadline. Each projectile
 has a 33-update maximum lifetime and is cleared before its Y coordinate wraps.

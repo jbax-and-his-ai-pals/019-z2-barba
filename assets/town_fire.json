@@ -2,16 +2,16 @@
   "_comment": "Original 16x16 town scorch art (2x2 BG tiles). '.'=0 (sky/backdrop), 'o'=1 (orange on brick, white on stone), '+'=2 (brown on brick, gray on stone), '#'=3 (black). Stage 'flame' shows for a moment, then 'char' stays until the column is redrawn.",
   "tiles": {
     "flame": {
-      "tl": "02",
-      "tr": "04",
-      "bl": "0E",
-      "br": "16"
+      "tl": "34",
+      "tr": "A4",
+      "bl": "AC",
+      "br": "C0"
     },
     "char": {
-      "tl": "25",
-      "tr": "96",
+      "tl": "C1",
+      "tr": "35",
       "bl": "A7",
-      "br": "B9"
+      "br": "C2"
     }
   },
   "flame": [

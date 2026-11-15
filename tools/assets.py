@@ -9,7 +9,7 @@ from boss_art import make_frames
 COLORS = [(20, 22, 28), (194, 43, 25), (255, 168, 57), (255, 243, 205)]
 TALL_POSES = ('walk0', 'walk1', 'walk2', 'idle', 'windup', 'attack',
               'crouch', 'crouch-attack', 'up', 'down', 'hurt', 'death', 'jump')
-ASH_TILES = (0x64, 0x66)
+ASH_TILES = (0x7E, 0x80)
 
 
 def compile_ash(root: Path) -> tuple[dict[int, bytes], list[str]]:
@@ -32,17 +32,35 @@ def compile_ash(root: Path) -> tuple[dict[int, bytes], list[str]]:
 
 SHOUT_FONT_BANK = 7          # town BG pattern table (4K CHR bank)
 SHOUT_GLYPH_BANK = 7         # odd sprite tiles read the same $1000 table
+SHOUT_SPRITE_BANK = 6        # even sprite tiles read the town sprite table ($0000)
+SHOUT_FONT_0 = 0xD0          # native font: '0'..'9' are consecutive tiles
 SHOUT_FONT_A = 0xDA          # native font: 'A'..'Z' are consecutive tiles
-# Truncated SHA-256 of each original 32-byte pair replaced in bank 7. These
-# decorative pairs appeared in no town room ($00..$3E) nametable census.
+# Truncated SHA-256 of each original 32-byte pair replaced, keyed (CHR bank, pair).
+# An 8x16 tile byte T draws BOTH tiles T&$FE and T|1, so a pair is free only if
+# neither tile is town BG (bank-3 metatile tables + 126-room nametable census),
+# no town sprite byte selects it (bank-3 townfolk table: $01-$27 odd in bank 7,
+# $C0-$CE/$62/$64/$74/$76 even in bank 6; items; emulator census of all town
+# rooms), and no menu/HUD pane draws it. Bank 7 $00-$27 are villager sprites.
 SHOUT_PAIR_SHA256 = {
-    0x80: '893a0325cdc7cf39', 0x82: '42de53a38d178b20', 0x84: 'af85fa03d8808ac1',
-    0x86: '3e0dffed3d26d014', 0x88: '55dc69973efa250d', 0x8A: '431ab247f511fe1d',
-    0x8C: 'c644321081be6393', 0x92: 'cab870c820270963', 0x94: '13ea6b95d58a4960',
-    0x98: 'f822b6a32d262016', 0x9C: '8d5f82fc987a6193', 0x9E: 'f9523c2896786a4b',
-    0xA0: '56c8c7c281e4177f', 0xA2: '904a335528773b88', 0xA8: '8a67b0ac638f1721',
-    0xAA: '28d9e3968e5dce9e', 0xAC: '1e50cd57abf29a43', 0xAE: '66351072a813d5f7',
-    0xBA: '77125f6e91a0dc9e', 0xBC: '14f9bfc9ad98c854', 0xBE: '5155a7a4143a9e04',
+    (7, 0x32): 'c0a91503eeabff7b', (7, 0x7E): '8f729ebb615dc165',
+    (7, 0x80): '893a0325cdc7cf39', (7, 0x84): 'af85fa03d8808ac1',
+    (7, 0x86): '3e0dffed3d26d014', (7, 0x88): '55dc69973efa250d', (7, 0x8A): '431ab247f511fe1d',
+    (7, 0x8C): 'c644321081be6393', (7, 0x92): 'cab870c820270963', (7, 0x94): '13ea6b95d58a4960',
+    (7, 0x9C): '8d5f82fc987a6193', (7, 0x9E): 'f9523c2896786a4b',
+    (7, 0xA0): '56c8c7c281e4177f', (7, 0xA2): '904a335528773b88', (7, 0xA8): '8a67b0ac638f1721',
+    (7, 0xAA): '28d9e3968e5dce9e',
+    (7, 0xBA): '77125f6e91a0dc9e', (7, 0xBC): '14f9bfc9ad98c854', (7, 0xBE): '5155a7a4143a9e04',
+    # Combo counter X/1-9, B, and H: unused Link-only pairs of town sprite bank 6.
+    (6, 0x6C): '41bbc50209ce0558', (6, 0x78): '3054cb3b20613bbd', (6, 0x7A): 'd5aa306916f80c94',
+    (6, 0x7C): 'dd16785f9de0c5fe',
+    (6, 0x9C): 'e5f9ae051f2311dd', (6, 0x9E): '4c70c04982e6fd14', (6, 0xA0): 'ba30f82dfe5d2a47',
+    (6, 0xA2): 'c8832b8c620c9f3a', (6, 0xA4): '081984032b7704fb', (6, 0xA6): '70a54fcbbaddb8d6',
+    (6, 0xAA): '75da72438cdf4244', (6, 0xAE): 'be16549eb5b081fb',
+}
+# Town sprite pairs that must stay vanilla (checked after every build).
+TOWN_SPRITE_PAIRS = {
+    7: tuple(range(0x00, 0x28, 2)) + (0x2E, 0x30, 0x64, 0x66, 0x74, 0x76, 0x7A, 0xC4, 0xF4, 0xFE),
+    6: (0x62, 0x64, 0x74, 0x76, 0xC0, 0xC2, 0xC4, 0xC6, 0xC8, 0xCA, 0xCC, 0xCE),
 }
 
 
@@ -53,6 +71,9 @@ def _render_shout_pair(char: str, spec: dict, source: bytes) -> bytes:
         rows = [row.replace('.', '0') for row in spec['authored'][char]]
     elif len(char) == 1 and 'A' <= char <= 'Z':
         offset = CHR_OFFSET + SHOUT_FONT_BANK*4096 + (SHOUT_FONT_A+ord(char)-ord('A'))*16
+        rows = [''.join(str(v) for v in row) for row in decode_tile(source[offset:offset+16])]
+    elif len(char) == 1 and '0' <= char <= '9':
+        offset = CHR_OFFSET + SHOUT_FONT_BANK*4096 + (SHOUT_FONT_0+ord(char)-ord('0'))*16
         rows = [''.join(str(v) for v in row) for row in decode_tile(source[offset:offset+16])]
     else:
         raise ValueError(f'No shout glyph source for {char!r}')
@@ -75,12 +96,13 @@ def _render_shout_pair(char: str, spec: dict, source: bytes) -> bytes:
     return sprite_pairs([''.join(row) for row in out])[0]
 
 
-def compile_shout_glyphs(root: Path, source: bytes) -> dict[int, bytes]:
+def compile_shout_glyphs(root: Path, source: bytes) -> dict[tuple[int, int], bytes]:
     """Build 8x16 shout-word glyph pairs from the user's own ROM font.
 
-    Returns {even pair index: 32 bytes} for town CHR bank 7 only. Letters
-    are recolored from the BG font at build time, so no ROM pixels are
-    committed. Each glyph sits in the lower tile; the upper tile is blank
+    Returns {(CHR bank, even pair index): 32 bytes}. Odd tile bytes select
+    town BG bank 7 ($1000); even bytes select town sprite bank 6 ($0000).
+    Letters are recolored from the BG font at build time, so no ROM pixels
+    are committed. Each glyph sits in the lower tile; the upper tile is blank
     apart from the outline row above the letter.
     """
     spec = json.loads((root / 'assets/shout_glyphs.json').read_text())
@@ -88,14 +110,13 @@ def compile_shout_glyphs(root: Path, source: bytes) -> dict[int, bytes]:
     tiles = {m.group(1): int(m.group(2), 16) for m in
              re.finditer(r'^ShoutTile_(\w+)\s*=\s*\$([0-9A-F]{2})\s*$', include, re.MULTILINE)}
     names = {'Bang': '!'}
-    result: dict[int, bytes] = {}
+    result: dict[tuple[int, int], bytes] = {}
     for name, tile in tiles.items():
         char = names.get(name, name)
-        if not tile % 2:
-            raise ValueError(f'Shout glyph {char} must be an odd ($1000 table) 8x16 tile')
-        if tile & 0xFE in result:
+        key = (SHOUT_GLYPH_BANK if tile % 2 else SHOUT_SPRITE_BANK, tile & 0xFE)
+        if key in result:
             raise ValueError(f'Shout glyph {char} reuses an allocated pair')
-        result[tile & 0xFE] = _render_shout_pair(char, spec, source)
+        result[key] = _render_shout_pair(char, spec, source)
     return result
 
 
@@ -144,12 +165,13 @@ TITLE_TILE_SHA256 = {
 
 TOWN_FIRE_BANK = 7           # town BG pattern table (both west and east towns map CHR 6/7)
 # Truncated SHA-256 of each original 16-byte tile replaced in bank 7. None of these
-# tiles is in any bank-3 town tile table, and an emulator census of all 126 town
-# rooms (worlds 1 and 2, rooms $00..$3E) found none in a nametable or odd sprite pair.
+# tiles is in any bank-3 town tile table or 126-room nametable census, none is
+# half of a town sprite pair (bank 7 $00-$27 are villager 8x16 sprites), and none
+# is drawn by the native pause/spell menu.
 TOWN_FIRE_TILE_SHA256 = {
-    0x02: '8c53505ddeae0a74', 0x04: '9661ce0a44e44581', 0x0E: 'e788c77ff7694347',
-    0x16: '721a14c19e585a61', 0x25: '2e94d649b4ae1a35', 0x96: '8f153b405205a912',
-    0xA7: '899cbd256813b89a', 0xB9: 'f73ab0652b1666ac',
+    0x34: 'b06d7e6e9899bbcf', 0xA4: '9cdf7aff56268b1c', 0xAC: 'a80338b3fc699cff',
+    0xC0: '1cecb0d1030f7c54', 0xC1: 'ebe7bc86960b8544', 0x35: '374708fff7719dd5',
+    0xA7: '899cbd256813b89a', 0xC2: 'e43c2b7f9db2ff96',
 }
 
 

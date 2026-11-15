@@ -152,6 +152,8 @@ emu.addEventCallback(function()
                 local p=PACK_SCENES[index].position
                 w(0x3B,math.floor(p.x/256));w(0x4D,p.x%256);w(0x29,p.y)
                 w(0x57D,0);w(0x479,0)
+            elseif PACK_SCENES and PACK_SCENES[index].town and age==80 then
+                w(0x4D,112);w(0x57D,0);w(0x479,0)
             end
             if scenes[index].id=='combat' and age==80 then
                 w(0x4D,96);w(0x3B,0);w(0x29,144);w(0x57D,0);w(0x479,0)

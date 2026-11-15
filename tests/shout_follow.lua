@@ -54,10 +54,22 @@ local expired,hiddenAfter=false,true
 local doorX,doorNt,despawnHidden,despawned,doorSeen,doorOpened,doorClosed=nil,nil,false,false,false,false,false
 local placedAt=nil
 local glyphBg=false
--- Background tiles replaced by the glyph pairs (bank 7, odd tiles $81..$A1).
+-- Background tiles replaced by the bank-7 glyph pairs (odd bytes) and the
+-- relocated town fire flame/char tiles (bank 7 singles).
 local replaced={}
-for _,pair in ipairs({0x80,0x82,0x84,0x86,0x88,0x8A,0x8C,0x92,0x94,0x98,0x9C,0x9E,0xA0,0xA2,0xA8,0xAA,0xAC,0xAE,0xBA,0xBC,0xBE}) do
+for _,pair in ipairs({0x32,0x7E,0x80,0x84,0x86,0x88,0x8A,0x8C,0x92,0x94,0x9C,0x9E,0xA0,0xA2,0xA8,0xAA,0xBA,0xBC,0xBE}) do
     replaced[pair]=true;replaced[pair+1]=true
+end
+for _,t in ipairs({0x34,0xA4,0xAC,0xC0,0xC1}) do replaced[t]=true end
+-- Fire char tiles must not appear in the native spell-menu pane.
+local menuFire={[0x35]=true,[0xA7]=true,[0xC2]=true}
+local menuFireSeen={}
+function menuFireOnScreen()
+    local p=emu.memType.nesPpuMemory
+    for a=0x2000,0x27BF do
+        local t=emu.read(a,p)
+        if (a%0x400)<0x3C0 and menuFire[t] then menuFireSeen[t]=true end
+    end
 end
 function glyphTilesOnScreen()
     local p=emu.memType.nesPpuMemory
@@ -160,7 +172,7 @@ emu.addEventCallback(function()
                     local gx=left+8*col
                     if gx>=4 and gx<252 then
                         err=math.max(err,math.abs(r(a)-(ay-32)),math.abs(r(a+3)-gx))
-                        if r(a+1)%2~=1 or r(a+2)~=2 then err=999 end
+                        if (r(a+1)%2~=1 and r(a+1)~=0x7C) or r(a+2)~=2 then err=999 end
                     end
                 end
                 for idx=#cols+1,#oamSlots do if r(oamSlots[idx])<0xEF then err=999 end end
@@ -256,12 +268,13 @@ emu.addEventCallback(function()
             if r(0x736)~=11 or r(0x74C)~=0 or r(0x524)~=0 then menuOpened=true end
             if age>16 then menuFrames=menuFrames+1;if vis>0 then menuHidden=false end end
         end
-        if age>12 and age<60 and age%8==0 and glyphTilesOnScreen() then glyphBg=true end
+        if age>12 and age<60 and age%8==0 and glyphTilesOnScreen() then glyphBg=true end if age>12 and age<60 and age%8==0 then menuFireOnScreen() end
         if age==30 then screenshot('shout-follow-menu') end
         if age==130 then
             check(menuOpened,'Start opens the pause menu mid-shout')
             check(menuHidden,'word is not drawn while the pause menu is open')
             check(not glyphBg,'dialogue and menu backgrounds never use the replaced glyph pairs')
+            check(menuFireSeen[0x35]==nil and menuFireSeen[0xA7]==nil and menuFireSeen[0xC2]==nil,'pause menu never draws fire-char tiles')
             check(r(0x736)==11,'town playable after the menu')
             pending=true
         end

@@ -4,19 +4,27 @@
 
 BarbaPreEnemy:
     jsr $9925
+    jmp BarbaStomp
+StompRet:
+    rts
 BarbaStomp:
     lda $0736
     cmp #$0B
-    bne @done
+    bne StompRet
     lda $B5
     cmp #$01
-    bne @done
+    bne StompRet
     lda $0707
     cmp #$01
-    beq @done
+    beq StompRet
     cmp #$02
-    beq @done
+    beq StompRet
     jsr BarbaPickup
+    ; No stomps while a boss fight holds the scroll lock ($0728, cleared by the boss key):
+    ; the stomp kills via the generic $E880 death before the enemy update, which skips the
+    ; boss-death handler (bank 4 $B1E9) that drops the key -> locked room, softlock.
+    lda $0728
+    bne StompRet
     lda $0479
     beq @done
     lda $057D
