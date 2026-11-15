@@ -1,16 +1,13 @@
 # Reactive town prototype
 
-All outdoor town villagers (`$19..$1C`, both randomly generated and scripted)
-can flee, shout, burn, and retreat into houses. Eligibility requires: live
-slot value 1, type `$19..$1C`, town world 1 or 2, and an explicit outdoor
-street. Street rooms `$00..$13` except `$06` were checked against the source
-headers and generator entries; all other rooms are excluded. Story-necessary
-NPCs (`$0B..$18` wise men, healers, and house-opening NPCs; `$1D..$20`
-quest-flag walkers; and all indoor actors) retain their normal behavior.
-
-Four bank-3 first-stage pointers at `$94BF..$94C5` redirect types `$19..$1C`
-to `src/town.inc`. Every action rechecks provenance; other NPC pointers remain
-untouched. The code occupies verified filler starting at bank 3 `$B803`.
+All live outdoor town villagers (`$13..$20`, static, generated, scripted and
+house-opening actors) can flee, shout, burn and retreat. Eligibility requires
+slot value 1, town world 1 or 2, and an outdoor street room `$00..$13` except
+`$06`; origin `$BC` does not restrict eligibility. Indoor actors and types
+`$0B..$12` (including wise men) are protected from panic/burning. Service
+characters with types `$17/$18` are eligible outdoors, but retain custom
+service dialogue indoors. Leaving/re-entering repopulates the room normally.
+Every action rechecks eligibility in `src/town.inc`.
 
 ## Behavior
 
@@ -44,19 +41,21 @@ untouched. The code occupies verified filler starting at bank 3 `$B803`.
   dialogue uses a two-update initial delay and one-update letters/line breaks;
   important/indoor dialogue keeps its original timing.
   The native conversation engine handles text, cancellation and movement lock.
-  The guarded dialogue hook preserves original selection for every other NPC.
+  The guarded dialogue hook preserves native selection for other NPCs, except
+  the custom wise-man/healer/magic service lines (native timing retained).
+  Panic pointer selection uses `($12 XOR type) AND 7`, not the old type-mod-4
+  table.
 
-Passive panic shouts also appear automatically in the unused top HUD row.
-All twenty padded glyphs are queued at once: no typewriter wait, conversation,
-input lock or pause. They last about 100 updates with a 180-update global
-cooldown. Busy queues defer the request instead of overwriting native commands.
-The row stays fixed while scrolling and restores native blank tiles on expiry.
+Passive panic shouts are floating sprite words only: no top-HUD subtitle,
+PPU text packet, input lock or pause. The global cooldown is 120 updates
+(`SHOUT_COOLDOWN = $78`); each word lasts 100 updates.
 
 ### Shout word above the villager
 
-The villager who shouts also carries a short word drawn as 8x16 sprites
-2 px above its head: type `$19` "SHIT!", `$1A` "RUN!", `$1B` "FUCK!",
-`$1C` "NO!". `TownRequestShout` records the actor slot (`$6465`), word
+The shouting villager carries a short word drawn as 8x16 sprites
+2 px above its head. Eight phrases rotate: "SHIT!", "RUN!", "FUCK!", "OH NO",
+"OMG!", "WTF!", "OH GOD", "HELP!". Type and `$6469` cycle select the phrase.
+`TownRequestShout` records the actor slot (`$6465`), word
 (`$6467`) and a 100-update timer (`$6468`). `BarbaShouts` runs at `$D50D`,
 after the native actor loop, and each frame recomputes the word's position
 from that actor's `$4E/$3C` minus scroll `$072C/$072A` and `$2A`, so the
@@ -68,12 +67,12 @@ at either screen edge, with no wraparound. That includes a villager up to
 offscreen, or when the word would reach the HUD.
 
 The word is cancelled for good when the slot stops being that living
-generated wanderer: doorway or offscreen despawn (`$B6`), burning or ash
-(`$AF`), or a new actor in the slot (`$BC`). It is also cancelled on timer
+villager: doorway or offscreen despawn (`$B6`), burning or ash
+(`$AF`), or an incompatible actor state. It is also cancelled on timer
 expiry, on room or world change, and on any dialogue, menu or transition
 (`$074C`, `$DE`, `$0726`, mode not `$0B`). Talking skips the native OAM
 clear, so the cancel path hides the five entries itself. A burn-triggered
-shout therefore shows only the subtitle. Up-to-talk is unchanged.
+request therefore leaves no visible word. Up-to-talk is unchanged.
 
 - **OAM:** five entries, `$E0..$F0`. Natively these are the enemy-projectile
   windows `$E0/$E8/$F0` from the `$D59B` rotation. A census loaded all 63
@@ -104,8 +103,8 @@ shout therefore shows only the subtitle. Up-to-talk is unchanged.
   the word's 16 rows, which makes 8 sprites. A fireball crossing that band
   drops letters first, because `$E0+` has the lowest priority. This is
   cosmetic.
-- **Subtitle:** the top-HUD subtitle is kept as the full line. It still appears
-  and erases as before (`tests/shouts.lua`).
+- **Subtitle:** retired. `tests/shouts.lua` checks that the former top-HUD
+  subtitle span stays unchanged while the floating word appears.
 
 `tests/shout_follow.lua` checks that the word appears within 4 frames, tracks
 the fleeing villager to within 2 px in the same frame through scrolling, and
@@ -114,10 +113,9 @@ that the doorway's PPU tiles open and close), on ignition, on a scene change,
 through an Up conversation and in the pause menu. Finally, it checks per-glyph
 clipping at both screen edges.
 
-`src/shouts.inc` uses `$05EA` as a reset guard and `$6460..$6466` for timer,
-cooldown, pending message, scene identity and the Up latch, outside the backed
-projectile records. Each 23-byte packet appends to the native queue only when
-its total stays within 32 bytes and `$0725=0`; menus/dialogue defer it.
+`src/shouts.inc` uses `$05EA` as a reset guard and `$6460..$6469` for
+scene identity, cooldown, request, actor, Up latch, word, timer and cycle,
+outside the backed projectile records. Shouts do not append to native PPU queues.
 
 Ash uses generated-actor states `$A0..$BF`, two authored sprite pairs at
 `$64/$66`, and the town's charcoal/ember NPC palette. It draws only at the
@@ -166,11 +164,12 @@ hit, skipped when the buffer is past `$28`). After `SCORCH_FLAME` (24) updates,
 
 ## Validation and limits
 
-`tests/town_safety.lua` checks 1,041 eligibility combinations plus eight dialogue
-fallback cases, including indoor rooms, scripted origins, important types,
+`tests/town_safety.lua` checks type/origin eligibility, all 14 outdoor
+types across both town worlds and all rooms, and all eight panic pointers,
+plus native/custom-service dialogue cases, including indoor rooms, origins, protected types,
 non-town worlds and inactive actors. `tests/town.lua` uses the native Rauru room
 loader and generator, then controlled positions to verify fleeing, a real
-player-fireball burn/ash/expiry, scripted-walker survival, held-Up dialogue and closure and a
+player-fireball burn/ash/expiry, scripted-walker behavior, held-Up dialogue and closure and a
 doorway despawn with unchanged collision tiles. `tests/doors.lua` enters an
 actual open door with a nearby wanderer and exits back to the correct street.
 F8 now loads actual Rauru street room `$01`. The earlier room `$00` was a
@@ -181,8 +180,10 @@ More towns, door layouts, simultaneous conversations, quest interactions and
 healing services still need human playtesting. There is no reputation system,
 persistent population loss or alternate quest progression.
 
-`tests/shouts.lua` measures actual PPU visibility within six frames, player
-movement without dialogue locks, automatic cleanup and queue budget.
-`tests/shout_queue.lua` checks busy queues, prefix preservation, erasure,
-scene/dialogue deferral and adjacent-buffer safety. `tests/dialogue_speed.lua`
-checks fast panic typing and unchanged protected-NPC delays/register behavior.
+`tests/shouts.lua` checks actor-owned floating OAM within six frames, player
+movement without dialogue locks, word cleanup, the `$78` cooldown, an unchanged
+top-HUD subtitle span and native queue budget. `tests/shout_follow.lua` covers
+the replacement rendering/lifecycle in detail; the subtitle-only
+`tests/shout_queue.lua` is retired. `tests/dialogue_speed.lua` checks fast
+letters/line breaks for generated and scripted outdoor villagers, native
+protected-NPC delays, and unchanged caller indexes/carry/accumulator behavior.

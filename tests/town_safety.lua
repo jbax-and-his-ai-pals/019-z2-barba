@@ -1,4 +1,4 @@
--- Exhaustive positive-provenance checks in the assembled town gate.
+-- Outdoor eligibility and frame-varying panic/native dialogue selection.
 dofile(TEST_DIR..'/newgame.lua')
 local m=emu.memType.nesMemory
 local function r(a)return emu.read(a,m)end
@@ -10,7 +10,7 @@ local function add(world,room,kind,origin,alive)
     cases[#cases+1]={world=world,room=room,kind=kind,origin=origin,alive=alive or 1}
 end
 for kind=0,63 do for _,origin in ipairs({0,5,127,255})do add(1,0,kind,origin)end end
-for room=0,63 do for kind=0x19,0x1C do add(1,room,kind,255);add(2,room,kind,255)end end
+for room=0,63 do for kind=0x13,0x20 do add(1,room,kind,255);add(2,room,kind,255)end end
 for _,world in ipairs({0,3,4,5})do for kind=0x19,0x1C do add(world,0,kind,255)end end
 for origin=0,254 do add(1,0,0x19,origin)end
 add(1,0,0x19,255,0);add(1,0,0x19,255,2)
@@ -26,6 +26,17 @@ for _,c in ipairs({
     {world=1,room=0,kind=0x0F,origin=255,fear=false},
     {world=2,room=0,kind=0x19,origin=5,fear=true}
 })do c.alive=1;c.dialog=true;cases[#cases+1]=c end
+-- All eight frame-dependent phrases, plus protected custom service text.
+for phase=0,7 do
+    for kind=0x13,0x20 do
+        cases[#cases+1]={world=1,room=1,kind=kind,origin=5,alive=1,dialog=true,fear=true,phase=phase}
+    end
+end
+for _,c in ipairs({
+    {kind=0x0F,service=1,text=LABELS.TownWiseManText},
+    {kind=0x17,text=LABELS.TownHealerText},
+    {kind=0x18,text=LABELS.TownMagicText}
+})do c.world=1;c.room=0x1C;c.origin=255;c.alive=1;c.dialog=true;cases[#cases+1]=c end
 local function advance()
     current=current+1
     local c=cases[current]
@@ -34,7 +45,7 @@ local function advance()
         f:close();running=false;stopScenario(failures==0 and 0 or 1);return
     end
     w(0x707,c.world);w(0x561,c.room);w(0xB6,c.alive);w(0xBC,c.origin);w(0xA1,c.kind)
-    w(0x48B,0);w(0x524,0)
+    w(0x48B,0);w(0x524,0);w(0x12,c.phase or 0x35);w(0x05,c.service or 0)
     local entry=c.dialog and LABELS.TownDialog or LABELS.TownEligible
     w(0x769,3)
     local program={0x20,0xC9,0xFF,0x20,entry%256,math.floor(entry/256),0x4C,6,6}
@@ -45,14 +56,16 @@ emu.addMemoryCallback(function()
     if not running then return end
     local c=cases[current]
     if c.dialog then
-        local pointer=LABELS.TownFearPointers+(c.kind%4)*2
+        local pointer=LABELS.TownFearPointers+(((c.phase or 0x35) ~ c.kind)&7)*2
         local expected=c.fear and (r(pointer)+256*r(pointer+1)) or 0
         if not c.fear then
             local base=r(0xB421+c.world*2)+256*r(0xB422+c.world*2)
-            expected=r(base)+256*r(base+1)
+            expected=c.text or (r(base)+256*r(base+1))
         end
-        if r(0x569)+256*r(0x56A)~=expected or r(0x524)~=1 then
-            failures=failures+1;f:write('FAIL dialogue protection case '..current..'\n')
+        if r(0x569)+256*r(0x56A)~=expected or r(0x524)~=1
+            or (c.fear and (r(0x566)~=2 or r(0x489)~=0 or r(0x48A)~=0))
+            or (c.text and r(0x566)~=0x2A) then
+            failures=failures+1;f:write(string.format('FAIL dialogue case %d frame=%d kind=$%02X pointer=$%04X expected=$%04X ready=%d\n',current,frame,c.kind,r(0x569)+256*r(0x56A),expected,r(0x524)))
         end
         advance();return
     end

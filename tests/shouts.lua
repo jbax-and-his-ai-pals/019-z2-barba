@@ -1,4 +1,4 @@
--- Passive subtitle: real town actor, actual PPU queue, no input/dialogue lock.
+-- Floating sprite shout: native actor, unchanged top HUD, no dialogue lock.
 dofile(TEST_DIR..'/newgame.lua')
 local m,p=emu.memType.nesMemory,emu.memType.nesPpuMemory
 local function r(a)return emu.read(a,m)end
@@ -10,6 +10,9 @@ local visible,moved,cleared=false,false,false
 local noLock=true
 local firstAt=nil
 local queueMax=0
+local hud={}
+local hudUnchanged=true
+local cooldownSeen=false
 local f=assert(io.open(OUTPUT_DIR..'/shouts.txt','w'))
 local function check(ok,msg)
     f:write((ok and 'PASS ' or 'FAIL ')..msg..'\n');f:flush()
@@ -38,11 +41,12 @@ emu.addEventCallback(function()
         end
         if slot then
             active=true;age=0
+            for a=0x2006,0x2019 do hud[a]=emu.read(a,p) end
             w(0x4D,80);w(0x3B,0);w(0x70,0);w(0x29,176)
             w(0x4E+slot,112);w(0x3C+slot,0);w(0x2A+slot,176)
             w(0xAF+slot,0);w(0xA1+slot,0x19);w(0x5C3+slot,0)
             w(0x5EA,0)
-            for a=0x6460,0x6466 do w(a,0)end
+            for a=0x6460,0x6469 do w(a,0)end
             for x=0,5 do if r(0xA1+x)==0x23 then w(0xB6+x,0)end end
         end
         if frame==1800 then check(false,'native wanderer spawned');f:close();stopScenario(1)end
@@ -51,21 +55,23 @@ emu.addEventCallback(function()
     if not active then return end
     age=age+1
     if r(0x74C)~=0 or r(0xDE)~=0 or r(0x524)~=0 then noLock=false end
-    if emu.read(0x2006,p)==0xE8 and emu.read(0x2007,p)==0xE1 then
+    local glyphs=0
+    for a=0x2E0,0x2F0,4 do if r(a)<0xEF then glyphs=glyphs+1 end end
+    for a=0x2006,0x2019 do if emu.read(a,p)~=hud[a] then hudUnchanged=false end end
+    if r(0x6461)==0x78 then cooldownSeen=true end
+    if r(0x6467)~=0 and r(0x6465)==slot and glyphs>0 then
         visible=true;if not firstAt then firstAt=age end
     end
-    if age>=30 and r(0x70)~=0 and visible then moved=true end
+    if age>=30 and age<65 and r(0x70)~=0 then moved=true end
     if age==20 then screenshot('town-passive-shout')end
-    if age>115 then
-        local blank=true
-        for a=0x2006,0x2019 do if emu.read(a,p)~=0xF4 then blank=false end end
-        if blank then cleared=true end
-    end
+    if visible and age>6 and r(0x6467)==0 and glyphs==0 then cleared=true end
     if age==155 then
-        check(visible and firstAt<=6,'panic shout reaches real PPU within six frames')
+        check(visible and firstAt<=6,'panic shout draws actor-owned OAM glyphs within six frames')
         check(moved and noLock,'player keeps moving without any dialogue/menu lock')
-        check(cleared,'subtitle clears itself with spaces after its timeout')
-        check(queueMax<=0x20,'subtitle packet stays within the 32-byte queue budget')
+        check(cleared,'floating word clears its OAM after expiry or actor departure')
+        check(queueMax<=0x20,'native PPU queue stays within its 32-byte budget')
+        check(hudUnchanged,'floating words never write the retired top-HUD subtitle span')
+        check(cooldownSeen,'shout sets the current 120-update global cooldown')
         check(r(0x736)==11 and r(0x774)>0,'town remains playable')
         f:write('RESULT '..(errors==0 and 'PASS' or 'FAIL')..'\n');f:close();stopScenario(errors==0 and 0 or 1)
     end
