@@ -95,3 +95,8 @@ session with art iteration. The art is the long pole.
   piece instead of skipping the loop, which keeps `$049A` (head and beam X) current while the boss emerges.
   Fully risen: 5 pieces instead of 7 (10 neck sprites instead of 14). The button-down neck art is unchanged.
 - `tests/link_boss.lua` now checks the neck has 1-5 pieces at the first beam and logs palette-1 OAM.
+
+## Producer direction (2026-11-14)
+
+Keep this fight as Barba's pattern wearing Link (rise, sword beams, sink). Beams at every health level, no weakening
+phase, difficulty not a goal. Next: experiment with a shield mechanic, and play Link's hurt sound when Lava Link is hit.

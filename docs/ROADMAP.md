@@ -143,3 +143,14 @@ Wanderers flee at one pixel per update, panic at a smaller radius, and despawn
 immediately at existing doors without touching background tiles. Close Up
 conversations respect transitions. F8 uses the real Rauru street; player house
 entry and return are tested. Older checkpoints must be regenerated.
+
+## Producer direction (2026-11-14, latest)
+
+- **Lava Link stays the producer's original vision:** Barba's boss moves (rise, fire, sink) in Link's body. Sword beams
+  fire at every health level. No weakening phases: bosses don't get weaker as they're damaged. Difficulty and challenge
+  are not goals for this fight.
+- **Experiment:** shield mechanics for Lava Link. **Do:** Link's hurt sound when Lava Link takes damage (Link only).
+- **Later:** battle flicker, and polish (lava pose, roar triggers, leftover Link art in menus/ending).
+- **Now:** fix the stale town/shout/dialogue tests, and build save-state **checkpoint sets of key spots** so a whole-game
+  playtest is quick.
+- Town fire is final: scorch marks and casualties never persist after leaving a town.
