@@ -15,6 +15,17 @@ end
 local sawBoss=false
 local sawSpear=false
 local sawFlame=false
+-- Boss hits (hit timer set to $30 on a $21 slot) versus Link hurt SFX ($E9 = 1) written by LavaLinkHurt ($A795-$A7A8).
+local bossHits,hurtSfx=0,0
+emu.addMemoryCallback(function(addr,value)
+    -- Only the damage routine's store counts; DEC's read-modify-write also writes the old $30 back.
+    local pc=emu.getState()['cpu.pc']
+    if value==0x30 and r(0xA1+addr-0x040E)==0x21 and pc>=0xE700 and pc<0xE800 then bossHits=bossHits+1 end
+end,emu.callbackType.write,0x040E,0x0413)
+emu.addMemoryCallback(function(addr,value)
+    local pc=emu.getState()['cpu.pc']
+    if value==1 and pc>=0xA795 and pc<0xA7AA then hurtSfx=hurtSfx+1 end
+end,emu.callbackType.write,0xE9,0xE9)
 local bossPaletteOk=false
 local shotBeamPng=false
 local bossSlot=nil
@@ -99,6 +110,7 @@ emu.addEventCallback(function()
         check(neckPieces~=nil and neckPieces>=1 and neckPieces<=5,'Lava Link neck stops at the lava (1-5 pieces, got '..tostring(neckPieces)..')')
         check(not sawFlame,'Lava Link did not spawn Barba flame (04)')
         check(bossStartHp~=nil and bossMinHp<bossStartHp,'Barba fireballs damaged Lava Link')
+        check(bossHits>0 and hurtSfx==bossHits,'Link hurt sound once per boss hit (hits '..bossHits..', sounds '..hurtSfx..')')
         report:write('RESULT '..(errors==0 and 'PASS' or 'FAIL')..'\n')
         report:close()
         emu.stop()

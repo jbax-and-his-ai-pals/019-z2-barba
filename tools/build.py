@@ -328,11 +328,23 @@ def build(source_path: Path, output: Path) -> dict:
     overlay.prg(4, 0xB11F, bytes.fromhex('20 65 a7'), bytes.fromhex('20 0d b2'), 'Lava Link palette hook')
     overlay.prg(
         4, 0xA765,
-        bytes.fromhex('ad 99 04 d0 21 ad 28 07 f0 1c ad 25 07 d0 17 ad 01 03 d0 12 a0 00 b9 8e a7 99 02 03 c8 c0 07 d0 f5 a9 06 8d 01 03 4c 0d b2'),
+        # Ends in JMP LavaLinkHurt ($A795), which then continues to the original $B20D.
+        bytes.fromhex('ad 99 04 d0 21 ad 28 07 f0 1c ad 25 07 d0 17 ad 01 03 d0 12 a0 00 b9 8e a7 99 02 03 c8 c0 07 d0 f5 a9 06 8d 01 03 4c 95 a7'),
         b'\xff' * 41,
         'Lava Link palette helper',
     )
     overlay.prg(4, 0xA78E, bytes.fromhex('3f 15 03 18 36 2a ff'), b'\xff' * 7, 'Lava Link palette packet')
+    # Lava Link plays Link's hurt sound when hit (producer, 2026-11-14; boss only, Barba keeps hers).
+    # Every hit sets the enemy hit timer $040E,X = $30 (bank 7 $E726) and the enemy-hit SFX ($ED |= $10);
+    # Display decrements the timer later in this same update, so exactly one boss update per hit sees $30.
+    # LavaLinkHurt ($A795, X = boss slot): on $30, start Link's hurt SFX ($E9 = 1, as bank 7 $E314 does)
+    # and drop the enemy-hit SFX bit if the driver hasn't consumed it yet; then JMP $B20D as before.
+    overlay.prg(
+        4, 0xA795,
+        bytes.fromhex('bd 0e 04 c9 30 d0 0a a9 01 85 e9 a5 ed 29 ef 85 ed 4c 0d b2'),
+        b'\xff' * 20,
+        'Lava Link hurt sound',
+    )
     # Neck stops at the lava surface (producer, 2026-11-14): fewer sprites, and it reads as rising out of the
     # lava. Vanilla counted pieces down to Y=$E8 and skipped the whole neck below it (which also skips the
     # $049A head/beam X update). Now: count down to $D0, and below it draw a single piece instead of none, so
