@@ -46,6 +46,35 @@ SHOUT_PAIR_SHA256 = {
 }
 
 
+def _render_shout_pair(char: str, spec: dict, source: bytes) -> bytes:
+    """Render one 8x16 shout glyph pair from authored art or the ROM font."""
+    letter, outline = str(spec['letter_index']), str(spec['outline_index'])
+    if char in spec['authored']:
+        rows = [row.replace('.', '0') for row in spec['authored'][char]]
+    elif len(char) == 1 and 'A' <= char <= 'Z':
+        offset = CHR_OFFSET + SHOUT_FONT_BANK*4096 + (SHOUT_FONT_A+ord(char)-ord('A'))*16
+        rows = [''.join(str(v) for v in row) for row in decode_tile(source[offset:offset+16])]
+    else:
+        raise ValueError(f'No shout glyph source for {char!r}')
+    if len(rows) != 8 or any(len(row) != 8 or set(row)-set('012') for row in rows):
+        raise ValueError(f'Shout glyph {char!r} must be 8x8 using 0..2')
+    authored = char in spec['authored']
+    if not authored and any(row[0] == '1' for row in rows):
+        drop = 4 if char in ('N', 'K') else 3
+        rows = ['0' + row[:drop] + row[drop+1:7] + '0' for row in rows]
+    canvas = [['0']*8 for _ in range(8)] + [list(row) for row in rows]
+    body = {(y, x) for y in range(16) for x in range(8) if canvas[y][x] == '1'}
+    out = [['0']*8 for _ in range(16)]
+    for y in range(16):
+        for x in range(8):
+            if (y, x) in body:
+                out[y][x] = letter
+            elif (authored and canvas[y][x] == '2') or any((y+dy, x+dx) in body
+                    for dy in (-1, 0, 1) for dx in (-1, 0, 1)):
+                out[y][x] = outline
+    return sprite_pairs([''.join(row) for row in out])[0]
+
+
 def compile_shout_glyphs(root: Path, source: bytes) -> dict[int, bytes]:
     """Build 8x16 shout-word glyph pairs from the user's own ROM font.
 
@@ -55,7 +84,6 @@ def compile_shout_glyphs(root: Path, source: bytes) -> dict[int, bytes]:
     apart from the outline row above the letter.
     """
     spec = json.loads((root / 'assets/shout_glyphs.json').read_text())
-    letter, outline = str(spec['letter_index']), str(spec['outline_index'])
     include = (root / 'src/shout_layout.inc').read_text()
     tiles = {m.group(1): int(m.group(2), 16) for m in
              re.finditer(r'^ShoutTile_(\w+)\s*=\s*\$([0-9A-F]{2})\s*$', include, re.MULTILINE)}
@@ -65,33 +93,25 @@ def compile_shout_glyphs(root: Path, source: bytes) -> dict[int, bytes]:
         char = names.get(name, name)
         if not tile % 2:
             raise ValueError(f'Shout glyph {char} must be an odd ($1000 table) 8x16 tile')
-        if char in spec['authored']:
-            rows = [row.replace('.', '0') for row in spec['authored'][char]]
-        elif len(char) == 1 and 'A' <= char <= 'Z':
-            offset = CHR_OFFSET + SHOUT_FONT_BANK*4096 + (SHOUT_FONT_A+ord(char)-ord('A'))*16
-            rows = [''.join(str(v) for v in row) for row in decode_tile(source[offset:offset+16])]
-        else:
-            raise ValueError(f'No shout glyph source for {char!r}')
-        if len(rows) != 8 or any(len(row) != 8 or set(row)-set('012') for row in rows):
-            raise ValueError(f'Shout glyph {char!r} must be 8x8 using 0..2')
-        authored = char in spec['authored']
-        if not authored and any(row[0] == '1' for row in rows):
-            drop = 4 if char in ('N', 'K') else 3
-            rows = ['0' + row[:drop] + row[drop+1:7] + '0' for row in rows]
-        canvas = [['0']*8 for _ in range(8)] + [list(row) for row in rows]
-        body = {(y, x) for y in range(16) for x in range(8) if canvas[y][x] == '1'}
-        out = [['0']*8 for _ in range(16)]
-        for y in range(16):
-            for x in range(8):
-                if (y, x) in body:
-                    out[y][x] = letter
-                elif (authored and canvas[y][x] == '2') or any((y+dy, x+dx) in body
-                        for dy in (-1, 0, 1) for dx in (-1, 0, 1)):
-                    out[y][x] = outline
         if tile & 0xFE in result:
             raise ValueError(f'Shout glyph {char} reuses an allocated pair')
-        result[tile & 0xFE] = sprite_pairs([''.join(row) for row in out])[0]
+        result[tile & 0xFE] = _render_shout_pair(char, spec, source)
     return result
+
+
+CASTLE_SHOUT_BANK = 3        # North Palace BG/odd-sprite pattern table (4K CHR bank)
+CASTLE_SHOUT_TILES = {
+    'O': 0x5F, 'P': 0x61, 'S': 0x63, '...': 0x65,
+}
+# All 4 pairs are 32 zero bytes in original CHR bank 3.
+CASTLE_SHOUT_PAIR_SHA256 = {tile & 0xFE: '66687aadf862bd77' for tile in CASTLE_SHOUT_TILES.values()}
+
+
+def compile_castle_shout_glyphs(root: Path, source: bytes) -> dict[int, bytes]:
+    """Build 8x16 shout-word glyph pairs for Barba in North Palace (CHR bank 3)."""
+    spec = json.loads((root / 'assets/shout_glyphs.json').read_text())
+    return {tile & 0xFE: _render_shout_pair(char, spec, source)
+            for char, tile in CASTLE_SHOUT_TILES.items()}
 
 
 TITLE_CHR_BANK = 1  # title screen BG pattern table ($1000 when $76E == 0)
@@ -133,9 +153,8 @@ TOWN_FIRE_TILE_SHA256 = {
 }
 
 
-def compile_town_fire(root: Path) -> dict[int, bytes]:
-    """Compile the authored 16x16 flame and char art into eight town BG tiles."""
-    spec = json.loads((root / 'assets/town_fire.json').read_text())
+def _encode_scorch_art(spec: dict, tile_map: dict[str, dict[str, int]]) -> tuple[dict[int, bytes], list[int]]:
+    """Encode 16x16 flame and char art into 8 BG tiles using tile_map."""
     digits = {'.': '0', 'o': '1', '+': '2', '#': '3'}
     order = []
     tiles: dict[int, bytes] = {}
@@ -144,11 +163,20 @@ def compile_town_fire(root: Path) -> dict[int, bytes]:
         if len(rows) != 16 or any(len(row) != 16 or set(row) - set(digits) for row in rows):
             raise ValueError(f'Town fire {stage} must be 16 rows of 16 of . o + #')
         rows = [''.join(digits[c] for c in row) for row in rows]
-        ids = spec['tiles'][stage]
+        ids = tile_map[stage]
         for corner, (y, x) in (('tl', (0, 0)), ('bl', (8, 0)), ('tr', (0, 8)), ('br', (8, 8))):
-            tile = int(ids[corner], 16)
+            tile = ids[corner]
             tiles[tile] = encode_tile([row[x:x+8] for row in rows[y:y+8]])
             order.append(tile)
+    return tiles, order
+
+
+def compile_town_fire(root: Path) -> dict[int, bytes]:
+    """Compile the authored 16x16 flame and char art into eight town BG tiles."""
+    spec = json.loads((root / 'assets/town_fire.json').read_text())
+    tile_map = {stage: {k: int(v, 16) for k, v in spec['tiles'][stage].items()}
+                for stage in ('flame', 'char')}
+    tiles, order = _encode_scorch_art(spec, tile_map)
     if set(tiles) != set(TOWN_FIRE_TILE_SHA256):
         raise ValueError('Town fire tiles differ from the audited allocation')
     text = (root / 'src/blocks.inc').read_text()
@@ -156,6 +184,29 @@ def compile_town_fire(root: Path) -> dict[int, bytes]:
     found = [int(v, 16) for v in re.findall(r'\$([0-9A-Fa-f]{2})', table.group(1))] if table else []
     if found != order:
         raise ValueError('ScorchTiles in src/blocks.inc does not match assets/town_fire.json')
+    return tiles
+
+
+CASTLE_FIRE_BANK = 3         # North Palace BG pattern table (4K CHR bank)
+CASTLE_FIRE_TILES = {
+    'flame': {'tl': 0x56, 'bl': 0x57, 'tr': 0x58, 'br': 0x59},
+    'char':  {'tl': 0x5A, 'bl': 0x5B, 'tr': 0x5C, 'br': 0x5D},
+}
+# All 8 tiles are 16 zero bytes in original CHR bank 3.
+CASTLE_FIRE_TILE_SHA256 = {tile: '374708fff7719dd5' for stage in CASTLE_FIRE_TILES.values() for tile in stage.values()}
+
+
+def compile_castle_fire(root: Path) -> dict[int, bytes]:
+    """Compile the authored 16x16 flame and char art into eight North Palace BG tiles."""
+    spec = json.loads((root / 'assets/town_fire.json').read_text())
+    tiles, order = _encode_scorch_art(spec, CASTLE_FIRE_TILES)
+    if set(tiles) != set(CASTLE_FIRE_TILE_SHA256):
+        raise ValueError('Castle fire tiles differ from the audited allocation')
+    text = (root / 'src/blocks.inc').read_text()
+    table = re.search(r'^ScorchTiles:\s*\n(?:[ \t]*\.byte[^\n]*\n){2}((?:[ \t]*\.byte[^\n]*\n){2})', text, re.MULTILINE)
+    found = [int(v, 16) for v in re.findall(r'\$([0-9A-Fa-f]{2})', table.group(1))] if table else []
+    if found != order:
+        raise ValueError('Castle ScorchTiles in src/blocks.inc does not match CASTLE_FIRE_TILES')
     return tiles
 
 

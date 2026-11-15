@@ -59,7 +59,7 @@ emu.addEventCallback(function()
     emu.setInput(b,0)
 end,emu.eventType.inputPolled)
 emu.addMemoryCallback(function()
-    if phase==4 then
+    if phase==4 and r(0x74C)==2 and r(LABELS.TownFastDialogReady)==0xEE and r(LABELS.TownFastDialogReady+1)==0x24 and r(LABELS.TownFastDialogReady+2)==0x05 then
         requests=requests+1
         local actual=r(0x569)+256*r(0x56A)
         for idx=0,7 do

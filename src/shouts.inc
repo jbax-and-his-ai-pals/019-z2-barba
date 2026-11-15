@@ -22,6 +22,27 @@ SHOUT_OAM = $DC
 SHOUT_WORD_TIME = $64
 
 BarbaShouts:
+    lda #>(BarbaShouts6-1)
+    pha
+    lda #<(BarbaShouts6-1)
+    pha
+    jmp SwapToBank6
+
+; Trigger Barba's "OOPS..." shout in North Palace when Zelda is scorched.
+CastleZeldaShout:
+    lda SHOUT_READY
+    beq @done
+    lda #$FF
+    sta SHOUT_SLOT
+    lda #$0A
+    sta SHOUT_WORD
+    lda #SHOUT_WORD_TIME
+    sta SHOUT_WORD_TIMER
+@done:
+    rts
+
+.segment "BANK6"
+BarbaShouts6:
     txa
     pha
     tya
@@ -43,9 +64,12 @@ BarbaShouts:
     jsr @reset
 @town:
     lda $0707
-    cmp #$01
-    beq @mode
-    cmp #$02
+    cmp #$03
+    bcs @done
+    cmp #$00
+    bne @mode
+    lda $0706
+    ora $0561
     bne @done
 @mode:
     lda $0736
@@ -61,7 +85,16 @@ BarbaShouts:
     ora $DE
     ora $0726
     bne @busy
+    lda $0707
+    beq @run_shout
+    jsr ComboTick
+    bcc @run_shout
+    lda #$00
+    sta SHOUT_WORD
+    beq @after_word
+@run_shout:
     jsr ShoutWord
+@after_word:
     lda SHOUT_COOLDOWN
     beq :+
     dec SHOUT_COOLDOWN
@@ -77,12 +110,13 @@ BarbaShouts:
     ; Dialogue, menus and transitions. Talking skips the native OAM clear,
     ; so the word must leave OAM itself here instead of freezing on screen.
     jsr ShoutWordCancel
+    jsr ComboHide
 @done:
     pla
     tay
     pla
     tax
-    rts
+    jmp $FFC5
 @reset:
     ; Scene change: drop the word. The native NMI already cleared last
     ; frame's sprites; never write OAM here, the new scene may own $E0.
@@ -97,7 +131,7 @@ BarbaShouts:
     sta SHOUT_WORLD
     lda $0561
     sta SHOUT_ROOM
-    rts
+    jmp ComboReset
 
 ; Draw the live word above its villager in normal town play. Runs after the
 ; native actor loop ($D504) moved and drew this frame's actors, so the word
@@ -112,6 +146,9 @@ ShoutWord:
     jmp ShoutWordHide
 @start:
     ldx SHOUT_SLOT
+    bpl :+
+    jmp @player_shout
+:
     ; Cancel for good when the slot stops being that living, fleeing or
     ; calm villager: door/offscreen despawn ($B6) or burn and ash ($AF).
     lda $B6,x
@@ -181,6 +218,8 @@ ShoutWord:
     sta $02
     lda ShoutWordStart-1,y
     tax
+    lda #SHOUT_OAM+$1C
+    sta $04
     ldy #SHOUT_OAM
 @glyph:
     lda ShoutWordTiles,x
@@ -206,7 +245,7 @@ ShoutWord:
     iny
     iny
     iny
-    cpy #SHOUT_OAM+$1C
+    cpy $04
     beq @word_done
 @advance_x:
     lda $01
@@ -226,10 +265,49 @@ ShoutWord:
     iny
     iny
     iny
-    cpy #SHOUT_OAM+$1C
+    cpy $04
     bne @hide_loop
 @word_done:
     rts
+
+@player_shout:
+    dec SHOUT_WORD_TIMER
+    beq ShoutWordCancel
+    lda $29
+    sec
+    sbc #$24                    ; clear of Barba's horns (5 glyphs + 2 torches <= 8)
+    bcc ShoutWordHide
+    cmp #$20                    ; keep clear of the HUD above the split
+    bcc ShoutWordHide
+    sta $00
+    lda $4D
+    sec
+    sbc $072C
+    sta $01
+    lda $3B
+    sbc $072A
+    beq @player_onscreen
+    cmp #$FF
+    bne ShoutWordHide
+    lda $01
+    cmp #$F0
+    bcc ShoutWordHide
+    lda #$FF
+@player_onscreen:
+    sta $02
+    ; Center 5-char "OOPS..." (40 px) over Barba's 24 px head ($4D + 16 - 20 = $4D - 4).
+    lda $01
+    sec
+    sbc #$04
+    sta $01
+    lda $02
+    sbc #$00
+    sta $02
+    ldx #72                     ; CastleShoutTiles offset in ShoutWordTiles
+    lda #$3C
+    sta $04
+    ldy #$28                    ; higher priority than North Palace torches ($50..$5C)
+    jmp @glyph
 
 ShoutWordCancel:
     lda SHOUT_WORD
@@ -237,15 +315,22 @@ ShoutWordCancel:
     lda #$00
     sta SHOUT_WORD
 ShoutWordHide:
-    lda #$F8
     ldy #SHOUT_OAM
+    lda #SHOUT_OAM+$1C
+    ldx SHOUT_SLOT
+    bpl :+
+    ldy #$28
+    lda #$3C
+:
+    sta $04
+    lda #$F8
 :
     sta $0200,y
     iny
     iny
     iny
     iny
-    cpy #SHOUT_OAM+$1C
+    cpy $04
     bne :-
 ShoutWordDone:
     rts
@@ -267,3 +352,8 @@ ShoutWordTiles:
     .byte ShoutTile_S, ShoutTile_A, ShoutTile_V, ShoutTile_E, ShoutTile_Space, ShoutTile_M, ShoutTile_E, ShoutTile_Bang ; 7 SAVE ME!
     .byte ShoutTile_N, ShoutTile_O, ShoutTile_Bang, $00, $00, $00, $00, $00                                           ; 8 NO!
     .byte ShoutTile_B, ShoutTile_A, ShoutTile_R, ShoutTile_B, ShoutTile_A, ShoutTile_Bang, $00, $00                   ; 9 BARBA!
+; 10: North Palace "OOPS..." (CHR bank 3 odd 8x16 sprite tiles, offset 72).
+CastleShoutTiles:
+    .byte $5F, $5F, $61, $63, $65, $00
+
+.include "combo.inc"

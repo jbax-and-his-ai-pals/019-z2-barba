@@ -1,7 +1,7 @@
 ; Town-only prototype. This module runs in PRG bank 3, not the bank 0 hooks.
-; Install TownUpdate in ONLY routine-0 pointers for native types $19..$1C.
+; Install TownUpdate in routine-0 pointers for outdoor villager types $0C and $10..$21.
 ; Every mutation requires an explicit outdoor room in world 1 or 2. Story-necessary
-; NPCs ($0B..$18, $1D..$20, and all indoor actors) always keep their native routines.
+; NPCs ($0B, $0D..$0F, $22..$24, and all indoor actors) always keep their native routines.
 .segment "TOWN"
 .export TownUpdate, TownEligible, TownOutdoorRooms, TownEnd, TownDialog, TownFearText, TownFearPointers, TownHide
 .export TownFastDialogReady, TownLetterDelay, TownLineDelay, TownAsh
@@ -17,11 +17,15 @@ TownUpdate:
     bcs @eligible
 @native:
     lda $A1,x
+    cmp #$13
+    bcc @native_10_12
     cmp #$19
-    bcs :+
-    jmp $97D4
-:
+    bcc @native_13_18
     jmp $9878
+@native_10_12:
+    jmp $9793
+@native_13_18:
+    jmp $97D4
 @eligible:
     ; Let an already-started conversation finish using its original stack
     ; convention ($9A9B intentionally discards one native call frame).
@@ -62,6 +66,13 @@ TownUpdate:
 @projectile:
     jsr TownProjectileHit
     bcc @unhit
+    lda COMBO_ADD
+    clc
+    adc #$03
+    bcc :+
+    lda #$FF
+:
+    sta COMBO_ADD
     jsr TownRequestShout
     lda #$DF
     sta $AF,x
@@ -72,7 +83,9 @@ TownUpdate:
     lda $AF,x
     bmi TownFlee
     jsr TownPlayerNearby
-    bcc @native
+    bcs :+
+    jmp @native
+:
     lda #$80
     ldy $A1,x
     cpy #$19
@@ -441,18 +454,17 @@ TownAsh:
 @hide:
     jmp TownHide
 
-; Carry set iff this is a live outdoor villager ($19..$1C in world 1/2 outdoor room).
-; Story-necessary NPCs ($0B..$18, $1D..$20) and indoor actors are excluded.
+; Carry set iff this is a live outdoor villager ($10..$20 in world 1/2 outdoor room).
+; Story-necessary NPCs ($0B..$0F, $21..$24) and indoor actors are excluded.
 TownEligible:
     lda $B6,x
     cmp #$01
     bne @no
     lda $A1,x
-    cmp #$13
+    cmp #$10
     bcc @no
     cmp #$21
     bcs @no
-@type_ok:
     lda $0707
     cmp #$01
     beq @town
@@ -622,8 +634,7 @@ TownRequestShout:
     cmp #$F0
     bcs @done
     lda $A1,x
-    sec
-    sbc #$19
+    and #$07
     clc
     adc SHOUT_CYCLE
     cmp #$09

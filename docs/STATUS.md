@@ -2,6 +2,48 @@
 
 This is an initial playable implementation, not a completed total conversion.
 
+## Town rampage combo banner (2026-11-14)
+
+- `src/combo.inc` (PRG bank 6 `$BA00`, called from `BarbaShouts` via `SwapToBank6` in `LAVA` and `jmp $FFC5`) implements an Unreal Tournament-style running combo banner in towns (`DOUBLE KILL!`, `MULTI KILL!`, `MEGA KILL!`, `ULTRA KILL!`, `MONSTER KILL!`, `GODLIKE!`).
+- Weighted scoring: igniting an eligible villager (`src/town.inc`) adds `+3` to `COMBO_ADD`; scorching a fresh building metatile (`src/blocks.inc`) adds `+1`. Tiers unlock every 3 points starting at 6 (`DOUBLE KILL!` .. `GODLIKE!` at 21+), with a 180-frame (~3.0s) decay timer, 45-frame low-timer blink warning, and clean hiding on pause/dialogue/scene change.
+- Higher tiers escalate in width (8 → 9 → 10 px letter spacing), palette (pale `$02` → fire `$01` → `$01`/`$02` strobe), slam-in/shake (`±1`/`±2 px`), tier-up SFX (`$ED |= $10`), and two flanking animated flame sprites (`$84`) on `GODLIKE!`.
+- `tests/town_combo.lua`, `tests/shouts.lua`, `tests/shout_follow.lua`, `tests/town.lua`, `tests/town_fire.lua`, `tests/castle_zelda_burn.lua`, and `tests/farcall.lua` all PASS.
+
+## Dark Barba 24x48 height & Triforce-hold pose (2026-11-14)
+
+- `src/dark_barba.inc` (`BANK5` `$BDE0`, hooked from bank 5 `$9A7F`) draws Dark Barba ("Dark Link") at full 24x48 Barba height (`$026C/$0270/$0274` top row at `$2A - $10`, `$0250..$0264` torso and base) using `DarkBarbaTiles`, matching Barba's height while preserving `LEC02` sword hitboxes and slash OAM (`$0268`).
+- `DarkBarbaTriforcePose` (hooked at bank 5 `$9BB1`) sets `$80 = $08` (48px looking-up Barba) instead of `$0B` (the crouched death slot) and raises the Triforce sprites (`$0208,y`/`$020C,y` via `$91`) by 16px above Barba's head while keeping the old man on the floor.
+- `tests/dark_link.lua` and `tests/ending.lua` both PASS.
+
+## Downstab second torso chunk (2026-11-14)
+
+- `src/tall_player.inc` (`BarbaDisplay`, `@done_draw`) now draws a second 16x16 torso chunk (`$06/$08`) at `DRAW_TOP - $10` during downstab (`DRAW_FRAME == $51`) using the unused native sword/shield OAM slots (`$0220/$0224`), giving Barba two torso chunks above the turned-down head (64px visual height).
+- Clipped against the HUD (`Y < $20`), screen bottom/wrap (`Y >= $F0`), horizontal screen edges, and ceiling/lava tuck (`GEOMETRY & $06`); collision, hurtbox, and `BarbaSetThrusts` foot hitbox (`$0480`) are unchanged.
+- Freed 44 unused table bytes in `src/tall_player.inc` (`HeadProbeX`, `HeadProbeY`, `TallOam`, `TallMirror`, `TallColumn`, `TallRow`) so `BANK0` fits cleanly.
+- `tests/routines.lua`, `tests/tall_geometry.lua`, `tests/upstab.lua`, `tests/gameplay.lua`, `tests/projectile_only.lua`, and `tests/perf_volley.lua` all PASS.
+
+## Lava Link palette fix (2026-11-14)
+
+- Moved Palace 6 "Lava Link" (`bank4` `$A9F6`: `$4E` -> `$CE`), sword beams (`$AABB`: `01` -> `03`), and the boss palette packet (`$A78E`: `$3F15` -> `$3F1D`) from Sprite Palette 1 to **Sprite Palette 3**.
+- Keeps Sprite Palette 1 (`16 27 30`) intact for the boss health bar, Barba's partial LIFE bar, and Barba's fireballs instead of turning them olive/green during the fight. `tests/link_boss.lua` PASS (including fireball damage and Link hurt SFX).
+
+## Stationary outdoor villagers flee & burn (2026-11-14)
+
+- `src/town.inc` (`TownEligible`, `TownUpdate`) and `tools/build.py` (bank 3 `$94AD`, `$94AF`, `$94B1` routine pointers) now include stationary outdoor villagers `$10..$12` (e.g., Saria's old man with a cane and Ruto's stationary hint-givers) in panic fleeing, shouting, doorway refuge, and fireball burning/ash, while keeping story-critical NPCs (`$0D..$0F`, including Wise Man `$0F`), invisible triggers (`$0C`, `$21`, `$22`), and all indoor actors protected.
+- Fixed `BarbaExtraReset` in `src/extra_fire.inc` (`lda #$00` inside the clear loop) so entering a town or room no longer leaves `$10` in `$6410/$6419`, which previously drew a stray fireball over OAM `$00` (Sprite 0) and risked hanging `$B082` waiting for Sprite 0 hit.
+- `tests/town_safety.lua`, `tests/town.lua`, `tests/shouts.lua`, `tests/shout_follow.lua`, `tests/dialogue_speed.lua`, `tests/doors.lua`, and `tests/town_fire.lua` all PASS.
+
+## Ending sequence & 1-Up Barba doll (2026-11-14)
+
+- `tools/build.py` converts the ending sequence in PRG bank 5: replaces the half-Barba/half-Link chimera (`$8D8D`, `$8C0D`, `$8C38`, `$8DD5` -> `$8B31`) with full 24x48 Barba (`$0210..$022F`) standing beside woken Zelda (`$0230..$023F`), skips `$3F10` palette clobbering in `L8CE3` so Barba never turns into a red silhouette during the awakening flash, keeps Barba and Zelda in place (`$8F6E`), and adds the curtain-fall toast finale (`$8CEB..$8D4B`, `$8F6F..$8F8C`): when the curtain reaches `$22A0`, Barba fires a behind-curtain fireball (`$32`, attr `$20`) that drops below the curtain into view right before hitting Zelda and turning her into a pile of ash (`$5E/$62` in CHR bank 2). Adds a shaded `?` glyph in CHR bank 15 tile `$0F`, updates Zelda's wake-up dialogue (`$BDA1`, 4x15 at `$2184`: `BARBA? / HOLY SHIT! / THE FUCK ARE / YOU DOING HERE?`), and expands the credits (`$9259..$93FF`, `$9176`, `$9197`) to 20 entries including `BARBA EDITION / JERBTRUNDLES` and `LAVA RECLAIMED. / PUSH START TO REPLAY`.
+- `tools/build.py` replaces the side-view 1-Up Link doll (`$A8/$A9`) across all 13 even CHR banks (`0, 2, ..., 24`) with Barba's 8x16 doll (`compile_file_select_doll`).
+- `tests/ending.lua` PASS (24x48 Barba OAM, woken Zelda OAM, zero Link tiles `$E0-$E6`, Barba stays in place, curtain fireball `$32` attr `$20` drops below curtain, Zelda turns to ash `$5E/$62`, 20-entry credits, New Game+ `$07A0 == 1`).
+
+## Dark Link fireball damage (2026-11-14)
+
+- `src/extra_fire.inc` (`DarkLinkFireCheck` / `DarkLinkHitBox`) and `src/barba.asm` (`BarbaUpdate`) now check all five fireball slots (native `$8D/$8E` and backed `EXTRA_BASE` records) against Dark Link (`$0707=5`, `$A1=$23`, `$63=3`) and apply the exact 1-HP sword-strike response from bank 5 `$9A8D` (`DEC $C2`, `$0509=$38`, `$050D=$18`/`$FF`, `$DC91` knockback, `$057E=$FD`, `$E9=1`).
+- `tests/dark_link.lua` PASS (8 hits, `maxDelta=1`, hurt state, death state, victory phase `$63>=4`).
+
 The current player uses boss-derived 24x48 poses, a shared mouth position and a
 five-shot diagonal volley at all health levels. Terrain and enemy-contact collision retain the
 native body: the raised head is visual, not a newly enlarged hurtbox. Solid
@@ -9,6 +51,15 @@ ceilings fold the head into the original 32px height; crouch draws a 24px compac
 The body now keeps the boss's narrow neck silhouette without the added belly
 coil. Full-body jump rendering is checked during ascent and descent; grounded
 crouching retains a short neck beneath the head.
+
+## North Palace sleeping princess burn & shout
+
+- `src/blocks.inc` (`BarbaBlocks`/`BarbaBlockSlot`/`BarbaTownBurn`) now scorches
+  sleeping Zelda (`$4E`/`$4F`) in North Palace (`$0707=0, $0706=0, $0561=0`)
+  into 2x2 flame and char in CHR bank 3 (`$56..$5D`, hash-guarded zero tiles).
+- `src/shouts.inc` (`CastleZeldaShout`) triggers `"OOPS..."` (`SHOUT_WORD = 10`,
+  `SHOUT_SLOT = $FF`, OAM `$28..$38`, CHR bank 3 odd tiles `$5F..$65`) above
+  Barba when Zelda is ignited. `tests/castle_zelda_burn.lua` PASS.
 
 ## Playthrough checkpoint sets (2026-11-14)
 
@@ -100,7 +151,7 @@ BUILD.md. Hardware sprite limits remain enabled.
 | Tall geometry and renderer | Four-corner native solid probes, lower head row, world-page crossing, edge rejection, ceiling folding, crouch and extra OAM cleanup pass controlled CPU checks |
 | HUD split timing | 900 measured Palace 1 frames keep the split on line 31; previous build reached line 42. No upper-HUD scroll/address writes; native sprite-limit flicker remains possible |
 | Bounded volley | Five logical slots keep exact eight-update spacing, preserve range, continue beyond attack animation, require release before rearming, and sustain Zelda II's native Barba/Flame fireball sound (`$ED |= $40` in `BarbaBreathSfx`) every frame while any volley fireball is live at all spell levels |
-| Weak-enemy stomp & item pickup | `BarbaPreEnemy` (`$D4FE` -> `stomp.inc`) lets descending Barba stomp-kill weak enemies (`$C2,x` 1..4) via native `$E880` with an upward bounce (`$057D = $FC`) and no contact damage, and lets Barba pick up keys, jars, P-bags, and 1-Ups (`$A1 = $01`, `$AF & $7F` in `$08..$0D, $10, $11`) by touching them via native `$E771` without requiring a crouched fireball |
+| Weak-enemy stomp & item pickup | `BarbaPreEnemy` (`$D4FE` -> `stomp.inc`) lets descending Barba stomp-kill weak enemies (`$C2,x` 1..4, excluding Dark Barba `$A1 = $23`) via native `$E880` with an upward bounce (`$057D = $FC`) and no contact damage, and lets Barba pick up keys, jars, P-bags, and 1-Ups (`$A1 = $01`, `$AF & $7F` in `$08..$0D, $10, $11`) by touching them via native `$E771` without requiring a crouched fireball |
 | Post-flash palette | Strided WRAM flash-restore table (`$A9FA`/`$AA00`/`$AA06` -> `$69D2`/`$69D8`/`$69DE`) and side-view init (`$90DA`) patched to `$16/$27/$30` so `$074B` flash sequences (spells, item pickups, crystal flashes) restore Barba's red/orange/white palette instead of vanilla green/beige (`$18/$36/$2A`) |
 | Downstab | `BarbaSetThrusts` (`src/tall_player.inc`) preserves `$0480`/`$047E` when `$80 == $09` (Downstab) while keeping horizontal melee disabled (`$F8`); hitbox widened to 18x12 px (`$E9B5`, `$E9A1`) centered under Barba (`$29+$1C`, `$CC+$0B`) |
 | Town safety | All outdoor `$13..$20` villagers (static, generated, scripted, and house-openers) are eligible to panic and burn, and respawn when leaving and re-entering the room/town; indoor rooms and `$0B..$12` wise men/healers remain excluded |

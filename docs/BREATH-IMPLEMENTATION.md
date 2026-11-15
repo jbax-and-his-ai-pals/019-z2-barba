@@ -55,7 +55,10 @@ for movement, damage, shields and glove-gated blocks, then restore native state.
 Collision wrappers skip inactive/distant shots to preserve frame headroom.
 
 Extra fireballs use OAM `$3C/$44/$48`. The raised head moved to `$04/$4C/$F8`,
-avoiding the original enemy-projectile slots at `$28/$2C/$30`. Native shots and
+avoiding the original enemy-projectile slots at `$28/$2C/$30`. During downstab
+(`DRAW_FRAME == $51`), unused native sword/shield slots `$20/$24` draw a second
+16x16 torso chunk (`$06/$08`) at `DRAW_TOP - $10` unless tucked or clipped by
+the HUD/screen edges. Native shots and
 their original OAM remain intact. Native enemy and shield entry hooks execute
 through fixed-bank gateways and retain the original vulnerability routines.
 

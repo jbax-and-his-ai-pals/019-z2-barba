@@ -106,3 +106,9 @@ beam window (commit `6abf789`, reverted) made him too hard to hit. Don't re-add 
 
 **Done:** `LavaLinkHurt` (bank 4 `$A795`, chained after the palette helper) starts Link's hurt SFX (`$E9 = 1`) on the
 boss update that sees a fresh hit (`$040E,X == $30`) and drops the enemy-hit SFX bit. `link_boss.lua` checks one sound per hit.
+
+## Palette fix (2026-11-14)
+
+- Moved Lava Link (`bank4` `$A9F6`: `$4E` -> `$CE`), his sword beams (`$AABB`: `01` -> `03`), and `Lava Link palette packet` (`$A78E`: `$3F15` -> `$3F1D`) from **Sprite Palette 1** to **Sprite Palette 3**.
+- Sprite Palette 1 (`$3F15`: `16 27 30`) is shared by the boss health bar, Barba's partial LIFE bar, and Barba's fireballs; leaving it untouched restores red/orange/white colors for health and fireballs while keeping Lava Link and his sword beams in Link's green/skin/olive palette (`18 36 2A`).
+- `tests/link_boss.lua` verifies both Sprite Palette 3 (`18 36 2A`) and Sprite Palette 1 (`16 27 30`), plus fireball damage and hurt SFX.

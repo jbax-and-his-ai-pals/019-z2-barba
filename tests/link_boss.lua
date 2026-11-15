@@ -27,6 +27,7 @@ emu.addMemoryCallback(function(addr,value)
     if value==1 and pc>=0xA795 and pc<0xA7AA then hurtSfx=hurtSfx+1 end
 end,emu.callbackType.write,0xE9,0xE9)
 local bossPaletteOk=false
+local pal1Ok=true
 local shotBeamPng=false
 local bossSlot=nil
 local bossStartHp=nil
@@ -40,8 +41,8 @@ emu.addEventCallback(function()
         local by=r(0x2A+bossSlot)
         local px=r(0x4D)
         local py=r(0x29)
-        if bx<px-16 then buttons.left=(frame%16<2)
-        elseif bx>px+16 then buttons.right=(frame%16<2) end
+        if bx<px-16 then buttons.left=(frame%8<3)
+        elseif bx>px+16 then buttons.right=(frame%8<3) end
         buttons.a=buttons.a or (py>by+8 and frame%40<20)
         buttons.b=(math.abs(py-by)<=20 and frame%10<3)
     end
@@ -79,7 +80,7 @@ emu.addEventCallback(function()
                     for o=0,63 do
                         local b=0x200+o*4
                         local y,tl,at,x=r(b),r(b+1),r(b+2),r(b+3)
-                        if y<0xEF and (at%4)==1 then
+                        if y<0xEF and (at%4)==3 then
                             if tl==0xA1 then neckPieces=neckPieces+1 end
                             report:write(string.format('oam%02d y=%3d x=%3d tile=%02X attr=%02X',o,y,x,tl,at)..string.char(10))
                         end
@@ -91,9 +92,13 @@ emu.addEventCallback(function()
             end
         end
         if r(0x0499)>=2 then
-            local c1,c2,c3=emu.read(0x15,pal),emu.read(0x16,pal),emu.read(0x17,pal)
+            local c1,c2,c3=emu.read(0x1D,pal),emu.read(0x1E,pal),emu.read(0x1F,pal)
             if c1==0x18 and c2==0x36 and c3==0x2A then
                 bossPaletteOk=true
+            end
+            local p1a,p1b,p1c=emu.read(0x15,pal),emu.read(0x16,pal),emu.read(0x17,pal)
+            if p1a~=0x16 or p1b~=0x27 or p1c~=0x30 then
+                pal1Ok=false
             end
         end
     end
@@ -101,11 +106,13 @@ emu.addEventCallback(function()
         screenshot('link_boss_rising')
     end
     if frame==2500 then
-        local c1,c2,c3=emu.read(0x15,pal),emu.read(0x16,pal),emu.read(0x17,pal)
-        report:write(string.format('sp_pal1=%02X %02X %02X hp_start=%s hp_min=%d\n',
-            c1,c2,c3,tostring(bossStartHp),bossMinHp))
+        local c1,c2,c3=emu.read(0x1D,pal),emu.read(0x1E,pal),emu.read(0x1F,pal)
+        local p1a,p1b,p1c=emu.read(0x15,pal),emu.read(0x16,pal),emu.read(0x17,pal)
+        report:write(string.format('sp_pal3=%02X %02X %02X sp_pal1=%02X %02X %02X hp_start=%s hp_min=%d\n',
+            c1,c2,c3,p1a,p1b,p1c,tostring(bossStartHp),bossMinHp))
         check(sawBoss,'Palace 6 boss (0x21) spawned')
-        check(bossPaletteOk,'Sprite palette 1 switched to Link (18 36 2A)')
+        check(bossPaletteOk,'Sprite palette 3 switched to Link (18 36 2A)')
+        check(pal1Ok,'Sprite palette 1 preserved for health/fireballs (16 27 30)')
         check(sawSpear,'Lava Link spawned Spear/sword-beam projectile (05)')
         check(neckPieces~=nil and neckPieces>=1 and neckPieces<=5,'Lava Link neck stops at the lava (1-5 pieces, got '..tostring(neckPieces)..')')
         check(not sawFlame,'Lava Link did not spawn Barba flame (04)')

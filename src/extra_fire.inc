@@ -1,7 +1,7 @@
 ; Three backed projectiles multiplex native slot 0 without changing range.
 ; Record offsets: state,Y,Xlo,Xhi,vx,dir,actorCode,class,fraction,life,OAM.
 .export BarbaExtraAllocate, BarbaExtraUpdate, BarbaExtraReset
-.export BarbaEnemyFire, BarbaShieldFire, BarbaExtraBlocks
+.export BarbaEnemyFire, BarbaShieldFire, BarbaExtraBlocks, DarkLinkFireCheck
 EXTRA_BASE = $6400
 EXTRA_SAVE = $6440
 EXTRA_INDEX = $6450
@@ -26,12 +26,16 @@ BarbaExtraEnsure:
 BarbaExtraReset:
     lda #$00
     sta EXTRA_LIVE
-    sta EXTRA_BASE
-    sta EXTRA_BASE+$10
-    sta EXTRA_BASE+$20
-    sta EXTRA_BASE+$09
-    sta EXTRA_BASE+$19
-    sta EXTRA_BASE+$29
+    ldx #$20
+:
+    lda #$00
+    sta EXTRA_BASE,x
+    sta EXTRA_BASE+$09,x
+    txa
+    sec
+    sbc #$10
+    tax
+    bpl :-
     jmp BarbaScorchClear ; WRAM survives power-off: drop any stale scorch entries
 
 ; Save slot 0 and its OAM window. The fourth sprite bytes are copied too:
@@ -426,6 +430,12 @@ BarbaExtraUpdate:
 
 ; Root fixed helpers reconstruct the original entry prefixes and return in
 ; BANK0. Run originals once for the two real slots, then each backed slot.
+SafeNativeShieldFire:
+    lda #>(NativeReturn0-1)
+    pha
+    lda #<(NativeReturn0-1)
+    pha
+    jmp NativeShieldFire
 BarbaEnemyFire:
     lda $B6,x
     cmp #$01
@@ -439,7 +449,7 @@ BarbaEnemyFire:
     lda #$00
     jmp ExtraCollision
 BarbaShieldFire:
-    jsr NativeShieldFire
+    jsr SafeNativeShieldFire
     php
     pha
     tya
@@ -485,7 +495,6 @@ ExtraCollision:
     sta EXTRA_OLD11
     lda $8E
     sta EXTRA_OLD8E
-    jsr BarbaExtraEnsure
     ; Save slot 0 lazily: most enemies are far from every backed shot.
     lda #$00
     sta EXTRA_KIND+$03 ; $6457: 1 once slot 0 has been saved this call
@@ -514,7 +523,7 @@ ExtraCollision:
     jsr NativeEnemyFire
     jmp @store
 @shield:
-    jsr NativeShieldFire
+    jsr SafeNativeShieldFire
 @store:
     jsr ExtraStoreRecord
 @next:
@@ -645,3 +654,122 @@ BarbaExtraBlocks:
     rts
 ExtraOam:
     .byte $3C,$44,$48
+
+; Dark Link (Great Palace room $36, enemy $23 in slot 0) uses a custom sword-only
+; collision handler (bank 5 $9A8D) and skips $E48B. Check native and extra
+; fireball slots against Dark Link's body and apply the exact 1-HP sword-hit
+; response ($0509/$050D knockback, $E9 SFX, $C2 == 0 death).
+DarkLinkFireCheck:
+    lda $0707
+    cmp #$05
+    bne @done
+    lda $0736
+    cmp #$0B
+    bne @done
+    lda $B6
+    cmp #$01
+    bne @done
+    lda $A1
+    cmp #$23
+    bne @done
+    lda $63
+    cmp #$03
+    bne @done
+    lda $C2
+    beq @done
+    lda $0505
+    ora $050D
+    ora $0509
+    bne @done
+    ldy #$01
+@native:
+    lda $8D,y
+    beq @next_native
+    bmi @next_native
+    lda $5A,y
+    sta $00
+    lda $48,y
+    sta $01
+    lda $36,y
+    jsr DarkLinkHitBox
+    bcs @hit
+@next_native:
+    dey
+    bpl @native
+    lda EXTRA_LIVE
+    beq @done
+    ldy #$00
+@extra:
+    lda EXTRA_BASE+$00,y
+    beq @next_extra
+    bmi @next_extra
+    lda EXTRA_BASE+$02,y
+    sta $00
+    lda EXTRA_BASE+$03,y
+    sta $01
+    lda EXTRA_BASE+$01,y
+    jsr DarkLinkHitBox
+    bcs @hit
+@next_extra:
+    tya
+    clc
+    adc #$10
+    tay
+    cmp #$30
+    bcc @extra
+@done:
+    rts
+@hit:
+    ldx #$00
+    ldy #$00
+    sty $0401
+    dey
+    dec $C2
+    beq @dead
+    lda #$38
+    sta $0509
+    ldy #$18
+@dead:
+    sty $050D
+    clc
+    jsr $DC91
+    lda DarkLinkKnockback,y
+    sta $71
+    lda #$FD
+    sta $057E
+    lda #$01
+    sta $E9
+    sta $62
+    rts
+DarkLinkHitBox:
+    sta $02
+    lda $00
+    sec
+    sbc $4E
+    pha
+    lda $01
+    sbc $3C
+    tax
+    pla
+    clc
+    adc #$04
+    bcc :+
+    inx
+:   cpx #$00
+    bne @miss
+    cmp #$11
+    bcs @miss
+    lda $02
+    sec
+    sbc $2A
+    clc
+    adc #$0A
+    cmp #$24
+    bcs @miss
+    sec
+    rts
+@miss:
+    clc
+    rts
+DarkLinkKnockback:
+    .byte $F6,$0A

@@ -6,14 +6,17 @@ import json
 import shutil
 import subprocess
 from pathlib import Path
-from assets import (ASH_TILES, SHOUT_GLYPH_BANK, SHOUT_PAIR_SHA256,
+from assets import (ASH_TILES, CASTLE_FIRE_BANK, CASTLE_FIRE_TILE_SHA256,
+                    CASTLE_SHOUT_BANK, CASTLE_SHOUT_PAIR_SHA256,
+                    SHOUT_GLYPH_BANK, SHOUT_PAIR_SHA256,
                     TITLE_CHR_BANK, TITLE_TILE_SHA256,
                     TOWN_FIRE_BANK, TOWN_FIRE_TILE_SHA256,
-                    compile_assets, compile_file_select_doll,
+                    compile_assets, compile_castle_fire,
+                    compile_castle_shout_glyphs, compile_file_select_doll,
                     compile_shout_glyphs, compile_title_logo, compile_town_fire)
 from bps import apply, encode
 from boss_art import compile_lava_link
-from nes import CHR_OFFSET, SOURCE_SHA256, load_source, prg_offset
+from nes import CHR_OFFSET, SOURCE_SHA256, encode_tile, load_source, prg_offset
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -75,7 +78,7 @@ def build(source_path: Path, output: Path) -> dict:
         offset = prg_offset(bank, 0x8506 if bank < 7 else 0xC506)
         if source[offset] != expected:
             raise ValueError(f'FarCall0 bank fingerprint changed: {bank}')
-    for filename, bank, address in [('code', 0, 0xAA40), ('lava', 7, 0xD39A), ('terrain', 7, 0xFF4C), ('town', 3, 0xB803), ('gateway', 7, 0xFEAA)]:
+    for filename, bank, address in [('code', 0, 0xAA40), ('lava', 7, 0xD39A), ('terrain', 7, 0xFF4C), ('town', 3, 0xB803), ('gateway', 7, 0xFEAA), ('bank6', 6, 0xBA00), ('bank5', 5, 0xBDE0)]:
         data = (output/f'barba-{filename}.bin').read_bytes()
         overlay.prg(bank, address, data, b'\xFF'*len(data), f'New {filename} routines')
     def hook(bank: int, address: int, label: str, opcode: int, expected: str, pad: int = 0):
@@ -90,17 +93,24 @@ def build(source_path: Path, output: Path) -> dict:
     hook(7, 0xD50D, 'BarbaUpdate', 0x20, '20 47 98')
     hook(7, 0xE48B, 'EnemyFireGateway', 0x4C, 'b5 b6 c9 01', 1)
     hook(7, 0xE617, 'ShieldFireGateway', 0x4C, 'a5 c8 0a')
+    hook(5, 0x9A7F, 'DarkBarbaDraw', 0x20, '20 02 ec')
+    hook(5, 0x9BB1, 'DarkBarbaTriforcePose', 0x4C, 'a9 0b 85 80 e6 af 4c 11 ef', 6)
+    lag_dest = labels['LagNmiBank6']
+    overlay.prg(7, 0xC065, bytes.fromhex('ad 06 85 48') + bytes([0x4C, lag_dest & 255, lag_dest >> 8]),
+                bytes.fromhex('a9 06 20 cc ff 20 00'), 'Lag-frame NMI bank preservation')
     overlay.prg(7, 0xE6E2, bytes.fromhex('4c f3 e6 ea'), bytes.fromhex('29 20 f0 0d'),
                 'Allow fireballs against sword-only enemies')
     hook(3, 0xB5F8, 'TownDialog', 0x4C, '0a a8 ad 07 07', 2)
     hook(3, 0xB74D, 'TownLetterDelay', 0x20, 'a9 05 8d 66 05', 2)
     hook(3, 0xB65E, 'TownLineDelay', 0x20, '8c 66 05')
+    dest = labels['TownUpdate']
+    for address in (0x94AD, 0x94AF, 0x94B1):
+        overlay.prg(3, address, dest.to_bytes(2, 'little'), bytes.fromhex('93 97'),
+                    f'Stationary outdoor villager update {address:04X}')
     for address in (0x94B3, 0x94B5, 0x94B7, 0x94B9, 0x94BB, 0x94BD):
-        dest = labels['TownUpdate']
         overlay.prg(3, address, dest.to_bytes(2, 'little'), bytes.fromhex('d4 97'),
                     f'Static outdoor villager update {address:04X}')
     for address in (0x94BF, 0x94C1, 0x94C3, 0x94C5, 0x94C7, 0x94C9, 0x94CB, 0x94CD):
-        dest = labels['TownUpdate']
         overlay.prg(3, address, dest.to_bytes(2, 'little'), bytes.fromhex('78 98'),
                     f'Wandering villager update {address:04X}')
     dest = labels['BarbaInferno']
@@ -127,10 +137,31 @@ def build(source_path: Path, output: Path) -> dict:
                 continue
             offset = CHR_OFFSET + bank*4096 + tile*16
             overlay.put(offset, pair, source[offset:offset+32], f'CHR {bank:02X}: dragon tile {tile:02X}')
-    # File Select save-slot dolls: CHR bank 0 tile $D0/$D1.
+    # Ending '?' glyph in CHR bank 15 tile $0F (matching the shaded font of !/$07 and A/$DA).
+    question_tile = encode_tile([
+        '01111120',
+        '11200112',
+        '00001122',
+        '00011220',
+        '00022000',
+        '00000000',
+        '00012000',
+        '00022000',
+    ])
+    q_off = CHR_OFFSET + 15 * 4096 + 0x0F * 16
+    overlay.put(q_off, question_tile, b'\x00' * 16, 'CHR 0F: ending question mark tile 0F')
+    # Ending ash tiles ($5E/$62, replacing unused Link-only tiles across matching even CHR banks).
+    for bank in (0, 2, 4, 8, 10, 12, 14, 18, 20, 24):
+        for dst_tile, src_tile in ((0x5E, 0x64), (0x62, 0x66)):
+            ash_off = CHR_OFFSET + bank*4096 + dst_tile*16
+            overlay.put(ash_off, graphics[src_tile], source[ash_off:ash_off+32], f'CHR {bank:02X}: ending ash tile {dst_tile:02X}')
+    # File Select & 1-Up dolls: CHR bank 0 $D0/$D1 and all 13 even side-view banks $A8/$A9.
     doll = compile_file_select_doll(ROOT)
     doll_offset = CHR_OFFSET + 0xD0 * 16
     overlay.put(doll_offset, doll, source[doll_offset:doll_offset+32], 'CHR 00: File Select Barba doll')
+    for bank in range(0, 26, 2):
+        oneup_offset = CHR_OFFSET + bank*4096 + 0xA8*16
+        overlay.put(oneup_offset, doll, source[oneup_offset:oneup_offset+32], f'CHR {bank:02X}: 1-Up Barba doll')
     # Villager shout words: town CHR bank 7 only (odd 8x16 sprite tiles).
     glyphs = compile_shout_glyphs(ROOT, source)
     if set(glyphs) != set(SHOUT_PAIR_SHA256):
@@ -148,6 +179,19 @@ def build(source_path: Path, output: Path) -> dict:
         if hashlib.sha256(original).hexdigest()[:16] != TOWN_FIRE_TILE_SHA256[tile]:
             raise ValueError(f'Town fire tile {tile:02X} is not the audited original')
         overlay.put(offset, data, original, f'CHR {TOWN_FIRE_BANK:02X}: town fire tile {tile:02X}')
+    # North Palace sleeping-princess scorch marks & Barba shout glyphs in CHR bank 3.
+    for tile, data in sorted(compile_castle_fire(ROOT).items()):
+        offset = CHR_OFFSET + CASTLE_FIRE_BANK*4096 + tile*16
+        original = source[offset:offset+16]
+        if hashlib.sha256(original).hexdigest()[:16] != CASTLE_FIRE_TILE_SHA256[tile]:
+            raise ValueError(f'Castle fire tile {tile:02X} is not the audited original')
+        overlay.put(offset, data, original, f'CHR {CASTLE_FIRE_BANK:02X}: castle fire tile {tile:02X}')
+    for pair, data in sorted(compile_castle_shout_glyphs(ROOT, source).items()):
+        offset = CHR_OFFSET + CASTLE_SHOUT_BANK*4096 + pair*16
+        original = source[offset:offset+32]
+        if hashlib.sha256(original).hexdigest()[:16] != CASTLE_SHOUT_PAIR_SHA256[pair]:
+            raise ValueError(f'Castle shout pair {pair:02X} is not the audited original')
+        overlay.put(offset, data, original, f'CHR {CASTLE_SHOUT_BANK:02X}: castle shout pair {pair:02X}')
     # Title screen: replace LINK's bank-1 tiles and nametable rows with BARBA.
     title_tiles, title_rows = compile_title_logo(ROOT)
     for tid, data in sorted(title_tiles.items()):
@@ -320,11 +364,13 @@ def build(source_path: Path, output: Path) -> dict:
         overlay.put(offset, data, source[offset:offset+7], f'Spell menu: {name}')
 
     # Palace 6 "Lava Link" boss: Link art in CHR bank 25, Spear (05) sword beams, Link palette.
+    # Use Sprite Palette 3 ($3F1D) so Sprite Palette 1 ($3F15, shared by health bars and fireballs) stays red/orange.
     for tile_id, pair_bytes in compile_lava_link(source).items():
         offset = CHR_OFFSET + 25*4096 + tile_id*16
         overlay.put(offset, pair_bytes, source[offset:offset+32], f'Lava Link CHR bank 25 pair {tile_id:02X}')
+    overlay.prg(4, 0xA9F6, b'\xce', b'\x4e', 'Lava Link enemy palette (3)')
     overlay.prg(4, 0xB19B, b'\x05', b'\x04', 'Lava Link sword-beam breath (05)')
-    overlay.prg(4, 0xAABB, b'\x01', b'\x00', 'Lava Link sword-beam palette (1)')
+    overlay.prg(4, 0xAABB, b'\x03', b'\x00', 'Lava Link sword-beam palette (3)')
     overlay.prg(4, 0xB11F, bytes.fromhex('20 65 a7'), bytes.fromhex('20 0d b2'), 'Lava Link palette hook')
     overlay.prg(
         4, 0xA765,
@@ -333,7 +379,7 @@ def build(source_path: Path, output: Path) -> dict:
         b'\xff' * 41,
         'Lava Link palette helper',
     )
-    overlay.prg(4, 0xA78E, bytes.fromhex('3f 15 03 18 36 2a ff'), b'\xff' * 7, 'Lava Link palette packet')
+    overlay.prg(4, 0xA78E, bytes.fromhex('3f 1d 03 18 36 2a ff'), b'\xff' * 7, 'Lava Link palette packet')
     # Lava Link plays Link's hurt sound when hit (producer, 2026-11-14; boss only, Barba keeps hers).
     # Every hit sets the enemy hit timer $040E,X = $30 (bank 7 $E726) and the enemy-hit SFX ($ED |= $10);
     # Display decrements the timer later in this same update, so exactly one boss update per hit sees $30.
@@ -360,6 +406,222 @@ def build(source_path: Path, output: Path) -> dict:
     # Cut Lava Link sword beams per attack from 6 (every 2 frames in $4F..$40) to 2 ($48 and $40, 8 frames apart).
     overlay.prg(4, 0xB18C, b'\x29\x37', b'\x29\x30', 'Lava Link beam cadence mask ($37 -> $48/$40)')
     overlay.prg(4, 0xB190, b'\xea' * 5, bytes.fromhex('a5 12 4a 90 29'), 'Lava Link beam cadence no parity skip')
+
+    # Ending sequence (PRG bank 5): replace Link & half-Link chimera with full 24x48 Barba + Zelda,
+    # update Zelda's wake-up dialogue, and add Barba Edition credits.
+    overlay.prg(
+        5, 0x8C0D,
+        bytes.fromhex('b0 d8 22 80 b0 da 22 88 c0 dc 22 80 c0 de 22 88'),
+        bytes.fromhex('b0 e0 00 78 b0 e0 40 80 c0 e2 00 78 c0 e2 40 80'),
+        'Ending Zelda OAM sprites',
+    )
+    overlay.prg(
+        5, 0x8D8D,
+        bytes.fromhex(
+            'a0 04 60 60 a0 02 60 68 a0 00 60 70 '
+            'b0 08 60 60 b0 06 60 68 '
+            'c0 0e 60 60 c0 0c 60 68 c0 0a 60 70'
+        ),
+        bytes.fromhex(
+            'b0 02 60 70 b0 e4 20 78 b0 d8 22 80 b0 da 22 88 '
+            'c0 06 60 70 c0 e6 20 78 c0 dc 22 80 c0 de 22 88'
+        ),
+        'Ending 24x48 Barba OAM sprites',
+    )
+    overlay.prg(
+        5, 0x8C38,
+        bytes.fromhex('4c d6 93') + b'\xea' * 9,
+        bytes.fromhex('a0 0f b9 0d 8c 99 10 02 88 10 f7 60'),
+        'Ending draw 24x48 Barba hook',
+    )
+    overlay.prg(
+        5, 0x93D6,
+        bytes.fromhex(
+            'a0 1f b9 8d 8d 99 10 02 88 10 f7 '
+            'ad 61 07 c9 06 b0 0d '
+            'a9 40 a0 1c '
+            '99 12 02 88 88 88 88 10 f7 '
+            '60'
+        ),
+        b'\xff' * 32,
+        'Ending draw 24x48 Barba (visible before curtain, behind curtain on drop)',
+    )
+    overlay.prg(
+        5, 0x8DD5,
+        bytes.fromhex('4c 31 8b') + b'\xea' * 9,
+        bytes.fromhex('a0 1f b9 8d 8d 99 10 02 88 10 f7 60'),
+        'Ending draw Barba and Zelda hook',
+    )
+    overlay.prg(
+        5, 0x8B31,
+        bytes.fromhex('20 38 8c a0 0f b9 0d 8c 99 30 02 88 10 f7 4c eb 8c'),
+        b'\xff' * 17,
+        'Ending draw Barba and Zelda helper',
+    )
+    # Clear ending toast state ($05F8 = 0) when ending starts at $8C32 (instead of JSR $8C38 directly).
+    overlay.prg(5, 0x8C32, bytes.fromhex('20 42 8b'), bytes.fromhex('20 38 8c'), 'Ending init toast state hook')
+    overlay.prg(
+        5, 0x8B42,
+        bytes.fromhex('a9 00 8d f8 05 4c 38 8c'),
+        b'\xff' * 8,
+        'Ending init toast state helper',
+    )
+    # L8CE3: keep the $074B awakening flash timer without clobbering Sprite Palette 0 ($3F10),
+    # which turned Barba into a red silhouette when the split Triforce passed over him.
+    # ($8CE2 is RTS, so D0 FA returns cleanly.)
+    overlay.prg(
+        5, 0x8CE3,
+        bytes.fromhex('ce 4b 07 d0 fa 4c 44 8c'),
+        source[prg_offset(5, 0x8CE3):prg_offset(5, 0x8CEB)],
+        'Ending awakening flash without red Barba silhouette',
+    )
+    # L8F6B: keep Barba and Zelda in place (do not step closer together) and run toast update.
+    overlay.prg(
+        5, 0x8F6E,
+        bytes.fromhex('60'),
+        bytes.fromhex('a9'),
+        'Ending keep Barba distance from Zelda',
+    )
+    # Ending toast finale ($8CEB..$8D4D + @ash at $8F6F -> $8B4A):
+    # When the curtain reaches $22A0 (covering Barba's head), Barba fires a behind-curtain fireball
+    # (attr $20) that drops below the curtain into view right before hitting Zelda and turning her to ash.
+    overlay.prg(
+        5, 0x8F6F,
+        bytes.fromhex(
+            'a9 f8 8d 30 02 8d 34 02 8d 40 02 '
+            'a9 5e 8d 39 02 a9 62 8d 3d 02 '
+            'a9 22 8d 3a 02 8d 3e 02 '
+            '4c f7 93'
+        ),
+        source[prg_offset(5, 0x8F6F):prg_offset(5, 0x8F6F + 32)],
+        'Ending Zelda-to-ash helper',
+    )
+    overlay.prg(
+        5, 0x93F7,
+        bytes.fromhex('a9 c8 8d 38 02 8d 3c 02 60'),
+        b'\xff' * 9,
+        'Ending Zelda-to-ash Y=$C8 tail',
+    )
+    ending_toast = bytes.fromhex(
+        # $8CEB:
+        'ad f8 05 d0 27 '                  # lda $05F8; bne @not_idle (+$27)
+        'ad 61 07 c9 06 d0 1f '            # lda $0761; cmp #6; bne @done (+$1F)
+        'a5 27 c9 22 d0 19 '               # lda $27; cmp #$22; bne @done (+$19)
+        'a5 28 c9 a0 90 13 '               # lda $28; cmp #$A0; bcc @done (+$13)
+        'ee f8 05 '                        # inc $05F8 (start fire)
+        'a9 aa 8d f9 05 '                  # lda #$AA; sta $05F9 (Y)
+        'a9 72 8d fa 05 '                  # lda #$72; sta $05FA (X)
+        'a5 ed 09 40 85 ed '               # lda $ED; ora #$40; sta $ED (SFX)
+        '60 '                              # @done: rts
+        # @not_idle ($8D17):
+        'c9 01 d0 2a '                     # cmp #1; bne @ash (+$2A -> jmp $8F6F)
+        'ee f9 05 '                        # inc $05F9 (Y += 1)
+        'a5 12 29 01 f0 03 ee fa 05 '      # odd frame: X += 1
+        'ad f9 05 c9 bc b0 14 '            # cmp #$BC; bcs @hit (+$14)
+        '8d 40 02 a9 32 8d 41 02 '         # OAM $0240: Y, tile $32
+        'a9 20 8d 42 02 ad fa 05 8d 43 02 ' # attr $20 (behind BG/curtain), X
+        '60 '                              # rts
+        # @hit:
+        'ee f8 05 '                        # inc $05F8 ($05F8 = 2)
+        # @ash:
+        '4c 6f 8f'                         # jmp $8F6F
+    )
+    assert len(ending_toast) <= 0x8D4E - 0x8CEB, f'ending_toast too big: {len(ending_toast)}'
+    assert ending_toast[5 + 0x27 + 4 + 0x2a:] == bytes.fromhex('4c 6f 8f')
+    overlay.prg(
+        5, 0x8CEB,
+        ending_toast,
+        source[prg_offset(5, 0x8CEB):prg_offset(5, 0x8CEB + len(ending_toast))],
+        'Ending curtain fireball toast logic',
+    )
+    def encode_ending_text(text: str) -> bytes:
+        table = {' ': 0x00, '!': 0x07, '?': 0x0F, '.': 0xCF}
+        out = bytearray()
+        for ch in text:
+            if 'A' <= ch <= 'Z':
+                out.append(0xDA + ord(ch) - ord('A'))
+            elif ch in table:
+                out.append(table[ch])
+            else:
+                raise ValueError(f'Unsupported ending char {ch!r}')
+        out.append(0xFF)
+        return bytes(out)
+    ending_text = encode_ending_text(
+        'BARBA?         '
+        'HOLY SHIT!     '
+        'THE FUCK ARE   '
+        'YOU DOING HERE?'
+    )
+    overlay.prg(
+        5, 0xBDA1,
+        ending_text,
+        b'\xff' * len(ending_text),
+        'Ending Zelda wake-up dialogue',
+    )
+    overlay.prg(5, 0x8E10, bytes.fromhex('a1 bd'), bytes.fromhex('e1 8d'), 'Ending text pointer (read)')
+    overlay.prg(5, 0x8E60, bytes.fromhex('a1 bd'), bytes.fromhex('e1 8d'), 'Ending text pointer (draw)')
+    overlay.prg(5, 0x8E31, b'\x84', b'\xcb', 'Ending text start position ($2184)')
+    overlay.prg(5, 0x8E37, b'\x0f', b'\x0a', 'Ending text line width 15 (cmp)')
+    overlay.prg(5, 0x8E3C, b'\x0f', b'\x0a', 'Ending text line width 15 (sbc)')
+    def encode_credit_pkt(rows: list[tuple[int, int, str]]) -> bytes:
+        pkt = bytearray()
+        for hi, lo, text in rows:
+            pkt.extend([hi, lo, len(text)])
+            for ch in text:
+                if 'A' <= ch <= 'Z':
+                    pkt.append(0xDA + ord(ch) - ord('A'))
+                elif ch == ' ':
+                    pkt.append(0xF4)
+                elif ch == '.':
+                    pkt.append(0xCF)
+                else:
+                    raise ValueError(f'Unsupported credit char {ch!r}')
+        pkt.append(0xFF)
+        return bytes(pkt)
+    credit_entries = [
+        [(0x22, 0x47, 'EXECUTIVE PRODUCER')],
+        [(0x22, 0x8B, 'H.YAMAUCHI')],
+        [(0x22, 0x47, 'PRODUCER          ')],
+        [(0x22, 0x8B, 'MIYAHON   ')],
+        [(0x22, 0x47, 'DIRECTOR')],
+        [(0x22, 0x8B, 'SUGIYAN'), (0x22, 0xCB, 'YAMAHEN')],
+        [(0x22, 0x47, 'DESIGNER')],
+        [(0x22, 0x8B, 'ISSHIN '), (0x22, 0xCB, '       ')],
+        [(0x22, 0x47, 'SOUND COMPOSER')],
+        [(0x22, 0x8B, 'TSUKASAN')],
+        [(0x22, 0x47, 'PROGRAMER     ')],
+        [(0x22, 0x8B, 'MORIKAZU '), (0x22, 0xCB, 'MARUMARU')],
+        '__PROG__',
+        [(0x22, 0x8B, 'SHIGECHAN'), (0x22, 0xCB, 'NISHIYAN')],
+        '__PROG__',
+        [(0x22, 0x8B, 'NAKAZOO  '), (0x22, 0xCB, '        ')],
+        [(0x22, 0x47, 'BARBA EDITION ')],
+        [(0x22, 0x8B, 'JERBTRUNDLES')],
+        [(0x22, 0x47, 'LAVA RECLAIMED.  ')],
+        [(0x22, 0x8B, 'PUSH START  '), (0x22, 0xCB, 'TO REPLAY')],
+    ]
+    credit_blob = bytearray()
+    credit_ptrs = []
+    prog_ptr = None
+    data_base = 0x9259 + len(credit_entries) * 2
+    for entry in credit_entries:
+        if entry == '__PROG__':
+            credit_ptrs.append(prog_ptr)
+            continue
+        addr = data_base + len(credit_blob)
+        if entry == [(0x22, 0x47, 'PROGRAMER     ')]:
+            prog_ptr = addr
+        credit_ptrs.append(addr)
+        credit_blob.extend(encode_credit_pkt(entry))
+    credit_table = b''.join(p.to_bytes(2, 'little') for p in credit_ptrs) + bytes(credit_blob)
+    if len(credit_table) > 0x9400 - 0x9259:
+        raise ValueError(f'Ending credits overflow bank 5: {len(credit_table)} bytes')
+    expected_credits = source[prg_offset(5, 0x9259):prg_offset(5, 0x9259 + len(credit_table))]
+    if source[prg_offset(5, 0x93AE):prg_offset(5, 0x9400)] != b'\xff' * (0x9400 - 0x93AE):
+        raise ValueError('Bank 5 ending credits unused area changed')
+    overlay.prg(5, 0x9259, credit_table, expected_credits, 'Ending credits with Barba Edition')
+    overlay.prg(5, 0x9176, b'\x14', b'\x12', 'Ending credits entry count (20)')
+    overlay.prg(5, 0x9197, b'\x12', b'\x10', 'Ending credits clear STAFF header index')
 
     target = bytes(overlay.target)
     for bank, expected in enumerate(fingerprints):

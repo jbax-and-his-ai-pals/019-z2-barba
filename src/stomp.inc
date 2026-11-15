@@ -31,6 +31,8 @@ BarbaStomp:
     lda $A1,x
     cmp #$02
     bcc @next
+    cmp #$23
+    beq @next
     lda $C2,x
     beq @next
     cmp #$05

@@ -2,7 +2,7 @@
 .setcpu "6502"
 .export BarbaOverworld, BarbaDisplay, BarbaUpdate, BarbaInferno
 .export LavaSurface
-.export EnemyFireGateway, ShieldFireGateway
+.export EnemyFireGateway, ShieldFireGateway, LagNmiBank6
 
 ROAR_TIMER = $05F0 ; cleared by the original $0500..$05FF reset loop; no original references
 LAVA_CONTACT = $05EB ; 4-frame grace timer while supported by palace lava
@@ -29,7 +29,6 @@ BarbaOverworld:
     clc
     adc $00
     sta $0201
-    clc
     adc #$02
     sta $0205
     lda #$00
@@ -52,6 +51,7 @@ BarbaInferno:
 ; override; the game's audio driver resumes control on the following frame.
 BarbaUpdate:
     jsr BarbaProjectiles
+    jsr DarkLinkFireCheck
     jsr BarbaShouts
     lda LAVA_CONTACT
     beq @roar
@@ -107,13 +107,18 @@ LavaSurface:
     rts
 
 ; Execute the original shield handler with its first three bytes restored.
-; Player melee stays disabled, so its melee-only stack escape is unreachable.
+; SafeNativeShieldFire (bank 0) pushes NativeReturn0-1 so LE654's PLA/PLA
+; stack escape returns through NativeReturn0 instead of mapping-less bank 0.
 NativeShieldFire:
     jsr $FFC9
     lda $C8
     asl
     jsr $E61A
     jmp NativeReturn0
+
+SwapToBank6:
+    lda #$06
+    jmp $FFCC
 
 .segment "GATEWAY"
 ; Fast path: with no backed shot alive, run the original E48B test in place
@@ -133,6 +138,11 @@ ShieldFireGateway:
     jsr $FFC5
     jsr BarbaShieldFire
     jmp $FFC9
+; Lag-frame NMI ($C065) pushed $8506 before entering here.
+LagNmiBank6:
+    lda #$06
+    jsr $FFCC
+    jmp LagNmiInBank6
 
 .segment "TERRAIN"
 ; All four corner tiles are collected before swapping. The area's native
@@ -158,6 +168,30 @@ NativeEnemyFire:
     jsr $E491
 NativeReturn0:
     php
+    pha
     jsr $FFC5
+    pla
     plp
     rts
+
+.segment "BANK6"
+; Lag-frame NMI: run audio driver in bank 6, then restore the actual
+; interrupted bank (bank 0 if $8506 fingerprint == $F0, else area bank $0769).
+LagNmiInBank6:
+    jsr $9000
+    pla
+    cmp #$F0
+    beq @bank0
+    lda $0769
+    .byte $2C
+@bank0:
+    lda #$00
+    tax
+    lda #>($C070-1)
+    pha
+    lda #<($C070-1)
+    pha
+    txa
+    jmp $FFCC
+
+.include "dark_barba.inc"

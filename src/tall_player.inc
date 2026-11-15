@@ -29,12 +29,11 @@ BarbaGeometry:
     sbc #$10
     sta DRAW_TOP
     lda $13
-    beq :+
-    jmp @done
-:
+    bne @to_done
     lda $80
     cmp #$0C
     bcc :+
+@to_done:
     jmp @done
 :
     lda $17
@@ -204,7 +203,7 @@ BarbaGeometry:
     clc
     adc #$1C
     bcs @done
-    jmp @mouth_x
+    bcc @mouth_x
 @left:
     lda $CC
     sec
@@ -212,23 +211,16 @@ BarbaGeometry:
     bcc @done
 @mouth_x:
     sta BREATH_MUZZLE_X
-    lda GEOMETRY
-    ora #$01
-    sta GEOMETRY
+    inc GEOMETRY
 @done:
     pla
     tay
     pla
     tax
     rts
-HeadProbeX:
-    .byte 4, 27, 4, 27
-HeadProbeY:
-    .byte $30,$30,$21,$21
 
 BarbaDisplay:
     lda #$F8
-    sta $0224
     sta $0204
     sta $024C
     sta $02F8
@@ -361,9 +353,8 @@ BarbaDisplay:
     sta $021C
     ldx DRAW_FRAME
     ldy DRAW_ATTR
-    lda $9F
-    cmp #$01
-    bne :+
+    bit DRAW_ATTR
+    bvc :+
     jmp @draw_right
 :
     lda GEOMETRY
@@ -420,6 +411,50 @@ BarbaDisplay:
     TALL_SPRITE 7, $0218, 8
     TALL_SPRITE 8, $021C, 16
 @done_draw:
+    ; Downstab (pose 9, DRAW_FRAME == $51) adds a second torso chunk above
+    ; Row 0 using the unused native sword/shield OAM slots ($0220/$0224).
+    lda DRAW_FRAME
+    cmp #$51
+    bne @no_extra_torso
+    lda GEOMETRY
+    and #$06
+    bne @no_extra_torso
+    lda DRAW_TOP
+    sec
+    sbc #$10
+    cmp #$20
+    bcc @no_extra_torso
+    cmp #$F0
+    bcs @no_extra_torso
+    sta $00
+    ldx #$06
+    ldy #$08
+    lda DRAW_LEFT
+    bit DRAW_ATTR
+    bvc @extra_left
+    ldx #$08
+    ldy #$06
+    bcc @extra_place
+@extra_left:
+    clc
+    adc #$08
+    bcs @no_extra_torso
+@extra_place:
+    sta $0223
+    stx $0221
+    ldx $00
+    stx $0220
+    ldx DRAW_ATTR
+    stx $0222
+    clc
+    adc #$08
+    bcs @no_extra_torso
+    sta $0227
+    sty $0225
+    lda $00
+    sta $0224
+    stx $0226
+@no_extra_torso:
     lda $12
     and #$01
     beq @no_rot
@@ -555,12 +590,4 @@ BarbaSetThrusts:
     lda #$F8
     sta $0480
     rts
-TallOam:
-    .byte $04,$4C,$F8,$08,$0C,$10,$14,$18,$1C
-TallMirror:
-    .byte 2,1,0,5,4,3,8,7,6
-TallColumn:
-    .byte 0,8,16,0,8,16,0,8,16
-TallRow:
-    .byte 0,0,0,16,16,16,32,32,32
 .include "tall_layout.inc"

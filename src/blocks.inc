@@ -3,12 +3,15 @@
 .export BarbaBlocks, BarbaNativeBlocks, BarbaBlockSlot
 BarbaBlocks:
     lda $0707
+    beq @castle
     cmp #$03
     beq @done
-    ; Outdoor town ($0707 = 1/2, $0706 = 0): advance scorch marks first.
-    cmp #$01
-    beq @town
-    cmp #$02
+    bcs @blocks
+    ; Outdoor town ($0707 = 1/2, $0706 = 0) or North Palace ($0707 = 0, $0706 = 0, $0561 = 0):
+    ; advance scorch marks first.
+    bcc @town
+@castle:
+    lda $0561
     bne @blocks
 @town:
     lda $0706
@@ -18,7 +21,11 @@ BarbaBlocks:
 @blocks:
     jsr BarbaNativeBlocks
     lda $0707
-    beq @done
+    bne @extra
+    lda $0706
+    ora $0561
+    bne @done
+@extra:
     jsr BarbaExtraBlocks
 @done:
     jmp BarbaSetThrusts ; restore held thrust after temporary projectile origins
@@ -72,9 +79,12 @@ BarbaBlockSlot:
     ; Native down-tech branch uses the supplied world origin and avoids
     ; applying horizontal sword recoil to Barba on contact with stone.
     lda $0707
-    cmp #$01
-    beq @check_town
-    cmp #$02
+    beq @castle_slot
+    cmp #$03
+    bcs @native_block
+    bcc @check_town
+@castle_slot:
+    lda $0561
     bne @native_block
 @check_town:
     lda $0706
@@ -116,6 +126,15 @@ BarbaTownBurn:
     ldx #$10
     ldy #$1C
     jsr $EAE8
+    ldy $0707
+    bne @town_filter
+    ; North Palace: only sleeping Zelda ($4E head, $4F body) burns.
+    cmp #$4E
+    beq @burn
+    cmp #$4F
+    beq @burn
+    rts
+@town_filter:
     ldy $02
     cpy #$B0
     bcs @skip
@@ -211,11 +230,25 @@ BarbaTownBurn:
     sta SCORCH_TIME,x
     lda #$04
     sta $ED
+    lda $0707
+    beq @castle_scorch
+    inc COMBO_ADD
+    bne @queue_flame
+@castle_scorch:
+    jsr CastleZeldaShout
+@queue_flame:
     ldy #$00
     ; fall through
 
 ; Queue a 2x2 tile write at $00/$01 from ScorchTiles,Y (two vertical columns).
 ScorchQueue:
+    lda $0707
+    bne :+
+    tya
+    clc
+    adc #$08
+    tay
+:
     ldx $0362
     lda $00
     sta $0363,x
@@ -294,5 +327,7 @@ ScorchRun:
 ; Column order per stage: top-left, bottom-left, top-right, bottom-right.
 ; Tile ids must match assets/town_fire.json (checked by tools/assets.py).
 ScorchTiles:
-    .byte $02,$0E,$04,$16   ; flame
-    .byte $25,$A7,$96,$B9   ; char
+    .byte $02,$0E,$04,$16   ; town flame (CHR bank 7)
+    .byte $25,$A7,$96,$B9   ; town char (CHR bank 7)
+    .byte $56,$57,$58,$59   ; North Palace flame (CHR bank 3)
+    .byte $5A,$5B,$5C,$5D   ; North Palace char (CHR bank 3)

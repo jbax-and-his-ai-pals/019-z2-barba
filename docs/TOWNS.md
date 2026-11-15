@@ -1,10 +1,11 @@
 # Reactive town prototype
 
-All live outdoor town villagers (`$13..$20`, static, generated, scripted and
+All live outdoor town villagers (`$10..$20`, stationary, static, generated, scripted and
 house-opening actors) can flee, shout, burn and retreat. Eligibility requires
 slot value 1, town world 1 or 2, and an outdoor street room `$00..$13` except
-`$06`; origin `$BC` does not restrict eligibility. Indoor actors and types
-`$0B..$12` (including wise men) are protected from panic/burning. Service
+`$06`; origin `$BC` does not restrict eligibility. Indoor actors, invisible
+triggers (`$0C`, `$21`, `$22`), and story/wise-man types (`$0B`, `$0D..$0F`) are
+protected from panic/burning. Service
 characters with types `$17/$18` are eligible outdoors, but retain custom
 service dialogue indoors. Leaving/re-entering repopulates the room normally.
 Every action rechecks eligibility in `src/town.inc`.
@@ -161,6 +162,41 @@ hit, skipped when the buffer is past `$28`). After `SCORCH_FLAME` (24) updates,
 - **Test:** `tests/town_fire.lua` walks to the Rauru brick house and jump-attacks
   it. It checks that the metatiles are unchanged, flames appear and then become
   char, no tile is blanked to sky, and nothing else in the nametable changes.
+
+### North Palace sleeping princess scorch & Barba shout
+
+- **Trigger:** In the starting palace (`$0707 = 0`, `$0706 = 0`, `$0561 = 0`),
+  `BarbaBlocks`/`BarbaBlockSlot`/`BarbaTownBurn` (`src/blocks.inc`) allow live
+  fireballs to scorch sleeping Zelda's metatiles (`$4E` head, `$4F` body) into
+  2x2 flame and then char without altering collision/metatiles. Other North
+  Palace metatiles are ignored.
+- **Shout:** Igniting Zelda calls `CastleZeldaShout` (`src/shouts.inc`), which
+  sets `SHOUT_SLOT = $FF`, `SHOUT_WORD = 10`, and `SHOUT_WORD_TIMER = $64`
+  (100 updates) to float `"OOPS..."` (5 glyphs in OAM `$28..$38`, in front of
+  the altar torches `$50..$5C`, zero dropped sprites) above Barba (`$29 - $24`). Leaving the room, pausing, or timer
+  expiry cancels and hides it.
+- **CHR bank 3:** Flame (`$56..$59`), char (`$5A..$5D`), and odd 8x16 shout
+  glyphs (`O,P,S,...` in pairs `$5E..$64`, odd tiles `$5F..$65`) occupy
+  previously all-zero tiles in CHR bank 3, hash-guarded in `tools/assets.py`.
+- **Test:** `tests/castle_zelda_burn.lua` verifies flame -> char progression,
+  unchanged metatiles/surrounding nametable, and the 5-glyph `"OOPS..."` shout.
+
+## Rampage combo banner
+
+- **Scoring (`src/combo.inc`, `src/town.inc`, `src/blocks.inc`):** Igniting an eligible
+  villager adds `+3` (`COMBO_ADD` `$646C`) and scorching a fresh building metatile in a
+  town adds `+1`, refreshing the 180-frame (~3.0 s) decay timer (`COMBO_TIMER` `$646F`).
+- **Tiers:** `6` `DOUBLE KILL!`, `9` `MULTI KILL!`, `12` `MEGA KILL!`, `15` `ULTRA KILL!`,
+  `18` `MONSTER KILL!`, `21+` `GODLIKE!`.
+- **Escalation:** Tiers 1–2 use 8 px spacing and pale palette 2; tiers 3–4 use 9 px
+  spacing, fire palette 1, and tier-up jitter; tiers 5–6 use 10 px spacing, palette 1/2
+  strobe, continuous `±1`/`±2 px` shake, and two flanking `$84` flame sprites on `GODLIKE!`.
+  New tiers trigger `$ED |= $10` SFX and an 8-frame drop-in slam (`COMBO_SLAM` `$6488`).
+- **OAM & lifecycle:** Uses 12 town-free OAM slots (`$DC..$F4, $FC, $28..$34`) on 2 rows
+  to stay within 8 sprites/scanline, suppressing villager `ShoutWord` while active,
+  blinking during the final 45 frames, and hiding on pause/dialogue/scene change.
+- **Test:** `tests/town_combo.lua` verifies tiers 1/3/5/6, strobe/flames, pause hiding,
+  decay warning blink, and expiry cleanup.
 
 ## Validation and limits
 

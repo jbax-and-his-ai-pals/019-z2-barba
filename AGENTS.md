@@ -23,7 +23,7 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
 - Full suite: boot, gameplay, combat, palace, routines, tall_geometry, projectile_only, burst,
   extra_fire, left_fire, damage, hud_timing, breath_height, town, town_safety, shouts,
   shout_follow, doors, dialogue_speed, perf_volley, perf_lava, link_boss, shield_enemies,
-  title_roar, overworld_side, farcall, town_fire, upstab, perf_upward, look_up, plus `state_pack` via create_test_pack.
+  title_roar, overworld_side, farcall, town_fire, upstab, perf_upward, look_up, ending, plus `state_pack` via create_test_pack.
 
 ## Hard rules
 
@@ -46,6 +46,7 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
 | `src/extra_fire.inc` | 3 extra projectile records multiplexed through native slot 0; enemy/shield collision wrappers |
 | `src/blocks.inc` | fireballs break glove-gated blocks |
 | `src/tall_player.inc`, `tall_layout.inc` | 24x48 boss-derived player renderer and head geometry |
+| `src/dark_barba.inc` | bank 5 24x48 Dark Barba renderer and Triforce-hold pose |
 | `src/town*.inc`, `shouts.inc`, `ash_layout.inc` | fleeing/burning villagers, panic dialogue and shouts |
 | `tools/build.py` | assemble + guarded patch list (all hooks are listed here) |
 | `tools/assets.py`, `assets/*.json` | sprite compilation; `tools/boss_art.py` extracts boss tiles |
@@ -54,15 +55,15 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
 
 ## Free space and RAM in use (check before allocating)
 
-- ROM: bank 0 `$AA40-$BF6F` (BANK0; $1122 used, 1038 bytes free), bank 3 `$B803-$BF6F` (TOWN; 283 free).
-  Fixed bank 7: LAVA `$D39A-$D3C4` used / `$D3C5-$D3C9` free (5), GATEWAY `$FEC8-$FECF` free (8),
-  TERRAIN `$FF6D-$FF6F` free (3): **16 bytes total free, formerly 11**. `FarCall0` provides cold bank-0
+- ROM: bank 0 `$AA40-$BF6F` (BANK0), bank 3 `$B803-$BF6F` (TOWN; 245 free), bank 6 `$BA00-$BF6F` (BANK6; `shouts.inc` + `combo.inc`).
+  Fixed bank 7: LAVA `$D39A-$D3C9` (0 free), GATEWAY `$FEAA-$FECF` (0 free),
+  TERRAIN `$FF4C-$FF6E` (1 free). `FarCall0` provides cold bank-0
   hooks at 5 fixed bytes/call (6 with standalone RTS), 369-482 bridge cycles plus target work;
   see `docs/BUILD.md` for ABI/recipe and `docs/FIXED-BANK-AUDIT.md` for ownership/padding evidence.
   No new padding region was claimed. Never allocate live JMP operands `$FF4B` or `$E02C`.
 - RAM `$05EA`, `$05EB` (lava contact), `$05F0-$05FF` (roar, breath, tall renderer, extra guard). Cleared by the native reset loop.
 - WRAM `$6400-$642F` extra projectile records; `$6440-$645F` scratch (`$6457` lazy-save flag,
-  `$6458-$645F` geometry terrain cache, `$645C` EXTRA_LIVE); `$6460-$6469` shouts (`$6465` actor, `$6467` word, `$6468` timer, `$6469` cycle); `$646A` + `$6470-$6487` town scorch ring; `$646B` volley aim latch (0 forward / $40 upward). Don't touch collision/room/save regions elsewhere in `$6000-$7FFF`.
+  `$6458-$645F` geometry terrain cache, `$645C` EXTRA_LIVE); `$6460-$6469` shouts (`$6465` actor, `$6467` word, `$6468` timer, `$6469` cycle); `$646A` + `$6470-$6487` town scorch ring; `$646B` volley aim latch (0 forward / $40 upward); `$646C-$646F` + `$6488` town combo banner. Don't touch collision/room/save regions elsewhere in `$6000-$7FFF`.
 - OAM in use: tall head `$04/$4C/$F8`, extra fireballs `$3C/$44/$48`; enemy projectiles use `$28/$2C/$30`;
   town shout word `$DC-$F4` (7 glyphs, only while a word is live and no enemy projectile exists).
 - CHR: player art in even sprite banks 0-24; ash `$64/$66` **bank 6 only** (shared sprites elsewhere);
