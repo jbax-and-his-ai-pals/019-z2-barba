@@ -140,43 +140,37 @@ def make_study(root: Path = ROOT) -> Path:
 
 def compile_lava_link(rom: bytes) -> dict[int, bytes]:
     """Build Palace 6 'Lava Link' CHR bank 25 pairs from original Link bank 2 pixels."""
-    # Extract Link's 16x16 idle pose (bank 2 pairs 0x00 + 0x02), facing right -> flip left.
-    left = source_pair(rom, 0x00, bank=2)
-    right = source_pair(rom, 0x02, bank=2)
-    link_full = [(left[y] + right[y])[::-1] for y in range(16)]
-    # Rows 0..10 (cols 1..15) contain Link's full cap, face, hair, and ear without shield.
-    head_src = [row[1:15] for row in link_full[:11]]
-    head_2x = resize_x(head_src, 28)
+    # Original hand-drawn 16x16 Link heads, facing left (producer-approved 2026-11-14).
+    # The game draws only the left 16x16 of each head state (first two pairs); the
+    # right pairs feed the top neck piece, so they carry the neck strip.
+    # Indices: 1 = $18 olive outline/hair, 2 = $36 skin, 3 = $2A green cap/tunic.
+    head_top = [
+        '......33333.....',
+        '....333333333...',
+        '...33333333333..',
+        '..1333333333333.',
+        '..1111111113333.',
+        '..1222221122.333',
+        '.12212221122..33',
+        '.122222212.....3',
+        '1222222212......',
+    ]
+    head_bottom = {
+        # closed: calm profile with a chin line
+        0: ['.122222221......', '..12222122......', '..1222222.......', '...11111........'],
+        # half: small open mouth
+        2: ['.122222221......', '..11222122......', '..1222222.......', '...11111........'],
+        # open: round shout, not a dropped jaw
+        4: ['.122222221......', '..11222122......', '..11222222......', '...11111........'],
+    }
+    # The collar sweeps back to the right edge, where the top neck piece starts 14 px over.
+    collar = ['...3333333331...', '..3333333333331.', '.33333333333333.']
 
     def make_head(mouth_open: int) -> list[str]:
-        canvas = [['0'] * 32 for _ in range(16)]
-        # Top cap + upper face (rows 0..7)
-        for y in range(min(8, len(head_2x))):
-            for x in range(28):
-                canvas[y][2 + x] = head_2x[y][x]
-        # Lower face / jaw (rows 8..10) shifted down by mouth_open pixels
-        for y in range(8, 11):
-            dst_y = min(15, y + mouth_open)
-            for x in range(28):
-                canvas[dst_y][2 + x] = head_2x[y][x]
-        if mouth_open > 0:
-            # Carve mouth opening on the left/front face (cols 3..11)
-            for my in range(8, min(15, 8 + mouth_open)):
-                for mx in range(3, 12):
-                    canvas[my][mx] = '0'
-                canvas[my][12] = '1'
-            if mouth_open >= 3:
-                canvas[8][5] = '2'
-        # Collar / tunic base connecting to the neck at bottom-right (cols 14..27)
-        for y in range(12 + (mouth_open // 2), 16):
-            for x in range(14, 28):
-                if canvas[y][x] == '0':
-                    canvas[y][x] = '1' if x in (14, 27) or y == 15 else '3'
-        return [''.join(r) for r in canvas]
+        return [row.replace('.', '0') for row in head_top + head_bottom[mouth_open] + collar]
 
     # Clean green tunic + brown belt column (16x16) using Link's tunic palette (1=brown, 2=gold/skin, 3=green).
     # Derived from Link's tunic color indices in bank 2 pairs 0x00/0x02.
-    _ = link_full[10:15]
     neck_rows = []
     for y in range(16):
         if y == 15:
@@ -196,7 +190,7 @@ def compile_lava_link(rom: bytes) -> dict[int, bytes]:
     pairs: dict[int, bytes] = {}
     for state, mouth_open in (('closed', 0), ('half', 2), ('open', 4)):
         tile_ids = HEAD_PAIRS[state]
-        compiled = pairs_from_rows(make_head(mouth_open))
+        compiled = pairs_from_rows([h + n for h, n in zip(make_head(mouth_open), neck_rows)])
         for tile_id, pair_bytes in zip(tile_ids, compiled):
             pairs[tile_id] = pair_bytes
 

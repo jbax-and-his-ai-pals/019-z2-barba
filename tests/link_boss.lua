@@ -64,6 +64,16 @@ emu.addEventCallback(function()
                 if not shotBeamPng then
                     shotBeamPng=true
                     screenshot('link_boss_beam')
+                    neckPieces=0
+                    for o=0,63 do
+                        local b=0x200+o*4
+                        local y,tl,at,x=r(b),r(b+1),r(b+2),r(b+3)
+                        if y<0xEF and (at%4)==1 then
+                            if tl==0xA1 then neckPieces=neckPieces+1 end
+                            report:write(string.format('oam%02d y=%3d x=%3d tile=%02X attr=%02X',o,y,x,tl,at)..string.char(10))
+                        end
+                    end
+
                 end
             elseif kind==0x04 then
                 sawFlame=true
@@ -86,6 +96,7 @@ emu.addEventCallback(function()
         check(sawBoss,'Palace 6 boss (0x21) spawned')
         check(bossPaletteOk,'Sprite palette 1 switched to Link (18 36 2A)')
         check(sawSpear,'Lava Link spawned Spear/sword-beam projectile (05)')
+        check(neckPieces~=nil and neckPieces>=1 and neckPieces<=5,'Lava Link neck stops at the lava (1-5 pieces, got '..tostring(neckPieces)..')')
         check(not sawFlame,'Lava Link did not spawn Barba flame (04)')
         check(bossStartHp~=nil and bossMinHp<bossStartHp,'Barba fireballs damaged Lava Link')
         report:write('RESULT '..(errors==0 and 'PASS' or 'FAIL')..'\n')

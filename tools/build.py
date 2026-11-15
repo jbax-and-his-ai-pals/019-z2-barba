@@ -318,6 +318,17 @@ def build(source_path: Path, output: Path) -> dict:
         'Lava Link palette helper',
     )
     overlay.prg(4, 0xA78E, bytes.fromhex('3f 15 03 18 36 2a ff'), b'\xff' * 7, 'Lava Link palette packet')
+    # Neck stops at the lava surface (producer, 2026-11-14): fewer sprites, and it reads as rising out of the
+    # lava. Vanilla counted pieces down to Y=$E8 and skipped the whole neck below it (which also skips the
+    # $049A head/beam X update). Now: count down to $D0, and below it draw a single piece instead of none, so
+    # $049A stays current while the boss emerges. Fully risen: 7 pieces -> 5 (14 -> 10 neck sprites).
+    # $D0 - Y max is $50 (Y >= $80), so the dropped AND #$07 cap is never needed.
+    overlay.prg(
+        4, 0xB294,
+        bytes.fromhex('a9 d0 38 e5 00 b0 02 a9 00 4a 4a 4a 4a'),
+        bytes.fromhex('a9 e8 38 e5 00 90 69 4a 4a 4a 4a 29 07'),
+        'Lava Link neck stops at lava',
+    )
 
     target = bytes(overlay.target)
     # The FF byte at FF4B is the high operand of a live JMP, not filler.
