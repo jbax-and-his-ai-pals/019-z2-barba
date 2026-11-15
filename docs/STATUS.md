@@ -10,6 +10,13 @@ The body now keeps the boss's narrow neck silhouette without the added belly
 coil. Full-body jump rendering is checked during ascent and descent; grounded
 crouching retains a short neck beneath the head.
 
+## Looking-up head (2026-11-14, `feat/look-up-head`)
+
+Tall frame 8 is the boss open-jaw head sheared 2:1 snout-up (build-time recipe in `tools/boss_art.py`,
+no ROM pixels committed), replacing the broken 90-degree rotation. Drawn while rising with Up held, during
+an airborne Up+B windup, and for an upward-latched volley; forward air/ground attacks keep frames 4/5.
+`tests/look_up.lua` PASS; body pairs 43/47; upward perf 27,837 peak, 0/900 lag.
+
 ## Upward breath and rising head-butt (2026-11-14)
 
 Implemented the approved [upstab plan](UPSTAB-FIRE-PLAN.md). With Upward Thrust learned,
@@ -100,7 +107,7 @@ Audio register/envelope validation is not a listening-quality review.
 
 The ordered next steps and latest human feedback are in [ROADMAP.md](ROADMAP.md).
 
-- Tune upward breath/head-butt feel by hand and draw the deferred looking-up attack head.
+- Tune upward breath/head-butt feel by hand (looking-up head drawn 2026-11-14).
   Up/down thrusts and glove-gated fireball block breaking are implemented.
 - Palace 6's boss is now **Lava Link** (`tests/link_boss.lua` PASS); full defeat-to-crystal playthrough remains to be tested by hand.
 - Audit sprite states and CHR sharing in every town, palace, menu, ending and
