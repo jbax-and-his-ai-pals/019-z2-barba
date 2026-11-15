@@ -1,6 +1,6 @@
 # Plan: upward fire ("upstab" for a dragon)
 
-Status: **design approved, 2026-11-14.** Not implemented.
+Status: **implemented, 2026-11-14**, on `feat/upstab-fire` (base `262501a`).
 
 **Producer decisions (2026-11-14):** build both A (upward breath) and B (rising head-butt); column shape; Up+B fires
 upward **airborne only**; both are **gated on the Upward Thrust tech**. The **(producer)** markers below were the questions; they are settled.
@@ -92,3 +92,32 @@ sync across `tools/state_scenarios.lua`, `tools/create_test_pack.py` and `tests/
 
 Codex for parts A and B plus the tests, once `feat/fixed-bank-headroom` merges. The looking-up head art is done in
 chat, iterating on screenshots.
+
+## Implementation and validation (2026-11-14)
+
+- Both A and B implemented in bank 0; no new fixed-bank hook or guarded patch sites.
+- Upward volley aim is latched in new WRAM byte `$646B` (moved from `$6469`, which is `SHOUT_CYCLE`, at merge) before the first shot.
+  Slot bit 6 stores upward direction, bits 0-5 lifetime, bit 7 shallow crouch.
+  Up shots live 28 updates, move -3 Y/update and +/-1 X/update (native $10/$F0).
+  Releasing Up or landing does not change the queued volley. Forward attacks keep their 33-update lifetime.
+- Up muzzle is existing muzzle Y minus 12, including the folded-head case. Existing snout X is retained.
+  Existing open-jaw attack art is reused; no original-ROM pixels or new looking-up art committed.
+- `BarbaSetThrusts` replaces `BarbaSetDownstab`: rising pose 8, airborne and technique gated,
+  native head Y minus 8 reach, centered at X+11. Descending hides melee. Downstab is unchanged.
+- Necessary integration deviation: `BarbaBlocks` restores the held thrust after its temporary
+  projectile collision origins. Otherwise a live fireball erased the head-butt before the next enemy update.
+- `tests/upstab.lua`: 797 assertions pass, including both facings, no-tech fallback, ground/elevator
+  slot fixture, all three backed records moving/clipping, folded muzzle, glove gate and unchanged brick-contact
+  pose/velocities, top/borrow guards, and actual native enemy damage (HP 32 -> 26 rising, 32 descending).
+  Elevator coverage is a CPU grounded/elevator-actor fixture, not a controller-driven elevator ride.
+- Build + 10 Python unit tests pass. All 23 non-stale full-suite scenarios and 10-state pack validation pass.
+  The four stale reports are byte-identical to base: town_safety, shouts, shout_queue, dialogue_speed.
+- Standard perf_volley peak 30,119 -> 30,158 (+39), lag unchanged 1/900; idle 0/300.
+  perf_lava peak 21,677 -> 21,699 (+22), lag 0/300. Floor peak 20,416 -> 20,439 (+23).
+  Six-active-Bot probe (`perf_upward.lua`): base forward peak 27,888 -> upward 27,839 (-49),
+  lag 0/900 in both; 25 upward emissions. LOAD_LIMIT/BarbaLoadOk unchanged.
+- Bank 0 uses $1122 bytes (+131), 1,038 bytes free; fixed-bank space unchanged at 16 bytes.
+- No checkpoint added; regenerated all 10 existing states. F3 is the control-feel scene.
+  Looking-up art remains deferred as approved. No gates advanced.
+
+Rollback: revert this feature commit and rebuild/regenerate the pack; no save-format change.

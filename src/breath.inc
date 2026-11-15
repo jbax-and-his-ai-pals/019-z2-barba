@@ -1,7 +1,7 @@
-; Five-shot diagonal dragon breath. Runs after the sprite-zero HUD split.
+; Five-shot forward/down or technique-gated upward dragon breath. Runs after the sprite-zero HUD split.
 ; Two native slots plus three backed slots preserve range at an even cadence.
 .export BarbaProjectiles, BarbaFireSpell, BarbaMuzzleScreen, BarbaSpellDeferred
-.export BarbaVolleyPlaced
+.export BarbaVolleyPlaced, BarbaStepSlotY
 BREATH_MUZZLE_X = $05F2
 BREATH_MUZZLE_Y = $05F3
 BREATH_GEOMETRY_FLAGS = $05F6
@@ -9,6 +9,7 @@ BURST_DEADLINE = $05F1 ; finite 120-update lifetime, including blocked spawns
 BREATH_BURST_DELAY = $05F7
 BREATH_BURST_STATE = $05F8 ; 0 ready, 1 active, 2 wait for release/attack idle
 VOLLEY_SLOT = $05FC ; two independent projectile lifetime counters (33 updates)
+BREATH_UP = $646B ; volley aim latch: 0 forward, $40 upward
 BREATH_REMAINING = $05FE ; pending shots, initially four after first allocation
 
 ; Spell dispatch precedes the timing-critical HUD split. Do not emit here.
@@ -191,7 +192,7 @@ BarbaCancelBurst:
     sta BREATH_BURST_STATE
     rts
 
-; Both classes descend and expire identically. Fire changes vulnerability,
+; Both damage classes share aim and expiry. Fire changes vulnerability,
 ; not the lifetime, which guarantees that a two-slot pool can emit five shots.
 BarbaAdvanceVolley:
     ldx #$01
@@ -211,14 +212,17 @@ BarbaAdvanceVolley:
     bpl @slot
     rts
 
-; Advance slot X's lifetime and downward drift. Bit 7 of VOLLEY_SLOT,x selects
+; Advance slot X: low 6 bits lifetime, bit 6 upward (-3 px). Bit 7 selects
 ; crouched shallow descent (0.5 px/frame) so low fireballs clear high shields.
 ; Carry set if still alive, clear if expired/clipped.
 BarbaStepSlotY:
     dec VOLLEY_SLOT,x
     lda VOLLEY_SLOT,x
-    and #$7F
+    and #$3F
     beq @kill
+    lda VOLLEY_SLOT,x
+    and #$40
+    bne @up
     lda VOLLEY_SLOT,x
     bpl @steep
     and #$01
@@ -232,6 +236,15 @@ BarbaStepSlotY:
     bcs @kill
     cmp #$E0
     bcs @kill
+    sta $36,x
+    jmp @alive
+@up:
+    lda $36,x
+    sec
+    sbc #$03
+    bcc @kill
+    cmp #$10
+    bcc @kill
     sta $36,x
 @alive:
     sec
@@ -261,6 +274,19 @@ BarbaFireSpell:
     ; Consume this attack's gate even if its mouth or pool is unavailable.
     lda #$02
     sta BREATH_BURST_STATE
+    lda #$00
+    sta BREATH_UP
+    lda $0479
+    beq @aimed
+    lda $0796
+    and #$04
+    beq @aimed
+    lda $F7
+    and #$08
+    beq @aimed
+    lda #$40
+    sta BREATH_UP
+@aimed:
     jsr BarbaGeometry
     lda BREATH_GEOMETRY_FLAGS
     and #$01
@@ -328,6 +354,13 @@ BarbaPlaceNewFlameCached:
     and #$01
     beq BarbaClipped
     lda BREATH_MUZZLE_Y
+    ldy BREATH_UP
+    beq :+
+    sec
+    sbc #$0C ; folded or raised head top
+    cmp #$10
+    bcc BarbaClipped
+:
     sta $36,x
     lda BREATH_MUZZLE_X
     clc
@@ -344,6 +377,8 @@ BarbaPlaceNewFlameCached:
     lda #$D2
     sta $05CA,x
 :
+    lda BREATH_UP
+    bne @up_life
     lda #$21
     ldy $17
     bne :+
@@ -354,6 +389,13 @@ BarbaPlaceNewFlameCached:
     sta VOLLEY_SLOT,x
     ldy $6D,x
     lda VolleySpeed,y
+    jmp @speed
+@up_life:
+    ora #$1C ; 28 updates
+    sta VOLLEY_SLOT,x
+    ldy $6D,x
+    lda VolleyUpSpeed,y
+@speed:
     sta $7D,x
 BarbaVolleyPlaced:
     sec ; exported callback point: X identifies a successfully placed shot
@@ -368,3 +410,5 @@ BarbaMuzzleScreen:
     jmp BarbaGeometry
 VolleySpeed:
     .byte $00,$20,$E0
+VolleyUpSpeed:
+    .byte $00,$10,$F0

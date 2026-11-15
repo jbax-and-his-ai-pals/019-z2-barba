@@ -23,7 +23,7 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
 - Full suite: boot, gameplay, combat, palace, routines, tall_geometry, projectile_only, burst,
   extra_fire, left_fire, damage, hud_timing, breath_height, town, town_safety, shouts,
   shout_queue, shout_follow, doors, dialogue_speed, perf_volley, perf_lava, link_boss, shield_enemies,
-  title_roar, overworld_side, farcall, town_fire, plus `state_pack` via create_test_pack.
+  title_roar, overworld_side, farcall, town_fire, plus `state_pack` via create_test_pack. Feature acceptance: `upstab`, `perf_upward`.
 - Known stale (fail on the 2026-11-14 baseline too, subtitle-era assertions): town_safety, shouts, shout_queue,
   dialogue_speed. Don't treat those failures as regressions until the tests are updated.
 
@@ -56,7 +56,7 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
 
 ## Free space and RAM in use (check before allocating)
 
-- ROM: bank 0 `$AA40-$BF6F` (BANK0; $109F used, 1169 bytes free), bank 3 `$B803-$BF6F` (TOWN; 283 free).
+- ROM: bank 0 `$AA40-$BF6F` (BANK0; $1122 used, 1038 bytes free), bank 3 `$B803-$BF6F` (TOWN; 283 free).
   Fixed bank 7: LAVA `$D39A-$D3C4` used / `$D3C5-$D3C9` free (5), GATEWAY `$FEC8-$FECF` free (8),
   TERRAIN `$FF6D-$FF6F` free (3): **16 bytes total free, formerly 11**. `FarCall0` provides cold bank-0
   hooks at 5 fixed bytes/call (6 with standalone RTS), 369-482 bridge cycles plus target work;
@@ -64,7 +64,7 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
   No new padding region was claimed. Never allocate live JMP operands `$FF4B` or `$E02C`.
 - RAM `$05EA`, `$05EB` (lava contact), `$05F0-$05FF` (roar, breath, tall renderer, extra guard). Cleared by the native reset loop.
 - WRAM `$6400-$642F` extra projectile records; `$6440-$645F` scratch (`$6457` lazy-save flag,
-  `$6458-$645F` geometry terrain cache, `$645C` EXTRA_LIVE); `$6460-$6469` shouts (`$6465` actor, `$6467` word, `$6468` timer, `$6469` cycle); `$646A` + `$6470-$6487` town scorch ring. Don't touch collision/room/save regions elsewhere in `$6000-$7FFF`.
+  `$6458-$645F` geometry terrain cache, `$645C` EXTRA_LIVE); `$6460-$6469` shouts (`$6465` actor, `$6467` word, `$6468` timer, `$6469` cycle); `$646A` + `$6470-$6487` town scorch ring; `$646B` volley aim latch (0 forward / $40 upward). Don't touch collision/room/save regions elsewhere in `$6000-$7FFF`.
 - OAM in use: tall head `$04/$4C/$F8`, extra fireballs `$3C/$44/$48`; enemy projectiles use `$28/$2C/$30`;
   town shout word `$E0-$F0` (only while a word is live and no enemy projectile exists).
 - CHR: player art in even sprite banks 0-24; ash `$64/$66` **bank 6 only** (shared sprites elsewhere);
@@ -90,9 +90,14 @@ overworld fights with 0 lag frames, max 28,941 cycles; the older Palace 1 measur
 | Towns, villagers, shouts | docs/TOWNS.md |
 | Perf/flicker/shout follow-ups | docs/NEXT-PERF-AND-SHOUTS.md |
 | Palace 6 "Lava Link" boss plan | docs/LINK-BOSS-PLAN.md |
-| Upward fire / upstab design (draft) | docs/UPSTAB-FIRE-PLAN.md |
+| Upward fire / upstab implementation | docs/UPSTAB-FIRE-PLAN.md |
 | Build/tooling, ROM research | docs/BUILD.md, docs/RESEARCH.md |
 | Checkpoints | docs/TEST-PACK.md (F1-F9; F9 = before Palace 6 boss, max stats) |
 
 When you finish a task: update the one relevant doc plus STATUS.md, and keep this file's
 memory map and perf facts current. Then hand the producer a short playtest: what changed, which F-key, what to look for.
+
+Upstab branch performance: standard volley peak 30,158 (+39 versus 262501a), unchanged 1/900 lag;
+lava peak 21,699 (+22), 0/300 lag. Six-active-Bot `perf_upward`: 27,839 peak, 0/900 lag,
+25 upward emissions (base forward 27,888). `BarbaSetThrusts` restores rising technique-gated
+head-butt after block checks; `VOLLEY_SLOT` bit 6 up, bit 7 crouch, low 6 bits lifetime.

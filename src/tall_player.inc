@@ -1,3 +1,4 @@
+.export BarbaSetThrusts
 ; The native actor keeps its proven 32px collision body. Extra head sprites
 ; fold into that body under stone; crouching occupies the native 16px lane.
 GEO_CACHE_TILES = $6458 ; 4 bytes: $04..$07
@@ -225,8 +226,8 @@ BarbaDisplay:
     bcc @fast_prep
 @fallback:
     jsr $EBF0
-    ; No horizontal sword collision survives, but preserve Downstab ($80 == $09).
-    jsr BarbaSetDownstab
+    ; Keep only the gated rising head-butt and the existing downstab.
+    jsr BarbaSetThrusts
     lda $80
     cmp #$0C
     bcs :+
@@ -244,7 +245,7 @@ BarbaDisplay:
     jsr $F27D
     lda $CC
     sta $15
-    jsr BarbaSetDownstab
+    jsr BarbaSetThrusts
     lda #$F8
     sta $0220
     sta $0224
@@ -279,6 +280,12 @@ BarbaDisplay:
     bne @pose
     lda #$05
 @pose:
+    cmp #$08
+    bne :+
+    ldx $0400
+    beq :+
+    lda #$05 ; existing open-jaw attack art, no new looking-up pixels
+:
     sta DRAW_FRAME
     asl
     asl
@@ -424,10 +431,12 @@ BarbaDisplay:
     TALL_SPRITE 6, $021C, 16
 @r_done:
     rts
-; Disable horizontal sword collision, but keep a generous Downstab ($80 == $09)
-; hitbox centered under Barba's 24 px body ($CC..$CC+24) and feet ($29+$1C).
-BarbaSetDownstab:
+; No horizontal melee. Downstab sits under the feet; upward thrust uses the
+; native head top, never the visually raised 48px head. Both are centered.
+BarbaSetThrusts:
     lda $80
+    cmp #$08
+    beq @up
     cmp #$09
     bne @no_melee
     lda $29
@@ -435,6 +444,7 @@ BarbaSetDownstab:
     adc #$1C
     bcs @no_melee
     sta $0480
+@center:
     lda $CC
     clc
     adc #$0B
@@ -443,6 +453,20 @@ BarbaSetDownstab:
 :
     sta $047E
     rts
+@up:
+    lda $0796
+    and #$04
+    beq @no_melee
+    lda $0479
+    beq @no_melee
+    lda $057D
+    bpl @no_melee
+    lda $29
+    sec
+    sbc #$08 ; native head top minus reach, not tall art top
+    bcc @no_melee
+    sta $0480
+    jmp @center
 @no_melee:
     lda #$F8
     sta $0480
