@@ -22,10 +22,8 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
 - Far-call regression: `python tools/emulator_test.py tests/farcall.lua` (all 8 banks, flags/registers, nesting, boundaries).
 - Full suite: boot, gameplay, combat, palace, routines, tall_geometry, projectile_only, burst,
   extra_fire, left_fire, damage, hud_timing, breath_height, town, town_safety, shouts,
-  shout_queue, shout_follow, doors, dialogue_speed, perf_volley, perf_lava, link_boss, shield_enemies,
-  title_roar, overworld_side, farcall, town_fire, plus `state_pack` via create_test_pack. Feature acceptance: `upstab`, `perf_upward`.
-- Known stale (fail on the 2026-11-14 baseline too, subtitle-era assertions): town_safety, shouts, shout_queue,
-  dialogue_speed. Don't treat those failures as regressions until the tests are updated.
+  shout_follow, doors, dialogue_speed, perf_volley, perf_lava, link_boss, shield_enemies,
+  title_roar, overworld_side, farcall, town_fire, upstab, perf_upward, plus `state_pack` via create_test_pack.
 
 ## Hard rules
 

@@ -5,11 +5,12 @@ local function r(a)return emu.read(a,m)end
 local function w(a,v)emu.write(a,v,m)end
 local cases={
     {kind='letter',room=1,origin=255,npc=0x19,delay=1},
-    {kind='letter',room=1,origin=5,npc=0x19,delay=5},
+    -- Scripted outdoor actors now share generated actors' panic timing.
+    {kind='letter',room=1,origin=5,npc=0x19,delay=1},
     {kind='letter',room=0x1C,origin=255,npc=0x19,delay=5},
     {kind='letter',room=1,origin=255,npc=0x0F,delay=5},
     {kind='line',room=1,origin=255,npc=0x19,delay=1},
-    {kind='line',room=1,origin=5,npc=0x19,delay=11},
+    {kind='line',room=1,origin=5,npc=0x19,delay=1},
     {kind='line',room=0x1C,origin=255,npc=0x19,delay=11},
     {kind='line',room=1,origin=255,npc=0x0F,delay=11}
 }

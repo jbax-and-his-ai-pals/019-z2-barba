@@ -35,10 +35,18 @@ FIXED-BANK-AUDIT.md for every owned fixed-bank byte. Hot enemy/terrain paths
 are unchanged. Baseline/final idle avg/peak: 15,370/15,378 cycles; volley:
 19,931/30,119, with lag unchanged at 0/300 idle and 1/900 volley.
 
-The required full-suite acceptance is **not green**: `town_safety`, `shouts`,
-`shout_queue`, and `dialogue_speed` also fail on the exact starting-commit ROM.
-The old subtitle/queue expectations and dialogue cases need a separate test/
-behavior reconciliation; this branch does not change towns or silence them.
+At this branch's starting commit (`9793c6c`), full-suite acceptance was not
+green: `town_safety`, `shouts`, `shout_queue`, and `dialogue_speed` had
+subtitle-era and earlier dialogue expectations. The test-only reconciliation
+now checks eight frame-dependent panic messages, expanded outdoor eligibility,
+scripted-actor fast typing, floating OAM words, no HUD subtitle writes, and
+the 120-update shout cooldown. The obsolete subtitle-only `shout_queue`
+scenario is retired; `shout_follow` covers its replacement. No game source,
+assets or build logic changed. Detailed per-assertion results are local in
+`build/STALE-TESTS-REPORT.md`. All 27 retained suite scenarios pass, run
+sequentially; all 10 ROM-free unit tests pass; test-pack generation and reload
+validation pass for all 10 checkpoints. No game bug was demonstrated by the
+20 baseline assertion failures.
 `routines` had a stale pose-9 no-thrust assertion despite the already-existing
 downstab; it now checks the precise foot hitbox and passes on both builds.
 Full logs and baseline comparisons are local under build/. No gates advanced.
