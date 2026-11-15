@@ -1,0 +1,65 @@
+{
+  "profiles": {
+    "p1": {"levels":[2,2,2],"magic":4,"hearts":4,"spells":1,"items":[],"tech":0,"placed":0,"flags":{}},
+    "p1boss": {"levels":[3,2,3],"magic":4,"hearts":4,"spells":1,"items":[0],"tech":0,"placed":0,"flags":{}},
+    "p2": {"levels":[3,3,3],"magic":5,"hearts":5,"spells":3,"items":[0,6],"tech":0,"placed":1,"flags":{"1944":16}},
+    "p2boss": {"levels":[4,3,4],"magic":5,"hearts":5,"spells":3,"items":[0,1,6],"tech":0,"placed":1,"flags":{"1944":16}},
+    "p3": {"levels":[4,4,4],"magic":5,"hearts":5,"spells":4,"items":[0,1,6],"tech":16,"placed":2,"flags":{"1944":16,"1945":1,"1946":72}},
+    "p3boss": {"levels":[5,4,4],"magic":5,"hearts":5,"spells":4,"items":[0,1,2,6],"tech":16,"placed":2,"flags":{"1944":16,"1945":1,"1946":72}},
+    "p4": {"levels":[5,5,5],"magic":6,"hearts":6,"spells":6,"items":[0,1,2,6],"tech":20,"placed":3,"flags":{"1944":16,"1945":1,"1946":72,"1947":1,"1948":32}},
+    "p4boss": {"levels":[5,5,5],"magic":6,"hearts":6,"spells":6,"items":[0,1,2,3,6],"tech":20,"placed":3,"flags":{"1944":16,"1945":1,"1946":72,"1947":1,"1948":32}},
+    "p5": {"levels":[6,5,6],"magic":6,"hearts":6,"spells":6,"items":[0,1,2,3,6],"tech":20,"placed":4,"flags":{"1944":16,"1945":1,"1946":72,"1947":1,"1948":32}},
+    "p5boss": {"levels":[6,6,6],"magic":6,"hearts":6,"spells":6,"items":[0,1,2,3,4,6],"tech":20,"placed":4,"flags":{"1944":16,"1945":1,"1946":72,"1947":1,"1948":32}},
+    "p6": {"levels":[7,6,7],"magic":8,"hearts":7,"spells":7,"items":[0,1,2,3,4,6,7],"tech":20,"placed":5,"flags":{"1944":16,"1945":1,"1946":72,"1947":1,"1948":32,"1949":8}},
+    "p6boss": {"levels":[7,7,7],"magic":8,"hearts":7,"spells":8,"items":[0,1,2,3,4,5,6,7],"tech":20,"placed":5,"flags":{"1944":16,"1945":1,"1946":72,"1947":1,"1948":32,"1949":8}},
+    "gp": {"levels":[8,7,8],"magic":8,"hearts":8,"spells":8,"items":[0,1,2,3,4,5,6,7],"tech":20,"placed":6,"flags":{"1944":16,"1945":1,"1946":72,"1947":1,"1948":32,"1949":8}},
+    "start": {"levels":[1,1,1],"magic":4,"hearts":4,"spells":1,"items":[],"tech":0,"placed":0,"flags":{}},
+    "ruto": {"levels":[3,2,3],"magic":5,"hearts":5,"spells":2,"items":[0],"tech":0,"placed":1,"flags":{"1944":16}},
+    "saria": {"levels":[3,3,3],"magic":5,"hearts":5,"spells":3,"items":[0],"tech":0,"placed":1,"flags":{"1944":16,"1945":1,"1946":8}},
+    "mido": {"levels":[4,4,4],"magic":5,"hearts":5,"spells":4,"items":[0,1,6],"tech":16,"placed":2,"flags":{"1944":16,"1945":1,"1946":72}},
+    "nabooru": {"levels":[5,4,5],"magic":6,"hearts":6,"spells":5,"items":[0,1,2,6],"tech":16,"placed":3,"flags":{"1944":16,"1945":1,"1946":72,"1947":1}}
+  },
+  "sets": {
+    "palaces": [
+      {"id":"p1-entrance","name":"Palace 1 entrance","profile":"p1","world":3,"region":0,"number":1,"room":0,"page":0,"instructions":"Check movement, head clearance, combat and HUD."},
+      {"id":"p1-before-boss","name":"Before Horsehead","profile":"p1boss","world":3,"region":0,"number":1,"room":12,"page":0,"instructions":"Check movement, head clearance, combat and HUD."},
+      {"id":"p2-entrance","name":"Palace 2 entrance","profile":"p2","world":3,"region":0,"number":2,"room":14,"page":0,"instructions":"Check movement, head clearance, combat and HUD."},
+      {"id":"p2-before-boss","name":"Before Helmethead","profile":"p2boss","world":3,"region":0,"number":2,"room":33,"page":0,"instructions":"Check movement, head clearance, combat and HUD."},
+      {"id":"p3-entrance","name":"Palace 3 entrance","profile":"p3","world":4,"region":0,"number":3,"room":0,"page":0,"instructions":"Check movement, head clearance, combat and HUD."},
+      {"id":"p3-before-boss","name":"Before Rebonack","profile":"p3boss","world":4,"region":0,"number":3,"room":13,"page":0,"instructions":"Check movement, head clearance, combat and HUD."},
+      {"id":"p4-entrance","name":"Palace 4 entrance","profile":"p4","world":4,"region":1,"number":4,"room":15,"page":0,"instructions":"Check movement, head clearance, combat and HUD."},
+      {"id":"p4-before-boss","name":"Before Carock","profile":"p4boss","world":4,"region":1,"number":4,"room":27,"page":0,"instructions":"Check movement, head clearance, combat and HUD."},
+      {"id":"p5-entrance","name":"Palace 5 entrance","profile":"p5","world":3,"region":2,"number":5,"room":35,"page":0,"instructions":"Check movement, head clearance, combat and HUD."},
+      {"id":"p5-before-boss","name":"Before Gooma","profile":"p5boss","world":3,"region":2,"number":5,"room":40,"page":1,"instructions":"Check movement, head clearance, combat and HUD."}
+    ],
+    "endgame": [
+      {"id":"p6-entrance","name":"Palace 6 entrance","profile":"p6","world":4,"region":2,"number":6,"room":36,"page":0,"instructions":"Check movement, head clearance, combat and HUD."},
+      {"id":"gp-entrance","name":"Great Palace entrance","profile":"gp","world":5,"region":2,"number":7,"room":0,"page":0,"instructions":"Check movement, head clearance, combat and HUD."},
+      {"id":"gp-elevator","name":"Great Palace elevator","profile":"gp","world":5,"region":2,"number":7,"room":1,"page":1,"instructions":"Check movement, head clearance, combat and HUD."},
+      {"id":"gp-tunnel","name":"Great Palace low tunnel","profile":"gp","world":5,"region":2,"number":7,"room":54,"page":0,"instructions":"Check movement, head clearance, combat and HUD."},
+      {"id":"thunderbird","name":"Before Thunderbird","profile":"gp","world":5,"region":2,"number":7,"room":53,"page":0,"instructions":"Check movement, head clearance, combat and HUD."},
+      {"id":"dark-link","name":"Before Dark Link","profile":"gp","world":5,"region":2,"number":7,"room":54,"page":0,"instructions":"Check movement, head clearance, combat and HUD."},
+      {"id":"p6-boss-approach","name":"Palace 6 boss and crystal approach","profile":"p6boss","world":4,"region":2,"number":6,"room":58,"page":0,"frames":60,"instructions":"Walk right to Lava Link; win normally and approach the crystal statue."}
+    ],
+    "world": [
+      {"id":"rauru","name":"Rauru street","profile":"start","world":1,"region":0,"number":0,"room":0,"page":1,"instructions":"Check outdoor NPCs, doorways, palette and head clearance.","town":true},
+      {"id":"ruto","name":"Ruto street","profile":"ruto","world":1,"region":0,"number":1,"room":3,"page":1,"instructions":"Check outdoor NPCs, doorways, palette and head clearance.","town":true},
+      {"id":"saria","name":"Saria street","profile":"saria","world":1,"region":0,"number":2,"room":6,"page":1,"instructions":"Check outdoor NPCs, doorways, palette and head clearance.","town":true},
+      {"id":"mido","name":"Mido street","profile":"mido","world":1,"region":0,"number":3,"room":9,"page":1,"instructions":"Check outdoor NPCs, doorways, palette and head clearance.","town":true},
+      {"id":"nabooru","name":"Nabooru street","profile":"nabooru","world":2,"region":2,"number":4,"room":12,"page":1,"instructions":"Check outdoor NPCs, doorways, palette and head clearance.","town":true},
+      {"id":"darunia","name":"Darunia street","profile":"p4","world":2,"region":2,"number":5,"room":15,"page":1,"instructions":"Check outdoor NPCs, doorways, palette and head clearance.","town":true},
+      {"id":"new-kasuto","name":"New Kasuto street","profile":"p6","world":2,"region":2,"number":6,"room":18,"page":1,"instructions":"Check outdoor NPCs, doorways, palette and head clearance.","town":true},
+      {"id":"old-kasuto","name":"Old Kasuto street","profile":"p6boss","world":2,"region":2,"number":7,"room":21,"page":1,"instructions":"Check outdoor NPCs, doorways, palette and head clearance.","town":true},
+      {"id":"death-mountain","name":"Death Mountain entrance","profile":"saria","world":0,"region":1,"number":0,"room":0,"page":0,"mode":5,"frames":90,"entry":{"115":42,"116":0,"1801":1,"1802":0,"1846":0,"1897":1},"instructions":"Walk the native overworld; enter nearby caves or Palace 4."},
+      {"id":"maze-island","name":"Maze Island near Palace 4","profile":"p4","world":0,"region":1,"number":0,"room":0,"page":0,"mode":5,"frames":90,"entry":{"115":58,"116":59,"1801":1,"1802":2,"1846":0,"1897":2},"instructions":"Walk the native overworld; enter nearby caves or Palace 4."}
+    ],
+    "movement": [
+      {"id":"p6-water-lava","name":"Palace 6 lava ledge","profile":"p6boss","world":4,"region":2,"number":6,"room":51,"page":0,"instructions":"Walk onto lava, jump back, check native body and folded head."},
+      {"id":"gp-low-ceiling","name":"Great Palace low ceiling","profile":"gp","world":5,"region":2,"number":7,"room":54,"page":0,"instructions":"Walk and crouch under the ceiling."},
+      {"id":"p1-shaft","name":"Palace 1 elevator shaft","profile":"p1","world":3,"region":0,"number":1,"room":1,"page":1,"instructions":"Ride the elevator; check head folding and exits."},
+      {"id":"p2-floor","name":"Palace 2 floor corridor","profile":"p2boss","world":3,"region":0,"number":2,"room":20,"page":1,"instructions":"Inspect floor and jump clearance."},
+      {"id":"west-water","name":"West Hyrule water bridge","profile":"saria","world":0,"region":0,"number":0,"room":1,"page":0,"entry":{"1801":0,"1864":19,"1897":1},"instructions":"Cross the bridge, test jumps and crouch clearance; water remains lethal."},
+      {"id":"medicine-bridge","name":"Medicine cave collapsing bridge","profile":"p3","world":0,"region":0,"number":0,"room":14,"page":0,"entry":{"1801":0,"1864":15,"1897":1},"instructions":"Cross the collapsing bridge above lava; non-palace lava is lethal."}
+    ]
+  }
+}

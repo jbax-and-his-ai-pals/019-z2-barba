@@ -10,6 +10,26 @@ The body now keeps the boss's narrow neck silhouette without the added belly
 coil. Full-body jump rendering is checked during ascent and descent; grounded
 crouching retains a short neck beneath the head.
 
+## Playthrough checkpoint sets (2026-11-14)
+
+Core keeps its existing F1-F10 fixtures. Four selectable local sets add ten palace
+entrance/pre-boss states, seven endgame approaches, ten town/world states and six
+movement fixtures. See [TEST-PACK.md](TEST-PACK.md) for the explicit standard-route
+assumptions, levels, spells, items, techniques, zero spare keys, crystals and quest
+flags. Native container meter limits and next-level XP targets are recomputed;
+no persistent cheats or game-code changes. Test profiles now live under build/,
+not the read-only shared .tools/ junction.
+
+All 29 retained emulator scenarios pass sequentially; 16 ROM-free unit tests pass.
+The 43-state pack reload checks include visible frames and 120-frame survival;
+new states also assert progression, native meter capacity and controller response.
+All five launcher selections pass PrepareOnly. Screenshots are generated for every
+state, but **visual acceptance is blocked**: this session could not open worktree
+images and had no connected desktop-control node. No artistic/HUD visual sign-off
+is claimed. Ending/crystal-placement and mid-pit/long-shaft snapshots are omitted,
+not faked; boss/shaft approaches are supplied instead. Full details and remaining
+acceptance limits: build/CHECKPOINTS-REPORT.md. No gates advanced.
+
 ## Upward breath and rising head-butt (2026-11-14)
 
 Implemented the approved [upstab plan](UPSTAB-FIRE-PLAN.md). With Upward Thrust learned,
