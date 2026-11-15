@@ -280,11 +280,37 @@ BarbaDisplay:
     bne @pose
     lda #$05
 @pose:
-    cmp #$08
+    ; Pose 8 (rising with Up: head-butt or upward breath) keeps the tilted
+    ; looking-up head. An airborne attack whose volley is latched upward shows
+    ; it too, including while descending (vanilla pose 7 -> frame 5 above).
+    ; The airborne windup looks up when the volley will latch upward
+    ; (same Up + Upward-tech test as BarbaFireSpell), so the head never
+    ; flicks forward before the shots rise.
+    cmp #$04
+    bne @not_windup
+    ldx $0479
+    beq @not_windup
+    tax
+    lda $F7
+    and #$08
+    beq @windup_fwd
+    lda $0796
+    and #$04
+    beq @windup_fwd
+    lda #$08
+    bne @not_windup
+@windup_fwd:
+    txa
+@not_windup:
+    cmp #$05
     bne :+
-    ldx $0400
+    ldx $0479
     beq :+
-    lda #$05 ; existing open-jaw attack art, no new looking-up pixels
+    ldx BREATH_UP
+    beq :+
+    ldx BREATH_BURST_STATE
+    beq :+
+    lda #$08
 :
     sta DRAW_FRAME
     asl
