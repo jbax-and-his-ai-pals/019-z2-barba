@@ -223,8 +223,8 @@ def compile_file_select_doll(root: Path) -> bytes:
 def compile_assets(root: Path, source_path: Path | None = None) -> tuple[bytes, dict[int, bytes], bytes, list[list[str]]]:
     art = json.loads((root / 'assets/barba.json').read_text())
     small = art['small']
-    for name in ('body', 'small', 'front', 'back'):
-        for row in art[name]:
+    for name in ('body', 'small', 'small_step', 'front', 'back'):
+        for row in art.get(name, []):
             if len(row) != 16 or set(row) - set('0123'):
                 raise ValueError(f'Invalid pixel row in {name}: {row!r}')
     # Original pixels come exclusively from the user's verified local ROM.
@@ -297,9 +297,12 @@ def compile_assets(root: Path, source_path: Path | None = None) -> tuple[bytes, 
     graphics.update(ash_graphics)
 
     ow = bytearray()
-    for rows in (small, [r[::-1] for r in small], art['front'], art['back']):
+    # Side view has an explicit walk frame (head/neck bob, planted coil); the others bob the whole sprite.
+    small_step = art.get('small_step')
+    for rows, step_rows in ((small, small_step), ([r[::-1] for r in small], small_step and [r[::-1] for r in small_step]),
+                            (art['front'], None), (art['back'], None)):
         for step in (0, 1):
-            animated = rows if step == 0 else ['0'*16] + rows[:-1]
+            animated = rows if step == 0 else (step_rows or ['0'*16] + rows[:-1])
             ow.extend(b''.join(sprite_pairs(animated)))
 
     # Local-only preview contains the extracted boss face and native texture.
