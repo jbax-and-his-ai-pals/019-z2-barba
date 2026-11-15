@@ -188,22 +188,41 @@ def build(source_path: Path, output: Path) -> dict:
     overlay.prg(5, 0xA7DD, bytes.fromhex('7f0002747f02027c'), bytes.fromhex('6ff802786ffa0280'), 'Title Barba head left/mid')
     overlay.prg(5, 0xA7FD, bytes.fromhex('7f0402848f06027c'), bytes.fromhex('7ffc02787ffe0280'), 'Title Barba head right/neck')
     overlay.prg(5, 0xA819, bytes.fromhex('8f0802849f0a02749f0c027c9f0e0284'), bytes.fromhex('8fea02788fec02809fea02789fec0280'), 'Title Barba neck/body')
-    # Title screen: occasionally open Barba's mouth subtly and trigger the fireball SFX ($ED |= $40).
-    overlay.prg(5, 0xA8CF, bytes.fromhex('4c 4f a5 ea'), bytes.fromhex('a2 6b a5 12'), 'Title Barba animate hook')
+    # Title screen: occasionally open Barba's mouth subtly. The fireball SFX ($ED |= $40) that used to fire
+    # here took over pulse 1 and cut into the title music (producer, 2026-11-14). Instead, every 4th full jaw
+    # opening (~17 s) starts the short noise-channel roar (same envelope as Inferno's), which leaves both
+    # pulse melodies and the triangle alone. The hook now enters TitleRoarUpdate ($A5AE), which runs the roar
+    # envelope each frame and then jumps to the jaw animation at $A54F.
+    overlay.prg(5, 0xA8CF, bytes.fromhex('4c ae a5 ea'), bytes.fromhex('a2 6b a5 12'), 'Title Barba animate hook')
     overlay.prg(
         5, 0xA54F,
         bytes.fromhex(
             'ad 1c 02 c9 7f d0 38 a5 12 c9 40 90 1e c9 60 b0 1a '
             'c9 48 90 12 f0 06 c9 58 b0 0c 90 06 '
-            'a5 ed 09 40 85 ed '
+            '20 9e a5 ea ea ea '   # jsr TitleRoarStart (was the fireball SFX)
             'a2 02 d0 06 a2 01 d0 02 a2 00 '
             'bd 95 a5 8d 1d 02 bd 98 a5 8d 21 02 bd 9b a5 8d 3d 02 '
             'a2 6b a5 12 4c d3 a8 '
             '00 1a 1e 02 1c 20 04 04 22'
         ),
         b'\xff' * 79,
-        'Title Barba mouth animation and fireball SFX',
+        'Title Barba mouth animation',
     )
+    # Title roar. $05FA (DRAW_FRAME) is renderer scratch, written before it is read in gameplay, so the title
+    # can use it as a jaw-opening counter. $05F0 is ROAR_TIMER (no original references).
+    title_roar = bytes.fromhex(
+        # TitleRoarStart $A59E: inc counter; every 4th opening set ROAR_TIMER = $30
+        'ee fa 05 ad fa 05 29 03 d0 05 a9 30 8d f0 05 60 '
+        # TitleRoarUpdate $A5AE: same envelope as BarbaUpdate's @roar, then jmp $A54F
+        'ad f0 05 f0 1a ce f0 05 ad f0 05 4a 4a aa '
+        'bd d0 a5 8d 0c 40 bd dc a5 8d 0e 40 a9 08 8d 0f 40 '
+        '4c 4f a5 '
+        # $A5D0 RoarVolume, $A5DC RoarPitch (copies of the bank-0 tables in src/barba.asm)
+        '30 32 34 35 36 38 39 3a 3c 3d 3f 3b '
+        '0f 0f 0e 0f 0d 0f 0e 0c 0f 0d 0b 0e'
+    )
+    assert len(title_roar) == 0xA5E8 - 0xA59E
+    overlay.prg(5, 0xA59E, title_roar, b'\xff' * len(title_roar), 'Title Barba roar')
     # Game Over screen: replace "RETURN OF GANON" ($8010, 15 bytes) with "LINK KEEPS LAVA".
     overlay.prg(
         0, 0x8010,
