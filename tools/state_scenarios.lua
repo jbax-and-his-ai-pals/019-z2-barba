@@ -1,6 +1,7 @@
 -- Generate human-playable snapshots using normal room loading and game logic.
 -- Only progression/stats/entry location are edited; no persistent cheats run.
 dofile(TEST_DIR..'/newgame.lua')
+dofile(TEST_DIR..'/checkpoint_features.lua')
 local mem=emu.memType.nesMemory
 local function r(a)return emu.read(a,mem)end
 local function w(a,v)emu.write(a,v,mem)end
@@ -98,11 +99,20 @@ local function finish()
 end
 local function saveScene()
     local scene=scenes[index]
+    if PACK_SCENES and PACK_SCENES[index].feature then
+        local ok,detail=checkpointFeature(PACK_SCENES[index])
+        assert(ok,detail);records[#records+1]='FEATURE '..scene.id..' '..detail
+    end
     local state=emu.createSavestate()
     local file=assert(io.open(PACK_DIR..'/'..scene.id..'.mss','wb'))
     file:write(state);file:close()
     file=assert(io.open(PACK_DIR..'/'..scene.id..'.png','wb'))
     file:write(emu.takeScreenshot());file:close()
+    if PACK_SCENES and PACK_SCENES[index].town then
+        local palette={}
+        for a=0,15 do palette[#palette+1]=string.format('%02X',emu.read(a,emu.memType.nesPaletteRam)) end
+        records[#records+1]='PALETTE '..scene.id..' '..table.concat(palette,' ')
+    end
     local enemies={}
     for slot=0,5 do
         if r(0xB6+slot)>0 then enemies[#enemies+1]=string.format('%02X',r(0xA1+slot)) end
@@ -138,6 +148,11 @@ emu.addEventCallback(function()
     else
         age=age+1
         if scenes[index] then
+            if PACK_SCENES and PACK_SCENES[index].position and age==80 then
+                local p=PACK_SCENES[index].position
+                w(0x3B,math.floor(p.x/256));w(0x4D,p.x%256);w(0x29,p.y)
+                w(0x57D,0);w(0x479,0)
+            end
             if scenes[index].id=='combat' and age==80 then
                 w(0x4D,96);w(0x3B,0);w(0x29,144);w(0x57D,0);w(0x479,0)
             end

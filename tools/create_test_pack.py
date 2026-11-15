@@ -21,7 +21,7 @@ SCENES=[
     ('great-palace','Great Palace final boss','Great Palace Thunderbird / Dark Link corridor with max stats, all spells and full meters. Test Inferno, fireballs and ending progression.')
 ]
 RECIPE_FILES=['tools/state_scenarios.lua','tests/newgame.lua','tests/state_pack.lua',
-              'tools/create_test_pack.py','tools/checkpoint_sets.json']
+              'tools/create_test_pack.py','tools/checkpoint_sets.json','tests/checkpoint_features.lua']
 RECIPES=json.loads((ROOT/'tools/checkpoint_sets.json').read_text())
 SETS=['core',*RECIPES['sets']]
 

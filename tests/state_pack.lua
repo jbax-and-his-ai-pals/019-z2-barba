@@ -1,5 +1,6 @@
 -- Reload every generated state and let the real game run after loading.
 dofile(TEST_DIR..'/newgame.lua')
+dofile(TEST_DIR..'/checkpoint_features.lua')
 local mem=emu.memType.nesMemory
 local function r(a)return emu.read(a,mem)end
 local frame=0
@@ -8,6 +9,14 @@ local index=0
 local pending=false
 local failures=0
 local initialX=0
+local initialY=0
+local downY=0
+local elevatorDown=false
+local elevatorUp=false
+local pendingDrop=false
+local dropProbe=false
+local dropBelowScreen=false
+local dropLives=0
 local moved=false
 local file=assert(io.open(PACK_DIR..'/validation.txt','w'))
 local ids=PACK_IDS or {'castle','combat','spells','lava-ledge','lava-surface','barba','raft','town','boss-door','great-palace'}
@@ -25,10 +34,12 @@ local function nextState()
     local state=stateFile:read('*a');stateFile:close()
     check(emu.loadSavestate(state),ids[index]..' native .mss loads')
     age=0
+    initialY=r(0x29);elevatorDown=false;elevatorUp=false;dropProbe=false;dropBelowScreen=false
     initialX=PACK_SCENES and PACK_SCENES[index].mode==5 and r(0x73)*256+r(0x74) or r(0x3B)*256+r(0x4D);moved=false
 end
 emu.addEventCallback(function()
-    emu.setInput({start=not PACK_SCENES and index==2 and age>=90 and age<93,select=false,a=false,b=false,up=false,down=PACK_SCENES~=nil and PACK_SCENES[index]~=nil and PACK_SCENES[index].mode==5 and age>=22 and age<38,left=false,right=PACK_SCENES~=nil and age>=10 and age<22},0)
+    local feature=PACK_SCENES and PACK_SCENES[index] and PACK_SCENES[index].feature
+    emu.setInput({start=not PACK_SCENES and index==2 and age>=90 and age<93,select=false,a=false,b=false,up=feature=='elevator' and age>=25 and age<37,down=(feature=='elevator' and age>=10 and age<22) or PACK_SCENES~=nil and PACK_SCENES[index]~=nil and PACK_SCENES[index].mode==5 and age>=22 and age<38,left=feature=='pit' and age>=10 and age<16,right=(dropProbe and age>=130 and age<146) or (PACK_SCENES~=nil and feature~='elevator' and feature~='pit' and age>=10 and age<22)},0)
 end,emu.eventType.inputPolled)
 emu.addEventCallback(function()
     frame=frame+1
@@ -36,8 +47,16 @@ emu.addEventCallback(function()
         if frame==120 then pending=true end
         return
     end
+    if PACK_SCENES and not PACK_SCENES[index] then return end
     age=age+1
     if PACK_SCENES and age>10 and age<42 and (PACK_SCENES[index].mode==5 and r(0x73)*256+r(0x74) or r(0x3B)*256+r(0x4D))~=initialX then moved=true end
+    if PACK_SCENES and PACK_SCENES[index].feature=='elevator' then
+        if age==23 then downY=r(0x29);elevatorDown=downY>initialY end
+        if age==38 then
+            elevatorUp=r(0x29)<downY;moved=elevatorDown and elevatorUp
+            check(moved,ids[index]..string.format(' elevator controller Y=%d -> %d -> %d',initialY,downY,r(0x29)))
+        end
+    end
     if PACK_SCENES and age==45 then
         check(moved,ids[index]..' responds to controller movement')
         if PACK_SCENES[index].mode~=5 then
@@ -60,6 +79,10 @@ emu.addEventCallback(function()
     if age==3 then
         if PACK_SCENES then
             local spec=PACK_SCENES[index]
+            if spec.feature then
+                local ok,detail=checkpointFeature(spec)
+                check(ok,ids[index]..' '..detail)
+            end
             check(r(0x773)<=r(0x783)*32-1 and r(0x774)<=r(0x784)*32-1,ids[index]..' meters fit native container capacity')
             check(r(0x736)==(spec.mode or 11) and r(0x707)==spec.world and (spec.mode==5 or r(0x561)==spec.room),ids[index]..' expected room/world')
             if spec.mode==5 then check(r(0x706)==spec.region and r(0x73)==spec.entry['115'] and r(0x74)==spec.entry['116'],ids[index]..' expected overworld location') end
@@ -109,9 +132,26 @@ emu.addEventCallback(function()
     if age==(not PACK_SCENES and index==2 and 410 or 120) then
         check(r(0x774)>0 and r(0x76C)~=2,ids[index]..' remains playable for 120 frames')
         if not PACK_SCENES and index==7 then check(r(0x706)==2 and r(0x736)==5,'sea crossing ends on East Hyrule overworld') end
-        pending=true
+        if PACK_SCENES and PACK_SCENES[index].feature=='pit' then
+            -- A geometric gap is not automatically a lethal pit: prove native routing.
+            pendingDrop=true
+        else pending=true end
+    end
+    if dropProbe then
+        if r(0x29)>=224 and r(0x561)==PACK_SCENES[index].room then dropBelowScreen=true end
+        if age==350 then
+            check(dropBelowScreen and r(0x561)==45 and r(0x700)==dropLives and r(0xB5)==1,
+                ids[index]..string.format(' native drop reaches room $%02X, lives %d -> %d (NOT lethal)',r(0x561),dropLives,r(0x700)))
+            pending=true
+        end
     end
 end,emu.eventType.endFrame)
 emu.addMemoryCallback(function()
+    if pendingDrop then
+        pendingDrop=false
+        local stateFile=assert(io.open(PACK_DIR..'/'..ids[index]..'.mss','rb'))
+        assert(emu.loadSavestate(stateFile:read('*a')));stateFile:close()
+        dropProbe=true;dropLives=r(0x700)
+    end
     if pending then pending=false;nextState()end
 end,emu.callbackType.exec,0xC07B)

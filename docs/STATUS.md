@@ -136,3 +136,14 @@ The ordered next steps and latest human feedback are in [ROADMAP.md](ROADMAP.md)
 
 No public ROM or finished release is provided in the repository. Build locally
 from the required source ROM; the ROM and generated patches stay ignored.
+
+
+## Checkpoint repair follow-up
+
+feat/checkpoint-sets: distinct GP $2C / P1 $03 low tunnels replace the duplicate
+GP $36 fixtures; both elevator states start on native object $13 and ride down/up
+in reload tests. World Darunia/Old Kasuto background palettes match vanilla
+($13/$02 sky). Movement adds the P6 $28 -> $2D drop-shaft edge, accurately labeled
+nonlethal; the requested lethal bottomless pit remains unverified, not fabricated.
+No game code, ROM recipe, asset, merge, push or producer gate was changed.
+Details and numeric proof: docs/TEST-PACK.md and local build/CHECKPOINTS-REPORT.md.

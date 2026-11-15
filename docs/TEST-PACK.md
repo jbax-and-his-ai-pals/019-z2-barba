@@ -149,8 +149,8 @@ Crystals are $078D-$0792, in palace order; $0794 is 6 minus placed. Keys $0793=0
 | --- | --- | --- | --- |
 | F1 | Palace 6 entrance (world 4, room $24, entry 0) | p6; keys 0 | Check movement, head clearance, combat and HUD. |
 | F2 | Great Palace entrance (world 5, room $00, entry 0) | gp; keys 0 | Check movement, head clearance, combat and HUD. |
-| F3 | Great Palace elevator (world 5, room $01, entry 1) | gp; keys 0 | Check movement, head clearance, combat and HUD. |
-| F4 | Great Palace low tunnel (world 5, room $36, entry 0) | gp; keys 0 | Check movement, head clearance, combat and HUD. |
+| F3 | Great Palace elevator (world 5, room $01, entry 0, x=112, y=160) | gp; keys 0 | Start on the native elevator. Hold Down to descend; Up to return. |
+| F4 | Great Palace low tunnel (world 5, room $2C, entry 0, x=64, y=176) | gp; keys 0 | Walk through the 32-pixel-high lane; the raised head must fold under stone. |
 | F5 | Before Thunderbird (world 5, room $35, entry 0) | gp; keys 0 | Check movement, head clearance, combat and HUD. |
 | F6 | Before Dark Link (world 5, room $36, entry 0) | gp; keys 0 | Check movement, head clearance, combat and HUD. |
 | F7 | Palace 6 boss and crystal approach (world 4, room $3A, entry 0) | p6boss; keys 0 | Walk right to Lava Link; win normally and approach the crystal statue. |
@@ -175,11 +175,12 @@ Crystals are $078D-$0792, in palace order; $0794 is 6 minus placed. Keys $0793=0
 | Key | Where | Loadout | Look for |
 | --- | --- | --- | --- |
 | F1 | Palace 6 lava ledge (world 4, room $33, entry 0) | p6boss; keys 0 | Walk onto lava, jump back, check native body and folded head. |
-| F2 | Great Palace low ceiling (world 5, room $36, entry 0) | gp; keys 0 | Walk and crouch under the ceiling. |
-| F3 | Palace 1 elevator shaft (world 3, room $01, entry 1) | p1; keys 0 | Ride the elevator; check head folding and exits. |
+| F2 | Palace 1 low tunnel (world 3, room $03, entry 1, x=288, y=176) | p1boss; keys 0 | Walk and crouch under the ceiling. |
+| F3 | Palace 1 elevator shaft (world 3, room $01, entry 0, x=112, y=160) | p1; keys 0 | Start on the native elevator. Hold Down to descend; Up to return. |
 | F4 | Palace 2 floor corridor (world 3, room $14, entry 1) | p2boss; keys 0 | Inspect floor and jump clearance. |
 | F5 | West Hyrule water bridge (world 0, room $01, native right-hand entry) | saria; keys 0 | Cross the bridge, test jumps and crouch clearance; water remains lethal. |
 | F6 | Medicine cave collapsing bridge (world 0, room $0E, native left-hand entry) | p3; keys 0 | Cross the collapsing bridge above lava; non-palace lava is lethal. |
+| F7 | Palace 6 drop-shaft edge (world 4, room $28, entry 1, x=300, y=176) | p6boss; keys 0 | Stand safely at the gap; jump across or fall to the lower room. This is not a lethal bottomless pit. |
 
 ### Evidence, omissions and limits
 
@@ -194,8 +195,32 @@ Thunderbird and Dark Link are safe **approaches**, not fabricated active-boss st
 Crystal placement and ending snapshots are omitted: no controller-driven boss defeat
 and ending capture was established, and writing boss-death/cutscene state would fake
 those milestones. The Palace 6 boss approach lets the producer pursue its crystal normally.
-A dedicated bottomless-pit/long-shaft midpoint snapshot is also omitted: only native
-room-entry shaft approaches were verified; no reliable mid-fall/ride capture was established.
+The two elevator states now start on the native platform (object $13, $0754=$10),
+not in a corridor. One-time position edits at frame 80 are fixture entry placement,
+not ongoing cheats. Reload validation rides down and up (Y 160 -> 178 -> 160).
+
+**Lethal bottomless pit remains unverified.** Movement F7 is explicitly a native
+Palace 6 drop-shaft, not the requested lethal pit: room $28 drops into $2D with
+three lives unchanged. Its adjacent columns have no floor ($40 at Y 176/192;
+native collision returns $40 below Y 208), but falling does not kill. Surveyed
+palace gaps were floor transitions or shafts; lava/water are different hazards.
+No death flag, collision tile, or game code was changed to fabricate a lethal pit.
+A qualifying native lethal-pit location is still needed for that acceptance item.
+Sets remain 7 Endgame / 7 Movement; optional slots are not padded with unverified
+boss-start, crystal/ending, long-ride or lookalike-room fixtures.
+
+### Numeric feature and palette checks
+
+Generation and reload share tests/checkpoint_features.lua: elevator object and
+player Y attachment; stone above the raised head, clear body lane and grounded
+floor; open-bottom gap beside a supported player. Controller and 120-frame checks
+still apply. Movement F7 additionally replays the native drop and checks room $2D
+and unchanged lives. Endgame F4 is GP $2C; Movement F2 is P1 $03, not GP $36.
+
+Run python tools/check_checkpoint_palettes.py to compare the same World fixtures
+on build/barba.nes and the untouched roms/z2.nes. Both 16-byte background palettes
+match exactly: Darunia universal sky $13 (purple), Old Kasuto $02 (dark blue).
+These are vanilla colors through this fixture; no palette-init or game fix was needed.
 
 Every generated state has a PNG beside it. Automated reload tests check visible-frame
 color diversity, expected room/world, all specified loadout fields, survival for 120

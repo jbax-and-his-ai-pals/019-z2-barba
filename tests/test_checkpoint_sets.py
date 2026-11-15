@@ -17,6 +17,24 @@ class CheckpointSets(unittest.TestCase):
             self.assertEqual(len({s['id'] for s in scenes}),len(scenes))
             for s in scenes:self.assertIn(s['profile'],pack.RECIPES['profiles'])
 
+    def test_repaired_feature_recipes(self):
+        sets=pack.RECIPES['sets']
+        end={s['id']:s for s in sets['endgame']}
+        movement={s['id']:s for s in sets['movement']}
+        self.assertEqual(end['dark-link']['room'],54)
+        self.assertNotEqual(end['gp-tunnel']['room'],54)
+        self.assertEqual((movement['p1-low-ceiling']['world'],movement['p1-low-ceiling']['room']),(3,3))
+        for scene in [end['gp-elevator'],movement['p1-shaft']]:
+            self.assertEqual(scene['feature'],'elevator')
+            self.assertEqual(scene['page'],0)
+            self.assertEqual(scene['position'],{'x':112,'y':160})
+        self.assertEqual(movement['p6-drop-shaft']['feature'],'pit')
+        self.assertIn('tests/checkpoint_features.lua',pack.RECIPE_FILES)
+        for name in ['endgame','movement']:
+            scenes=sets[name]
+            locations={(s['world'],s['room'],s['page'],tuple(s.get('position',{}).values())) for s in scenes}
+            self.assertEqual(len(locations),len(scenes))
+
     def test_core_stays_in_existing_order(self):
         ids=[s[0] for s in pack.SCENES]
         self.assertEqual(ids,['castle','combat','spells','lava-ledge','lava-surface','barba','raft','town','boss-door','great-palace'])
