@@ -1,0 +1,53 @@
+{
+  "_comment": "Original 16x16 town scorch art (2x2 BG tiles). '.'=0 (sky/backdrop), 'o'=1 (orange on brick, white on stone), '+'=2 (brown on brick, gray on stone), '#'=3 (black). Stage 'flame' shows for a moment, then 'char' stays until the column is redrawn.",
+  "tiles": {
+    "flame": {
+      "tl": "02",
+      "tr": "04",
+      "bl": "0E",
+      "br": "16"
+    },
+    "char": {
+      "tl": "25",
+      "tr": "96",
+      "bl": "A7",
+      "br": "B9"
+    }
+  },
+  "flame": [
+    "......o.....o...",
+    "..o..oo....oo...",
+    "..oo.o+o..o+o.o.",
+    ".o+o.o+o.oo+o.o.",
+    ".o+oo++oooo++oo.",
+    "o++o++o+o+o++o+o",
+    "o+oo+oooooo+oo+o",
+    "+oooooooooooooo+",
+    "+oooo+oooo+oooo+",
+    "#oo+###oo###+oo#",
+    "#o#######o#####+",
+    "###o######o#####",
+    "+#############o#",
+    "##+######+######",
+    "#+##o#######+###",
+    "+######+#######+"
+  ],
+  "char": [
+    "+o+o+++o++o++o+o",
+    "o+o++#+#+#++o++o",
+    "+o+##+####+##o+o",
+    "o+#+######o###+o",
+    "+###########o#++",
+    "++####o#########",
+    "+######.#######+",
+    "+##+####..###o#+",
+    "+###o####.#####+",
+    "+###########o##+",
+    "++##o###o#######",
+    "o+#############+",
+    "+o+#######o##++o",
+    "o+o+##+######+o+",
+    "+o+o++#+#++#+o+o",
+    "o+o+o+o++o+o+o+o"
+  ]
+}

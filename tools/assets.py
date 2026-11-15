@@ -122,6 +122,43 @@ TITLE_TILE_SHA256 = {
 }
 
 
+TOWN_FIRE_BANK = 7           # town BG pattern table (both west and east towns map CHR 6/7)
+# Truncated SHA-256 of each original 16-byte tile replaced in bank 7. None of these
+# tiles is in any bank-3 town tile table, and an emulator census of all 126 town
+# rooms (worlds 1 and 2, rooms $00..$3E) found none in a nametable or odd sprite pair.
+TOWN_FIRE_TILE_SHA256 = {
+    0x02: '8c53505ddeae0a74', 0x04: '9661ce0a44e44581', 0x0E: 'e788c77ff7694347',
+    0x16: '721a14c19e585a61', 0x25: '2e94d649b4ae1a35', 0x96: '8f153b405205a912',
+    0xA7: '899cbd256813b89a', 0xB9: 'f73ab0652b1666ac',
+}
+
+
+def compile_town_fire(root: Path) -> dict[int, bytes]:
+    """Compile the authored 16x16 flame and char art into eight town BG tiles."""
+    spec = json.loads((root / 'assets/town_fire.json').read_text())
+    digits = {'.': '0', 'o': '1', '+': '2', '#': '3'}
+    order = []
+    tiles: dict[int, bytes] = {}
+    for stage in ('flame', 'char'):
+        rows = spec[stage]
+        if len(rows) != 16 or any(len(row) != 16 or set(row) - set(digits) for row in rows):
+            raise ValueError(f'Town fire {stage} must be 16 rows of 16 of . o + #')
+        rows = [''.join(digits[c] for c in row) for row in rows]
+        ids = spec['tiles'][stage]
+        for corner, (y, x) in (('tl', (0, 0)), ('bl', (8, 0)), ('tr', (0, 8)), ('br', (8, 8))):
+            tile = int(ids[corner], 16)
+            tiles[tile] = encode_tile([row[x:x+8] for row in rows[y:y+8]])
+            order.append(tile)
+    if set(tiles) != set(TOWN_FIRE_TILE_SHA256):
+        raise ValueError('Town fire tiles differ from the audited allocation')
+    text = (root / 'src/blocks.inc').read_text()
+    table = re.search(r'^ScorchTiles:\s*\n((?:[ \t]*\.byte[^\n]*\n){2})', text, re.MULTILINE)
+    found = [int(v, 16) for v in re.findall(r'\$([0-9A-Fa-f]{2})', table.group(1))] if table else []
+    if found != order:
+        raise ValueError('ScorchTiles in src/blocks.inc does not match assets/town_fire.json')
+    return tiles
+
+
 def compile_title_logo(root: Path) -> tuple[dict[int, bytes], list[list[int]]]:
     """Compile authored BARBA title-screen tiles into LINK's title CHR slots."""
     spec = json.loads((root / 'assets/title_logo.json').read_text())

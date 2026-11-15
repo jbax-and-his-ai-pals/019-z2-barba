@@ -32,7 +32,7 @@ BarbaExtraReset:
     sta EXTRA_BASE+$09
     sta EXTRA_BASE+$19
     sta EXTRA_BASE+$29
-    rts
+    jmp BarbaScorchClear ; WRAM survives power-off: drop any stale scorch entries
 
 ; Save slot 0 and its OAM window. The fourth sprite bytes are copied too:
 ; native disintegration and normal update both use $0238..$023B.

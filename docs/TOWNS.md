@@ -128,6 +128,41 @@ actors normally. The art recipe is `assets/ash.json`.
 The prototype borrows each generated actor's `$AF` state. The native generator
 clears it on spawn. Conversations already in progress finish normally.
 
+## Scorched buildings
+
+Fireballs no longer delete town buildings. Each live fireball still samples the
+16x16 metatile at its center through the native lookup (`$EAE8`, via
+`BarbaTownBurn` in `src/blocks.inc`). Walls, roofs, windows, signs and bushes
+qualify. Sky `$40`, ground `$50..$5F`, doorways `$89..$8C`/`$91` and clouds
+`$C4..$C6` never do. The room's metatile buffer (`$6000+`, which is also its
+collision) is never written. Instead the hit queues a 2x2 **flame** into the
+nametable through the native PPU buffer (`$0362`, at most one 10-byte entry per
+hit, skipped when the buffer is past `$28`). After `SCORCH_FLAME` (24) updates,
+`BarbaScorchTick` rewrites the same spot as **char** with glowing embers.
+
+- **State:** WRAM ring of eight entries: PPU address high/low `$6470/$6478` and
+  timer `$6480`, plus `SCORCH_ROOM` `$646A`. The timer starts at `$FF`. Char is
+  queued at `$E7`, and the entry frees at 0 (about 4 s), which also stops a slow
+  fireball re-igniting the metatile it is crossing. With eight flames already
+  burning, a new hit is skipped. A room change (`$0561`) or
+  `BarbaExtraReset` clears the ring.
+- **Lifetime:** marks live in the nametable only. They vanish when that column
+  is redrawn (scrolling about two screens away) or the room reloads.
+- **Art:** `assets/town_fire.json` (original 16x16 art, palette indices). It
+  goes into eight town BG tiles in CHR bank 7: flame `$02/$0E/$04/$16`, char
+  `$25/$A7/$96/$B9`. Index 1 reads orange on brick and white on stone or
+  bushes, index 2 brown or gray, index 3 black. The build hash-checks each
+  original tile (`TOWN_FIRE_TILE_SHA256`) and that `ScorchTiles` matches the
+  JSON. Allocation evidence: none of the eight is in a bank-3 town tile table,
+  and an emulator census of all 126 town rooms (worlds 1 and 2) found none in a
+  nametable or odd sprite pair. Both worlds' towns map CHR 6/7.
+- **Cost:** about 70 cycles per update for the idle ring scan in outdoor towns.
+  No new OAM and no fixed-bank bytes (the tick rides the existing
+  `BarbaBlocks` hook).
+- **Test:** `tests/town_fire.lua` walks to the Rauru brick house and jump-attacks
+  it. It checks that the metatiles are unchanged, flames appear and then become
+  char, no tile is blanked to sky, and nothing else in the nametable changes.
+
 ## Validation and limits
 
 `tests/town_safety.lua` checks 1,041 eligibility combinations plus eight dialogue

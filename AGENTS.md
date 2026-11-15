@@ -21,7 +21,7 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
   Hand them a playable build (`play/barba.nes` + `build/barba.nes`) plus a regenerated test pack.
 - Full suite: boot, gameplay, combat, palace, routines, tall_geometry, projectile_only, burst,
   extra_fire, left_fire, damage, hud_timing, breath_height, town, town_safety, shouts,
-  shout_queue, shout_follow, doors, dialogue_speed, perf_volley, plus `state_pack` via create_test_pack.
+  shout_queue, shout_follow, doors, dialogue_speed, town_fire, title_roar, perf_volley, plus `state_pack` via create_test_pack.
 
 ## Hard rules
 
@@ -57,11 +57,12 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
   **The fixed bank is essentially full.** See `build/barba.map` for exact use.
 - RAM `$05EA`, `$05EB` (lava contact), `$05F0-$05FF` (roar, breath, tall renderer, extra guard). Cleared by the native reset loop.
 - WRAM `$6400-$642F` extra projectile records; `$6440-$645F` scratch (`$6457` lazy-save flag,
-  `$6458-$645F` geometry terrain cache, `$645C` EXTRA_LIVE); `$6460-$6468` shouts (`$6465` actor, `$6467` word, `$6468` timer). Don't touch collision/room/save regions elsewhere in `$6000-$7FFF`.
+  `$6458-$645F` geometry terrain cache, `$645C` EXTRA_LIVE); `$6460-$6469` shouts (`$6465` actor, `$6467` word, `$6468` timer, `$6469` cycle); `$646A` + `$6470-$6487` town scorch ring. Don't touch collision/room/save regions elsewhere in `$6000-$7FFF`.
 - OAM in use: tall head `$04/$4C/$F8`, extra fireballs `$3C/$44/$48`; enemy projectiles use `$28/$2C/$30`;
   town shout word `$E0-$F0` (only while a word is live and no enemy projectile exists).
 - CHR: player art in even sprite banks 0-24; ash `$64/$66` **bank 6 only** (shared sprites elsewhere);
-  shout glyphs in town BG bank 7 pairs `$80-$A0` (used as odd 8x16 sprite tiles).
+  shout glyphs in town BG bank 7 pairs `$80-$A0` (used as odd 8x16 sprite tiles); town scorch art in bank 7
+  tiles `$02/$04/$0E/$16` (flame) and `$25/$96/$A7/$B9` (char).
 
 ## Performance facts (from tests/perf_volley.lua)
 

@@ -8,8 +8,9 @@ import subprocess
 from pathlib import Path
 from assets import (ASH_TILES, SHOUT_GLYPH_BANK, SHOUT_PAIR_SHA256,
                     TITLE_CHR_BANK, TITLE_TILE_SHA256,
+                    TOWN_FIRE_BANK, TOWN_FIRE_TILE_SHA256,
                     compile_assets, compile_file_select_doll,
-                    compile_shout_glyphs, compile_title_logo)
+                    compile_shout_glyphs, compile_title_logo, compile_town_fire)
 from bps import apply, encode
 from boss_art import compile_lava_link
 from nes import CHR_OFFSET, SOURCE_SHA256, load_source, prg_offset
@@ -133,6 +134,13 @@ def build(source_path: Path, output: Path) -> dict:
         if hashlib.sha256(original).hexdigest()[:16] != SHOUT_PAIR_SHA256[pair]:
             raise ValueError(f'Shout glyph pair {pair:02X} is not the audited original')
         overlay.put(offset, data, original, f'CHR {SHOUT_GLYPH_BANK:02X}: shout glyph pair {pair:02X}')
+    # Town scorch marks: flame and char 2x2 BG art in town CHR bank 7 (ScorchTiles in src/blocks.inc).
+    for tile, data in sorted(compile_town_fire(ROOT).items()):
+        offset = CHR_OFFSET + TOWN_FIRE_BANK*4096 + tile*16
+        original = source[offset:offset+16]
+        if hashlib.sha256(original).hexdigest()[:16] != TOWN_FIRE_TILE_SHA256[tile]:
+            raise ValueError(f'Town fire tile {tile:02X} is not the audited original')
+        overlay.put(offset, data, original, f'CHR {TOWN_FIRE_BANK:02X}: town fire tile {tile:02X}')
     # Title screen: replace LINK's bank-1 tiles and nametable rows with BARBA.
     title_tiles, title_rows = compile_title_logo(ROOT)
     for tid, data in sorted(title_tiles.items()):
