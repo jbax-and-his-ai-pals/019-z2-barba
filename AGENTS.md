@@ -22,8 +22,9 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
 - Far-call regression: `python tools/emulator_test.py tests/farcall.lua` (all 8 banks, flags/registers, nesting, boundaries).
 - Full suite: boot, gameplay, combat, palace, routines, tall_geometry, projectile_only, burst,
   extra_fire, left_fire, damage, hud_timing, breath_height, town, town_safety, shouts,
-  shout_follow, doors, dialogue_speed, perf_volley, perf_lava, link_boss, shield_enemies,
-  title_roar, overworld_side, farcall, town_fire, upstab, perf_upward, look_up, ending, plus `state_pack` via create_test_pack.
+  shout_follow, doors, dialogue_speed, perf_volley, perf_lava, link_boss, dark_link,
+  shield_enemies, title_roar, overworld_side, farcall, town_fire, town_combo,
+  castle_zelda_burn, upstab, perf_upward, look_up, ending, checkpoint_features, plus `state_pack` via create_test_pack.
 
 ## Hard rules
 
@@ -83,14 +84,12 @@ overworld fights with 0 lag frames, max 28,941 cycles; the older Palace 1 measur
 
 | Topic | Doc |
 | --- | --- |
-| What's verified / open | docs/STATUS.md, docs/ROADMAP.md |
+| What's verified / open | docs/STATUS.md |
 | Breath, volley, tall sprite internals | docs/BREATH-IMPLEMENTATION.md |
 | Towns, villagers, shouts | docs/TOWNS.md |
-| Perf/flicker/shout follow-ups | docs/NEXT-PERF-AND-SHOUTS.md |
-| Palace 6 "Lava Link" boss plan | docs/LINK-BOSS-PLAN.md |
-| Upward fire / upstab implementation | docs/UPSTAB-FIRE-PLAN.md |
-| Build/tooling, ROM research | docs/BUILD.md, docs/RESEARCH.md |
+| Build/tooling, ROM research | docs/BUILD.md, docs/RESEARCH.md, docs/FIXED-BANK-AUDIT.md |
 | Checkpoints | docs/TEST-PACK.md (F1-F9; F9 = before Palace 6 boss, max stats) |
+| Archived plans & early design | docs/archive/ |
 
 When you finish a task: update the one relevant doc plus STATUS.md, and keep this file's
 memory map and perf facts current. Then hand the producer a short playtest: what changed, which F-key, what to look for.

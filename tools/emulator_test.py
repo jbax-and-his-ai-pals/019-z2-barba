@@ -28,21 +28,22 @@ def run(scenario: Path, rom: Path, timeout: int = 30) -> int:
     emulator = emulator_dir / 'Mesen.exe'
     settings = emulator_dir / 'settings.json'
     saves = Path(tempfile.mkdtemp(prefix='test-saves-', dir=output))
-    settings.write_text(json.dumps({
-        'Debug': {'ScriptWindow': {'AllowIoOsAccess': True}},
-        'Nes': {'AutoConfigureInput': False, 'Port1': {'Type': 'NesController'}},
-        'Preferences': {'OverrideSaveDataFolder': True, 'SaveDataFolder': str(saves)}
-    }))
-    runner = output / (scenario.stem + '-run.lua')
-    prefix = 'OUTPUT_DIR = ' + json.dumps(output.as_posix()) + '\n'
-    prefix += 'TEST_DIR = ' + json.dumps((ROOT/'tests').as_posix()) + '\n'
-    error_path = output/(scenario.stem+'-error.txt')
-    error_path.write_text('')
-    prefix += 'ERROR_PATH = ' + json.dumps(error_path.as_posix()) + '\n'
-    labels_file = rom.resolve().parent/'build-report.json'
-    labels = json.loads(labels_file.read_text())['labels'] if labels_file.exists() else {}
-    prefix += 'LABELS = {' + ','.join(f'{name}={value}' for name, value in labels.items()) + '}\n'
-    guard = '''
+    try:
+        settings.write_text(json.dumps({
+            'Debug': {'ScriptWindow': {'AllowIoOsAccess': True}},
+            'Nes': {'AutoConfigureInput': False, 'Port1': {'Type': 'NesController'}},
+            'Preferences': {'OverrideSaveDataFolder': True, 'SaveDataFolder': str(saves)}
+        }))
+        runner = output / (scenario.stem + '-run.lua')
+        prefix = 'OUTPUT_DIR = ' + json.dumps(output.as_posix()) + '\n'
+        prefix += 'TEST_DIR = ' + json.dumps((ROOT/'tests').as_posix()) + '\n'
+        error_path = output/(scenario.stem+'-error.txt')
+        error_path.write_text('')
+        prefix += 'ERROR_PATH = ' + json.dumps(error_path.as_posix()) + '\n'
+        labels_file = rom.resolve().parent/'build-report.json'
+        labels = json.loads(labels_file.read_text())['labels'] if labels_file.exists() else {}
+        prefix += 'LABELS = {' + ','.join(f'{name}={value}' for name, value in labels.items()) + '}\n'
+        guard = '''
 local function failScenario(message)
     local file=assert(io.open(ERROR_PATH,'w'))
     file:write(tostring(message));file:close()
@@ -60,15 +61,17 @@ local addMemory=emu.addMemoryCallback
 emu.addMemoryCallback=function(fn,...) return addMemory(guarded(fn),...) end
 local function runScenario()
 '''
-    runner.write_text(prefix + guard + scenario.read_text() + '\nend\nguarded(runScenario)()\n')
-    result = subprocess.run([str(emulator), '--testRunner', str(runner), str(rom.resolve()),
-                             f'--timeout={timeout}'], capture_output=True, timeout=timeout+10)
-    (output / (scenario.stem + '-mesen.log')).write_bytes(result.stdout + result.stderr)
-    print(f'{scenario.name}: Mesen exit {result.returncode}')
-    if error_path.read_text():
-        print(error_path.read_text())
-        return result.returncode or 2
-    return result.returncode
+        runner.write_text(prefix + guard + scenario.read_text() + '\nend\nguarded(runScenario)()\n')
+        result = subprocess.run([str(emulator), '--testRunner', str(runner), str(rom.resolve()),
+                                 f'--timeout={timeout}'], capture_output=True, timeout=timeout+10)
+        (output / (scenario.stem + '-mesen.log')).write_bytes(result.stdout + result.stderr)
+        print(f'{scenario.name}: Mesen exit {result.returncode}')
+        if error_path.read_text():
+            print(error_path.read_text())
+            return result.returncode or 2
+        return result.returncode
+    finally:
+        shutil.rmtree(saves, ignore_errors=True)
 
 
 if __name__ == '__main__':

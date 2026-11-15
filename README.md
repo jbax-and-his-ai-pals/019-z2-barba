@@ -13,27 +13,23 @@ The local build currently includes:
 - Thin, boss-derived 24x48 side-view Barba with full-body jumps, a compact crouched neck, jaw animation and ceiling folding,
   an 8x16 flying wyrmling,
   and a dedicated 16x16 overworld avatar with directional animation.
-- Evenly spaced five-shot downward-diagonal volleys at every health level, with no
-  sword, thrust damage or attached melee plume. Fire empowers projectile damage
-  against Fire-only enemies. Fireballs retain glove-gated block breaking.
-- Random outdoor wanderers flee at a catchable speed, vanish at existing doors, or burn into temporary ash piles
-  when hit. Indoor and scripted NPCs are protected. Panic shouts appear automatically without pausing. Hold Up near a wanderer
-  for faster direct dialogue; important characters keep their original conversations.
-- Head checks are batched and spawning runs after the HUD split to keep the
-  status text stable during battles.
-- A fiery attack sound.
-- Palace lava surface support with normal movement and jumping. Water outside
+- Evenly spaced five-shot downward-diagonal volleys at every health level, with
+  glove-gated brick breaking, upward breath / rising head-butt (Upward Thrust),
+  downstab (Downward Thrust), and weak-enemy stomp. Fire empowers projectile damage
+  against Fire-only enemies.
+- Outdoor villagers flee at a catchable speed, vanish at existing doors, or burn into temporary ash piles
+  when hit, with floating panic shouts, scorchable town props, and a rampage combo banner.
+  Indoor and story-critical NPCs are protected. Hold Up near a wanderer for faster direct dialogue.
+- Palace lava surface support with partly submerged lava pose and normal movement/jumping. Water outside
   palaces retains its original death behavior.
-- Dragon spell menu names and a short native noise-channel roar on Inferno.
-- Dragon sea crossings on the existing raft route and unlock.
+- Custom title screen (`BARBA I`), 1-Up dolls, dragon spell names with Inferno roar,
+  Palace 6 "Lava Link" boss, Dark Barba encounter, and custom ending sequence.
 
 The tall head is visual: terrain and enemy contact retain the native collision
 body. Crouching fits the original low lane; stone ceilings fold the head down.
 
-**Not a finished conversion.** Vertical technique presentation needs review;
-Palace 6's boss has not yet received the Ice Barba treatment. Title/story text,
-some menu graphics, lava pose polish, and full-game compatibility testing remain.
-See [validation and remaining work](docs/STATUS.md) for exact coverage.
+**Playable alpha.** Full-game playthrough and second-emulator cross-checking remain.
+See [status and verification](docs/STATUS.md) for details.
 
 ## Development
 
@@ -61,9 +57,9 @@ to the castle, combat, all-spells sandbox, lava ledge, lava surface, Barba boss,
 sea crossing, and a Rauru town street. See [the test pack guide](docs/TEST-PACK.md). Test progress uses
 a separate Mesen profile and never overwrites your normal play save.
 
-See [the refined design](docs/DESIGN.md), [build instructions](docs/BUILD.md),
+See [status](docs/STATUS.md), [build instructions](docs/BUILD.md),
 [town reactions](docs/TOWNS.md), [research notes](docs/RESEARCH.md), and
-[the next-work roadmap](docs/ROADMAP.md).
+[archived design docs](docs/archive/).
 
 This is an unofficial fan project. Zelda II and its original characters,
 graphics, music, and game data belong to their respective owners.
