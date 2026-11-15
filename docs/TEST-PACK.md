@@ -60,3 +60,15 @@ to replace an old in-memory checkpoint; this fix does not change normal saves.
 The town checkpoint now uses Rauru's normal street room rather than its
 lookalike entrance copy. Load the newly prepared F8 state; old snapshots can
 retain fake door tiles made by the retired villager animation.
+
+## Planned: playthrough checkpoint sets (producer, 2026-11-14)
+
+Today's F1-F10 stay as the **Core** set. Four more sets of ten, each chosen from the test launcher, with the **levels,
+spells and items you would have at that point in a normal playthrough** (not maxed):
+
+- **Palaces 1-5:** each palace's entrance and the room before its boss.
+- **Endgame:** Palace 6 entrance, Great Palace entrance, an elevator and a low tunnel there, Thunderbird, Dark Link,
+  crystal/ending moments.
+- **Towns and world:** each town street (Rauru, Ruto, Saria, Mido, Nabooru, Darunia, New Kasuto, Old Kasuto),
+  Death Mountain entrance, Maze Island.
+- **Tricky movement:** low ceilings, collapsing floors, water, bottomless pits, long elevator shafts.

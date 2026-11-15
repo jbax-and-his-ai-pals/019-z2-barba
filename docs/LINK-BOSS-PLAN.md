@@ -100,3 +100,4 @@ session with art iteration. The art is the long pole.
 
 Keep this fight as Barba's pattern wearing Link (rise, sword beams, sink). Beams at every health level, no weakening
 phase, difficulty not a goal. Next: experiment with a shield mechanic, and play Link's hurt sound when Lava Link is hit.
+The hurt sound is for the boss only: Barba keeps her current hurt sound (producer, 2026-11-14).
