@@ -8,15 +8,14 @@ local p=emu.memType.nesPpuMemory
 local function r(a)return emu.read(a,m)end
 local function w(a,v)emu.write(a,v,m)end
 local WALK=150 -- frames of walking right from the entrance to stand before the brick house
-local BG_FLAME={[0x34]=true,[0xA4]=true,[0xAC]=true,[0xC0]=true}
+local FLAME={[0x34]=true,[0xA4]=true,[0xAC]=true,[0xC0]=true}
 local CHAR={[0xC1]=true,[0x35]=true,[0xA7]=true,[0xC2]=true}
-local SCORCH_OAM={0x28,0x2C,0x30,0x34,0x60,0x64,0x78,0x7C,0x90,0xA8,0xC0,0xFC,0xDC,0xE0,0xE4,0xE8,0xEC,0xF0,0xF4}
 local frame,age,phase,errors=0,0,0,0
 local pending,wantLoad,base=false,false,nil
 local metatiles,nametable=nil,nil
-local maxFlame,maxBgFlame,maxChar,blanked,foreign=0,0,0,0,0
+local maxFlame,maxChar,blanked,foreign=0,0,0,0
 local flameSeenAt,charSeenAt,flameAt180=nil,nil,0
-local sawFlip0,sawFlip1=false,false
+local animAddr,saw02,saw04=nil,false,false
 local f=assert(io.open(OUTPUT_DIR..'/town-fire.txt','w'))
 local function check(ok,msg)
     f:write((ok and 'PASS ' or 'FAIL ')..msg..'\n');f:flush()
@@ -32,23 +31,10 @@ local function counts()
     for a=0x2000,0x27BF do
         if (a%0x400)<0x3C0 then
             local t=emu.read(a,p)
-            if BG_FLAME[t] then fl=fl+1 elseif CHAR[t] then ch=ch+1 end
+            if FLAME[t] then fl=fl+1 elseif CHAR[t] then ch=ch+1 end
         end
     end
     return fl,ch
-end
-local function spriteFlames()
-    local n,f0,f1=0,false,false
-    for _,oam in ipairs(SCORCH_OAM) do
-        local y=r(0x200+oam)
-        local t=r(0x201+oam)
-        local attr=r(0x202+oam)
-        if y<0xF8 and t==0x84 and (attr%4)==1 then
-            n=n+1
-            if (attr%128)>=0x40 then f1=true else f0=true end
-        end
-    end
-    return n,f0,f1
 end
 local function liveSlots()
     local n=0
@@ -123,17 +109,22 @@ emu.addEventCallback(function()
     if phase==1 then
         if age==WALK+29 then metatiles=snapMeta();nametable=snapNT();screenshot('town-fire-before')end
         if age>=WALK+30 then
-            local bgFl,ch=counts()
-            local spFl,f0,f1=spriteFlames()
-            if spFl>maxFlame then maxFlame=spFl end
-            if bgFl>maxBgFlame then maxBgFlame=bgFl end
+            local fl,ch=counts()
+            if fl>maxFlame then maxFlame=fl end
             if ch>maxChar then maxChar=ch end
-            if spFl>0 and not flameSeenAt then flameSeenAt=age end
-            if f0 then sawFlip0=true end
-            if f1 then sawFlip1=true end
+            if fl>0 and not flameSeenAt then
+                flameSeenAt=age
+                for a=0x2000,0x27BF do
+                    if (a%0x400)<0x3C0 and emu.read(a,p)==0x34 then animAddr=a; break end
+                end
+            end
+            if animAddr then
+                local t=emu.read(animAddr,p)
+                if t==0x34 then saw02=true elseif t==0xA4 then saw04=true end
+            end
             if ch>0 and not charSeenAt then charSeenAt=age end
-            if spFl>0 and age-(flameSeenAt or age)==6 then screenshot('town-fire-flame')end
-            if age==WALK+210 then flameAt180=spFl end
+            if fl>0 and age-(flameSeenAt or age)==6 then screenshot('town-fire-flame')end
+            if age==WALK+210 then flameAt180=fl end
         end
         if age==WALK+700 then
             screenshot('town-fire-after')
@@ -144,21 +135,19 @@ emu.addEventCallback(function()
                     local t=emu.read(a,p);local old=nametable[a]
                     if t~=old then
                         if t==0xF4 then blanked=blanked+1
-                        elseif not CHAR[t] then foreign=foreign+1 end
+                        elseif not FLAME[t] and not CHAR[t] then foreign=foreign+1 end
                     end
                 end
             end
-            local bgFl,ch=counts()
-            local spFl=spriteFlames()
-            f:write(string.format('p1 maxFlame=%d maxBgFlame=%d flameAt180=%d maxChar=%d flameAt=%s charAt=%s endFlame=%d endChar=%d blanked=%d foreign=%d\n',
-                maxFlame,maxBgFlame,flameAt180,maxChar,tostring(flameSeenAt),tostring(charSeenAt),spFl,ch,blanked,foreign))
+            local fl,ch=counts()
+            f:write(string.format('p1 maxFlame=%d flameAt180=%d maxChar=%d flameAt=%s charAt=%s endFlame=%d endChar=%d blanked=%d foreign=%d\n',
+                maxFlame,flameAt180,maxChar,tostring(flameSeenAt),tostring(charSeenAt),fl,ch,blanked,foreign))
             check(same,'room metatiles (collision) are unchanged after the attack')
-            check(maxFlame>=2,'fireballs ignite at least one 16x16 sprite flame on the building')
-            check(maxBgFlame==0,'active town flames use OAM sprites instead of BG flame tiles')
-            check(flameAt180>=2,'building flames stay lit for at least 180 frames')
-            check(sawFlip0 and sawFlip1,'burning sprite flames animate between frames')
+            check(maxFlame>=4,'fireballs ignite at least one 2x2 flame on the building')
+            check(flameAt180>=4,'building flames stay lit for at least 180 frames')
+            check(saw02 and saw04,'burning flame tiles animate between frames')
             check(ch>=4,'flames eventually expire into char marks')
-            check(spFl==0,'no sprite flames remain once the ~10s timer expires')
+            check(fl==0,'no flame tiles remain once the ~10s timer expires')
             check(blanked==0,'no building tile is blanked to sky')
             check(foreign==0,'no other nametable tile changed')
             check(liveSlots()<=16,'scorch ring stays bounded')
@@ -167,27 +156,25 @@ emu.addEventCallback(function()
         end
     elseif phase==2 then
         if age==50 then
-            local spFl=spriteFlames()
+            local fl,_=counts()
             screenshot('town-fire-ground')
-            check(spFl>=2,'crouching breath ignites the village ground ('..spFl..' flame sprites)')
+            check(fl>=4,'crouching breath ignites the village ground ('..fl..' flame tiles)')
         end
         if age==400 then
-            local _,ch=counts()
-            local spFl=spriteFlames()
+            local fl,ch=counts()
             local live=liveSlots()
-            f:write(string.format('p2 spFl=%d ch=%d live=%d mode=%d room=%d sroom=%d page=%02X x=%02X\n',
-                spFl,ch,live,r(0x736),r(0x561),r(0x646A),r(0x3B),r(0x4D)))
-            check(spFl>=6,'multiple lasting sprite fires stay lit across the street')
+            f:write(string.format('p2 fl=%d ch=%d live=%d mode=%d room=%d sroom=%d page=%02X x=%02X\n',
+                fl,ch,live,r(0x736),r(0x561),r(0x646A),r(0x3B),r(0x4D)))
+            check(fl>=16,'multiple lasting fires stay lit across the street')
             check(live<=16,'active fire ring never exceeds 16 slots ('..live..')')
             check(ch>=4,'exceeding 16 fires evicts the oldest fire to char ('..ch..' char tiles)')
             -- Simulate leaving the room ($0561 change) and verify ring clears on next update.
             w(0x561,2)
         end
         if age==405 then
-            local spFl=spriteFlames()
-            f:write(string.format('p2_end live=%d spFl=%d mode=%d room=%d sroom=%d\n',
-                liveSlots(),spFl,r(0x736),r(0x561),r(0x646A)))
-            check(liveSlots()==0 and spFl==0,'leaving the room clears all active fire slots and sprite flames')
+            f:write(string.format('p2_end live=%d mode=%d room=%d sroom=%d\n',
+                liveSlots(),r(0x736),r(0x561),r(0x646A)))
+            check(liveSlots()==0,'leaving the room clears all active fire slots')
             f:write('RESULT '..(errors==0 and 'PASS' or 'FAIL')..'\n');f:close()
             stopScenario(errors==0 and 0 or 1)
         end

@@ -105,9 +105,15 @@ def build(source_path: Path, output: Path) -> dict:
     hook(3, 0xB74D, 'TownLetterDelay', 0x20, 'a9 05 8d 66 05', 2)
     hook(3, 0xB65E, 'TownLineDelay', 0x20, '8c 66 05')
     dest = labels['TownUpdate']
-    for address in (0x94AD, 0x94AF, 0x94B1):
+    overlay.prg(3, 0x949F, dest.to_bytes(2, 'little'), bytes.fromhex('78 98'),
+                'Indoor NPC update 949F')
+    overlay.prg(3, 0x94AB, dest.to_bytes(2, 'little'), bytes.fromhex('a9 97'),
+                'Wise Man NPC update 94AB')
+    overlay.prg(3, 0x94CF, dest.to_bytes(2, 'little'), bytes.fromhex('bd 9a'),
+                'Special NPC update 94CF')
+    for address in (0x94A1, 0x94A7, 0x94A9, 0x94AD, 0x94AF, 0x94B1):
         overlay.prg(3, address, dest.to_bytes(2, 'little'), bytes.fromhex('93 97'),
-                    f'Stationary outdoor villager update {address:04X}')
+                    f'Stationary villager/NPC update {address:04X}')
     for address in (0x94B3, 0x94B5, 0x94B7, 0x94B9, 0x94BB, 0x94BD):
         overlay.prg(3, address, dest.to_bytes(2, 'little'), bytes.fromhex('d4 97'),
                     f'Static outdoor villager update {address:04X}')

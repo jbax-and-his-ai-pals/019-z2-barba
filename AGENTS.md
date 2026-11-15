@@ -58,7 +58,7 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
 
 ## Free space and RAM in use (check before allocating)
 
-- ROM: bank 0 `$A89E-$A97D` (BANK0_OW; `BarbaSplitBurnForest`) + `$AA40-$BF6F` (BANK0), bank 3 `$B803-$BF6F` (TOWN; 245 free), bank 6 `$BA00-$BF6F` (BANK6; `shouts.inc` + `combo.inc`).
+- ROM: bank 0 `$A89E-$A97D` (BANK0_OW; `BarbaSplitBurnForest`) + `$AA40-$BF6F` (BANK0), bank 3 `$B803-$BF6F` (TOWN; 125 free), bank 6 `$BA00-$BF6F` (BANK6; `shouts.inc` + `combo.inc`).
   Bank 4 `$A765-$A8FF` is vanilla `$FF` pad patched by raw bytes in `build.py`: Lava Link helpers `$A765-$A7A8`,
   `CarockHit` `$A7B0-$A7BE`; `$A7BF-$A8FF` free.
   Fixed bank 7: LAVA `$D39A-$D3C9` (0 free), GATEWAY `$FEAA-$FECF` (0 free),

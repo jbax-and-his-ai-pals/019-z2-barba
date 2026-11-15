@@ -1,14 +1,15 @@
 # Reactive town prototype
 
 All live outdoor town villagers (`$10..$20`, stationary, static, generated, scripted and
-house-opening actors) can flee, shout, burn and retreat. Eligibility requires
+house-opening actors) can flee, shout, burn and retreat. Eligibility (`TownEligible`) requires
 slot value 1, town world 1 or 2, and an outdoor street room `$00..$13` except
-`$06`; origin `$BC` does not restrict eligibility. Indoor actors, invisible
-triggers (`$0C`, `$21`, `$22`), and story/wise-man types (`$0B`, `$0D..$0F`) are
-protected from panic/burning. Service
-characters with types `$17/$18` are eligible outdoors, but retain custom
-service dialogue indoors. Leaving/re-entering repopulates the room normally.
-Every action rechecks eligibility in `src/town.inc`.
+`$06`; origin `$BC` does not restrict eligibility. Single-area non-town and indoor
+NPCs (`$0A..$21` excluding `$0C`, in world 1 or 2 rooms except North Palace `$3C`)
+are covered by `TownBurnable`: they do not flee and retain their native or custom
+service dialogue (`$0F` wise-man, `$17` healer, `$18` magic), but ignite into
+temporary ash when hit by a player fireball. Invisible triggers (`$0C`, `$22`)
+and North Palace (`$3C`, handled separately) are excluded. Leaving/re-entering
+repopulates the room normally. Every action rechecks eligibility in `src/town.inc`.
 
 ## Behavior
 
@@ -26,7 +27,10 @@ Every action rechecks eligibility in `src/town.inc`.
   `$9946`/`$994E`) without altering collision RAM (`$6000..$633F`) or
   house/quest flags. PPU writes are skipped if the doorway has scrolled
   offscreen and deferred if the `$0302` PPU buffer is busy. Without a door
-  they run offscreen.
+  they run offscreen. House-opening villagers (`$13..$18`) that spawn hidden
+  inside a closed door (`$AF = $80`, `Y = $A8`) stay hidden (`TownHideOAM`)
+  rather than mistaking native `$80` for `TownFlee`, and `TownFlee` steps any
+  villager above street level (`$2A < $B0`) down `+4` px every 16 frames to `$B0`.
 - A live player fireball can ignite an eligible wanderer. A brief flame effect
   leaves a charcoal-and-ember pile for about two seconds before removal.
   Both effects reuse its original OAM slots. No extra sprites or quest
@@ -143,16 +147,13 @@ street ground (`$50..$5F`, `Y < $C0`) qualify; when a fireball passes through
 sky (`$40`) just above ground (`Y + $10`), the ground metatile below it also
 ignites. Sky `$40`, doorways `$89..$8C`/`$91`, clouds `$C4..$C6`, and sub-street
 rows (`Y >= $C0`) never do. The room's metatile buffer (`$6000+`, which is also
-its collision) is never written. Instead the hit registers a 16x16 **flame** in
-the ring, drawn each frame as two fiery 8x16 OAM sprites (`ScorchDrawTown` in
-bank 3, tile `$84`, sprite palette 1, mirrored columns animating every 8 frames)
-using free OAM slots (`ScorchOam`: `$28..$34, $60..$C0, $FC, $DC..$F4`, yielding
-to any active shout/combo sprite). Because active flames are OAM sprites rather
-than BG nametable writes, they keep true red/orange fire colors on grass, stone,
-and brick alike without BG attribute bleed. In towns, flames stay lit for
-`SCORCH_TOWN_TIME * 4` = 600 updates (~10 s) before `BarbaScorchTick` writes
-**char** into the nametable through the native PPU buffer (`$0362`, skipped when
-past `$28`) (North Palace Zelda keeps the BG flame -> char progression).
+its collision) is never written. Instead the hit queues a 2x2 **flame** into the
+nametable through the native PPU buffer (`$0362`, skipped when the buffer is
+past `$28`). In towns, flames stay lit for `SCORCH_TOWN_TIME * 4` = 600 updates
+(~10 s) and animate every 8 frames (alternating `ScorchTiles` left/right
+columns via `ScorchAnimOne`, 2 slots per frame) before `BarbaScorchTick`
+rewrites the same spot as **char** with glowing embers (North Palace Zelda
+keeps the short 24-update flame stage).
 
 - **State:** 16-entry WRAM FIFO ring (`SCORCH_MAX = 16`): PPU address high/low
   `$6490/$64A0`, timer `$64B0`, head index `$64C0`, world page `$64C1`, plus

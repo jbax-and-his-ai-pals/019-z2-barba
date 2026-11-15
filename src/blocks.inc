@@ -281,7 +281,7 @@ BarbaTownBurn:
     lda $0707
     beq @castle_scorch
     inc COMBO_ADD
-    rts                     ; Towns: active flames render as OAM sprites, not BG tiles
+    bne @queue_flame
 @castle_scorch:
     jsr CastleZeldaShout
 @queue_flame:
@@ -377,7 +377,7 @@ ScorchRun:
     beq @tick               ; North Palace: tick every update
     lda $12
     and #$03
-    bne @draw_town          ; Towns: tick every 4th update (~10s for 150 ticks)
+    bne @anim               ; Towns: tick every 4th update (~10s for 150 ticks)
 @tick:
     ldx #SCORCH_MAX-1
 @entry:
@@ -407,15 +407,44 @@ ScorchRun:
     dex
     bpl @entry
     lda $0707
-    bne @draw_town
+    bne @anim
     rts
-@draw_town:
-    lda #>(ScorchDrawTown-1)
+@anim:
+    lda #$00
+    ldy $12
+    tya
+    and #$08
+    beq :+
+    lda #$10
+:
+    sta $02                 ; $00 = flame A, $10 = flame B
+    tya
+    and #$07
+    asl
+    tax
+    jsr ScorchAnimOne
+    inx
+ScorchAnimOne:
+    lda SCORCH_TIME,x
+    beq @skip_anim
+    jsr ScorchOnScreen
+    bcc @skip_anim
+    lda $0362
+    cmp #$28
+    bcs @skip_anim
+    lda SCORCH_HI,x
+    sta $00
+    lda SCORCH_LO,x
+    sta $01
+    txa
     pha
-    lda #<(ScorchDrawTown-1)
-    pha
-    lda #$03
-    jmp $FFCC
+    ldy $02
+    jsr ScorchQueue
+    pla
+    tax
+@skip_anim:
+@anim_done:
+    rts
 
 ; Column order per stage: top-left, bottom-left, top-right, bottom-right.
 ; Tile ids must match assets/town_fire.json (checked by tools/assets.py).
@@ -425,113 +454,3 @@ ScorchTiles:
     .byte $56,$57,$58,$59   ; North Palace flame (CHR bank 3)
     .byte $5A,$5B,$5C,$5D   ; North Palace char (CHR bank 3)
     .byte $A4,$C0,$34,$AC   ; town flame B (CHR bank 7, mirrored columns)
-
-.segment "TOWN"
-; Draw active town flames as fiery OAM sprites (tile $84, sprite palette 1)
-; using free OAM slots so flames keep their true red/orange palette on grass,
-; stone, and brick without BG attribute bleed.
-SCORCH_OAM_COUNT = 19
-ScorchDrawTown:
-    lda $0561
-    cmp SCORCH_ROOM
-    beq :+
-    jmp $FFC5
-:
-    lda #$00
-    ldy $12
-    tya
-    and #$08
-    beq :+
-    lda #$40
-:
-    ora #$01
-    sta $02                 ; $02 = sprite attr ($01 or $41)
-    tya
-    and #SCORCH_MASK
-    sta $03                 ; rotating start slot in SCORCH ring
-    lda #SCORCH_MAX
-    sta $04                 ; remaining slots to check
-    lda #$00
-    sta $05                 ; index into ScorchOam
-@draw_loop:
-    ldx $03
-    lda SCORCH_TIME,x
-    beq @draw_next
-    ; Compute screen_X = world_X_lo - $072C; check world_X_hi == $072A.
-    lda SCORCH_LO,x
-    and #$1E
-    asl
-    asl
-    asl
-    sec
-    sbc $072C
-    sta $01
-    lda SCORCH_PAGE,x
-    sbc $072A
-    bne @draw_next
-    ; Reconstruct OAM_Y = ((SCORCH_HI & 3) << 6) | (SCORCH_LO & $C0) - 1.
-    lda SCORCH_LO,x
-    and #$C0
-    sta $00
-    lda SCORCH_HI,x
-    lsr
-    ror $00
-    lsr
-    ror $00
-    dec $00
-    ; Left 8x16 flame sprite at screen_X.
-    jsr @find_free_oam
-    bcs @draw_done
-    lda $00
-    sta $0200,y
-    lda #$84
-    sta $0201,y
-    lda $02
-    sta $0202,y
-    lda $01
-    sta $0203,y
-    ; Right 8x16 flame sprite at screen_X + 8 (skip if wrapping past $FF).
-    clc
-    adc #$08
-    bcs @draw_next
-    sta $01
-    jsr @find_free_oam
-    bcs @draw_done
-    lda $00
-    sta $0200,y
-    lda #$84
-    sta $0201,y
-    lda $02
-    eor #$40
-    sta $0202,y
-    lda $01
-    sta $0203,y
-@draw_next:
-    inc $03
-    lda $03
-    and #SCORCH_MASK
-    sta $03
-    dec $04
-    bne @draw_loop
-@draw_done:
-    jmp $FFC5
-
-@find_free_oam:
-    ldy $05
-    cpy #SCORCH_OAM_COUNT
-    bcs @oam_full
-    lda ScorchOam,y
-    inc $05
-    tay
-    lda $0200,y
-    cmp #$F8
-    bne @find_free_oam
-    clc
-    rts
-@oam_full:
-    sec
-    rts
-
-ScorchOam:
-    .byte $28,$2C,$30,$34,$60,$64,$78,$7C,$90,$A8,$C0,$FC,$DC,$E0,$E4,$E8,$EC,$F0,$F4
-.segment "BANK0"

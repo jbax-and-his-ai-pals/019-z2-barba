@@ -290,7 +290,7 @@ def validate_layout(root: Path) -> bytes:
         if len(tokens) != 9 or any(not re.fullmatch(r'\$[0-9A-F]{2}', token) for token in tokens):
             raise ValueError(f'Tall layout {name} requires nine byte indexes')
         tiles = [int(token[1:], 16) for token in tokens]
-        if any(tile != 0xF5 and (tile % 2 or tile >= 0x64 or tile in {0x32,0x50,0x54}) for tile in tiles):
+        if any(tile != 0xF5 and (tile % 2 or tile >= 0x64 or tile in {0x32,0x4E,0x50,0x52,0x54,0x5E,0x62}) for tile in tiles):
             raise ValueError(f'Tall layout {name} uses a reserved or invalid body pair')
         if name in ('crouch', 'crouch-attack') and tiles[:3] != [0xF5]*3:
             raise ValueError(f'Tall layout {name} exceeds the compact crouch lane')
@@ -358,8 +358,9 @@ def compile_assets(root: Path, source_path: Path | None = None) -> tuple[bytes, 
                       'tuck', 'tuck', 'tuck')
     fallback = [named[name][16:] for name in fallback_names]
 
-    # Reserve weapon/candle tiles used by existing renderer immediates and North Castle.
-    reserved = {0x32, 0x50, 0x52, 0x54}
+    # Reserve weapon/candle tiles (0x32, 0x52, 0x54), Ache/bat enemy pairs (0x4E, 0x50),
+    # and ending ash pairs (0x5E, 0x62, patched separately in tools/build.py).
+    reserved = {0x32, 0x4E, 0x50, 0x52, 0x54, 0x5E, 0x62}
     slots = iter(i for i in range(0, 0x64, 2) if i not in reserved)
     pairs: dict[bytes, int] = {bytes(32): 0xF5}
     graphics: dict[int, bytes] = {}
@@ -392,10 +393,7 @@ def compile_assets(root: Path, source_path: Path | None = None) -> tuple[bytes, 
     flame = ['00000000']*3 + [
         '10000000','12100000','12211010','12322121','12333222',
         '12333222','12322121','12211010','12100000','10000000'] + ['00000000']*3
-    tip = ['00000000']*3 + [
-        '00000000','00000000','01000000','12101000','22212110',
-        '22212110','12101000','01000000','00000000','00000000'] + ['00000000']*3
-    for tile, rows in ((0x32, flame), (0x54, flame), (0x50, tip)):
+    for tile, rows in ((0x32, flame), (0x54, flame)):
         graphics[tile] = sprite_pairs([row[::-1] for row in rows])[0]
     # Fairy's existing 8x16 slot becomes a tiny dragon, preserving flight logic.
     hatchling = [row[::2] for row in small]
@@ -430,8 +428,8 @@ def compile_assets(root: Path, source_path: Path | None = None) -> tuple[bytes, 
               [[ash_colors[int(pixel)] for pixel in row] for row in ash_rows], 12)
     (root / 'build/barba-assets.json').write_text(json.dumps({
         'poses': list(TALL_POSES), 'size': [24, 48],
-        'body_pairs': len(pairs)-1, 'available_body_pairs': 47,
-        'weapon_pairs': [0x32, 0x50, 0x54], 'wyrmling_pairs': [0x68, 0x6A],
+        'body_pairs': len(pairs)-1, 'available_body_pairs': 43,
+        'weapon_pairs': [0x32, 0x54], 'wyrmling_pairs': [0x68, 0x6A],
         'ash_pairs': list(ASH_TILES), 'ash_visible_size': [16,8],
         'ash_sprite_npc_y_offset': 24,
         'mapping': [list(row) for row in tall_mapping],

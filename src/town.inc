@@ -3,7 +3,7 @@
 ; Every mutation requires an explicit outdoor room in world 1 or 2. Story-necessary
 ; NPCs ($0B, $0D..$0F, $22..$24, and all indoor actors) always keep their native routines.
 .segment "TOWN"
-.export TownUpdate, TownEligible, TownOutdoorRooms, TownEnd, TownDialog, TownFearText, TownFearPointers, TownHide
+.export TownUpdate, TownEligible, TownBurnable, TownOutdoorRooms, TownEnd, TownDialog, TownFearText, TownFearPointers, TownHide
 .export TownFastDialogReady, TownLetterDelay, TownLineDelay, TownAsh
 .include "ash_layout.inc"
 
@@ -15,13 +15,39 @@
 TownUpdate:
     jsr TownEligible
     bcs @eligible
+    jsr TownBurnable
+    bcc @native
+    lda $05C3,x
+    bne @native
+    lda $AF,x
+    cmp #$C0
+    bcc :+
+    jmp TownBurning
+:
+    cmp #$A0
+    bcc :+
+    jmp TownAsh
+:
+    jsr TownProjectileHit
+    bcs @ignite
 @native:
     lda $A1,x
+    cmp #$09
+    beq @native_19_20
+    cmp #$0F
+    beq @native_0F
+    cmp #$21
+    beq @native_21
     cmp #$13
     bcc @native_10_12
     cmp #$19
     bcc @native_13_18
+@native_19_20:
     jmp $9878
+@native_0F:
+    jmp $97A9
+@native_21:
+    jmp $9ABD
 @native_10_12:
     jmp $9793
 @native_13_18:
@@ -41,7 +67,14 @@ TownUpdate:
     jmp TownAsh
 :
     cmp #$80
-    beq @canHit
+    bne :+
+    ldy $A1,x
+    cpy #$19
+    bcs @canHit
+    ; Native $13..$18 house-openers spawn hidden inside a door with AF=$80, Y=$A8.
+    ; Keep them hidden inside instead of mistaking native $80 for TownFlee.
+    jmp TownHideOAM
+:
     cmp #$82
     beq @canHit
     cmp #$00
@@ -66,6 +99,7 @@ TownUpdate:
 @projectile:
     jsr TownProjectileHit
     bcc @unhit
+@ignite:
     lda COMBO_ADD
     clc
     adc #$03
@@ -96,6 +130,17 @@ TownUpdate:
     jsr TownPickEscapeDir
 
 TownFlee:
+    lda $2A,x
+    cmp #$B0
+    bcs @on_ground
+    lda $12
+    and #$0F
+    bne @on_ground
+    lda $2A,x
+    clc
+    adc #$04
+    sta $2A,x
+@on_ground:
     lda $71,x
     beq :+
     jsr TownPickEscapeDir
@@ -484,6 +529,35 @@ TownEligible:
 
 TownOutdoorRooms:
     .byte 1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1
+
+; Carry set iff this is a live burnable person in world 1/2 (including
+; single-area non-town places and indoor rooms, excluding North Palace $3C
+; and invisible triggers $0C/$22-$24).
+TownBurnable:
+    lda $B6,x
+    cmp #$01
+    bne @burn_no
+    lda $0707
+    cmp #$01
+    beq @burn_world_ok
+    cmp #$02
+    bne @burn_no
+@burn_world_ok:
+    lda $0561
+    cmp #$3C
+    beq @burn_no
+    lda $A1,x
+    cmp #$0A
+    bcc @burn_no
+    cmp #$0C
+    beq @burn_no
+    cmp #$22
+    bcs @burn_no
+    sec
+    rts
+@burn_no:
+    clc
+    rts
 
 ; Carry set when a native live player projectile overlaps this actor's body.
 ; Both slots and both page bytes are tested. Native projectile class (including
