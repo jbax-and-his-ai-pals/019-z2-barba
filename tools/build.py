@@ -67,6 +67,13 @@ def build(source_path: Path, output: Path) -> dict:
     mapping, graphics, ow, _ = compile_assets(ROOT, source_path)
     labels = assemble(output)
     overlay = Overlay(source)
+    # FarCall0 identifies the ACTUAL mapped bank without touching the native
+    # mapper path (and without mistaking the area-bank variable for a shadow).
+    fingerprints = bytes.fromhex('f0 7d 60 2e 91 2f 00 c9')
+    for bank, expected in enumerate(fingerprints):
+        offset = prg_offset(bank, 0x8506 if bank < 7 else 0xC506)
+        if source[offset] != expected:
+            raise ValueError(f'FarCall0 bank fingerprint changed: {bank}')
     for filename, bank, address in [('code', 0, 0xAA40), ('lava', 7, 0xD39A), ('terrain', 7, 0xFF4C), ('town', 3, 0xB803), ('gateway', 7, 0xFEAA)]:
         data = (output/f'barba-{filename}.bin').read_bytes()
         overlay.prg(bank, address, data, b'\xFF'*len(data), f'New {filename} routines')
@@ -301,6 +308,10 @@ def build(source_path: Path, output: Path) -> dict:
     overlay.prg(4, 0xA78E, bytes.fromhex('3f 15 03 18 36 2a ff'), b'\xff' * 7, 'Lava Link palette packet')
 
     target = bytes(overlay.target)
+    for bank, expected in enumerate(fingerprints):
+        offset = prg_offset(bank, 0x8506 if bank < 7 else 0xC506)
+        if target[offset] != expected:
+            raise ValueError(f'Patch overwrote FarCall0 bank fingerprint: {bank}')
     # The FF byte at FF4B is the high operand of a live JMP, not filler.
     # Keep its whole instruction untouched beside the new terrain allocation.
     anchor = prg_offset(7, 0xFF49)

@@ -70,3 +70,53 @@ associated `*-error.txt` file. Native emulator logs are retained for diagnosis.
 GitHub Actions runs ROM-free tests, assembles the custom code, validates the
 art compiler, and checks that no ROMs/saves are tracked. Emulator scenarios
 require the user's local ROM and are not run in public CI.
+
+## Adding a cold bank-0 hook
+
+Use the reusable bridge in `src/farcall.inc`:
+
+```asm
+; Call site and operand must remain mapped (fixed ROM, or test RAM).
+    jsr FarCall0
+    .word MyBank0Routine
+; Resume here in the ACTUAL caller bank, with target A/X/Y/P.
+```
+
+1. Put the routine in BANK0 and end with RTS. Do not deliberately leave another
+   bank mapped on return.
+2. Add the 5-byte call at an instruction-aligned fixed-bank site or proven free
+   space. A standalone returning gateway also needs RTS: **6 bytes**, plus the
+   original 3-byte hook. Inside an existing gateway: **5 fixed bytes** per call,
+   no per-target table entry.
+3. Use only guarded overlay.prg/put writes with expected source bytes, covering
+   complete original instructions. See FIXED-BANK-AUDIT.md. FF4B and E02C are
+   live JMP operands, not padding.
+4. Preserve the identity byte at CPU $8506 in every bank. Build guards check
+   source and output identities. $0769 is the saved AREA bank, not a current-bank
+   shadow; FFC9 is not a general restoration API. The native mapper is unchanged.
+5. Run build, unit tests, farcall.lua, affected gameplay scenarios and perf_volley
+   sequentially. Never convert EnemyFireGateway fast path or TerrainBatch to this
+   slower generic ABI.
+
+Common cost: **20 fixed bytes + 157 bank-0 bytes**, paid once. Incoming A/X/Y/P
+and $00/$01 reach the target unchanged; target register/flag/scratch outputs
+survive restoration. Hardware B/U status bits are not state. Stack-local frames
+nest: budget 15 stack bytes at bridge peak (including caller JSR), plus target
+stack use; 9 extra bytes remain live during the target versus ordinary JSR. No
+persistent RAM is used. Use in existing serialized/NMI game logic; this does
+not provide asynchronous interrupt/mapper arbitration.
+
+Measured on real Mesen 6502/MMC1, excluding a 26-cycle target body including RTS,
+the 5-byte call costs **474 - 15*b cycles**, with actual entry PRG bank b=0..7:
+474 from bank0, 429 from bank3, 369 from bank7. Operand page crossing adds up to
+2 cycles; target low byte $00 adds 6 for RTS-address borrow. Reserve **482 cycles**
+worst case under this link layout, plus target work. Recheck branch/table page
+costs after relinking. This ABI is for cold hooks, not per-enemy/projectile/terrain.
+
+Current fixed padding free: **16 bytes**, formerly 11 (LAVA 5, GATEWAY 8,
+TERRAIN 3). Bank0: 1169 free; bank3: 283. Only the original three proven spans
+are used. Rollback: revert this branch commit and rebuild; no source ROM changes.
+
+The emulator runner copies executable dependencies to build/mesen and writes
+settings there, never into the shared .tools junction. Run scenarios sequentially.
+No ROM, emulator binary, generated state or build output is tracked.

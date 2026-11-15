@@ -29,7 +29,12 @@ for _,pose in ipairs({5,7,8,9})do
         w(0x72A,0);w(0x72C,0);w(0xC8,0);w(0x48D,0);w(0x50C,0)
         w(0x70E,0);w(0x752,0);w(0x480,0x80);w(0x47E,0x60)
     end,function()
-        check(r(0x480)==0xF8,'pose '..pose..' disables native sword/thrust collision')
+        if pose==9 then
+            -- Native $F27D derives screen X=$48 from the world coordinate.
+            check(r(0x480)==0xAC and r(0x47E)==0x53,'downstab preserves the existing foot hitbox')
+        else
+            check(r(0x480)==0xF8,'pose '..pose..' disables native sword/thrust collision')
+        end
         check(r(0x220)==0xF8 and r(0x224)==0xF8,'pose '..pose..' hides both attached-flame sprites')
         check(r(0x80)==pose,'renderer preserves native attack pose')
         check(emu.getState()['mapper.prgReg']==0,'renderer retains player PRG bank')

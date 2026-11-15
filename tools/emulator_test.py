@@ -2,6 +2,7 @@
 from __future__ import annotations
 import argparse
 import json
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -10,12 +11,22 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def run(scenario: Path, rom: Path, timeout: int = 30) -> int:
-    emulator = ROOT / '.tools/mesen/Mesen.exe'
-    if not emulator.exists():
+    source_emulator = ROOT / '.tools/mesen/Mesen.exe'
+    if not source_emulator.exists():
         raise SystemExit('Portable Mesen is missing. See docs/BUILD.md.')
-    settings = emulator.parent / 'settings.json'
     output = ROOT / 'build'
     output.mkdir(exist_ok=True)
+    # .tools may be a read-only shared junction in an isolated worktree.
+    # Mesen writes settings and ancillary files beside its executable.
+    emulator_dir = output / 'mesen'
+    emulator_dir.mkdir(exist_ok=True)
+    for source in source_emulator.parent.iterdir():
+        if source.is_file() and source.name != 'settings.json':
+            dest = emulator_dir / source.name
+            if not dest.exists() or dest.stat().st_size != source.stat().st_size:
+                shutil.copy2(source, dest)
+    emulator = emulator_dir / 'Mesen.exe'
+    settings = emulator_dir / 'settings.json'
     saves = Path(tempfile.mkdtemp(prefix='test-saves-', dir=output))
     settings.write_text(json.dumps({
         'Debug': {'ScriptWindow': {'AllowIoOsAccess': True}},
