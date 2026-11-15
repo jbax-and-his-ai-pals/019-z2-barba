@@ -10,6 +10,22 @@ The body now keeps the boss's narrow neck silhouette without the added belly
 coil. Full-body jump rendering is checked during ascent and descent; grounded
 crouching retains a short neck beneath the head.
 
+## Upward breath and rising head-butt (2026-11-14)
+
+Implemented the approved [upstab plan](UPSTAB-FIRE-PLAN.md). With Upward Thrust learned,
+airborne Up+B starts a latched five-shot upward column (-3 Y, slight forward drift).
+Grounded Up+B stays forward/vanilla; no tech means normal breath. Hold Up while rising
+for centered native-head melee; descent disables it. Glove-gated ceiling bricks and
+folded-head spawning are covered. Existing open-jaw art only; LOAD_LIMIT remains 7.
+
+Build, 10 unit tests, 797 upstab assertions, all 23 non-stale suite scenarios, and
+10 regenerated checkpoint reloads pass. Four known stale scenario reports are exactly
+identical to base 262501a. Standard volley peak +39 cycles (30,119 -> 30,158), existing
+1/900 lag unchanged; lava +22 (21,677 -> 21,699), 0 lag. Six-active-Bot upward probe:
+27,839 peak versus base forward 27,888, 0/900 lag, 25 upward shots.
+Elevator test is a CPU grounded/elevator-actor fixture, not a real elevator ride.
+No new checkpoint; F3 is the playtest. Local report: build/UPSTAB-REPORT.md. No gates advanced.
+
 ## Fixed-bank headroom branch (2026-11-14)
 
 `FarCall0` is a cold-hook ABI with exact caller-bank restoration; the lava body
@@ -53,7 +69,7 @@ BUILD.md. Hardware sprite limits remain enabled.
 | Bounded volley | Five logical slots keep exact eight-update spacing, preserve range, continue beyond attack animation, require release before rearming, and trigger Zelda II's native Barba/Flame fireball sound (`$ED |= $40` in `BarbaBreathSfx`) once per attack |
 | Weak-enemy stomp & item pickup | `BarbaPreEnemy` (`$D4FE` -> `stomp.inc`) lets descending Barba stomp-kill weak enemies (`$C2,x` 1..4) via native `$E880` with an upward bounce (`$057D = $FC`) and no contact damage, and lets Barba pick up keys, jars, P-bags, and 1-Ups (`$A1 = $01`, `$AF & $7F` in `$08..$0D, $10, $11`) by touching them via native `$E771` without requiring a crouched fireball |
 | Post-flash palette | Strided WRAM flash-restore table (`$A9FA`/`$AA00`/`$AA06` -> `$69D2`/`$69D8`/`$69DE`) and side-view init (`$90DA`) patched to `$16/$27/$30` so `$074B` flash sequences (spells, item pickups, crystal flashes) restore Barba's red/orange/white palette instead of vanilla green/beige (`$18/$36/$2A`) |
-| Downstab | `BarbaSetDownstab` (`src/tall_player.inc`) preserves `$0480`/`$047E` when `$80 == $09` (Downstab) while keeping horizontal melee disabled (`$F8`); hitbox widened to 18x12 px (`$E9B5`, `$E9A1`) centered under Barba (`$29+$1C`, `$CC+$0B`) |
+| Downstab | `BarbaSetThrusts` (`src/tall_player.inc`) preserves `$0480`/`$047E` when `$80 == $09` (Downstab) while keeping horizontal melee disabled (`$F8`); hitbox widened to 18x12 px (`$E9B5`, `$E9A1`) centered under Barba (`$29+$1C`, `$CC+$0B`) |
 | Town safety | All outdoor `$13..$20` villagers (static, generated, scripted, and house-openers) are eligible to panic and burn, and respawn when leaving and re-entering the room/town; indoor rooms and `$0B..$12` wise men/healers remain excluded |
 | Town gameplay | Native Rauru generator, away-from-Barba fleeing (`$0E`/`$F2`, signed page check + continuous re-check; 72 px normal / 96 px attack awareness radius), real fireball burn/ash/expiry, burnable outdoor town props & buildings (`BarbaTownBurn` in `src/blocks.inc`, preserving ground/clouds/doors), reachable held-Up dialogue, open black entryway (`$91`) shelter, and closed doorway (`$8B`) open/enter/close PPU animation without collision RAM edits |
 | Left-facing and player doors | Busy-original-slot and world-page tests emit five shots; real doorway entry/return works with a nearby villager; F8 starts at Rauru entrance (`$00`) |
@@ -76,8 +92,8 @@ Audio register/envelope validation is not a listening-quality review.
 
 The ordered next steps and latest human feedback are in [ROADMAP.md](ROADMAP.md).
 
-- Redesign vertical techniques around projectile-only combat; old thrust damage
-  and bounce are retired. Glove-gated fireball block breaking is implemented.
+- Tune upward breath/head-butt feel by hand and draw the deferred looking-up attack head.
+  Up/down thrusts and glove-gated fireball block breaking are implemented.
 - Palace 6's boss is now **Lava Link** (`tests/link_boss.lua` PASS); full defeat-to-crystal playthrough remains to be tested by hand.
 - Audit sprite states and CHR sharing in every town, palace, menu, ending and
   the Dark Link encounter; the current replacement covers 13 side-view sprite banks.

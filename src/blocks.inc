@@ -8,9 +8,9 @@ BarbaBlocks:
     jsr BarbaNativeBlocks
     lda $0707
     beq @done
-    jmp BarbaExtraBlocks
+    jsr BarbaExtraBlocks
 @done:
-    rts
+    jmp BarbaSetThrusts ; restore held thrust after temporary projectile origins
 BarbaNativeBlocks:
     lda $8D
     ora $8E
