@@ -1,6 +1,7 @@
 -- Generate human-playable snapshots using normal room loading and game logic.
 -- Only progression/stats/entry location are edited; no persistent cheats run.
 dofile(TEST_DIR..'/newgame.lua')
+dofile(TEST_DIR..'/checkpoint_features.lua')
 local mem=emu.memType.nesMemory
 local function r(a)return emu.read(a,mem)end
 local function w(a,v)emu.write(a,v,mem)end
@@ -11,6 +12,7 @@ local base=nil
 local capture=false
 local records={}
 local crossingFrame=nil
+local positioned=false
 local function upgraded()
     w(0x700,9)
     w(0x777,4);w(0x778,8);w(0x779,8)
@@ -80,6 +82,16 @@ local scenes={
         w(0x777,8);w(0x770,0xFF);w(0x771,0xFF)
     end,capture=function()return r(0x736)==11 end}
 }
+-- Python supplies the same recipe list to generation, manifest and reload checks.
+if PACK_SCENES then
+    scenes={}
+    for _,recipe in ipairs(PACK_SCENES) do
+        local spec=recipe
+        scenes[#scenes+1]={id=spec.id,name=spec.name,frames=spec.frames or 150,setup=function()
+            for address,value in pairs(spec.writes) do w(address,value) end
+        end,capture=function()return r(0x736)==(spec.mode or 11) and (spec.mode==5 or r(0xB5)==1) end}
+    end
+end
 local function finish()
     local f=assert(io.open(PACK_DIR..'/capture-log.txt','w'))
     f:write(table.concat(records,'\n')..'\n');f:close()
@@ -87,11 +99,20 @@ local function finish()
 end
 local function saveScene()
     local scene=scenes[index]
+    if PACK_SCENES and PACK_SCENES[index].feature then
+        local ok,detail=checkpointFeature(PACK_SCENES[index])
+        assert(ok,detail);records[#records+1]='FEATURE '..scene.id..' '..detail
+    end
     local state=emu.createSavestate()
     local file=assert(io.open(PACK_DIR..'/'..scene.id..'.mss','wb'))
     file:write(state);file:close()
     file=assert(io.open(PACK_DIR..'/'..scene.id..'.png','wb'))
     file:write(emu.takeScreenshot());file:close()
+    if PACK_SCENES and PACK_SCENES[index].town then
+        local palette={}
+        for a=0,15 do palette[#palette+1]=string.format('%02X',emu.read(a,emu.memType.nesPaletteRam)) end
+        records[#records+1]='PALETTE '..scene.id..' '..table.concat(palette,' ')
+    end
     local enemies={}
     for slot=0,5 do
         if r(0xB6+slot)>0 then enemies[#enemies+1]=string.format('%02X',r(0xA1+slot)) end
@@ -103,6 +124,7 @@ local function saveScene()
     assert(emu.loadSavestate(base),'Failed to restore fresh-game baseline')
     age=0
     crossingFrame=nil
+    positioned=false
     scenes[index].setup()
 end
 emu.addEventCallback(function()
@@ -126,6 +148,11 @@ emu.addEventCallback(function()
     else
         age=age+1
         if scenes[index] then
+            if PACK_SCENES and PACK_SCENES[index].position and age==80 then
+                local p=PACK_SCENES[index].position
+                w(0x3B,math.floor(p.x/256));w(0x4D,p.x%256);w(0x29,p.y)
+                w(0x57D,0);w(0x479,0)
+            end
             if scenes[index].id=='combat' and age==80 then
                 w(0x4D,96);w(0x3B,0);w(0x29,144);w(0x57D,0);w(0x479,0)
             end
@@ -138,9 +165,18 @@ emu.addEventCallback(function()
     end
 end,emu.eventType.endFrame)
 emu.addMemoryCallback(function()
+    if PACK_SCENES and base and not positioned and PACK_SCENES[index].mode==5 and r(0x736)==2 then
+        -- The native outside-area transition restores the last area coordinates.
+        -- Supply the new entry location before normal overworld drawing begins.
+        w(0x73,PACK_SCENES[index].entry['115']);w(0x74,PACK_SCENES[index].entry['116'])
+        positioned=true
+    end
     if capture then
         capture=false
-        if not base then base=emu.createSavestate() end
+        if not base then
+            base=emu.createSavestate()
+            if PACK_SCENES then scenes[1].setup();age=0;return end
+        end
         saveScene()
     end
 end,emu.callbackType.exec,0xC07B)

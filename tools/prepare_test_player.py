@@ -1,20 +1,23 @@
 """Install validated scenario states in an isolated human-test Mesen profile."""
 from __future__ import annotations
+import argparse
 import json
 import shutil
 from pathlib import Path
-from create_test_pack import ROOT, create
+from create_test_pack import ROOT, SETS, create
 
 
-def prepare() -> dict:
-    manifest=create()
+def prepare(set_name: str='core') -> dict:
+    manifest=create(set_name=set_name)
     folder=Path(manifest['folder'])
     slots=folder/'slots'
     slots.mkdir(exist_ok=True)
     # Slot files are disposable copies; generated masters are kept separately.
+    for slot in range(len(manifest['states'])+1,11):
+        (slots/f'barba-test_{slot}.mss').unlink(missing_ok=True)
     for scene in manifest['states']:
         shutil.copyfile(folder/scene['file'],slots/f"barba-test_{scene['slot']}.mss")
-    player=ROOT/'.tools/mesen-scenarios/Mesen.exe'
+    player=ROOT/'build/mesen-scenarios'/set_name/'Mesen.exe'
     player.parent.mkdir(parents=True,exist_ok=True)
     if not player.exists():shutil.copyfile(ROOT/'.tools/mesen/Mesen.exe',player)
     settings=player.parent/'settings.json'
@@ -35,12 +38,14 @@ def prepare() -> dict:
                         'OverrideSaveStateFolder':True,'SaveStateFolder':str(slots)})
     # Reserve one F-key per test checkpoint, clearing conflicting default bindings (e.g. F8=Auto, F9=MaxSpeed).
     shortcuts=preferences.setdefault('ShortcutKeys',[])
-    reserved=set(range(90,90+len(manifest['states'])))
+    reserved=set(range(90,100))
     for entry in shortcuts:
         for key_field in ('KeyCombination','KeyCombination2'):
             combo=entry.get(key_field)
             if combo and combo.get('Key1') in reserved and not combo.get('Key2') and not combo.get('Key3'):
                 combo['Key1']=0
+    names={f'LoadStateSlot{slot}' for slot in range(1,11)}
+    shortcuts[:]=[s for s in shortcuts if s.get('Shortcut') not in names]
     for slot in range(1,len(manifest['states'])+1):
         name=f'LoadStateSlot{slot}'
         shortcuts[:]=[s for s in shortcuts if s.get('Shortcut')!=name]
@@ -51,4 +56,7 @@ def prepare() -> dict:
     return manifest
 
 
-if __name__=='__main__':prepare()
+if __name__=='__main__':
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--set',choices=SETS,default='core')
+    prepare(parser.parse_args().set)
