@@ -11,14 +11,14 @@ python tools/build.py                          # build/barba.nes + .bps; source 
 python -m unittest discover -s tests           # ROM-free unit tests (fast)
 python tools/emulator_test.py tests/<name>.lua # one Mesen scenario, headless. Run scenarios one at a time.
 python tools/emulator_test.py tests/boot.lua --rom roms/z2.nes
-python tools/create_test_pack.py --force       # F1-F9 human checkpoints for the current build
+python tools/create_test_pack.py --force       # F1-F10 human checkpoints for the current build
 python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-per-line report
 ```
 
 - Results go to `build/<scenario>.txt` (PASS/FAIL lines plus RESULT). Errors go to `build/<scenario>-error.txt`.
 - Each scenario has a 30 s timeout. For longer probes call `emulator_test.run(path, rom, timeout=N)`.
-- The producer plays via `Play Barba.cmd` and uses checkpoints via `Test Barba.cmd`.
-  Hand them a playable build (`build/barba.nes`) plus a regenerated test pack.
+- The producer plays via `play/Play Barba.cmd` and uses checkpoints via `play/Test Barba.cmd`.
+  Hand them a playable build (`play/barba.nes` + `build/barba.nes`) plus a regenerated test pack.
 - Full suite: boot, gameplay, combat, palace, routines, tall_geometry, projectile_only, burst,
   extra_fire, left_fire, damage, hud_timing, breath_height, town, town_safety, shouts,
   shout_queue, shout_follow, doors, dialogue_speed, perf_volley, plus `state_pack` via create_test_pack.
@@ -55,9 +55,9 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
 - ROM: bank 0 `$AA40-$BF6F` (BANK0; about $9B0 used), bank 3 `$B803-$BF6F` (TOWN),
   fixed bank 7: `$D39A` LAVA (5 bytes left), `$FEAA` GATEWAY (about 8 left), `$FF4C-$FF6F` TERRAIN (about 3 left).
   **The fixed bank is essentially full.** See `build/barba.map` for exact use.
-- RAM `$05EA`, `$05F0-$05FF` (roar, breath, tall renderer, extra guard). Cleared by the native reset loop.
-- WRAM `$6400-$642F` extra projectile records; `$6440-$645C` scratch (`$6457` lazy-save flag,
-  `$645C` EXTRA_LIVE); `$6460-$6468` shouts (`$6465` actor, `$6467` word, `$6468` timer). Don't touch collision/room/save regions elsewhere in `$6000-$7FFF`.
+- RAM `$05EA`, `$05EB` (lava contact), `$05F0-$05FF` (roar, breath, tall renderer, extra guard). Cleared by the native reset loop.
+- WRAM `$6400-$642F` extra projectile records; `$6440-$645F` scratch (`$6457` lazy-save flag,
+  `$6458-$645F` geometry terrain cache, `$645C` EXTRA_LIVE); `$6460-$6468` shouts (`$6465` actor, `$6467` word, `$6468` timer). Don't touch collision/room/save regions elsewhere in `$6000-$7FFF`.
 - OAM in use: tall head `$04/$4C/$F8`, extra fireballs `$3C/$44/$48`; enemy projectiles use `$28/$2C/$30`;
   town shout word `$E0-$F0` (only while a word is live and no enemy projectile exists).
 - CHR: player art in even sprite banks 0-24; ash `$64/$66` **bank 6 only** (shared sprites elsewhere);
@@ -66,9 +66,10 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
 ## Performance facts (from tests/perf_volley.lua)
 
 The game logic runs in NMI. Over about 29.7k cycles the next frame lags. Vanilla peaks near 26.6k
-with 6 enemies. The mod adds about 2.5k constant. Each live shot costs about 1.2-1.7k. Fixes in place:
-idle fast paths, a fixed-bank no-extras fast path for enemy collision, and the governor (queued
-shots wait while enemies + live shots >= 6). Result: 0 lag frames in the Palace 1 fixture.
+with 6 enemies. `BarbaDisplay` bypasses `$EBF0` on normal frames (using `$F27D` + unrolled 9-sprite
+draw) and `BarbaGeometry` caches `TerrainBatch` in `$6458-$645F`, cutting display cost from ~4.0k
+to ~1.2k cycles/frame. `BarbaLoadOk` uses `LOAD_LIMIT = 7` (allows 2 simultaneous shots in 6-enemy
+overworld fights with 0 lag frames, max 28,941 cycles, and 4/900 lag frames in Palace 1 volley).
 
 ## Status and docs (read only what you need)
 

@@ -1,6 +1,6 @@
 # Instant playtesting checkpoints
 
-On Windows, double-click **Test Barba.cmd**, or run:
+On Windows, double-click **play/Test Barba.cmd**, or run:
 
 ```powershell
 ./tools/launch.ps1 -TestPack
@@ -21,7 +21,8 @@ Press the same key again at any time to restart that test and refill its meters.
 | F6 | Palace 6 Barba encounter | Original Barba is above the lava. Test player/boss graphics, attacks and movement around the platforms. Ice Barba is not implemented. |
 | F7 | Sea crossing in progress | Watch the dragon complete the normal raft route to East Hyrule. Reload F7 to repeat. |
 | F8 | Rauru town street | Approach outdoor wanderers, watch slower fleeing/immediate door despawn, and test fireballs. Watch automatic shouts and ash piles; hold Up while approaching for faster dialogue. Scripted and indoor NPCs are protected. |
-| F9 | Before Palace 6 boss | Left edge of the boss room with level 8 attack/magic/life, all spells and full meters. Walk right to start the fight. |
+| F9 | Before Palace 6 boss | Left edge of the boss room with level 8 attack/magic/life, all spells and full meters. Walk right to start the fight against Lava Link. |
+| F10 | Great Palace final boss | Low-ceiling corridor before Thunderbird and Dark Link with max stats, all spells and full meters. Test `INFERNO`, Dark Link combat and ending progression. |
 
 Controls: arrows move, **X** jumps, **Z** attacks, **Enter** starts/pauses, and
 **Left Shift** is Select/cast. State-load keys work independently of the game menu.

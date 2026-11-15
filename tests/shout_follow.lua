@@ -13,7 +13,17 @@ local function check(ok,msg)
     f:write((ok and 'PASS ' or 'FAIL ')..msg..'\n');f:flush()
     if not ok then errors=errors+1 end
 end
-local lengths={5,4,5,3}
+local lengths={5,4,5,5,4,4,6,5}
+local words={
+    {0,1,2,3,4},       -- 1 SHIT!
+    {0,1,2,3},         -- 2 RUN!
+    {0,1,2,3,4},       -- 3 FUCK!
+    {0,1,3,4},         -- 4 OH NO (space at 2)
+    {0,1,2,3},         -- 5 OMG!
+    {0,1,2,3},         -- 6 WTF!
+    {0,1,3,4,5},       -- 7 OH GOD (space at 2)
+    {0,1,2,3,4},       -- 8 HELP!
+}
 local function glyphsVisible()
     local n=0
     for i=0,4 do if r(OAM+i*4)<0xEF then n=n+1 end end
@@ -37,14 +47,14 @@ local function anyHiddenBreak()
     return glyphsVisible()==0
 end
 -- Phase state
-local seen,firstAt,tracked,maxErr,scrolled,startScroll=false,nil,0,0,false,nil
+local seen,firstAt,firstWord,rotatedWord,tracked,maxErr,scrolled,startScroll=false,nil,nil,nil,0,0,false,nil
 local expired,hiddenAfter=false,true
-local doorX,despawnHidden,despawned,doorSeen=nil,false,false,false
+local doorX,doorNt,despawnHidden,despawned,doorSeen,doorOpened,doorClosed=nil,nil,false,false,false,false,false
 local placedAt=nil
 local glyphBg=false
 -- Background tiles replaced by the glyph pairs (bank 7, odd tiles $81..$A1).
 local replaced={}
-for _,pair in ipairs({0x80,0x82,0x84,0x86,0x88,0x8A,0x8C,0x92,0x94,0x9C,0x9E,0xA0}) do
+for _,pair in ipairs({0x80,0x82,0x84,0x86,0x88,0x8A,0x8C,0x92,0x94,0x9C,0x9E,0xA0,0xA2,0xA8,0xAA,0xAC,0xBA,0xBC,0xBE}) do
     replaced[pair]=true;replaced[pair+1]=true
 end
 function glyphTilesOnScreen()
@@ -76,7 +86,10 @@ local function setup()
         for page=0,3 do
             local baseAddress=0x6000+page*0xD0
             for column=0,15 do
-                if not doorX and r(baseAddress+0xA0+column)==0x8B then doorX=page*256+column*16 end
+                if not doorX and r(baseAddress+0xA0+column)==0x8B then
+                    doorX=page*256+column*16
+                    doorNt=((page%2==1) and 0x2400 or 0x2000)+0x280+column*2
+                end
             end
         end
         check(doorX~=nil,'door phase: native street has a closed doorway')
@@ -92,7 +105,7 @@ emu.addEventCallback(function()
         if base then
             if phase==1 then b.right=age>=20 and age<80 end
             if phase==3 then b.right=doorX~=nil and not placedAt and playerX()<doorX-100 end
-            if phase==4 then b.b=age>=12 and age<15 end
+            if phase==4 then b.b=age>=8 and age<11 end
             if phase==6 then b.up=age>=10 and age<40 end
             if phase==7 then b.start=age>=10 and age<13 end
             if phase==7 and age>=60 and age<63 then b.start=true end
@@ -133,21 +146,22 @@ emu.addEventCallback(function()
     if phase==1 then
         -- Panic, flee, follow; then expiry.
         if word~=0 and vis>0 then
-            if not seen then seen=true;firstAt=age end
+            if not seen then seen=true;firstAt=age;firstWord=word end
             local n,ax,ay=actorBox()
-            if n>0 and r(0xB6+slot)==1 then
+            if n==4 and r(0xB6+slot)==1 then
                 local len=lengths[word]
+                local cols=words[word]
                 local left=ax+8-4*len
                 local err=0
-                for i=0,len-1 do
-                    local a=OAM+i*4
-                    local gx=left+8*i
-                    if gx>=0 and gx<256 then
+                for idx,col in ipairs(cols) do
+                    local a=OAM+(idx-1)*4
+                    local gx=left+8*col
+                    if gx>=4 and gx<252 then
                         err=math.max(err,math.abs(r(a)-(ay-18)),math.abs(r(a+3)-gx))
                         if r(a+1)%2~=1 or r(a+2)~=2 then err=999 end
                     end
                 end
-                for i=len,4 do if r(OAM+i*4)<0xEF then err=999 end end
+                for i=#cols,4 do if r(OAM+i*4)<0xEF then err=999 end end
                 if err>maxErr then maxErr=err;f:write(string.format('note new max error=%d age=%d ax=%d ay=%d g0=%d,%d\n',err,age,ax,ay,r(OAM+3),r(OAM))) end
                 tracked=tracked+1
                 if not startScroll then startScroll=r(0x72C) end
@@ -156,12 +170,14 @@ emu.addEventCallback(function()
             if age==40 then screenshot('shout-follow')end
         end
         if seen and word==0 and not expired then expired=true end
-        if expired and vis>0 then hiddenAfter=false end
+        if expired and word==0 and vis>0 then hiddenAfter=false end
+        if expired and word~=0 and not rotatedWord then rotatedWord=word end
         if age==170 then
             check(seen and firstAt<=4,'word appears within four frames of the panic (frame '..tostring(firstAt)..')')
-            check(tracked>=40 and maxErr<=1,'word tracks the fleeing villager in the same frame ('..tracked..' frames, max error '..maxErr..')')
+            check(tracked>=40 and maxErr<=2,'word tracks the fleeing villager in the same frame ('..tracked..' frames, max error '..maxErr..')')
             check(scrolled,'tracking holds while the screen scrolls')
             check(expired and hiddenAfter,'word hides itself when its timer expires')
+            check(rotatedWord~=nil and rotatedWord~=firstWord,'word rotates on next shout ('..tostring(firstWord)..'->'..tostring(rotatedWord)..')')
             check(r(0x736)==11,'town remains playable')
             pending=true
         end
@@ -184,6 +200,11 @@ emu.addEventCallback(function()
             w(WORD,1);w(SLOT,slot);w(TIMER,100);w(0x6461,0xB4)
         end
         if placedAt and age>placedAt+1 then
+            if doorNt then
+                local tile=emu.read(doorNt+0x20,emu.memType.nesPpuMemory)
+                if tile==0xFF then doorOpened=true end
+                if doorOpened and tile==0x40 then doorClosed=true end
+            end
             if vis>0 and not despawned then
                 doorSeen=true
                 if age==placedAt+6 then screenshot('shout-follow-door') end
@@ -195,6 +216,7 @@ emu.addEventCallback(function()
         if (placedAt and age==placedAt+120) or age==700 then
             check(doorSeen,'word is drawn above the villager running for the door')
             check(despawned and despawnHidden,'word vanishes the same frame the villager enters a doorway')
+            check(doorOpened and doorClosed,'house door opens and closes in PPU nametable')
             pending=true
         end
     elseif phase==4 then

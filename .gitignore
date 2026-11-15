@@ -5,6 +5,7 @@
 /.tools/
 /.cache/
 *.nes
+*.bps
 *.fds
 *.sav
 *.srm

@@ -40,6 +40,9 @@ SHOUT_PAIR_SHA256 = {
     0x86: '3e0dffed3d26d014', 0x88: '55dc69973efa250d', 0x8A: '431ab247f511fe1d',
     0x8C: 'c644321081be6393', 0x92: 'cab870c820270963', 0x94: '13ea6b95d58a4960',
     0x9C: '8d5f82fc987a6193', 0x9E: 'f9523c2896786a4b', 0xA0: '56c8c7c281e4177f',
+    0xA2: '904a335528773b88', 0xA8: '8a67b0ac638f1721', 0xAA: '28d9e3968e5dce9e',
+    0xAC: '1e50cd57abf29a43', 0xBA: '77125f6e91a0dc9e', 0xBC: '14f9bfc9ad98c854',
+    0xBE: '5155a7a4143a9e04',
 }
 
 
@@ -71,6 +74,10 @@ def compile_shout_glyphs(root: Path, source: bytes) -> dict[int, bytes]:
             raise ValueError(f'No shout glyph source for {char!r}')
         if len(rows) != 8 or any(len(row) != 8 or set(row)-set('012') for row in rows):
             raise ValueError(f'Shout glyph {char!r} must be 8x8 using 0..2')
+        authored = char in spec['authored']
+        if not authored and any(row[0] == '1' for row in rows):
+            drop = 4 if char in ('N', 'K') else 3
+            rows = ['0' + row[:drop] + row[drop+1:7] + '0' for row in rows]
         canvas = [['0']*8 for _ in range(8)] + [list(row) for row in rows]
         body = {(y, x) for y in range(16) for x in range(8) if canvas[y][x] == '1'}
         out = [['0']*8 for _ in range(16)]
@@ -78,13 +85,87 @@ def compile_shout_glyphs(root: Path, source: bytes) -> dict[int, bytes]:
             for x in range(8):
                 if (y, x) in body:
                     out[y][x] = letter
-                elif canvas[y][x] == '2' or any((y+dy, x+dx) in body
+                elif (authored and canvas[y][x] == '2') or any((y+dy, x+dx) in body
                         for dy in (-1, 0, 1) for dx in (-1, 0, 1)):
                     out[y][x] = outline
         if tile & 0xFE in result:
             raise ValueError(f'Shout glyph {char} reuses an allocated pair')
         result[tile & 0xFE] = sprite_pairs([''.join(row) for row in out])[0]
     return result
+
+
+TITLE_CHR_BANK = 1  # title screen BG pattern table ($1000 when $76E == 0)
+# Truncated SHA-256 of each original 16-byte tile in bank 1 used exclusively by
+# the "LINK" title logo (never shared with "ZELDA II", "THE ADVENTURE OF",
+# "TM", story scroll, or borders).
+TITLE_TILE_SHA256 = {
+    0x08: '371d8e9cb6316f58', 0x09: '649f2a5ed69da97f', 0x0A: '9147ab7e42b250c0',
+    0x0B: '5a76765c34612834', 0x0C: '1c9a6a270eba5569', 0x0D: 'f165b2d2b496f400',
+    0x0F: '374708fff7719dd5', 0x10: 'cbba06729da534a0', 0x11: '0170b5093715d9cd',
+    0x12: 'f1a32dd9bb342605', 0x13: '6c7e98a360cd532e', 0x14: '55c9dc053ef77941',
+    0x15: '8b49c028ac739f64', 0x16: '4b2d82926df1f59a', 0x17: 'e2b9a8d07bfb190f',
+    0x1A: 'c855540fd4119033', 0x3E: 'c188f501b4bc9a90', 0x3F: '87669a249efd631f',
+    0x40: 'd96ae899ea88facf', 0x41: '4a5d0546e52ffa90', 0x42: '6b75fb316aa357ee',
+    0x43: '26991008efdd2d01', 0x44: '465acaaf337dbda6', 0x45: 'd0906abed0c87110',
+    0x46: 'b1c5cf63ba57631b', 0x47: '17d014410caf8ff3', 0x48: '83ef6c626299ec5f',
+    0x49: '17d014410caf8ff3', 0x4A: 'd60973e30109d200', 0x4B: 'd3b51386a6cdb886',
+    0x4C: '6982dfc1ca77282c', 0x4D: 'd68abbfd56da3c2c', 0x4E: '9922d2ab646c67c5',
+    0x4F: 'd8b85654ced2070a', 0x50: '9d51b3afcd4cf2df', 0x51: 'd96ae899ea88facf',
+    0x52: 'e355c8e54e1c8dcb', 0x53: 'fdd06dd77479f928', 0x54: '38d18df06d4558c9',
+    0x55: '542636ae4cd933db', 0x56: '322bad65b84d2b0e', 0x57: '827ad5631666685d',
+    0x58: 'd96ae899ea88facf', 0x59: '2b0dc49f17947974', 0x5A: '2e0b9451211d638e',
+    0x5B: '0c0e107614ca4e36', 0x5C: 'ac4c7e69ac53603c', 0x5D: 'd94cb0fab02f37d5',
+    0x5E: '87c4471416b07ebe', 0x5F: '3fae0548ede339dd', 0x60: 'c967a2d4e2771a7c',
+    0x61: '4fa5ae7205e2b4c2', 0x62: 'c816db8e032adad3', 0x63: 'b213fd6c9dcd3e46',
+    0x64: '845e4b27693c9b88', 0x65: 'aa4240846448d732', 0x66: '02a41544a51738a6',
+    0x67: 'c1c6f8ea72091c8c',
+}
+
+
+def compile_title_logo(root: Path) -> tuple[dict[int, bytes], list[list[int]]]:
+    """Compile authored BARBA title-screen tiles into LINK's title CHR slots."""
+    spec = json.loads((root / 'assets/title_logo.json').read_text())
+    palette = {'.': '0', '#': '1', '@': '2', '*': '3'}
+    blank = b'\x00' * 16
+    solid = b'\xff' * 8 + b'\x00' * 8
+    pool = [t for t in sorted(TITLE_TILE_SHA256) if not (0x0F <= t <= 0x17)]
+    by_bytes: dict[bytes, int] = {blank: 0xF4, solid: 0xFD}
+    tiles: dict[int, bytes] = {}
+    letter_grids: dict[str, list[list[int]]] = {}
+    for ch, rows in spec['letters'].items():
+        if len(rows) != 32 or any(len(r) != 32 or set(r) - set(palette) for r in rows):
+            raise ValueError(f'Title letter {ch!r} must be 32x32 using .#@')
+        grid: list[list[int]] = []
+        for tr in range(4):
+            row_ids: list[int] = []
+            for tc in range(4):
+                sub = [''.join(palette[rows[tr*8 + y][tc*8 + x]] for x in range(8)) for y in range(8)]
+                raw = encode_tile(sub)
+                if raw not in by_bytes:
+                    if not pool:
+                        raise ValueError('BARBA title logo exceeded 49 available tile slots')
+                    tid = pool.pop(0)
+                    by_bytes[raw] = tid
+                    tiles[tid] = raw
+                row_ids.append(by_bytes[raw])
+            grid.append(row_ids)
+        letter_grids[ch] = grid
+    rows_out: list[list[int]] = []
+    for r in range(4):
+        row = []
+        for ch in spec['word']:
+            row.extend(letter_grids[ch][r])
+        if r == 0:
+            row.append(0xF4)  # blank space (no TM symbol)
+        rows_out.append(row)
+    sub = spec['subtitle']
+    if len(sub) != 8 or any(len(r) != 72 or set(r) - {'.', '*'} for r in sub):
+        raise ValueError('Title subtitle must be 8x72 using .*')
+    for idx in range(9):
+        tiles[0x0F + idx] = encode_tile(
+            [''.join(palette[sub[y][idx*8 + x]] for x in range(8)) for y in range(8)]
+        )
+    return tiles, rows_out
 
 
 def validate_layout(root: Path) -> bytes:
@@ -116,6 +197,29 @@ def sprite_pairs(rows: list[str]) -> list[bytes]:
             for top in range(0, len(rows), 16) for x in range(0, width, 8)]
 
 
+def compile_file_select_doll(root: Path) -> bytes:
+    """Build the 8x16 File Select Barba head/bust sprite pair."""
+    doll = [
+        '03000030',
+        '03300330',
+        '01311310',
+        '01111110',
+        '11311311',
+        '11322311',
+        '12222221',
+        '12122121',
+        '01222210',
+        '01322310',
+        '00122100',
+        '01122110',
+        '01222210',
+        '01122110',
+        '00111100',
+        '00000000',
+    ]
+    return sprite_pairs(doll)[0]
+
+
 def compile_assets(root: Path, source_path: Path | None = None) -> tuple[bytes, dict[int, bytes], bytes, list[list[str]]]:
     art = json.loads((root / 'assets/barba.json').read_text())
     small = art['small']
@@ -144,8 +248,8 @@ def compile_assets(root: Path, source_path: Path | None = None) -> tuple[bytes, 
                       'tuck', 'tuck', 'tuck')
     fallback = [named[name][16:] for name in fallback_names]
 
-    # Reserve weapon tiles used by existing renderer immediates and the new tip.
-    reserved = {0x32, 0x50, 0x54}
+    # Reserve weapon/candle tiles used by existing renderer immediates and North Castle.
+    reserved = {0x32, 0x50, 0x52, 0x54}
     slots = iter(i for i in range(0, 0x64, 2) if i not in reserved)
     pairs: dict[bytes, int] = {bytes(32): 0xF5}
     graphics: dict[int, bytes] = {}

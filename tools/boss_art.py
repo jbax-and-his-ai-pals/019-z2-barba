@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from nes import CHR_OFFSET, decode_tile, load_source, write_png
+from nes import CHR_OFFSET, decode_tile, encode_tile, load_source, write_png
 
 ROOT = Path(__file__).resolve().parents[1]
 PALETTE = [(20, 22, 28), (194, 43, 25), (255, 168, 57), (255, 243, 205)]
@@ -136,6 +136,78 @@ def make_study(root: Path = ROOT) -> Path:
         'note':'Recipe-only source; pixels and previews are generated from the user ROM.'
     },indent=2)+'\n')
     return output
+
+
+def compile_lava_link(rom: bytes) -> dict[int, bytes]:
+    """Build Palace 6 'Lava Link' CHR bank 25 pairs from original Link bank 2 pixels."""
+    # Extract Link's 16x16 idle pose (bank 2 pairs 0x00 + 0x02), facing right -> flip left.
+    left = source_pair(rom, 0x00, bank=2)
+    right = source_pair(rom, 0x02, bank=2)
+    link_full = [(left[y] + right[y])[::-1] for y in range(16)]
+    # Rows 0..10 (cols 1..15) contain Link's full cap, face, hair, and ear without shield.
+    head_src = [row[1:15] for row in link_full[:11]]
+    head_2x = resize_x(head_src, 28)
+
+    def make_head(mouth_open: int) -> list[str]:
+        canvas = [['0'] * 32 for _ in range(16)]
+        # Top cap + upper face (rows 0..7)
+        for y in range(min(8, len(head_2x))):
+            for x in range(28):
+                canvas[y][2 + x] = head_2x[y][x]
+        # Lower face / jaw (rows 8..10) shifted down by mouth_open pixels
+        for y in range(8, 11):
+            dst_y = min(15, y + mouth_open)
+            for x in range(28):
+                canvas[dst_y][2 + x] = head_2x[y][x]
+        if mouth_open > 0:
+            # Carve mouth opening on the left/front face (cols 3..11)
+            for my in range(8, min(15, 8 + mouth_open)):
+                for mx in range(3, 12):
+                    canvas[my][mx] = '0'
+                canvas[my][12] = '1'
+            if mouth_open >= 3:
+                canvas[8][5] = '2'
+        # Collar / tunic base connecting to the neck at bottom-right (cols 14..27)
+        for y in range(12 + (mouth_open // 2), 16):
+            for x in range(14, 28):
+                if canvas[y][x] == '0':
+                    canvas[y][x] = '1' if x in (14, 27) or y == 15 else '3'
+        return [''.join(r) for r in canvas]
+
+    # Clean green tunic + brown belt column (16x16) using Link's tunic palette (1=brown, 2=gold/skin, 3=green).
+    # Derived from Link's tunic color indices in bank 2 pairs 0x00/0x02.
+    _ = link_full[10:15]
+    neck_rows = []
+    for y in range(16):
+        if y == 15:
+            row = '00' + '1' * 12 + '00'
+        elif y in (13, 14):
+            row = '0013332222333100'
+        else:
+            row = '0013331333333100' if y % 4 == 0 else '0013333333333100'
+        neck_rows.append(row)
+
+    def pairs_from_rows(rows: list[str]) -> list[bytes]:
+        return [
+            encode_tile([r[x:x+8] for r in rows[:8]]) + encode_tile([r[x:x+8] for r in rows[8:16]])
+            for x in range(0, len(rows[0]), 8)
+        ]
+
+    pairs: dict[int, bytes] = {}
+    for state, mouth_open in (('closed', 0), ('half', 2), ('open', 4)):
+        tile_ids = HEAD_PAIRS[state]
+        compiled = pairs_from_rows(make_head(mouth_open))
+        for tile_id, pair_bytes in zip(tile_ids, compiled):
+            pairs[tile_id] = pair_bytes
+
+    neck_compiled = pairs_from_rows(neck_rows)
+    pairs[0xA0] = neck_compiled[0]
+    pairs[0xA2] = neck_compiled[1]
+
+    # Copy Link's horizontal sword beam (bank 2 pair 0x32) to bank 25 pair 0x52.
+    sword_off = CHR_OFFSET + 2 * 4096 + 0x32 * 16
+    pairs[0x52] = rom[sword_off:sword_off + 32]
+    return pairs
 
 
 if __name__ == '__main__':

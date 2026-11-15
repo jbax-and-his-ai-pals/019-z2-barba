@@ -18,6 +18,7 @@
 
 TownFearPointers:
     .word TownFearText, TownFearHide, TownFearLeaving, TownFearPlea
+    .word TownFearBarbaAlert, TownFearBarbaLoose, TownFearBarbaSight, TownFearBarbaBurn
 TownFearText:
     TownLine "OH SHIT.", $FD
     TownLine "IT IS BARBA.", $FD
@@ -34,3 +35,31 @@ TownFearPlea:
     TownLine "PLEASE", $FD
     TownLine "DO NOT", $FD
     TownLine "EAT ME.", $FF
+TownFearBarbaAlert:
+    TownLine "IT IS BARBA.", $FD
+    TownLine "EVERYONE", $FD
+    TownLine "GET INSIDE.", $FF
+TownFearBarbaLoose:
+    TownLine "BARBA IS", $FD
+    TownLine "LOOSE IN", $FD
+    TownLine "TOWN. HELP.", $FF
+TownFearBarbaSight:
+    TownLine "NO WAY.", $FD
+    TownLine "THAT IS", $FD
+    TownLine "BARBA.", $FF
+TownFearBarbaBurn:
+    TownLine "BARBA WILL", $FD
+    TownLine "BURN US ALL.", $FD
+    TownLine "RUN AWAY.", $FF
+TownWiseManText:
+    TownLine "TAKE THIS", $FD
+    TownLine "MAGIC AND", $FD
+    TownLine "SPARE ME.", $FF
+TownHealerText:
+    TownLine "OH NO BARBA.", $FD
+    TownLine "LET ME HEAL", $FD
+    TownLine "YOUR SCALES.", $FF
+TownMagicText:
+    TownLine "TAKE MY", $FD
+    TownLine "MAGIC BARBA.", $FD
+    TownLine "GO IN PEACE.", $FF

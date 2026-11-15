@@ -12,8 +12,9 @@ SHOUT_WORLD = $6463
 SHOUT_ROOM = $6464
 SHOUT_SLOT = $6465          ; actor slot X that raised the current shout
 TALK_LATCH = $6466
-SHOUT_WORD = $6467          ; 0 none, else word 1..4 drawn above SHOUT_SLOT
+SHOUT_WORD = $6467          ; 0 none, else word 1..8 drawn above SHOUT_SLOT
 SHOUT_WORD_TIMER = $6468    ; frames left for the word
+SHOUT_CYCLE = $6469         ; rotating offset so repeated shouts cycle phrases
 ; Five OAM entries $E0..$F0. Natively these are enemy-projectile windows
 ; (bases $E0/$E8/$F0 in the $D59B rotation); town streets never fill them.
 ; They are written only while a word is live in town play, and the word
@@ -66,30 +67,10 @@ BarbaShouts:
     beq :+
     dec SHOUT_COOLDOWN
 :
-    lda SHOUT_TIMER
-    beq @packet
-    dec SHOUT_TIMER
-    bne @packet
-    lda #$FF
-    sta SHOUT_REQUEST
-@packet:
     lda SHOUT_REQUEST
     beq @done
-    lda $0725
-    bne @done
-    ; Twenty glyphs plus a three-byte header: never exceed 32 queued bytes.
-    lda $0301
-    cmp #$0A
-    bcs @done
-    jsr ShoutPacket
-    lda SHOUT_REQUEST
-    cmp #$FF
-    beq :+
-    lda #$64
-    sta SHOUT_TIMER
-    lda #$B4
+    lda #$78
     sta SHOUT_COOLDOWN
-:
     lda #$00
     sta SHOUT_REQUEST
     beq @done
@@ -112,53 +93,11 @@ BarbaShouts:
     sta SHOUT_COOLDOWN
     sta SHOUT_REQUEST
     sta TALK_LATCH
+    sta SHOUT_CYCLE
     lda $0707
     sta SHOUT_WORLD
     lda $0561
     sta SHOUT_ROOM
-    rts
-
-ShoutPacket:
-    lda SHOUT_REQUEST
-    sec
-    sbc #$01
-    asl
-    asl
-    sta $00
-    asl
-    asl
-    clc
-    adc $00
-    tax
-    ldy $0301
-    lda #$20
-    sta $0302,y
-    lda #$06
-    sta $0303,y
-    lda #$14
-    sta $0304,y
-    lda #$14
-    sta $00
-@letter:
-    lda SHOUT_REQUEST
-    cmp #$FF
-    beq @blank
-    lda ShoutText,x
-    jmp @put
-@blank:
-    lda #$F4
-@put:
-    sta $0305,y
-    inx
-    iny
-    dec $00
-    bne @letter
-    lda #$FF
-    sta $0305,y
-    tya
-    clc
-    adc #$03
-    sta $0301
     rts
 
 ; Draw the live word above its villager in normal town play. Runs after the
@@ -175,17 +114,15 @@ ShoutWord:
 @start:
     ldx SHOUT_SLOT
     ; Cancel for good when the slot stops being that living, fleeing or
-    ; calm generated wanderer: door/offscreen despawn ($B6), burn and ash
-    ; ($AF), or a different actor generated into the slot ($BC).
+    ; calm villager: door/offscreen despawn ($B6) or burn and ash ($AF).
     lda $B6,x
     cmp #$01
-    bne @cancel
-    lda $BC,x
-    cmp #$FF
     bne @cancel
     lda $AF,x
     beq :+
     cmp #$80
+    beq :+
+    cmp #$82
     bne @cancel
 :
     dec SHOUT_WORD_TIMER
@@ -247,7 +184,9 @@ ShoutWord:
     ldy #SHOUT_OAM
 @glyph:
     lda ShoutWordTiles,x
-    beq @blank                  ; $00 pads words shorter than five
+    beq @hide_rest              ; $00 ends phrases with <5 visible glyphs
+    cmp #ShoutTile_Space
+    beq @advance_x              ; spaces advance X without consuming an OAM slot
     lda $02
     bne @blank                  ; clip each glyph off either screen edge
     lda $00
@@ -263,6 +202,13 @@ ShoutWord:
     lda #$F8
     sta $0200,y
 @next:
+    iny
+    iny
+    iny
+    iny
+    cpy #SHOUT_OAM+$14
+    beq @word_done
+@advance_x:
     lda $01
     clc
     adc #$08
@@ -271,12 +217,18 @@ ShoutWord:
     inc $02
 :
     inx
+    jmp @glyph
+@hide_rest:
+    lda #$F8
+@hide_loop:
+    sta $0200,y
     iny
     iny
     iny
     iny
     cpy #SHOUT_OAM+$14
-    bne @glyph
+    bne @hide_loop
+@word_done:
     rts
 
 ShoutWordCancel:
@@ -298,33 +250,19 @@ ShoutWordHide:
 ShoutWordDone:
     rts
 
-; Word per wandering type $19..$1C (SHOUT_REQUEST 1..4), at most five glyphs.
-; ShoutWordTiles comes from shout_layout.inc: five tiles per word, $00 pad.
+; Fear phrases per shout word 1..8, up to five visible glyphs plus optional space.
+; ShoutWordTiles comes from shout_layout.inc: six bytes per phrase, $FF space, $00 end.
+ShoutTile_Space = $FF
 ShoutWordLength:
-    .byte 5, 4, 5, 3
+    .byte 5, 4, 5, 5, 4, 4, 6, 5
 ShoutWordStart:
-    .byte 0, 5, 10, 15
+    .byte 0, 6, 12, 18, 24, 30, 36, 42
 ShoutWordTiles:
-    .byte ShoutTile_S, ShoutTile_H, ShoutTile_I, ShoutTile_T, ShoutTile_Bang ; $19
-    .byte ShoutTile_R, ShoutTile_U, ShoutTile_N, ShoutTile_Bang, $00          ; $1A
-    .byte ShoutTile_F, ShoutTile_U, ShoutTile_C, ShoutTile_K, ShoutTile_Bang ; $1B
-    .byte ShoutTile_N, ShoutTile_O, ShoutTile_Bang, $00, $00                  ; $1C
-
-.macro ShoutLine text
-    .assert .strlen(text) <= 20, error, "Panic shout is too wide"
-    .repeat .strlen(text), character
-        .if .strat(text, character) = ' '
-            .byte $F4
-        .elseif .strat(text, character) = '.'
-            .byte $CF
-        .else
-            .byte .strat(text, character)-'A'+$DA
-        .endif
-    .endrepeat
-    .res 20-.strlen(text), $F4
-.endmacro
-ShoutText:
-    ShoutLine "OH SHIT. BARBA. RUN."
-    ShoutLine "A DRAGON. HIDE."
-    ShoutLine "FUCK THAT. RUN."
-    ShoutLine "PLEASE. NO FIRE."
+    .byte ShoutTile_S, ShoutTile_H, ShoutTile_I, ShoutTile_T, ShoutTile_Bang, $00             ; 1 SHIT!
+    .byte ShoutTile_R, ShoutTile_U, ShoutTile_N, ShoutTile_Bang, $00, $00                     ; 2 RUN!
+    .byte ShoutTile_F, ShoutTile_U, ShoutTile_C, ShoutTile_K, ShoutTile_Bang, $00             ; 3 FUCK!
+    .byte ShoutTile_O, ShoutTile_H, ShoutTile_Space, ShoutTile_N, ShoutTile_O, $00            ; 4 OH NO
+    .byte ShoutTile_O, ShoutTile_M, ShoutTile_G, ShoutTile_Bang, $00, $00                     ; 5 OMG!
+    .byte ShoutTile_W, ShoutTile_T, ShoutTile_F, ShoutTile_Bang, $00, $00                     ; 6 WTF!
+    .byte ShoutTile_O, ShoutTile_H, ShoutTile_Space, ShoutTile_G, ShoutTile_O, ShoutTile_D    ; 7 OH GOD
+    .byte ShoutTile_H, ShoutTile_E, ShoutTile_L, ShoutTile_P, ShoutTile_Bang, $00             ; 8 HELP!

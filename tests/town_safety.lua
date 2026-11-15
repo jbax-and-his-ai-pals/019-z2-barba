@@ -19,10 +19,12 @@ for _,c in ipairs({
     {world=1,room=0,kind=0x1A,origin=255,fear=true},
     {world=1,room=0,kind=0x1B,origin=255,fear=true},
     {world=2,room=0,kind=0x1C,origin=255,fear=true},
-    {world=1,room=0,kind=0x19,origin=5,fear=false},
+    {world=1,room=0,kind=0x19,origin=5,fear=true},
     {world=1,room=0x1C,kind=0x19,origin=255,fear=false},
+    {world=1,room=0,kind=0x1D,origin=5,fear=true},
+    {world=1,room=0,kind=0x17,origin=255,fear=true},
     {world=1,room=0,kind=0x0F,origin=255,fear=false},
-    {world=2,room=0,kind=0x19,origin=5,fear=false}
+    {world=2,room=0,kind=0x19,origin=5,fear=true}
 })do c.alive=1;c.dialog=true;cases[#cases+1]=c end
 local function advance()
     current=current+1
@@ -43,7 +45,7 @@ emu.addMemoryCallback(function()
     if not running then return end
     local c=cases[current]
     if c.dialog then
-        local pointer=LABELS.TownFearPointers+(c.kind-0x19)*2
+        local pointer=LABELS.TownFearPointers+(c.kind%4)*2
         local expected=c.fear and (r(pointer)+256*r(pointer+1)) or 0
         if not c.fear then
             local base=r(0xB421+c.world*2)+256*r(0xB422+c.world*2)
@@ -54,7 +56,7 @@ emu.addMemoryCallback(function()
         end
         advance();return
     end
-    local want=c.alive==1 and c.origin==255 and c.kind>=0x19 and c.kind<=0x1C
+    local want=c.alive==1 and c.kind>=0x13 and c.kind<=0x20
         and (c.world==1 or c.world==2) and c.room<0x14 and c.room~=6
     local actual=(emu.getState()['cpu.ps']&1)~=0
     if want~=actual or emu.getState()['cpu.x']~=0 then

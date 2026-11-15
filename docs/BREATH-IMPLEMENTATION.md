@@ -88,6 +88,8 @@ native collision rules; it does not copy aimed enemy-projectile code.
 - `combat.lua`: glove-gated fireball brick breaking and restored player state.
 - `damage.lua`: real native Bot damage from ordinary and Fire-empowered shots
   in both directions.
+- `shield_enemies.lua`: Orange Ironknuckle (`$18`) high/low shield blocking
+  and crouching shallow-angle (`$29+$0A`, 0.5 px/frame) low-half hits.
 - `gameplay.lua`, `tall_geometry.lua`, `routines.lua`: movement, jumps, ceilings,
   item/Fairy cleanup, disabled thrust collisions, lava and roar.
 - `hud_timing.lua`: 900 Palace 1 frames with a stable line-31 split.

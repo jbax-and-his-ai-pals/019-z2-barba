@@ -57,17 +57,11 @@ local scenes={
         w(0x73,0x4D);w(0x74,0x3C);w(0x562,1);w(0x736,2)
         w(0x7A9,0);w(0x7AA,0);w(0x7AC,0);w(0x7AD,0);w(0x726,1)
     end},
-    {id='town',name='Rauru town street',frames=180,setup=function()
-        upgraded();w(0x707,1);w(0x706,0);w(0x769,3);w(0x561,1)
-        w(0x701,0);w(0x75C,0);w(0x704,0);w(0x736,0);w(0x73D,0);w(0x726,1)
+    {id='town',name='Rauru town street',frames=150,setup=function()
+        upgraded();w(0x707,1);w(0x706,0);w(0x769,3);w(0x561,0)
+        w(0x701,0);w(0x75C,1);w(0x704,0);w(0x736,0);w(0x73D,0);w(0x726,1)
     end,capture=function()
-        for slot=0,5 do
-            local code=r(0xA1+slot)
-            local x=r(0x4E+slot)+r(0x3C+slot)*256-r(0x72C)-r(0x72A)*256
-            if r(0xB6+slot)==1 and r(0xBC+slot)==255 and code>=0x19 and code<=0x1C
-                and x>=24 and x<=200 then return true end
-        end
-        return false
+        return r(0xCC)>=88 and r(0xCC)<=168
     end},
     -- Left edge of the Palace 6 boss room before the boss rises; max stats.
     {id='boss-door',name='Before Palace 6 boss',frames=60,setup=function()
@@ -75,7 +69,16 @@ local scenes={
         -- Max attack too. Every stat is at level 8, so park the next-level
         -- XP target out of reach rather than reading past the cost tables.
         w(0x777,8);w(0x770,0xFF);w(0x771,0xFF)
-    end,capture=function()return r(0x736)==11 and r(0x499)~=2 end}
+    end,capture=function()return r(0x736)==11 and r(0x499)~=2 end},
+    -- Great Palace Thunderbird / Dark Link encounter with max stats, all spells, and full meters.
+    {id='great-palace',name='Great Palace final boss',frames=60,setup=function()
+        upgraded()
+        w(0x707,5);w(0x706,2);w(0x769,5)
+        w(0x561,0x36);w(0x568,6);w(0x56B,7);w(0x56C,2)
+        w(0x701,0);w(0x75C,0);w(0x704,0)
+        w(0x736,0);w(0x73D,0);w(0x726,1)
+        w(0x777,8);w(0x770,0xFF);w(0x771,0xFF)
+    end,capture=function()return r(0x736)==11 end}
 }
 local function finish()
     local f=assert(io.open(PACK_DIR..'/capture-log.txt','w'))
@@ -111,6 +114,7 @@ emu.addEventCallback(function()
             if id=='combat' then buttons.right=age>=100 and age<125 end
             if id=='lava-surface' then buttons.right=age>=100 and age<230 end
             if id=='raft' then buttons.right=age>=90 and age<110 end
+            if id=='town' then buttons.right=(r(0x736)==11 and r(0xCC)<116) end
         end
     end
     emu.setInput(buttons,0)

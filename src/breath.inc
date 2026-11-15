@@ -34,7 +34,10 @@ BarbaProjectiles:
     lda #$00
     sta BREATH_BURST_STATE
 @start:
+    lda $0400
+    beq :+
     jsr BarbaFireSpell
+:
     lda BREATH_BURST_STATE
     cmp #$01
     bne @update
@@ -57,7 +60,11 @@ BarbaProjectiles:
 @cancel:
     jsr BarbaCancelBurst
 @update:
+    lda VOLLEY_SLOT
+    ora VOLLEY_SLOT+1
+    beq @no_volley
     jsr BarbaAdvanceVolley
+@no_volley:
     lda $0777
     cmp #$04
     bcs @native
@@ -65,6 +72,9 @@ BarbaProjectiles:
     jsr $9888
 @native:
     jsr $9878
+    lda VOLLEY_SLOT
+    ora VOLLEY_SLOT+1
+    beq @extra
     txa
     pha
     ldx #$01
@@ -86,22 +96,33 @@ BarbaProjectiles:
     bpl @draw
     pla
     tax
+@extra:
     jsr BarbaExtraUpdate
     rts
 
 ; The same five-slot allocation path handles both initial and queued shots.
 ; Never index the native actor arrays with X >= 2: that aliases player state.
 BarbaEmitOne:
+    clc
+    .byte $24                   ; BIT zp: skip SEC below
+BarbaEmitOneCached:
+    sec
+    php
     ldx #$01
 @slot:
     lda $8D,x
     beq @native
     dex
     bpl @slot
+    plp
     jmp BarbaExtraAllocate
 @native:
     clc
     jsr $981B
+    plp
+    bcc :+
+    jmp BarbaPlaceNewFlameCached
+:
     jmp BarbaPlaceNewFlame
 
 ; Frame-budget governor for queued shots (not the attack's first shot).
@@ -111,6 +132,7 @@ BarbaEmitOne:
 BarbaLoadOk:
     lda #$00
     sta $00
+    sta $01
     ldx #$05
 @enemy:
     lda $B6,x
@@ -124,7 +146,7 @@ BarbaLoadOk:
     lda $8D,x
     beq :+
     bmi :+
-    inc $00
+    inc $01
 :
     dex
     bpl @native
@@ -133,7 +155,7 @@ BarbaLoadOk:
     lda $6400,x
     beq :+
     bmi :+
-    inc $00
+    inc $01
 :
     txa
     clc
@@ -142,6 +164,15 @@ BarbaLoadOk:
     cpx #$30
     bcc @extra
     lda $00
+    cmp #$02
+    bcc @total
+    lda $01
+    cmp #$03
+    bcs @deny
+@total:
+    lda $00
+    clc
+    adc $01
     cmp #LOAD_LIMIT
     bcs @deny
     sec
@@ -149,7 +180,7 @@ BarbaLoadOk:
 @deny:
     clc
     rts
-LOAD_LIMIT = 6
+LOAD_LIMIT = 7
 
 BarbaCancelBurst:
     lda #$00
@@ -170,25 +201,46 @@ BarbaAdvanceVolley:
     lda $8D,x
     beq @clear
     bmi @clear
-    dec VOLLEY_SLOT,x
-    beq @kill
-    lda $36,x
-    clc
-    adc #$02
-    bcs @kill
-    cmp #$E0
-    bcs @kill
-    sta $36,x
+    jsr BarbaStepSlotY
     jmp @next
-@kill:
-    lda #$00
-    sta $8D,x
 @clear:
     lda #$00
     sta VOLLEY_SLOT,x
 @next:
     dex
     bpl @slot
+    rts
+
+; Advance slot X's lifetime and downward drift. Bit 7 of VOLLEY_SLOT,x selects
+; crouched shallow descent (0.5 px/frame) so low fireballs clear high shields.
+; Carry set if still alive, clear if expired/clipped.
+BarbaStepSlotY:
+    dec VOLLEY_SLOT,x
+    lda VOLLEY_SLOT,x
+    and #$7F
+    beq @kill
+    lda VOLLEY_SLOT,x
+    bpl @steep
+    and #$01
+    beq @alive
+    bne @add_y
+@steep:
+    lda #$02
+@add_y:
+    clc
+    adc $36,x
+    bcs @kill
+    cmp #$E0
+    bcs @kill
+    sta $36,x
+@alive:
+    sec
+    rts
+@kill:
+    lda #$00
+    sta $8D,x
+    sta VOLLEY_SLOT,x
+    clc
     rts
 
 ; The initial shot alone uses the native attack/delay gate.
@@ -213,10 +265,22 @@ BarbaFireSpell:
     lda BREATH_GEOMETRY_FLAGS
     and #$01
     beq @done
-    jsr BarbaEmitOne
+    jsr BarbaEmitOneCached
     bcc @done
     jsr BarbaArmBurst
+    jsr BarbaBreathSfx
 @done:
+    rts
+
+; Trigger Zelda II's native Barba / Flame fireball sound ($ED bit 6) once per attack
+; so five-shot volleys sound like vanilla Barba without re-triggering every shot.
+BarbaBreathSfx:
+    lda ROAR_TIMER
+    bne @skip
+    lda $ED
+    ora #$40
+    sta $ED
+@skip:
     rts
 
 BarbaArmBurst:
@@ -259,6 +323,7 @@ BarbaPlaceNewFlame:
     jsr BarbaGeometry
     pla
     tax
+BarbaPlaceNewFlameCached:
     lda BREATH_GEOMETRY_FLAGS
     and #$01
     beq BarbaClipped
@@ -280,6 +345,12 @@ BarbaPlaceNewFlame:
     sta $05CA,x
 :
     lda #$21
+    ldy $17
+    bne :+
+    ldy $0479
+    bne :+
+    ora #$80            ; grounded crouch: shallow 0.5 px/frame descent
+:
     sta VOLLEY_SLOT,x
     ldy $6D,x
     lda VolleySpeed,y

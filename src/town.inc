@@ -1,8 +1,7 @@
 ; Town-only prototype. This module runs in PRG bank 3, not the bank 0 hooks.
 ; Install TownUpdate in ONLY routine-0 pointers for native types $19..$1C.
-; Every mutation additionally requires a proven generator origin ($BC,x=$FF)
-; and an explicit outdoor room. Scripted actors, including walking actors
-; with these same type numbers, always tail-call the untouched native routine.
+; Every mutation requires an explicit outdoor room in world 1 or 2. Story-necessary
+; NPCs ($0B..$18, $1D..$20, and all indoor actors) always keep their native routines.
 .segment "TOWN"
 .export TownUpdate, TownEligible, TownOutdoorRooms, TownEnd, TownDialog, TownFearText, TownFearPointers, TownHide
 .export TownFastDialogReady, TownLetterDelay, TownLineDelay, TownAsh
@@ -10,14 +9,18 @@
 
 ; Native generator $96E0 clears AF before initializing each new actor.
 ; We borrow that actor's state only after the positive provenance gate:
-;   $00 normal; $80 flee; $A0..$BF ashes; $C0..$DF burning.
-; Old prototype door-entry states $01..$7F are immediately hidden on load.
+;   $00 normal; $01..$40 door entry; $80 flee; $A0..$BF ashes; $C0..$DF burning.
 ; No extra per-NPC RAM or quest flags. Shared subtitle state is in shouts.inc.
 
 TownUpdate:
     jsr TownEligible
     bcs @eligible
 @native:
+    lda $A1,x
+    cmp #$19
+    bcs :+
+    jmp $97D4
+:
     jmp $9878
 @eligible:
     ; Let an already-started conversation finish using its original stack
@@ -35,8 +38,11 @@ TownUpdate:
 :
     cmp #$80
     beq @canHit
+    cmp #$82
+    beq @canHit
     cmp #$00
-    bne TownDoor
+    beq @canHit
+    jmp TownDoor
 @canHit:
     ; Up talks to a nearby frightened wanderer. B remains the fire attack.
     lda TALK_LATCH
@@ -68,51 +74,269 @@ TownUpdate:
     jsr TownPlayerNearby
     bcc @native
     lda #$80
+    ldy $A1,x
+    cpy #$19
+    bcs :+
+    lda #$82
+:
     sta $AF,x
-    ; Pick one escape direction on panic. Do not oscillate when the player
-    ; crosses the NPC. Native velocities use four fractional bits.
+    jsr TownPickEscapeDir
+
+TownFlee:
+    lda $71,x
+    beq :+
+    jsr TownPickEscapeDir
+:
+    jsr TownRequestShout
+    jsr $9A68                  ; original fractional movement and walk cycle
+    ; Despawn once the villager retreated >=16 px past the left edge or past the right edge.
+    lda $69C4
+    sec
+    sbc #$01
+    cmp $3C,x
+    beq @check_left_px
+    lda $3C,x
+    cmp $69C4
+    bcc @edge_despawn
+    cmp $69C7
+    beq @in_bounds
+    bcs @edge_despawn
+    bcc @in_bounds
+@check_left_px:
+    lda $4E,x
+    cmp #$F0
+    bcc @edge_despawn
+@in_bounds:
+    ; $8B is the native closed-door collision tile. When reaching a real doorway,
+    ; open its PPU tiles, walk the villager inside, then close the door behind
+    ; them without altering collision RAM ($6000..$633F) or house/quest flags.
+    jsr $EA32
+    lda $D9
+    cmp #$91
+    beq @edge_despawn
+    cmp #$8B
+    bne @draw
+    jsr TownDoorStart
+    bcs @draw_door
+@edge_despawn:
+    jmp TownHide
+@draw_door:
+    jsr $9A8A
+    ldx $10
+    rts
+@draw:
+    ; AF=$80/$82 is custom; native drawing hides AF >= $40. Temporarily render
+    ; the normal walking pose, then restore the fleeing state.
+    lda $AF,x
+    pha
+    lda #$00
+    sta $AF,x
+    jsr $9A8A                  ; native clipping, native OAM, native countdown
+    ldx $10
+    pla
+    sta $AF,x
+    rts
+
+; Always flee away from Barba ($0E right or $F2 left). On either side there
+; is always a doorway ($8B) or room edge ($69C4/$69C7) to escape into.
+TownPickEscapeDir:
     lda $4E,x
     sec
     sbc $4D
     lda $3C,x
     sbc $3B
-    lda #$10
-    bcs @right
-    lda #$F0
-@right:
+    bvc :+
+    eor #$80
+:
+    bmi @go_left
+    lda #$0E
+    .byte $2C
+@go_left:
+    lda #$F2
     sta $71,x
+    rts
 
-TownFlee:
-    jsr TownRequestShout
-    jsr $9A68                  ; original fractional movement and walk cycle
-    ; $8B is the native closed-door collision tile. Disappear when reaching
-    ; this real doorway, without borrowing the scripted NPC door animation.
-    ; Its entry animation assumes a door owner and can alter the wrong house
-    ; when used by a generated walker. This path never edits background RAM,
-    ; PPU commands, house/quest flags, or native door pointer fields.
-    jsr $EA32
-    lda $D9
-    cmp #$8B
-    bne @draw
-    jmp TownHide
-@draw:
-    ; AF=$80 is custom; native drawing hides AF >= $40. Temporarily render
-    ; the normal walking pose, then restore the fleeing state.
-    lda #$00
-    sta $AF,x
-    jsr $9A8A                  ; native clipping, native OAM, native countdown
+; Derive the exact door column and page from LEA32's collision pointer ($DC/$DD)
+; so the PPU door macro always targets the real doorway, even across page seams.
+TownDoorStart:
+    lda $DD
+    sec
+    sbc #$60
+    bcc @bad
+    cmp #$04
+    bcs @bad
+    sta $01
+    lda $DC
+    ldy #$00
+@page_loop:
+    cmp #$D0
+    bcs @sub_page
+    ldx $01
+    beq @page_done
+@sub_page:
+    sec
+    sbc #$D0
+    bcs :+
+    dec $01
+:
+    iny
+    cpy #$04
+    bcc @page_loop
+@bad:
     ldx $10
-    lda #$80
+    clc
+    rts
+@page_done:
+    and #$0F
+    asl
+    asl
+    asl
+    asl
+    ldx $10
+    sta $0599,x
+    tya
+    sta $059F,x
+    lda #$41
     sta $AF,x
+    lda $71,x
+    bmi @left
+    lda #$08
+    .byte $2C                  ; BIT abs, skips next 2 bytes
+@left:
+    lda #$F8
+    sta $71,x
+    sec
+    rts
+
+; Check whether the doorway at ($0599,x / $059F,x) is within the active nametable
+; window ([-16, +256) from $072C/$072A) so scrolling never corrupts a wrapped page.
+TownDoorOnScreen:
+    lda $0599,x
+    sec
+    sbc $072C
+    sta $00
+    lda $059F,x
+    sbc $072A
+    beq @yes
+    cmp #$FF
+    bne @no
+    lda $00
+    cmp #$F0
+    bcc @no
+@yes:
+    sec
+    rts
+@no:
+    clc
+    rts
+
+; Queue a native door macro ($9946 half, $994A open, $994E closed).
+; A = 0 ($9946), 1 ($994A), or 2 ($994E).
+; Returns C=1 if the step should advance (queued or offscreen), C=0 if PPU buffer is busy.
+TownDoorQueuePpu:
+    pha
+    jsr TownDoorOnScreen
+    bcc @skip
+    lda $0301
+    cmp #$0F
+    bcs @busy
+    pla
+    beq @half
+    cmp #$01
+    beq @open
+    jsr $994E
+    sec
+    rts
+@half:
+    jsr $9946
+    sec
+    rts
+@open:
+    jsr $994A
+    sec
+    rts
+@skip:
+    pla
+    sec
+    rts
+@busy:
+    pla
+    clc
     rts
 
 TownDoor:
-    ; Compatibility with a test state saved during the old door animation.
+    lda $0736
+    cmp #$0B
+    beq :+
+    jmp TownHide
+:
+    lda $074C
+    ora $DE
+    ora $0726
+    bne @pause
+    lda $AF,x
+    cmp #$44
+    beq @half_open
+    cmp #$48
+    beq @full_open
+    cmp #$74
+    beq @half_open
+    cmp #$7C
+    beq @full_close
+    cmp #$68
+    beq @enter_house
+    bcc @outside
+    ; $69..$73 or $75..$7B: inside house, waiting for door to close.
+    inc $AF,x
+@pause:
+    rts
+@outside:
+    cmp #$48
+    bcc @draw
+    jsr $9A68
+    lda $AF,x
+    cmp #$54
+    beq @step_up
+    cmp #$64
+    bne @draw
+@step_up:
+    lda $2A,x
+    sec
+    sbc #$04
+    sta $2A,x
+@draw:
+    inc $AF,x
+    jsr $9A8A
+    ldx $10
+    rts
+@enter_house:
+    inc $AF,x
+    jmp TownHideOAM
+@half_open:
+    lda #$00
+    beq @queue_and_advance
+@full_open:
+    lda #$01
+@queue_and_advance:
+    jsr TownDoorQueuePpu
+    bcc @pause
+    lda $AF,x
+    cmp #$10
+    bcc @draw
+    inc $AF,x
+    rts
+@full_close:
+    lda #$02
+    jsr TownDoorQueuePpu
+    bcc @pause
+    jmp TownHide
+
 TownHide:
     lda #$00
     sta $B6,x
     sta $AF,x
     sta $71,x
+TownHideOAM:
     ldy $91,x
     lda #$04
     sta $00
@@ -217,21 +441,18 @@ TownAsh:
 @hide:
     jmp TownHide
 
-; Carry set iff this is a live, positively identified random outdoor walker.
-; X is always preserved. The room table is audited from the verified source
-; headers AND the presence of native generator type $23 in each enemy list.
+; Carry set iff this is a live outdoor villager ($19..$1C in world 1/2 outdoor room).
+; Story-necessary NPCs ($0B..$18, $1D..$20) and indoor actors are excluded.
 TownEligible:
     lda $B6,x
     cmp #$01
     bne @no
-    lda $BC,x
-    cmp #$FF
-    bne @no
     lda $A1,x
-    cmp #$19
+    cmp #$13
     bcc @no
-    cmp #$1D
+    cmp #$21
     bcs @no
+@type_ok:
     lda $0707
     cmp #$01
     beq @town
@@ -402,10 +623,16 @@ TownRequestShout:
     bcs @done
     lda $A1,x
     sec
-    sbc #$18
+    sbc #$19
+    clc
+    adc SHOUT_CYCLE
+    and #$07
+    clc
+    adc #$01
     sta SHOUT_REQUEST
     ; The same villager also carries a short sprite word (shouts.inc).
     sta SHOUT_WORD
+    inc SHOUT_CYCLE
     stx SHOUT_SLOT
     lda #SHOUT_WORD_TIME
     sta SHOUT_WORD_TIMER
@@ -414,7 +641,7 @@ TownRequestShout:
 
 TownPlayerNearby:
     ; World-space distance, so actors across a scrolling page boundary work.
-    ; Panic radius48 normally,80 during a player attack. Same vertical floor.
+    ; Panic radius 72 normally, 96 during a player attack. Same vertical floor.
     lda $4E,x
     sec
     sbc $4D
@@ -422,10 +649,10 @@ TownPlayerNearby:
     lda $3C,x
     sbc $3B
     sta $01
-    ldy #$30
+    ldy #$48
     lda $0400
     beq @radius
-    ldy #$50
+    ldy #$60
 @radius:
     tya
     clc
@@ -458,9 +685,9 @@ TownDialog:
     jsr TownEligible
     bcc TownOriginalDialog
     pla
-    lda $A1,x
-    sec
-    sbc #$19
+    lda $12
+    eor $A1,x
+    and #$07
     asl
     tay
     lda TownFearPointers,y
@@ -477,6 +704,35 @@ TownFastDialogReady:
     rts
 TownOriginalDialog:
     pla
+    ldy $A1,x
+    cpy #$0F
+    bne @check_healer
+    ldy $05
+    beq @native_dialog
+    lda #<TownWiseManText
+    ldy #>TownWiseManText
+    jmp @set_npc_dialog
+@check_healer:
+    cpy #$17
+    bne @check_magic
+    lda #<TownHealerText
+    ldy #>TownHealerText
+    jmp @set_npc_dialog
+@check_magic:
+    cpy #$18
+    bne @native_dialog
+    lda #<TownMagicText
+    ldy #>TownMagicText
+@set_npc_dialog:
+    sta $0569
+    sty $056A
+    lda #$2A
+    sta $0566
+    lda #$00
+    sta $0489
+    sta $048A
+    jmp TownFastDialogReady
+@native_dialog:
     asl
     tay
     lda $0707

@@ -239,21 +239,9 @@ BarbaExtraUpdate:
     jsr ExtraLoadRecord
     lda $8D
     bmi @native
-    dec VOLLEY_SLOT
-    beq @kill
-    lda $36
-    clc
-    adc #$02
-    bcs @kill
-    cmp #$E0
-    bcs @kill
-    sta $36
-    jmp @native
-@kill:
-    lda #$00
-    sta $8D
-    sta VOLLEY_SLOT
-    jmp @store
+    ldx #$00
+    jsr BarbaStepSlotY
+    bcc @store
 @native:
     ldx #$00
     jsr $9888
@@ -475,6 +463,12 @@ BarbaExtraBlocks:
     jmp @idle
 :
     jsr ExtraSaveZero
+    lda $80
+    pha
+    lda $047E
+    pha
+    lda $057D
+    pha
     lda $10
     pha
     lda $8E
@@ -488,7 +482,8 @@ BarbaExtraBlocks:
     beq @next
     bmi @next
     jsr ExtraLoadRecord
-    jsr BarbaNativeBlocks
+    ldx #$00
+    jsr BarbaBlockSlot
     jsr ExtraStoreRecord
 @next:
     lda EXTRA_INDEX
@@ -497,11 +492,19 @@ BarbaExtraBlocks:
     sta EXTRA_INDEX
     cmp #$30
     bcc @slot
-    jsr ExtraRestoreZero
     pla
     sta $8E
     pla
     sta $10
+    pla
+    sta $057D
+    pla
+    sta $047E
+    pla
+    sta $80
+    lda #$F8
+    sta $0480
+    jsr ExtraRestoreZero
 @idle:
     pla
     tay

@@ -75,3 +75,9 @@ all spells. Walk right to start the fight. (F6 starts mid-fight.)
 
 Effort guess: step 1 is under an hour with a test. Steps 2–4 are a focused
 session with art iteration. The art is the long pole.
+
+## Status: Implemented
+
+- `tools/boss_art.py` (`compile_lava_link`) builds `CHR 25` head pairs (`14/16/18/1A`, `1C/22/24/26`, `28/2A/2C/2E`), green tunic neck (`A0/A2`), and sword beam (`52`) from `roms/z2.nes` `CHR 2` Link pixels at build time.
+- `tools/build.py` patches bank 4 `$B19B` (`04` -> `05` Spear/sword beam), `$AABB` (`00` -> `01` palette), and hooks `$B11F` -> `$A765` to upload Sprite Palette 1 (`18 36 2A`) via `$0302` only during the Palace 6 boss encounter.
+- `tests/link_boss.lua` passes (`sp_pal1=18 36 2A`, boss `$21` spawns, projectile `$05` spawns, no `$04`, Barba fireballs damage Lava Link).

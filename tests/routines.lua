@@ -114,5 +114,5 @@ emu.addEventCallback(function()
     if frame==120 then ready=true end
 end,emu.eventType.endFrame)
 emu.addMemoryCallback(function()
-    if ready and phase=='idle' then ready=false;nextTest() end
+    if ready and phase=='idle' then ready=false;w(0x2000,0);nextTest() end
 end,emu.callbackType.exec,0xC07B)

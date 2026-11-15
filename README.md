@@ -46,17 +46,17 @@ from this repository. Build outputs and patches are generated locally.
 python tools/build.py
 ```
 
-Open `build/barba.nes` in a standard NES emulator. `build/barba.bps` is the
+Open `play/barba.nes` (also written to `build/barba.nes`) in a standard NES emulator. `play/barba.bps` is the
 source-specific patch; the build validates a complete patch round trip.
 The generated ROM is an alpha for testing, not a completed-game release.
 
-On Windows, double-click **Play Barba.cmd**, or run `./tools/launch.ps1`.
+On Windows, double-click **play/Play Barba.cmd**, or run `./tools/launch.ps1`.
 It rebuilds the alpha and opens it in Mesen automatically. Keyboard controls:
 arrows move, **X** jumps, **Z** attacks, **Enter** is Start, and **Left Shift** is
 Select. The launcher uses a separate play profile and persistent saves in
 `build/play-saves/`; automated test settings and temporary saves stay separate.
 
-For instant testing checkpoints, double-click **Test Barba.cmd**. **F1-F8** jump
+For instant testing checkpoints, double-click **play/Test Barba.cmd**. **F1-F9** jump
 to the castle, combat, all-spells sandbox, lava ledge, lava surface, Barba boss,
 sea crossing, and a Rauru town street. See [the test pack guide](docs/TEST-PACK.md). Test progress uses
 a separate Mesen profile and never overwrites your normal play save.

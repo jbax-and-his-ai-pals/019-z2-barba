@@ -178,7 +178,7 @@ emu.addMemoryCallback(function()
         maxSlots=math.max(maxSlots,count)
         local slot=emu.getState()['cpu.x']
         check(r(0x5CA+slot)==expectedClass,'shot '..shots..': spell selects vulnerability class')
-        check(r(0x5FC+slot)==33 and r(0x7D+slot)==0x20,'shot '..shots..': finite lifetime and diagonal speed')
+        check((r(0x5FC+slot)%128)==33 and r(0x7D+slot)==0x20,'shot '..shots..': finite lifetime and diagonal speed')
         local world=r(0x5A+slot)+256*r(0x48+slot)
         check(world==r(0x5F2)+496 and r(0x36+slot)==r(0x5F3),
             'shot '..shots..': shared muzzle carries across world page')

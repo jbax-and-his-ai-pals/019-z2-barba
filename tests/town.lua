@@ -24,12 +24,12 @@ local function setup()
     w(0x8D,0);w(0x8E,0);w(0x5F8,0);w(0x5FE,0);w(0x400,0);w(0x76F,0)
     w(0xB6+slot,1);w(0x4E+slot,112);w(0x3C+slot,0);w(0x2A+slot,176)
     w(0xAF+slot,phase==1 and 0 or 0x80);w(0x71+slot,0);w(0x5C3+slot,0)
-    if phase==3 then w(0xBC+slot,5);w(0xAF+slot,0)end
+    if phase==3 then w(0xA1+slot,0x0F);w(0xBC+slot,5);w(0xAF+slot,0)end
     if phase==2 then
         w(0xAF+slot,0)
         for x=0,5 do if x~=slot then w(0xB6+x,0)end end
     end
-    if phase==4 then w(0xA1+slot,0x19);w(0x4E+slot,140);w(0x71+slot,0x10)end
+    if phase==4 then w(0xA1+slot,0x19);w(0x4E+slot,112);w(0x71+slot,0x10)end
     for x=0,5 do if r(0xA1+x)==0x23 then w(0xB6+x,0)end end
     if phase==5 then
         for page=0,3 do
@@ -54,15 +54,18 @@ emu.addEventCallback(function()
     if frame>=1000 then
         b={start=false,select=false,a=false,b=false,up=false,down=false,left=false,right=false}
         if phase==2 or phase==3 then b.b=age>=8 and age<11 end
-        if phase==4 then b.up=age<220;b.right=age<70;b.b=age>=180 and age<183 end
+        if phase==4 then b.up=age<220;b.right=age<120;b.b=age>=180 and age<183 end
     end
     emu.setInput(b,0)
 end,emu.eventType.inputPolled)
 emu.addMemoryCallback(function()
     if phase==4 then
         requests=requests+1
-        local pointer=LABELS.TownFearPointers+(r(0xA1+slot)-0x19)*2
-        if r(0x569)+256*r(0x56A)==r(pointer)+256*r(pointer+1) then dialog=true end
+        local actual=r(0x569)+256*r(0x56A)
+        for idx=0,7 do
+            local pointer=LABELS.TownFearPointers+idx*2
+            if actual==r(pointer)+256*r(pointer+1) then dialog=true end
+        end
     end
 end,emu.callbackType.exec,LABELS.TownFastDialogReady)
 emu.addMemoryCallback(function()
@@ -93,7 +96,7 @@ emu.addEventCallback(function()
     end
     if not base then return end
     age=age+1
-    if phase==1 and r(0xAF+slot)==0x80 and r(0x4E+slot)>startX then fled=true end
+    if phase==1 and r(0xAF+slot)==0x80 and r(0x4E+slot)~=startX then fled=true end
     if phase==2 then
         if r(0xAF+slot)>=0xA0 and r(0xAF+slot)<0xC0 then
             if not ashes then screenshot('town-ash')end
@@ -135,7 +138,7 @@ emu.addEventCallback(function()
             check(closed,'fear dialogue closes and restores gameplay')
         end
         if phase==5 then
-            check(enteredDoor and hiddenAtDoor,'wanderer immediately despawns and hides at the real doorway')
+            check(enteredDoor and hiddenAtDoor,'wanderer despawns and hides at the real doorway')
             local unchanged=true
             for a=0x6000,0x633F do if r(a)~=doorTiles[a-0x6000+1]then unchanged=false end end
             check(unchanged,'refuge entry creates no doors or background collision changes')

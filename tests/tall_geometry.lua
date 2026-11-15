@@ -39,7 +39,7 @@ local function geometry(name,setup,x,y,flags)
 end
 geometry('standing right in open space',function()end,0x6C,0x84,1)
 geometry('standing left in open space',function()w(0x9F,2)end,0x4C,0x84,1)
-geometry('crouch keeps native low lane',function()w(0x17,0);w(0x80,6)end,0x6C,0x9C,1)
+geometry('crouch keeps native low lane',function()w(0x17,0);w(0x80,6)end,0x6C,0x9A,1)
 geometry('airborne low shield retains full-body mouth',function()
     w(0x17,0);w(0x80,6);w(0x479,2)
 end,0x6C,0x84,1)

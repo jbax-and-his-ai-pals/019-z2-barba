@@ -5,6 +5,7 @@
 .export EnemyFireGateway, ShieldFireGateway
 
 ROAR_TIMER = $05F0 ; cleared by the original $0500..$05FF reset loop; no original references
+LAVA_CONTACT = $05EB ; 4-frame grace timer while supported by palace lava
 
 .segment "BANK0"
 
@@ -52,6 +53,18 @@ BarbaInferno:
 BarbaUpdate:
     jsr BarbaProjectiles
     jsr BarbaShouts
+    lda LAVA_CONTACT
+    beq @roar
+    dec LAVA_CONTACT
+    lda $0479
+    beq @roar
+    lda $057D
+    bpl @roar
+    cmp #$FB
+    bcc @roar
+    lda #$FA
+    sta $057D
+@roar:
     lda ROAR_TIMER
     beq @done
     dec ROAR_TIMER
@@ -75,6 +88,7 @@ RoarPitch:
 .include "breath.inc"
 .include "extra_fire.inc"
 .include "tall_player.inc"
+.include "stomp.inc"
 .include "blocks.inc"
 .include "shouts.inc"
 .include "town.inc"
@@ -87,6 +101,8 @@ LavaSurface:
     lda $0707
     cmp #$03
     bcc @water
+    lda #$04
+    sta LAVA_CONTACT
     lda $A7
     ora #$04
     sta $A7

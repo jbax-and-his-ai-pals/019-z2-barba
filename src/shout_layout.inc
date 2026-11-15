@@ -15,6 +15,13 @@ ShoutTile_C = $95
 ShoutTile_K = $9D
 ShoutTile_O = $9F
 ShoutTile_Bang = $A1
+ShoutTile_M = $A3
+ShoutTile_G = $A9
+ShoutTile_W = $AB
+ShoutTile_D = $AD
+ShoutTile_E = $BB
+ShoutTile_L = $BD
+ShoutTile_P = $BF
 ; Town sprite palette 2 ($0F black, $16 red, $36 pale): letters use index 3,
 ; outline index 1. The same palette already draws the ash pile.
 ShoutGlyphPalette = $02

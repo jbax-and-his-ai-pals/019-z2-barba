@@ -1,32 +1,43 @@
 # Reactive town prototype
 
-Only native randomly generated outdoor wanderers can flee or burn. Eligibility
-requires all of these: live slot value 1, generator-origin marker `$BC,x=$FF`,
-type `$19..$1C`, town world 1 or 2, and an explicit outdoor street. Street rooms
-`$00..$13` except `$06` were checked against the source headers and generator
-entries; all other rooms are excluded. Scripted walkers of the same type have
-a different origin and retain their normal behavior.
+All outdoor town villagers (`$19..$1C`, both randomly generated and scripted)
+can flee, shout, burn, and retreat into houses. Eligibility requires: live
+slot value 1, type `$19..$1C`, town world 1 or 2, and an explicit outdoor
+street. Street rooms `$00..$13` except `$06` were checked against the source
+headers and generator entries; all other rooms are excluded. Story-necessary
+NPCs (`$0B..$18` wise men, healers, and house-opening NPCs; `$1D..$20`
+quest-flag walkers; and all indoor actors) retain their normal behavior.
 
-Four bank-3 first-stage pointers at `$94BF..$94C5` redirect those walking types
+Four bank-3 first-stage pointers at `$94BF..$94C5` redirect types `$19..$1C`
 to `src/town.inc`. Every action rechecks provenance; other NPC pointers remain
 untouched. The code occupies verified filler starting at bank 3 `$B803`.
 
 ## Behavior
 
-- Wanderers panic within 48 pixels, or 80 during an attack, on the same floor.
-  They choose a direction away from Barba and flee at one pixel per update,
-  allowing two-pixel-per-update fireballs to catch them.
-- They disappear immediately at a real closed doorway encountered along that
-  path, hiding all four sprites without any door animation or background edits. This does not find the nearest
-  house across the whole street. Without a door they run offscreen.
+- Wanderers panic within 72 pixels, or 96 during an attack, on the same floor.
+  `TownPickEscapeDir` picks the direction away from Barba toward the nearest
+  doorway (`$8B` / `$91`) or room edge (`$69C4` / `$69C7+1`). They flee at
+  0.875 pixels per update (`$0E`/`$F2`), so Barba (`1.5 px/update`) and
+  fireballs (`2.0 px/update`) can catch them before they reach shelter, and
+  despawn cleanly if they retreat `>= 16` px past the left edge or past the
+  right edge.
+- When reaching a real closed doorway (`$8B`) along that path, `TownDoor`
+  derives the door's exact column and page from `$DC/$DD`, opens the door's
+  PPU tiles (`$9946`/`$994A`), walks the villager inside (`$0C..$2B`), hides
+  their sprites at `$2C`, and closes the door behind them (`$38..$40` via
+  `$9946`/`$994E`) without altering collision RAM (`$6000..$633F`) or
+  house/quest flags. PPU writes are skipped if the doorway has scrolled
+  offscreen and deferred if the `$0302` PPU buffer is busy. Without a door
+  they run offscreen.
 - A live player fireball can ignite an eligible wanderer. A brief flame effect
   leaves a charcoal-and-ember pile for about two seconds before removal.
   Both effects reuse its original OAM slots. No extra sprites or quest
   flags are allocated. Ordinary room resets/generation can repopulate the town;
   casualties are not permanent.
-- Hold Up while approaching an eligible wanderer for one of four panicked messages, including
-  “OH SHIT. / IT IS BARBA. / RUN.” and “FUCK THAT. / I AM OUT / OF HERE.”
-  Different wandering types get different lines. B remains attack. Talking
+- Hold Up while approaching an eligible wanderer for one of eight panicked messages, including
+  “OH SHIT. / IT IS BARBA. / RUN.”, “IT IS BARBA. / EVERYONE / GET INSIDE.”,
+  and “BARBA WILL / BURN US ALL. / RUN AWAY.”. Different wandering types and frames
+  select across the eight lines. B remains attack. Talking
   requires being within 48 pixels on the same floor, grounded and in normal
   play; it cannot interrupt an existing conversation or doorway transition.
   The button is latched until release, preventing repeated reopening. Panic
@@ -76,8 +87,8 @@ shout therefore shows only the subtitle. Up-to-talk is unchanged.
   OAM, because the new scene may own `$E0`.
 - **Tiles:** odd 8x16 tile bytes select the `$1000` table. In towns that table
   is 4K CHR bank 7, the town background bank, which native sprite 0 already
-  uses for `$C5`. Twelve decorative BG pairs (`$80..$8C`, `$92`, `$94`,
-  `$9C..$A0`) appeared in no town room's nametables in that census. They are
+  uses for `$C5`. Nineteen decorative BG pairs (`$80..$8C`, `$92`, `$94`,
+  `$9C..$A2`, `$A8..$AC`, `$BA..$BE`) appeared in no town room's nametables in that census. They are
   replaced in bank 7 only. Letters are recolored at build time from the
   user's own ROM font (`$DA` + letter). `!` is authored in
   `assets/shout_glyphs.json`. The build checks a hash of each original pair
@@ -97,10 +108,11 @@ shout therefore shows only the subtitle. Up-to-talk is unchanged.
   and erases as before (`tests/shouts.lua`).
 
 `tests/shout_follow.lua` checks that the word appears within 4 frames, tracks
-the fleeing villager to within 1 px in the same frame through scrolling, and
-expires. It also checks that the word hides offscreen, at a real doorway, on
-ignition, on a scene change, through an Up conversation and in the pause menu.
-Finally, it checks per-glyph clipping at both screen edges.
+the fleeing villager to within 2 px in the same frame through scrolling, and
+expires. It also checks that the word hides offscreen, at a real doorway (and
+that the doorway's PPU tiles open and close), on ignition, on a scene change,
+through an Up conversation and in the pause menu. Finally, it checks per-glyph
+clipping at both screen edges.
 
 `src/shouts.inc` uses `$05EA` as a reset guard and `$6460..$6466` for timer,
 cooldown, pending message, scene identity and the Up latch, outside the backed

@@ -33,8 +33,14 @@ def prepare() -> dict:
     preferences.update({'SingleInstance':False,'AutoLoadPatches':False,
                         'OverrideSaveDataFolder':True,'SaveDataFolder':str(folder/'play-saves'),
                         'OverrideSaveStateFolder':True,'SaveStateFolder':str(slots)})
-    # Reserve one F-key per test checkpoint, preserving other bindings.
+    # Reserve one F-key per test checkpoint, clearing conflicting default bindings (e.g. F8=Auto, F9=MaxSpeed).
     shortcuts=preferences.setdefault('ShortcutKeys',[])
+    reserved=set(range(90,90+len(manifest['states'])))
+    for entry in shortcuts:
+        for key_field in ('KeyCombination','KeyCombination2'):
+            combo=entry.get(key_field)
+            if combo and combo.get('Key1') in reserved and not combo.get('Key2') and not combo.get('Key3'):
+                combo['Key1']=0
     for slot in range(1,len(manifest['states'])+1):
         name=f'LoadStateSlot{slot}'
         shortcuts[:]=[s for s in shortcuts if s.get('Shortcut')!=name]
