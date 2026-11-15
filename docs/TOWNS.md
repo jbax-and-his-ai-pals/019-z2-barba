@@ -147,7 +147,8 @@ hit, skipped when the buffer is past `$28`). After `SCORCH_FLAME` (24) updates,
   burning, a new hit is skipped. A room change (`$0561`) or
   `BarbaExtraReset` clears the ring.
 - **Lifetime:** marks live in the nametable only. They vanish when that column
-  is redrawn (scrolling about two screens away) or the room reloads.
+  is redrawn (scrolling about two screens away) or the room reloads. The producer approved this as
+  final (2026-11-14): no scorch or casualty persistence after leaving a town.
 - **Art:** `assets/town_fire.json` (original 16x16 art, palette indices). It
   goes into eight town BG tiles in CHR bank 7: flame `$02/$0E/$04/$16`, char
   `$25/$A7/$96/$B9`. Index 1 reads orange on brick and white on stone or
