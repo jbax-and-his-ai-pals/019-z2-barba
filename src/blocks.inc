@@ -133,6 +133,9 @@ SCORCH_HEAD = $64C0        ; next FIFO slot (0..15)
 SCORCH_PAGE = $64C1        ; 16 world X high bytes (page 0..3)
 SCORCH_TOWN_TIME = $96     ; 150 ticks * 4 updates = 600 updates (~10s)
 SCORCH_PALACE_TIME = $18   ; 24 updates (~0.4s) for North Palace Zelda
+SIGN_PENDING = $64D1       ; nonzero: a fireball scorched a sign board ($E3) this room;
+                           ; bank-3 SignUpdate copies it to the sign actor and clears it.
+                           ; Cleared with the ring (BarbaScorchClear covers $64B0-$64D1).
 BarbaTownBurn:
     lda $0480
     clc
@@ -192,6 +195,10 @@ BarbaTownBurn:
     cmp #$60
     bcs @skip
 @burn:
+    cmp #$E3                ; sign board (post is $E4)
+    bne :+
+    sta SIGN_PENDING
+:
     lda $0362
     cmp #$28
     bcs @skip
@@ -287,7 +294,7 @@ BarbaTownBurn:
     sta SCORCH_HEAD
     lda #$04
     sta $ED
-    lda $0707
+    tya                     ; Y = $0707
     beq @castle_scorch
     inc COMBO_ADD
     bne @queue_flame
@@ -302,8 +309,7 @@ ScorchQueue:
     lda $0707
     bne :+
     tya
-    clc
-    adc #$08
+    ora #$08                ; North Palace Y is only 0 or 4 (no flame-B anim)
     tay
 :
     ldx $0362
@@ -312,8 +318,7 @@ ScorchQueue:
     sta $0368,x
     lda $01
     sta $0364,x
-    clc
-    adc #$01
+    ora #$01                ; metatile left column is always even
     sta $0369,x
     lda #$82
     sta $0365,x
@@ -362,19 +367,15 @@ ScorchOnScreen:
     pha
     lda SCORCH_PAGE,x
     sbc $072A
-    beq @in_range
-    cmp #$FF
-    bne @offscreen
-    pla
+    beq @in_range           ; SBC result 0 leaves carry set (page never $FF)
+    cmp #$FF                ; carry set only for the page just left of the camera
+    pla                     ; PLA keeps carry
+    bcc @done
     cmp #$F0
+@done:
     rts
 @in_range:
     pla
-    sec
-    rts
-@offscreen:
-    pla
-    clc
     rts
 
 ; Once per update in outdoor towns or North Palace: count down active flames
@@ -387,8 +388,7 @@ BarbaScorchTick:
     sta SCORCH_ROOM
 BarbaScorchClear:
     lda #$00
-    sta SCORCH_HEAD
-    ldx #SCORCH_MAX-1
+    ldx #SIGN_PENDING-SCORCH_TIME ; timers, head, pages and SIGN_PENDING
 @clear:
     sta SCORCH_TIME,x
     dex

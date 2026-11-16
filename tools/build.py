@@ -78,7 +78,7 @@ def build(source_path: Path, output: Path) -> dict:
         offset = prg_offset(bank, 0x8506 if bank < 7 else 0xC506)
         if source[offset] != expected:
             raise ValueError(f'FarCall0 bank fingerprint changed: {bank}')
-    for filename, bank, address in [('code', 0, 0xAA40), ('bank0-ow', 0, 0xA89E), ('bank0-tail', 0, 0xBFE0),('lava', 7, 0xD39A), ('terrain', 7, 0xFF4C), ('town', 3, 0xB803), ('gateway', 7, 0xFEAA), ('bank6', 6, 0xBA00), ('bank5', 5, 0xBDE0), ('bank1', 1, 0x9EB9)]:
+    for filename, bank, address in [('code', 0, 0xAA40), ('bank0-ow', 0, 0xA89E), ('bank0-tail', 0, 0xBFE0),('lava', 7, 0xD39A), ('terrain', 7, 0xFF4C), ('town', 3, 0xB803), ('gateway', 7, 0xFEAA), ('bank6', 6, 0xBA00), ('bank5', 5, 0xBDE0), ('bank1', 1, 0x9EB9), ('bank3-sign', 3, 0x9D0A)]:
         data = (output/f'barba-{filename}.bin').read_bytes()
         overlay.prg(bank, address, data, b'\xFF'*len(data), f'New {filename} routines')
     # Dead vanilla bank-0 code reused for METEOR. Guard the full original ranges:
@@ -128,6 +128,12 @@ def build(source_path: Path, output: Path) -> dict:
         'Town door coordinates hook',
     )
     hook(3, 0x9A2C, 'TownNativeTalk', 0x20, 'ad f5 00 29 40', 2)
+    # Burned signs (src/sign.inc): sign readers $21/$22 update pointers ($9ABD) -> SignUpdate.
+    # SignUpdate only adds the burn mark and tail-calls $9ABD, so $21 quest triggers
+    # (Mirror/Fountain) keep their native behaviour.
+    dest = labels['SignUpdate']
+    for address, kind in ((0x94CF, '$21'), (0x94D1, '$22')):
+        overlay.prg(3, address, dest.to_bytes(2, 'little'), bytes.fromhex('bd 9a'), f'Sign reader {kind} update {address:04X}')
     dest = labels['TownUpdate']
     overlay.prg(3, 0x949F, dest.to_bytes(2, 'little'), bytes.fromhex('78 98'),
                 'Indoor NPC update 949F')

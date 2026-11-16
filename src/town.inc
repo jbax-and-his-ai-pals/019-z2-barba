@@ -4,7 +4,7 @@
 ; ($0C, $21..$23) and $0B always keep their native routines.
 .segment "TOWN"
 .export TownUpdate, TownEligible, TownBurnable, TownOutdoorRooms, TownEnd, TownDialog, TownFearText, TownFearPointers, TownHide
-.export TownFastDialogReady, TownLetterDelay, TownLineDelay, TownAsh, TownDoorCoords, TownDoorEmerged, TownNativeTalk
+.export TownNativeDialog, TownSetNpcDialog, TownFastDialogReady, TownLetterDelay, TownLineDelay, TownAsh, TownDoorCoords, TownDoorEmerged, TownNativeTalk
 .include "ash_layout.inc"
 
 ; Native generator $96E0 clears AF before initializing each new actor.
@@ -30,7 +30,7 @@ TownUpdate:
     ; to trigger native $99E6 heal/magic restore without stale $C9 blocking it.
     lda $AF,x
     beq @opener_outside
-    bmi @native
+    bmi @opener_hidden
     cmp #$40
     bcc @native
     lda $A1,x
@@ -49,6 +49,8 @@ TownUpdate:
     stx $048B
     lda $A1,x
     jmp $99E6
+@opener_hidden:
+    jmp TownOpenerGate
 @opener_outside:
     lda $F5
     and #$40
@@ -441,6 +443,40 @@ TownDoor:
     jsr TownDoorQueuePpu
     bcc @pause
     jmp TownHide
+
+; Hidden house-opener ($13..$18, AF=$80) emergence gate. Native L97E1 judges
+; "Barba is near" from $C9/$CD, but L9A90 never refreshes them for this actor,
+; so another actor's screen position leaks through and the opener can emerge
+; while its doorway is a page or two away. Its door macro ($9946/$994A/$994E)
+; then writes into nametable (page & 1) and paints a phantom door in open street.
+; Require Barba to really be within native 96 px before the native check runs.
+.segment "BANK3_SIGN"
+TownOpenerGate:
+    lda $AF,x
+    cmp #$80
+    bne @native
+    lda $4E,x
+    sec
+    sbc $4D
+    sta $00
+    lda $3C,x
+    sbc $3B
+    sta $01
+    lda $00
+    clc
+    adc #$60
+    bcc :+
+    inc $01
+:
+    ldy $01
+    bne @hold
+    cmp #$C0
+    bcs @hold
+@native:
+    jmp $97D4
+@hold:
+    jmp $9A90                  ; stay hidden; tick $05BD like native L97E1
+.segment "TOWN"
 
 TownHide:
     jsr $DD3D
@@ -878,27 +914,29 @@ TownFastDialogReady:
     inc $0524
     rts
 TownOriginalDialog:
+    jmp SignDialog          ; burned sign ($22) or back to TownNativeDialog
+TownNativeDialog:
     pla
     ldy $A1,x
     cpy #$0F
     bne @check_healer
     ldy $05
-    beq @native_dialog
+    beq TownNativeIndex
     lda #<TownWiseManText
     ldy #>TownWiseManText
-    jmp @set_npc_dialog
+    jmp TownSetNpcDialog
 @check_healer:
     cpy #$17
     bne @check_magic
     lda #<TownHealerText
     ldy #>TownHealerText
-    jmp @set_npc_dialog
+    jmp TownSetNpcDialog
 @check_magic:
     cpy #$18
-    bne @native_dialog
+    bne TownNativeIndex
     lda #<TownMagicText
     ldy #>TownMagicText
-@set_npc_dialog:
+TownSetNpcDialog:
     sta $0569
     sty $056A
     lda #$2A
@@ -907,7 +945,7 @@ TownOriginalDialog:
     sta $0489
     sta $048A
     jmp TownFastDialogReady
-@native_dialog:
+TownNativeIndex:
     asl
     tay
     lda $0707

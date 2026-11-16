@@ -38,7 +38,11 @@ action rechecks eligibility in `src/town.inc`.
   offscreen and deferred if the `$0302` PPU buffer is busy. Without a door
   they run offscreen. House-opening villagers (`$13..$18`) that spawn hidden
   inside a closed door (`$AF = $80`, `Y = $A8`) stay hidden (`TownHideOAM`)
-  rather than mistaking native `$80` for `TownFlee`, and `TownFlee` steps any
+  rather than mistaking native `$80` for `TownFlee`. They emerge only when
+  Barba is really within 96 px of them (`TownOpenerGate`, 16-bit distance):
+  native `L97E1` reads `$C9`/`$CD` from whichever actor drew last, so a far
+  opener could emerge and its door macro would paint a phantom closed door into
+  the visible nametable (`tests/opener_far.lua`). `TownFlee` steps any
   villager above street level (`$2A < $B0`) down `+4` px every 16 frames to `$B0`.
 - A live player fireball can ignite an eligible wanderer. A brief flame effect
   leaves a charcoal-and-ember pile for about two seconds before removal.
@@ -199,6 +203,41 @@ keeps the short 24-update flame stage).
   Both West Hyrule (`$0707 = 1`, `$0706 = 0`) and East Hyrule (`$0707 = 2`,
   `$0706 = 2`) towns scorch; `$0706 == 0` is only required for North Palace
   (`$0707 = 0`).
+
+### Burned signs
+
+A town sign is two metatiles, board `$E3` over post `$E4` (bank-3 constructor
+`$9C11`), plus an invisible talk actor: `$22` in world-1 rooms `$00-$06`, `$08`,
+`$0C`, `$0E`, `$12`, or `$21` in rooms `$09`, `$0B`, `$0F`, `$11`, `$17`
+(emulator census 2026-11-16: every sign room has exactly one reader; the quest
+`$21` triggers in rooms `$0D`, `$1A`, `$1E` have no sign; `$0C` never shares a
+room with a sign; room `$15` has a sign but no reader). When a fireball scorches the
+**board**, reading the sign shows one of six burned lines instead of its native
+text, rotating on each read (producer-picked, 2026-11-16):
+`IT IS CHAR. / YOU CAN NOT / READ IT.`, `WELL. YOU / BURNED IT.`,
+`WELCOME TO / THIS ASH / PILE.`, `WELCOME TO / WHAT IS / LEFT.`,
+`THE SIGN IS / ASH. YOU / DID THAT.`, `THIS WAS / A SIGN.`
+
+- **Mark:** `BarbaTownBurn` stores `$E3` in `SIGN_PENDING` (`$64D1`). `SignUpdate`
+  (`src/sign.inc`, now the update pointer of `$21`/`$22` at `$94CF`/`$94D1`, then
+  `jmp $9ABD`)
+  copies it into the sign actor's `$04A0,x` when `SCORCH_ROOM == $0561`, and
+  clears it. Native spawn (`$D6A8`) zeroes `$04A0,x` on every room load and no
+  bank 0/3/7 code reads it, so the mark survives dialogue (which clears the
+  scorch ring via `BarbaExtraReset`) and disappears with the char tiles when the
+  room reloads. `SIGN_PENDING` is cleared with the ring (`BarbaScorchClear`
+  covers `$64B0-$64D1`).
+- **Text:** `TownOriginalDialog` jumps to `SignDialog`; `$04A0,x` 1..6 picks the
+  line and advances (6 wraps to 1), shown through `TownSetNpcDialog`. Text and
+  code live in vanilla bank-3 pad `bank3_UNUSED_9D0A` (`BANK3_SIGN`, `$9D0A-$9FFF`).
+- **Limits:** the post (`$E4`) alone does not count. A scorched board that
+  scrolls far enough to be redrawn looks intact but keeps its burned text until
+  the room reloads. The census loader returned the same data for `$0707 = 2`, so
+  East Hyrule rooms are assumed to follow the same one-reader rule but were not
+  separately verified.
+- **Test:** `tests/sign_burn.lua`, two cases (Rauru entrance `$22`, room `$09`
+  `$21`): native text before, mark on burn, three reads rotate lines 1-3, native
+  text after a room reload.
 
 ### North Palace sleeping princess scorch & Barba shout
 
