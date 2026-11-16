@@ -11,7 +11,7 @@ import prepare_test_player as player
 
 class CheckpointSets(unittest.TestCase):
     def test_set_sizes_and_unique_ids(self):
-        self.assertEqual(pack.SETS,['core','palaces','endgame','world','movement'])
+        self.assertEqual(pack.SETS,['core','palaces','endgame','bosses','world','movement'])
         for scenes in pack.RECIPES['sets'].values():
             self.assertTrue(1<=len(scenes)<=10)
             self.assertEqual(len({s['id'] for s in scenes}),len(scenes))

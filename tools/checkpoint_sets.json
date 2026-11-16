@@ -41,6 +41,16 @@
       {"id":"dark-link","name":"Before Dark Link","profile":"gp","world":5,"region":2,"number":7,"room":54,"page":0,"instructions":"Check movement, head clearance, combat and HUD."},
       {"id":"p6-boss-approach","name":"Palace 6 boss and crystal approach","profile":"p6boss","world":4,"region":2,"number":6,"room":58,"page":0,"frames":60,"instructions":"Walk right to Lava Link; win normally and approach the crystal statue."}
     ],
+    "bosses": [
+      {"id":"boss-horsehead","name":"Horsehead (Palace 1)","profile":"p1boss","world":3,"region":0,"number":1,"room":13,"page":0,"instructions":"Walk right to start the fight. Reload this key to retry with full meters."},
+      {"id":"boss-helmethead","name":"Helmethead (Palace 2)","profile":"p2boss","world":3,"region":0,"number":2,"room":34,"page":0,"instructions":"Walk right to start the fight. Reload this key to retry with full meters."},
+      {"id":"boss-rebonack","name":"Rebonack (Palace 3)","profile":"p3boss","world":4,"region":0,"number":3,"room":14,"page":0,"instructions":"Walk right to start the fight. Reload this key to retry with full meters."},
+      {"id":"boss-carock","name":"Carock (Palace 4)","profile":"p4boss","world":4,"region":1,"number":4,"room":28,"page":0,"instructions":"Walk right to start the fight. Reload this key to retry with full meters."},
+      {"id":"boss-gooma","name":"Gooma (Palace 5)","profile":"p5boss","world":3,"region":2,"number":5,"room":41,"page":0,"instructions":"Walk right to start the fight. Reload this key to retry with full meters."},
+      {"id":"boss-lava-link","name":"Lava Link (Palace 6)","profile":"p6boss","world":4,"region":2,"number":6,"room":58,"page":0,"frames":60,"instructions":"Walk right to start the fight. Reload this key to retry with full meters."},
+      {"id":"boss-thunderbird","name":"Thunderbird (Great Palace)","profile":"gp","world":5,"region":2,"number":7,"room":54,"page":0,"frames":60,"instructions":"Walk right to start the fight. Reload this key to retry with full meters."},
+      {"id":"boss-dark-link","name":"Dark Link (Great Palace)","profile":"gp","world":5,"region":2,"number":7,"room":54,"page":1,"frames":590,"instructions":"Starts the moment the intro ends: the shadow dragon is already beside you. Reload this key to retry with full meters."}
+    ],
     "world": [
       {"id":"rauru","name":"Rauru street","profile":"start","world":1,"region":0,"number":0,"room":0,"page":1,"instructions":"Check outdoor NPCs, doorways, palette and head clearance.","town":true},
       {"id":"ruto","name":"Ruto street","profile":"ruto","world":1,"region":0,"number":1,"room":3,"page":1,"instructions":"Check outdoor NPCs, doorways, palette and head clearance.","town":true},

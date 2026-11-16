@@ -1,5 +1,5 @@
 param([switch]$NoRebuild, [switch]$TestPack, [switch]$PrepareOnly,
-      [ValidateSet('core','palaces','endgame','world','movement')][string]$CheckpointSet = 'core')
+      [ValidateSet('core','palaces','endgame','bosses','world','movement')][string]$CheckpointSet = 'core')
 $ErrorActionPreference = 'Stop'
 $taskRoot = Split-Path -Parent $PSScriptRoot
 $taskRom = Join-Path $taskRoot 'build\barba.nes'
