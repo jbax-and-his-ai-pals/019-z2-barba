@@ -186,14 +186,8 @@ BarbaSplitBurnForest:
     iny
     bne @find_end
 @found_end:
-    tya
-    clc
-    adc $08
-    tay                 ; Y = end_lo
-    lda $09
-    adc #$00
-    sta $09             ; $09 = end_hi
-    sta $0B             ; $0B = dst_hi
+    jmp BurnMapEndGuard ; computes end_lo/end_hi; refuses a split that would overflow WRAM
+BurnMapEndBack = *
     lda #$00
     sta $08             ; $08 = 0 (page base)
     lda $05
@@ -274,6 +268,30 @@ BarbaSplitBurnForest:
     sta ($0E),y
 @split_done:
     rts
+
+.segment "BANK0_TAIL"
+; Bank 0 pad $BFE0-$BFF9 (between the unused reset stub and the vectors).
+; The overworld RLE map lives at $7C00 and ends near $7F20; each forest split
+; grows it by up to 2 bytes. Past $7FFF the shift would write MMC1 registers,
+; so once the map end reaches $7FF0 further splits are refused (the tree stays).
+; Entry: Y = row-$4A end index, $08/$09 = row-$4A base, saved Y on the stack.
+BurnMapEndGuard:
+    tya
+    clc
+    adc $08
+    tay                 ; Y = end_lo
+    lda $09
+    adc #$00
+    sta $09             ; $09 = end_hi
+    sta $0B             ; $0B = dst_hi
+    cmp #$7F
+    bcc @ok
+    cpy #$F0
+    bcc @ok
+    pla                 ; drop saved row index; map unchanged
+    rts
+@ok:
+    jmp BurnMapEndBack
 
 .segment "BANK0"
 BarbaInferno:

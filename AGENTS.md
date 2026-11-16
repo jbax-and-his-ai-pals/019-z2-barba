@@ -25,7 +25,8 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
   shout_follow, doors, dialogue_speed, perf_volley, perf_lava, link_boss, dark_link,
   shield_enemies, title_roar, overworld_side, farcall, town_fire, town_combo,
   castle_zelda_burn, upstab, perf_upward, look_up, ending, horsehead, helmethead, rebonack, carock,
-  gooma, lava_link_kill, checkpoint_features, stomp, geldarm, plus `state_pack` via create_test_pack.
+  gooma, lava_link_kill, stomp, geldarm, encounter_hazard, heal_door, spell_door, stab_blocks,
+  swamp_submerge, town_nontown_burn, inferno, overworld_fire, forest_burn_limit, plus `state_pack` via create_test_pack.
   (`boss_fight.lua` is the shared fireball-only boss driver, not a scenario.)
 
 ## Hard rules
@@ -58,14 +59,15 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
 
 ## Free space and RAM in use (check before allocating)
 
-- ROM: bank 0 `$A89E-$A97D` (BANK0_OW; `BarbaSplitBurnForest`) + `$AA40-$BF6F` (BANK0), bank 3 `$B803-$BF6F` (TOWN; 125 free), bank 6 `$BA00-$BF6F` (BANK6; `shouts.inc` + `combo.inc`).
+- ROM: bank 0 `$A89E-$A97D` (BANK0_OW; `BarbaSplitBurnForest`) + `$AA40-$BF6F` (BANK0; 3 free) +
+  `$BFE0-$BFF9` (BANK0_TAIL, vanilla pad before vectors; `BurnMapEndGuard`, 0 free), bank 3 `$B803-$BF6F` (TOWN; 125 free), bank 6 `$BA00-$BF6F` (BANK6; `shouts.inc` + `combo.inc`).
   Bank 4 `$A765-$A8FF` is vanilla `$FF` pad patched by raw bytes in `build.py`: Lava Link helpers `$A765-$A7A8`,
   `CarockHit` `$A7B0-$A7BE`; `$A7BF-$A8FF` free.
   Fixed bank 7: LAVA `$D39A-$D3C9` (0 free), GATEWAY `$FEAA-$FECF` (0 free),
   TERRAIN `$FF4C-$FF6E` (1 free). `FarCall0` provides cold bank-0
   hooks at 5 fixed bytes/call (6 with standalone RTS), 369-482 bridge cycles plus target work;
   see `docs/BUILD.md` for ABI/recipe and `docs/FIXED-BANK-AUDIT.md` for ownership/padding evidence.
-  No new padding region was claimed. Never allocate live JMP operands `$FF4B` or `$E02C`.
+  No new fixed-bank padding was claimed. Never allocate live JMP operands `$FF4B` or `$E02C`.
 - RAM `$05EA`, `$05EB` (lava contact), `$05F0-$05FF` (roar, breath, tall renderer, extra guard). Cleared by the native reset loop.
 - WRAM `$6400-$642F` extra projectile records; `$6440-$645F` scratch (`$6457` lazy-save flag,
   `$6458-$645F` geometry terrain cache, `$645C` EXTRA_LIVE); `$6460-$6469` shouts (`$6465` actor, `$6467` word, `$6468` timer, `$6469` cycle); `$646A` + `$6490-$64D0` town scorch ring (16-slot FIFO + head/page); `$646B` volley aim latch (0 forward / $40 upward); `$646C-$646F` + `$6488` town combo banner; `$6470-$6473` Inferno firestorm (`$6470` timer, `$6473` wave aim) and overworld flame (`$6471` timer, `$6472` dir). Don't touch collision/room/save regions elsewhere in `$6000-$7FFF`.

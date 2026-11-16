@@ -57,6 +57,10 @@ Current playable alpha. Built locally from `roms/z2.nes` via `python tools/build
   - Town double-door visual bug: hooked native door entry (`$98AB`) to `TownDoorCoords` / `TownDoorEmerged` (`src/town.inc`) so calm/non-panicked villagers derive the door's exact column and page from `$DC/$DD` instead of `$4E,x + L9780,y` (which drew a duplicate closed door one column left of the real doorway), while house-openers emerging from inside (`L97F5`, `$AF=$81`) recover their doorway from `($4E,x - L9740,y)` and `$3C,x` because `LEA32` runs while `$4E,x` is offset (`tests/spell_door.lua`).
   - Magic container/town item sprite (`$83`) overlap: moved shout glyph `H` from bank-7 `$83` to unused bank-6 pair `$7C`.
   - Spell-teaching Wise Man frame (`$62/$64`, bank 6) overlap: moved town `ASH_TILES` from `$64/$66` to unused bank-6 pairs `$7E/$80` and guarded `$62/$64` in `TOWN_SPRITE_PAIRS`.
+  - Overworld forest-burn overflow: each burned tree grows the WRAM RLE map (`$7C00..`, ends near `$7F20`) by up to
+    2 bytes, so roughly 110-220 burns in one region would have shifted map bytes past `$7FFF` into MMC1 registers
+    (crash/corruption; West Hyrule has 359 forest tiles). `BurnMapEndGuard` (bank 0 pad `$BFE0`) refuses splits once
+    the map end reaches `$7FF0`; the tree stays (`tests/forest_burn_limit.lua`).
   - Spell-house door softlock: excluded `$13..$18` house-openers from `TownEligible` and `TownBurnable` and hooked `$9A2C` (`TownNativeTalk`) + `TownUpdate` to talk on `B` (or `Up`) (`tests/spell_door.lua`).
 
 Historical design notes and completed implementation plans are archived in [docs/archive/](archive/).

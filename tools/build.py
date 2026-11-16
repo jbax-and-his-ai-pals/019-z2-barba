@@ -78,7 +78,7 @@ def build(source_path: Path, output: Path) -> dict:
         offset = prg_offset(bank, 0x8506 if bank < 7 else 0xC506)
         if source[offset] != expected:
             raise ValueError(f'FarCall0 bank fingerprint changed: {bank}')
-    for filename, bank, address in [('code', 0, 0xAA40), ('bank0-ow', 0, 0xA89E), ('lava', 7, 0xD39A), ('terrain', 7, 0xFF4C), ('town', 3, 0xB803), ('gateway', 7, 0xFEAA), ('bank6', 6, 0xBA00), ('bank5', 5, 0xBDE0)]:
+    for filename, bank, address in [('code', 0, 0xAA40), ('bank0-ow', 0, 0xA89E), ('bank0-tail', 0, 0xBFE0),('lava', 7, 0xD39A), ('terrain', 7, 0xFF4C), ('town', 3, 0xB803), ('gateway', 7, 0xFEAA), ('bank6', 6, 0xBA00), ('bank5', 5, 0xBDE0)]:
         data = (output/f'barba-{filename}.bin').read_bytes()
         overlay.prg(bank, address, data, b'\xFF'*len(data), f'New {filename} routines')
     def hook(bank: int, address: int, label: str, opcode: int, expected: str, pad: int = 0):
