@@ -50,8 +50,8 @@ action rechecks eligibility in `src/town.inc`.
   flags are allocated. Ordinary room resets/generation can repopulate the town;
   casualties are not permanent.
 - Hold Up while approaching an eligible wanderer for one of eight panicked messages, including
-  “OH SHIT. / IT IS BARBA. / RUN.”, “IT IS BARBA. / EVERYONE / GET INSIDE.”,
-  and “BARBA WILL / BURN US ALL. / RUN AWAY.”. Different wandering types and frames
+  “OH SHIT! / BARBA'S / HERE! RUN!”, “IT'S BARBA / EVERYONE / GO INSIDE!”,
+  and “BARBA WILL / BURN US! / RUN AWAY!”. Different wandering types and frames
   select across the eight lines. B remains attack. Talking
   requires being within 48 pixels on the same floor, grounded and in normal
   play; it cannot interrupt an existing conversation or doorway transition.
@@ -61,9 +61,19 @@ action rechecks eligibility in `src/town.inc`.
   The native conversation engine handles text, cancellation and movement lock.
   The guarded dialogue hook preserves native selection for other NPCs, except
   the custom wise-man/healer/magic service lines (native timing retained).
-  All `TownLine` strings in `src/town_dialogue.inc` are asserted `<= 11`
-  characters so text (which starts at tile 2 of the 14-tile box) never
-  overwrites the right border at tile 13.
+  Message-box padding rule (producer, 2026-11-16): every line is at most 10
+  characters and every message at most 3 lines, so a blank tile separates the
+  text from all four borders (text starts at tile 2 of the 14-tile box; an
+  11th character or a 4th line sits against the border). `TownLine` asserts
+  `<= 10` and encodes A-Z, space, `.` (`$CF`), `!` (`$36`), `?` (`$34`) and an
+  apostrophe (`$35`, original art in `TEXT_GLYPHS`, `tools/assets.py`). Text tiles
+  must be in `$00-$3F` or `$C0-$FC` (the native engine draws byte = tile there).
+  Three 11-char vanilla lines end one byte early (`A STRANGER`, `THE CASTLE`,
+  `UP TO STAB`), and East message 36's five mid-dots (`$32`, now shout glyph D)
+  are drawn as periods (`tools/build.py`). The 66 four-line vanilla messages are
+  not yet rewritten. A post-build guard keeps the font, punctuation and box tiles
+  vanilla in bank 7 and fails if any vanilla message byte leaves that set (the
+  fire art had overwritten `?`, and shout D the mid-dot, until 2026-11-16).
   Panic pointer selection uses `($12 XOR type) AND 7`, not the old type-mod-4
   table.
 
@@ -185,13 +195,15 @@ keeps the short 24-update flame stage).
   is redrawn (scrolling about two screens away) or the room reloads. The producer approved this as
   final (2026-11-14): no scorch or casualty persistence after leaving a town.
 - **Art:** `assets/town_fire.json` (original 16x16 art, palette indices). It
-  goes into eight town BG tiles in CHR bank 7: flame `$34/$AC/$A4/$C0`, char
-  `$C1/$A7/$35/$C2` (flame and `$C1` moved 2026-11-14 off `$02/$0E/$04/$16/$25`,
+  goes into six town BG tiles in CHR bank 7: flame `$AC/$A4` over `$A7/$C2`, char
+  `$C1/$C0` over the same `$A7/$C2` (the flame's lower half is the char's lower half
+  since 2026-11-16, which handed `$34` back to the dialogue `?` and `$35` to the
+  apostrophe; flame and `$C1` moved 2026-11-14 off `$02/$0E/$04/$16/$25`,
   which were halves of villager sprite pairs; `$35/$C2` moved 2026-11-15 off
   `$96/$B9` so the native pause/spell menu icons stay clean). Index 1 reads orange on brick and white on stone or
   bushes, index 2 brown or gray, index 3 black. The build hash-checks each
   original tile (`TOWN_FIRE_TILE_SHA256`) and that `ScorchTiles` matches the
-  JSON. Allocation evidence: none of the eight is in a bank-3 town tile table,
+  JSON, and that quadrants sharing a tile have identical art. Allocation evidence: none of the eight original picks is in a bank-3 town tile table,
   and an emulator census of all 126 town rooms (worlds 1 and 2) found none in a
   nametable or odd sprite pair. Both worlds' towns map CHR 6/7.
 - **Cost:** about 70 cycles per update for the idle ring scan in outdoor towns.
@@ -213,10 +225,11 @@ A town sign is two metatiles, board `$E3` over post `$E4` (bank-3 constructor
 `$21` triggers in rooms `$0D`, `$1A`, `$1E` have no sign; `$0C` never shares a
 room with a sign; room `$15` has a sign but no reader). When a fireball scorches the
 **board**, reading the sign shows one of six burned lines instead of its native
-text, rotating on each read (producer-picked, 2026-11-16):
-`IT IS CHAR. / YOU CAN NOT / READ IT.`, `WELL. YOU / BURNED IT.`,
+text: the first read starts on a random line (frame counter `$12` mod 6 at burn
+time, producer 2026-11-16) and each later read moves to the next (producer-picked lines, 2026-11-16):
+`CHARRED. / YOU CAN'T / READ IT.`, `WELL. YOU / BURNED IT.`,
 `WELCOME TO / THIS ASH / PILE.`, `WELCOME TO / WHAT IS / LEFT.`,
-`THE SIGN IS / ASH. YOU / DID THAT.`, `THIS WAS / A SIGN.`
+`SIGN IS / ASH. YOU / DID THAT.`, `THIS WAS / A SIGN.`
 
 - **Mark:** `BarbaTownBurn` stores `$E3` in `SIGN_PENDING` (`$64D1`). `SignUpdate`
   (`src/sign.inc`, now the update pointer of `$21`/`$22` at `$94CF`/`$94D1`, then
@@ -227,7 +240,8 @@ text, rotating on each read (producer-picked, 2026-11-16):
   scorch ring via `BarbaExtraReset`) and disappears with the char tiles when the
   room reloads. `SIGN_PENDING` is cleared with the ring (`BarbaScorchClear`
   covers `$64B0-$64D1`).
-- **Text:** `TownOriginalDialog` jumps to `SignDialog`; `$04A0,x` 1..6 picks the
+- **Text:** `SignUpdate` seeds `$04A0,x` with a random 1..6 on the first mark.
+  `TownOriginalDialog` jumps to `SignDialog`; `$04A0,x` 1..6 picks the
   line and advances (6 wraps to 1), shown through `TownSetNpcDialog`. Text and
   code live in vanilla bank-3 pad `bank3_UNUSED_9D0A` (`BANK3_SIGN`, `$9D0A-$9FFF`).
 - **Limits:** the post (`$E4`) alone does not count. A scorched board that
@@ -236,7 +250,7 @@ text, rotating on each read (producer-picked, 2026-11-16):
   East Hyrule rooms are assumed to follow the same one-reader rule but were not
   separately verified.
 - **Test:** `tests/sign_burn.lua`, two cases (Rauru entrance `$22`, room `$09`
-  `$21`): native text before, mark on burn, three reads rotate lines 1-3, native
+  `$21`): native text before, mark on burn (start line 1-6), three reads rotate from it, native
   text after a room reload.
 
 ### North Palace sleeping princess scorch & Barba shout

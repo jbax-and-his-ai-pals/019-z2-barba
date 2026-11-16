@@ -1,15 +1,15 @@
 {
-  "_comment": "Original 16x16 town scorch art (2x2 BG tiles). '.'=0 (sky/backdrop), 'o'=1 (orange on brick, white on stone), '+'=2 (brown on brick, gray on stone), '#'=3 (black). Stage 'flame' shows for a moment, then 'char' stays until the column is redrawn.",
+  "_comment": "Original 16x16 town scorch art (2x2 BG tiles). '.'=0 (sky/backdrop), 'o'=1 (orange on brick, white on stone), '+'=2 (brown on brick, gray on stone), '#'=3 (black). Stage 'flame' shows for a moment, then 'char' stays until the column is redrawn. The flame's lower half is the char's lower half (shared tiles $A7/$C2), which keeps bank-7 $34 ('?') and $35 (apostrophe) free for dialogue text.",
   "tiles": {
     "flame": {
-      "tl": "34",
+      "tl": "AC",
       "tr": "A4",
-      "bl": "AC",
-      "br": "C0"
+      "bl": "A7",
+      "br": "C2"
     },
     "char": {
       "tl": "C1",
-      "tr": "35",
+      "tr": "C0",
       "bl": "A7",
       "br": "C2"
     }
@@ -23,14 +23,14 @@
     "o++o++o+o+o++o+o",
     "o+oo+oooooo+oo+o",
     "+oooooooooooooo+",
-    "+oooo+oooo+oooo+",
-    "#oo+###oo###+oo#",
-    "#o#######o#####+",
-    "###o######o#####",
-    "+#############o#",
-    "##+######+######",
-    "#+##o#######+###",
-    "+######+#######+"
+    "+###o####.#####+",
+    "+###########o##+",
+    "++##o###o#######",
+    "o+#############+",
+    "+o+#######o##++o",
+    "o+o+##+######+o+",
+    "+o+o++#+#++#+o+o",
+    "o+o+o+o++o+o+o+o"
   ],
   "char": [
     "+o+o+++o++o++o+o",

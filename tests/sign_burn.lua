@@ -121,6 +121,8 @@ emu.addEventCallback(function()
             else want={a=t<18,b=(t>=10 and t<13)} end
         end
         if r(0x4A0+slot)~=0 then
+            startMark=r(0x4A0+slot)
+            check(startMark>=1 and startMark<=6,cases[ci].name..': burned sign starts on line 1-6 ('..startMark..')')
             f:write(string.format('mark set at age %d (pending=%02X, mark=%02X, px=%02X)\n',age,r(0x64D1),r(0x4A0+slot),px()))
             screenshot('sign-burn-scorched')
             check(true,cases[ci].name..': '..'a fireball on the sign board marks the sign actor')
@@ -140,7 +142,8 @@ emu.addEventCallback(function()
                 check(ok[1] and signText(ok[1]),cases[ci].name..': '..'burned sign shows burned-sign text')
                 check(ok[2] and signText(ok[2]) and ok[2]~=ok[1],cases[ci].name..': '..'second read shows the next line')
                 check(ok[3] and signText(ok[3]) and ok[3]~=ok[2],cases[ci].name..': '..'third read shows another line (mark survives dialogue)')
-                check(r(0x4A0+slot)==4,'rotation advanced to line 4 ('..r(0x4A0+slot)..')')
+                local expect=(startMark-1+3)%6+1
+                check(r(0x4A0+slot)==expect,'rotation advanced three lines from '..startMark..' to '..expect..' ('..r(0x4A0+slot)..')')
                 f:write("frame "..frame.." -> phase 4\n");phase=4;age=0
             end
         end

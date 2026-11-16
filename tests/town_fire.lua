@@ -8,8 +8,10 @@ local p=emu.memType.nesPpuMemory
 local function r(a)return emu.read(a,m)end
 local function w(a,v)emu.write(a,v,m)end
 local WALK=150 -- frames of walking right from the entrance to stand before the brick house
-local FLAME={[0x34]=true,[0xA4]=true,[0xAC]=true,[0xC0]=true}
-local CHAR={[0xC1]=true,[0x35]=true,[0xA7]=true,[0xC2]=true}
+-- Flame and char share their lower-half tiles ($A7/$C2); only the top halves tell them apart.
+local FLAME={[0xAC]=true,[0xA4]=true}
+local CHAR={[0xC1]=true,[0xC0]=true}
+local SHARED={[0xA7]=true,[0xC2]=true}
 local frame,age,phase,errors=0,0,0,0
 local pending,wantLoad,base=false,false,nil
 local metatiles,nametable=nil,nil
@@ -115,12 +117,12 @@ emu.addEventCallback(function()
             if fl>0 and not flameSeenAt then
                 flameSeenAt=age
                 for a=0x2000,0x27BF do
-                    if (a%0x400)<0x3C0 and emu.read(a,p)==0x34 then animAddr=a; break end
+                    if (a%0x400)<0x3C0 and emu.read(a,p)==0xAC then animAddr=a; break end
                 end
             end
             if animAddr then
                 local t=emu.read(animAddr,p)
-                if t==0x34 then saw02=true elseif t==0xA4 then saw04=true end
+                if t==0xAC then saw02=true elseif t==0xA4 then saw04=true end
             end
             if ch>0 and not charSeenAt then charSeenAt=age end
             if fl>0 and age-(flameSeenAt or age)==6 then screenshot('town-fire-flame')end
@@ -135,7 +137,7 @@ emu.addEventCallback(function()
                     local t=emu.read(a,p);local old=nametable[a]
                     if t~=old then
                         if t==0xF4 then blanked=blanked+1
-                        elseif not FLAME[t] and not CHAR[t] then foreign=foreign+1 end
+                        elseif not FLAME[t] and not CHAR[t] and not SHARED[t] then foreign=foreign+1 end
                     end
                 end
             end

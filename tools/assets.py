@@ -177,12 +177,31 @@ TOWN_FIRE_BANK = 7           # town BG pattern table (both west and east towns m
 # Truncated SHA-256 of each original 16-byte tile replaced in bank 7. None of these
 # tiles is in any bank-3 town tile table or 126-room nametable census, none is
 # half of a town sprite pair (bank 7 $00-$27 are villager 8x16 sprites), and none
-# is drawn by the native pause/spell menu.
+# is drawn by the native pause/spell menu. Flame and char share their lower half
+# ($A7/$C2), so six tiles cover both stages. $34 is the vanilla dialogue '?' and must
+# stay vanilla; $35 (blank in vanilla) is the dialogue apostrophe (TEXT_GLYPHS).
 TOWN_FIRE_TILE_SHA256 = {
-    0x34: 'b06d7e6e9899bbcf', 0xA4: '9cdf7aff56268b1c', 0xAC: 'a80338b3fc699cff',
-    0xC0: '1cecb0d1030f7c54', 0xC1: 'ebe7bc86960b8544', 0x35: '374708fff7719dd5',
+    0xA4: '9cdf7aff56268b1c', 0xAC: 'a80338b3fc699cff',
+    0xC0: '1cecb0d1030f7c54', 0xC1: 'ebe7bc86960b8544',
     0xA7: '899cbd256813b89a', 0xC2: 'e43c2b7f9db2ff96',
 }
+
+# Dialogue glyphs added to the town BG bank. The native text engine draws a byte
+# below $40 as tile = byte (with blank $F4 above), so these must sit in $00-$3F or
+# $C0-$FC. Pixel values: 1 = font highlight, 2 = font shade (as in the ROM font).
+TEXT_GLYPH_BANK = 7
+TEXT_GLYPHS = {
+    0x35: ["00012000", "00012000", "00020000", "00000000",
+           "00000000", "00000000", "00000000", "00000000"],   # apostrophe
+}
+TEXT_GLYPH_SHA256 = {0x35: '374708fff7719dd5'}   # blank in vanilla bank 7
+
+
+def compile_text_glyphs() -> dict[int, bytes]:
+    """Encode authored dialogue glyphs (original pixels) for TEXT_GLYPH_BANK."""
+    if set(TEXT_GLYPHS) != set(TEXT_GLYPH_SHA256) or set(TEXT_GLYPHS) & set(TOWN_FIRE_TILE_SHA256):
+        raise ValueError('Text glyph tiles differ from the audited allocation')
+    return {tile: encode_tile(rows) for tile, rows in TEXT_GLYPHS.items()}
 
 
 def _encode_scorch_art(spec: dict, tile_map: dict[str, dict[str, int]]) -> tuple[dict[int, bytes], list[int]]:
@@ -198,7 +217,10 @@ def _encode_scorch_art(spec: dict, tile_map: dict[str, dict[str, int]]) -> tuple
         ids = tile_map[stage]
         for corner, (y, x) in (('tl', (0, 0)), ('bl', (8, 0)), ('tr', (0, 8)), ('br', (8, 8))):
             tile = ids[corner]
-            tiles[tile] = encode_tile([row[x:x+8] for row in rows[y:y+8]])
+            data = encode_tile([row[x:x+8] for row in rows[y:y+8]])
+            if tiles.get(tile, data) != data:
+                raise ValueError(f'Scorch tile {tile:02X} is shared by quadrants with different art')
+            tiles[tile] = data
             order.append(tile)
     return tiles, order
 

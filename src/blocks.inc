@@ -452,8 +452,8 @@ ScorchAnimOne:
 ; Column order per stage: top-left, bottom-left, top-right, bottom-right.
 ; Tile ids must match assets/town_fire.json (checked by tools/assets.py).
 ScorchTiles:
-    .byte $34,$AC,$A4,$C0   ; town flame A (CHR bank 7)
-    .byte $C1,$A7,$35,$C2   ; town char (CHR bank 7)
+    .byte $AC,$A7,$A4,$C2   ; town flame A (CHR bank 7; lower half shared with char)
+    .byte $C1,$A7,$C0,$C2   ; town char (CHR bank 7)
     .byte $56,$57,$58,$59   ; North Palace flame (CHR bank 3)
     .byte $5A,$5B,$5C,$5D   ; North Palace char (CHR bank 3)
-    .byte $A4,$C0,$34,$AC   ; town flame B (CHR bank 7, mirrored columns)
+    .byte $A4,$C2,$AC,$A7   ; town flame B (CHR bank 7, mirrored columns)

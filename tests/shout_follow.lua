@@ -60,8 +60,9 @@ local replaced={}
 for _,pair in ipairs({0x32,0x7E,0x80,0x84,0x86,0x88,0x8A,0x8C,0x92,0x94,0x9C,0x9E,0xA0,0xA2,0xA8,0xAA,0xBA,0xBC,0xBE}) do
     replaced[pair]=true;replaced[pair+1]=true
 end
-for _,t in ipairs({0x34,0xA4,0xAC,0xC0,0xC1}) do replaced[t]=true end
--- Fire char tiles must not appear in the native spell-menu pane.
+for _,t in ipairs({0xA4,0xAC,0xC0,0xC1}) do replaced[t]=true end
+-- Fire tiles and the dialogue apostrophe ($35, blank in vanilla) must not appear
+-- in the native spell-menu pane.
 local menuFire={[0x35]=true,[0xA7]=true,[0xC2]=true}
 local menuFireSeen={}
 function menuFireOnScreen()

@@ -23,7 +23,15 @@ SignUpdate:
     sta SIGN_PENDING
     lda $04A0,x
     bne @native             ; already burned: keep the rotation
-    inc $04A0,x             ; first read shows line 1
+    lda $12                 ; first read: random line 1..SIGN_LINES from the
+@mod:                       ; frame counter at burn time (once per burn, <=42 loops)
+    cmp #SIGN_LINES
+    bcc :+
+    sbc #SIGN_LINES         ; carry is set here
+    bcs @mod
+:
+    adc #$01                ; carry clear: 0..5 -> 1..6
+    sta $04A0,x
 @native:
     jmp $9ABD
 
@@ -65,8 +73,8 @@ SIGN_LINES = 6
 SignPointers:
     .word SignChar, SignBurned, SignAshPile, SignWhatLeft, SignDidThat, SignWasSign
 SignChar:
-    TownLine "IT IS CHAR.", $FD
-    TownLine "YOU CAN NOT", $FD
+    TownLine "CHARRED.", $FD
+    TownLine "YOU CAN'T", $FD
     TownLine "READ IT.", $FF
 SignBurned:
     TownLine "WELL. YOU", $FD
@@ -80,7 +88,7 @@ SignWhatLeft:
     TownLine "WHAT IS", $FD
     TownLine "LEFT.", $FF
 SignDidThat:
-    TownLine "THE SIGN IS", $FD
+    TownLine "SIGN IS", $FD
     TownLine "ASH. YOU", $FD
     TownLine "DID THAT.", $FF
 SignWasSign:

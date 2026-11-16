@@ -11,9 +11,11 @@ from assets import (ASH_TILES, CASTLE_FIRE_BANK, CASTLE_FIRE_TILE_SHA256,
                     SHOUT_PAIR_SHA256, TOWN_SPRITE_PAIRS,
                     TITLE_CHR_BANK, TITLE_TILE_SHA256,
                     TOWN_FIRE_BANK, TOWN_FIRE_TILE_SHA256,
+                    TEXT_GLYPH_BANK, TEXT_GLYPH_SHA256, TEXT_GLYPHS,
                     compile_assets, compile_castle_fire,
                     compile_castle_shout_glyphs, compile_file_select_doll,
-                    compile_shout_glyphs, compile_title_logo, compile_town_fire)
+                    compile_shout_glyphs, compile_text_glyphs, compile_title_logo,
+                    compile_town_fire)
 from bps import apply, encode
 from boss_art import compile_lava_link
 from nes import CHR_OFFSET, SOURCE_SHA256, encode_tile, load_source, prg_offset
@@ -134,6 +136,14 @@ def build(source_path: Path, output: Path) -> dict:
     dest = labels['SignUpdate']
     for address, kind in ((0x94CF, '$21'), (0x94D1, '$22')):
         overlay.prg(3, address, dest.to_bytes(2, 'little'), bytes.fromhex('bd 9a'), f'Sign reader {kind} update {address:04X}')
+    # Message-box padding (max 10 chars/line): end three 11-char vanilla lines one byte
+    # early by turning the final period into the terminator ("A STRANGER", "THE CASTLE",
+    # "UP TO STAB"). The original $FF after it is left unread.
+    for address, line in ((0xA423, 'A STRANGER'), (0xA612, 'THE CASTLE'), (0xADDD, 'UP TO STAB')):
+        overlay.prg(3, address, b'\xff', b'\xcf', f'Vanilla dialogue width trim: {line}')
+    # East message 36 is five mid-height dots (tile $32), which is now shout glyph D's
+    # upper half. Draw them with the period glyph instead.
+    overlay.prg(3, 0xAE19, b'\xcf' * 5, b'\x32' * 5, 'Vanilla dialogue ellipsis uses periods')
     dest = labels['TownUpdate']
     overlay.prg(3, 0x949F, dest.to_bytes(2, 'little'), bytes.fromhex('78 98'),
                 'Indoor NPC update 949F')
@@ -215,6 +225,13 @@ def build(source_path: Path, output: Path) -> dict:
         if hashlib.sha256(original).hexdigest()[:16] != TOWN_FIRE_TILE_SHA256[tile]:
             raise ValueError(f'Town fire tile {tile:02X} is not the audited original')
         overlay.put(offset, data, original, f'CHR {TOWN_FIRE_BANK:02X}: town fire tile {tile:02X}')
+    # Dialogue glyphs (apostrophe) in the town BG bank; see TEXT_GLYPHS in tools/assets.py.
+    for tile, data in sorted(compile_text_glyphs().items()):
+        offset = CHR_OFFSET + TEXT_GLYPH_BANK*4096 + tile*16
+        original = source[offset:offset+16]
+        if hashlib.sha256(original).hexdigest()[:16] != TEXT_GLYPH_SHA256[tile]:
+            raise ValueError(f'Text glyph tile {tile:02X} is not the audited original')
+        overlay.put(offset, data, original, f'CHR {TEXT_GLYPH_BANK:02X}: dialogue glyph {tile:02X}')
     # North Palace sleeping-princess scorch marks & Barba shout glyphs in CHR bank 3.
     for tile, data in sorted(compile_castle_fire(ROOT).items()):
         offset = CHR_OFFSET + CASTLE_FIRE_BANK*4096 + tile*16
@@ -744,6 +761,20 @@ def build(source_path: Path, output: Path) -> dict:
             offset = CHR_OFFSET + bank*4096 + pair*16
             if target[offset:offset+32] != source[offset:offset+32]:
                 raise ValueError(f'Patch overwrote town sprite pair CHR {bank:02X}:{pair:02X}')
+    # Dialogue glyphs: the box border, font and punctuation the town message box draws
+    # must stay vanilla in the town BG bank (only TEXT_GLYPHS are added), and every
+    # vanilla message byte must resolve to one of them. 2026-11-16: the town fire art
+    # had overwritten '?' ($34) and a shout glyph the mid-dot ($32).
+    font = set(range(0xD0, 0xF5)) | {0xCA, 0xCB, 0xCC, 0xCF, 0x34, 0x36}
+    for tile in font:
+        offset = CHR_OFFSET + TEXT_GLYPH_BANK*4096 + tile*16
+        if target[offset:offset+16] != source[offset:offset+16]:
+            raise ValueError(f'Patch overwrote dialogue glyph CHR {TEXT_GLYPH_BANK:02X}:{tile:02X}')
+    text = target[prg_offset(3, 0xA380):prg_offset(3, 0xAFBE)]
+    bad = sorted({b for b in text if b < 0xFD and b not in font | set(TEXT_GLYPHS)})
+    if bad:
+        raise ValueError('Vanilla dialogue uses glyph bytes outside the guarded font: '
+                         + ' '.join(f'{b:02X}' for b in bad))
     patch = encode(source, target, 'Zelda II - Barba Edition | development alpha',
                    [(CHR_OFFSET+30*4096+len(ow), CHR_OFFSET+16*4096+len(ow), 0x60*16-len(ow)),
                     (CHR_OFFSET+30*4096+0x64*16, CHR_OFFSET+16*4096+0x64*16, 8192-0x64*16)])
