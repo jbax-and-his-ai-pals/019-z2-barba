@@ -41,7 +41,7 @@ local function finishCase()
     for n=2,#shots do if shots[n].age-shots[n-1].age~=8 then even=false end end
     check(even,name..': all five shots have even eight-frame spacing')
     check(aligned==5,name..': all five shots originate at current mouth, count='..aligned)
-    check(classified==5 and classStable,name..': Fire class 0 or ordinary class D2 retained')
+    check(classified==5 and classStable,name..': breath is always fire class 0')
     check(movingX and movingY,name..': shots move forward and downward')
     check(poseSeen,name..': standing/crouching attack pose exercised')
     check(meleeHidden,name..': native horizontal melee origin stays hidden')
@@ -81,7 +81,7 @@ emu.addMemoryCallback(function()
     local y=r(0x36+slot);local class=r(0x5CA+slot)
     local shot={age=age,slot=slot,
         aligned=screenX==r(0x5F2) and y==r(0x5F3),
-        classified=class==(c.fire and 0 or 0xD2)}
+        classified=class==0}
     shots[#shots+1]=shot;tracked[slot]=nil
     report:write(string.format('SHOT %d age=%d slot=%d xy=%d,%d mouth=%d,%d class=%02X\n',
         #shots,age,slot,screenX,y,r(0x5F2),r(0x5F3),class))
@@ -103,8 +103,7 @@ emu.addMemoryCallback(function()
         if (c.dir==1 and dx>0 and dx<16)or(c.dir==2 and dx<0 and dx> -16)then movingX=true end
         if dy>0 and dy<=3 then movingY=true end
     end
-    if c.fire and class~=0 then classStable=false end
-    if not c.fire and class==0 then classStable=false end
+    if class~=0 then classStable=false end
     tracked[slot]={x=x,y=y}
 end,emu.callbackType.exec,0x9888)
 emu.addMemoryCallback(function()

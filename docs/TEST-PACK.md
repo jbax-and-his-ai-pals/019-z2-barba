@@ -14,7 +14,7 @@ Press the same key again at any time to restart that test and refill its meters.
 | Key | Checkpoint | What to try |
 | --- | --- | --- |
 | F1 | Starting castle | Normal starting stats. Walk, turn, crouch, jump and attack. |
-| F2 | Palace 1 combat corridor | Fight in both directions. Every health level has five diagonal fireballs; cast Fire to test Fire-only enemies. |
+| F2 | Palace 1 combat corridor | Fight in both directions. Every health level has five diagonal fireballs; Fire-only enemies now take ordinary breath. |
 | F3 | All spells and techniques | Safe castle, full health/magic, all spells and both thrusts. Inferno is selected: Left Shift casts it. Use Enter for the spell menu; reload F3 to refill or leave the flying form. |
 | F4 | Palace 6 lava ledge | Walk right into the lava, stop, move, jump and return. |
 | F5 | Standing on lava | Already on the lava surface. Check for sinking and test jumps immediately. |
@@ -63,7 +63,7 @@ retain fake door tiles made by the retired villager animation.
 
 ## Playthrough checkpoint sets
 
-Core remains the default. Use **Test Barba - Palaces.cmd**, **- Endgame.cmd**,
+Core remains the default. Use **Test Barba - Palaces.cmd**, **- Endgame.cmd**, **- Bosses.cmd**,
 **- Towns and World.cmd**, or **- Tricky Movement.cmd** in play/ (all beside
 Test Barba.cmd). Each opens its own isolated local profile and maps that set to F1-F10.
 Unused F-keys do not point at another set's states. Script equivalent:
@@ -72,7 +72,7 @@ Unused F-keys do not point at another set's states. Script equivalent:
 ./tools/launch.ps1 -TestPack -CheckpointSet palaces -PrepareOnly
 ```
 
-Replace palaces with core, endgame, world or movement. Generation with
+Replace palaces with core, endgame, bosses, world or movement. Generation with
 `python tools/create_test_pack.py --force` builds and validates **every** set,
 then leaves Core selected. Add `--set world` to regenerate just one set.
 
@@ -101,7 +101,7 @@ fresh-room data: these are progression fixtures, **not** claimed authentic batte
 
 A/M/L = attack/magic/life levels. M/H = magic/heart container counts.
 Spells are the first N native spells in order: Scales, Jump, Life, Wyrmlng (Fairy),
-Fire, Reflect, Spell, Inferno (Thunder). D = Downward Thrust, U = Upward Thrust.
+Meteor (Fire), Reflect, Spell, Inferno (Thunder). D = Downward Thrust, U = Upward Thrust.
 Quest flags: T trophy ($0798=$10), R mirror ($0799=$01), B Bagu ($079A bit $08),
 M medicine ($079A bit $40), W water ($079B=$01), C rescued child ($079C=$20),
 7 seven-container quest ($079D=$08). Unlisted quest bytes are zero.
@@ -154,6 +154,26 @@ Crystals are $078D-$0792, in palace order; $0794 is 6 minus placed. Keys $0793=0
 | F5 | Before Thunderbird (world 5, room $35, entry 0) | gp; keys 0 | Check movement, head clearance, combat and HUD. |
 | F6 | Before Dark Link (world 5, room $36, entry 0) | gp; keys 0 | Check movement, head clearance, combat and HUD. |
 | F7 | Palace 6 boss and crystal approach (world 4, room $3A, entry 0) | p6boss; keys 0 | Walk right to Lava Link; win normally and approach the crystal statue. |
+
+### bosses
+
+Every boss in order, one key each. Each starts at the left edge of the boss room
+itself (no door to walk through) with that boss's pre-boss loadout. Reload the key to retry.
+
+| Key | Boss | Room | Loadout |
+| --- | --- | --- | --- |
+| F1 | Horsehead (Palace 1) | world 3, room $0D, page 0 | p1boss |
+| F2 | Helmethead (Palace 2) | world 3, room $22, page 0 | p2boss |
+| F3 | Rebonack (Palace 3) | world 4, room $0E, page 0 | p3boss |
+| F4 | Carock (Palace 4) | world 4, room $1C, page 0 | p4boss |
+| F5 | Gooma (Palace 5) | world 3, room $29, page 0 | p5boss |
+| F6 | Lava Link (Palace 6) | world 4, room $3A, page 0 | p6boss |
+| F7 | Thunderbird (Great Palace) | world 5, room $36, page 0 | gp |
+| F8 | Dark Link (Great Palace) | world 5, room $36, page 1 | gp |
+
+Rooms match the boss scenarios in tests/ (horsehead.lua ... dark_link.lua). Dark Link's
+intro freezes the player for ~340 frames, so F8 is captured at 590 frames, just as control
+returns: the fight is already live. F9/F10 are unused.
 
 ### world
 

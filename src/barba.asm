@@ -451,3 +451,4 @@ LagNmiInBank6:
     jmp $FFCC
 
 .include "dark_barba.inc"
+.include "geldarm.inc"

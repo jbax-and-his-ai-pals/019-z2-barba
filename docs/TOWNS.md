@@ -109,7 +109,9 @@ request therefore leaves no visible word. Up-to-talk is unchanged.
   `$09-$0F`, Fat Woman `$11-$1F`, indoor NPC `$21-$27` in rooms `$2E/$2F`); the
   build refuses to touch them (`TOWN_SPRITE_PAIRS`). Bank-7 glyph pairs: `$32`
   (D), `$7E` (V), `$80`, `$84..$8C`, `$92`, `$94`, `$9C..$A2`, `$A8`, `$AA`, `$BA..$BE`.
-  Bank-6 glyph pairs (even bytes, unused Link-only art): `$6C` (X), `$78..$7A`, `$7C` (H),
+  Bank-6 glyph pairs (even bytes; vanilla XP score digits and Link art, safe because
+  only towns map sprite bank 6 and towns have no XP drops; overworld encounters
+  map CHR = PRG bank x2, i.e. 2 or 4, at `$CD78`): `$6C` (X), `$78..$7A`, `$7C` (H),
   `$9C..$A6`, `$AA` (digits 1-9), `$AE` (B). Bank 7 has no free pair left. These
   are replaced in their bank only. Letters are recolored at build time from the
   user's own ROM font (`$DA` + letter). `!` is authored in

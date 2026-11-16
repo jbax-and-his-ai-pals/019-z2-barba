@@ -10,6 +10,16 @@ COLORS = [(20, 22, 28), (194, 43, 25), (255, 168, 57), (255, 243, 205)]
 TALL_POSES = ('walk0', 'walk1', 'walk2', 'idle', 'windup', 'attack',
               'crouch', 'crouch-attack', 'up', 'down', 'hurt', 'death', 'jump')
 ASH_TILES = (0x7E, 0x80)
+# Player-bank pairs the tall renderer must never allocate: weapon/candle (0x32, 0x52,
+# 0x54), Ache/bat enemy (0x4E, 0x50), ending ash (0x5E, 0x62, patched in build.py),
+# and the XP "3" score digit (0x60, drawn by the bank-7 score table at $DD4C).
+PLAYER_RESERVED_PAIRS = frozenset({0x32, 0x4E, 0x50, 0x52, 0x54, 0x5E, 0x60, 0x62})
+
+
+def _pair_pixel_diff(a: bytes, b: bytes) -> int:
+    """Count differing pixels between two 32-byte 8x16 sprite pairs."""
+    return sum(bin((a[t+y] ^ b[t+y]) | (a[t+y+8] ^ b[t+y+8])).count('1')
+               for t in (0, 16) for y in range(8))
 
 
 def compile_ash(root: Path) -> tuple[dict[int, bytes], list[str]]:
@@ -290,7 +300,7 @@ def validate_layout(root: Path) -> bytes:
         if len(tokens) != 9 or any(not re.fullmatch(r'\$[0-9A-F]{2}', token) for token in tokens):
             raise ValueError(f'Tall layout {name} requires nine byte indexes')
         tiles = [int(token[1:], 16) for token in tokens]
-        if any(tile != 0xF5 and (tile % 2 or tile >= 0x64 or tile in {0x32,0x4E,0x50,0x52,0x54,0x5E,0x62}) for tile in tiles):
+        if any(tile != 0xF5 and (tile % 2 or tile >= 0x64 or tile in PLAYER_RESERVED_PAIRS) for tile in tiles):
             raise ValueError(f'Tall layout {name} uses a reserved or invalid body pair')
         if name in ('crouch', 'crouch-attack') and tiles[:3] != [0xF5]*3:
             raise ValueError(f'Tall layout {name} exceeds the compact crouch lane')
@@ -358,15 +368,19 @@ def compile_assets(root: Path, source_path: Path | None = None) -> tuple[bytes, 
                       'tuck', 'tuck', 'tuck')
     fallback = [named[name][16:] for name in fallback_names]
 
-    # Reserve weapon/candle tiles (0x32, 0x52, 0x54), Ache/bat enemy pairs (0x4E, 0x50),
-    # and ending ash pairs (0x5E, 0x62, patched separately in tools/build.py).
-    reserved = {0x32, 0x4E, 0x50, 0x52, 0x54, 0x5E, 0x62}
-    slots = iter(i for i in range(0, 0x64, 2) if i not in reserved)
+    slots = iter(i for i in range(0, 0x64, 2) if i not in PLAYER_RESERVED_PAIRS)
     pairs: dict[bytes, int] = {bytes(32): 0xF5}
     graphics: dict[int, bytes] = {}
     def allocate(rows):
         result = bytearray()
         for pair in sprite_pairs(rows):
+            if pair not in pairs:
+                # Reuse an allocated pair that differs by at most one pixel: the
+                # player budget is exactly full, and this keeps $60 free.
+                near = next((known for known in pairs
+                             if _pair_pixel_diff(pair, known) <= 1), None)
+                if near is not None:
+                    pairs[pair] = pairs[near]
             if pair not in pairs:
                 try:
                     tile = next(slots)

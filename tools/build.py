@@ -78,9 +78,20 @@ def build(source_path: Path, output: Path) -> dict:
         offset = prg_offset(bank, 0x8506 if bank < 7 else 0xC506)
         if source[offset] != expected:
             raise ValueError(f'FarCall0 bank fingerprint changed: {bank}')
-    for filename, bank, address in [('code', 0, 0xAA40), ('bank0-ow', 0, 0xA89E), ('bank0-tail', 0, 0xBFE0),('lava', 7, 0xD39A), ('terrain', 7, 0xFF4C), ('town', 3, 0xB803), ('gateway', 7, 0xFEAA), ('bank6', 6, 0xBA00), ('bank5', 5, 0xBDE0)]:
+    for filename, bank, address in [('code', 0, 0xAA40), ('bank0-ow', 0, 0xA89E), ('bank0-tail', 0, 0xBFE0),('lava', 7, 0xD39A), ('terrain', 7, 0xFF4C), ('town', 3, 0xB803), ('gateway', 7, 0xFEAA), ('bank6', 6, 0xBA00), ('bank5', 5, 0xBDE0), ('bank1', 1, 0x9EB9)]:
         data = (output/f'barba-{filename}.bin').read_bytes()
         overlay.prg(bank, address, data, b'\xFF'*len(data), f'New {filename} routines')
+    # Dead vanilla bank-0 code reused for METEOR. Guard the full original ranges:
+    # the Fire spell body ($97F1-$9814; pointer $8E50 -> BarbaSpellDeferred) and
+    # Check_for_Fire_Spell ($9847-$9877; sole caller $D50D -> BarbaUpdate hook).
+    for filename, address, expected in [
+            ('fire-spell', 0x97F1, 'a2 01 ad 77 07 c9 04 b0 02 a2 00 ac 00 04 88 cc 95 04 d0 0e ad 0a 05 c9 05 d0 07 b5 8d f0 0b ca 10 f9 18 60'),
+            ('fire-check', 0x9847, 'ad 6f 07 29 10 d0 2a ad 84 07 0a 0a 0a 0a 0a 38 e9 01 cd 74 07 d0 1a 20 fa 97 90 15 a5 29 ac 95 04 79 17 98 95 36 a9 d2 8d ca 05 a5 ef 09 08 85 ef'),
+            # Raft-avatar tail after the 'Sea crossing avatar' RTS at $81C0 (only self-referenced).
+            ('raft-tail', 0x81C1, '45 8d 01 02 a9 47 8d 05 02 ac a9 07 b9 ae 81 8d 02 02 8d 06 02 c0 01 d0 0a a9 47 8d 01 02 a9 45 8d 05 02 60')]:
+        data = (output/f'barba-{filename}.bin').read_bytes()
+        original = bytes.fromhex(expected)
+        overlay.prg(0, address, data + original[len(data):], original, f'METEOR in dead vanilla {filename}')
     def hook(bank: int, address: int, label: str, opcode: int, expected: str, pad: int = 0):
         dest = labels[label]
         data = bytes([opcode, dest & 255, dest >> 8]) + b'\xEA'*pad
@@ -406,9 +417,15 @@ def build(source_path: Path, output: Path) -> dict:
     # Geldarm (sand worm) hurtbox ($E90E, type 5): widen 8->12 px (dx=-2) and extend height 8->64 px
     # so Barba's standing and crouching fireballs hit its body as well as its head.
     overlay.prg(7, 0xE90E, b'\xFE\x0C\x00\x40', b'\x00\x08\x00\x08', 'Geldarm (sand worm) hurtbox (12x64 px)')
+    # Geldarm dies by sinking into the sand (producer, 2026-11-15; src/geldarm.inc, bank-1 pad $9EB9):
+    # entry ($9BB5 LDA $AF,X / BNE) -> GeldarmUpdate, and its JSR $DE40 hit/draw call -> GeldarmHits.
+    hook(1, 0x9BB5, 'GeldarmUpdate', 0x4C, 'b5 af d0 35', 1)
+    hook(1, 0x9C3D, 'GeldarmHits', 0x20, '20 40 de')
+    # Fewer hits: West Hyrule HP table ($9421 + enemy $20, copied to $6D41) 8 -> 4.
+    overlay.prg(1, 0x9441, b'\x04', b'\x08', 'Geldarm HP 8 -> 4')
 
     # Existing menu stores 14-byte rows. Preserve border, cost digits and spacing.
-    for i, name in enumerate(['SCALES','JUMP','LIFE','WYRMLNG','FIRE','REFLECT','SPELL','INFERNO']):
+    for i, name in enumerate(['SCALES','JUMP','LIFE','WYRMLNG','METEOR','REFLECT','SPELL','INFERNO']):
         offset = prg_offset(0, 0x9C2A + i*14)
         data = bytes(0xDA+ord(c)-ord('A') for c in name.ljust(7) if c != ' ')
         data += b'\xCF'*(7-len(data))

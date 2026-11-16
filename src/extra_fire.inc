@@ -289,6 +289,8 @@ BarbaExtraUpdate:
     sta EXTRA_BASE+$01,x
     jmp @fast_move_x
 @fast_up_y:
+    lda EXTRA_BASE+$09,x
+    bmi @fast_move_x    ; METEOR_WAVE ($C0): flat along the floor
     lda EXTRA_BASE+$01,x
     sec
     sbc #$03

@@ -47,8 +47,9 @@ attack state (`$0400 == 0` or standing post-slash recovery `$0400 == 4`) are req
 A full pool retries only until the 120-update burst deadline. Each projectile
 has a 33-update maximum lifetime and is cleared before its Y coordinate wraps.
 Menus, transitions, death and Wyrmling cancel queued shots. Health is never an
-eligibility test. Fire changes vulnerability class, allowing Fire-only enemy
-hits; ordinary breath retains the native beam class and progression rules.
+eligibility test. Breath is always fire class (`$05CA = 0`), so Fire-only enemies
+take hits without a spell; flame class strictly dominates the native beam (`$D2`)
+in bank 7 `$E6CB`. The old Fire slot is METEOR (see below).
 
 State: `$05F1` deadline, `$05F7` spacing, `$05F8` latch, `$05FC/$05FD` projectile
 lifetimes and `$05FE` pending-shot count. These locations have no original
@@ -66,6 +67,24 @@ avoiding the original enemy-projectile slots at `$28/$2C/$30`. During downstab
 the HUD/screen edges. Native shots and
 their original OAM remain intact. Native enemy and shield entry hooks execute
 through fixed-bank gateways and retain the original vulnerability routines.
+
+## METEOR slam (spell slot 4)
+
+Casting sets `$076F` bit 4, which lasts as vanilla Fire did (side-view init `$8CF4` clears it). `BarbaMeteorTick`
+(after the HUD split, from `BarbaProjectiles`) starts a dive on mid-air `Down + B`
+(`$F7` bit 2, `$F5` bit 6), cancels that attack's volley, and holds `$057D = 6`
+until `$0479` clears. `MeteorLand` plays the stomp thud (`$ED |= $10`), a short
+decor flash (`$074B = $84`) and emits two shots through the normal allocator with
+`INFERNO_AIM = $C1/$C2`. Aim and `VOLLEY_SLOT` flags `$C0` (up + crouch, never
+otherwise combined) mean a flat wave at `$29 + $12` with breath's 33-update life (63 held the 2-live-shot cap and throttled the next volley);
+`BarbaStepSlotY` and the extra fast path skip Y movement for it. `METEOR_STATE`
+is WRAM `$6474`, cleared on any non-gameplay frame.
+
+Bank 0 had 3 free bytes, so METEOR reuses dead vanilla code: the Fire spell body
+`$97F1-$9814` (`MeteorLand`), `Check_for_Fire_Spell` `$9847-$9877` (`BarbaMeteorTick`;
+its only caller `$D50D` is the `BarbaUpdate` hook) and the raft-avatar tail
+`$81C1-$81E4` after the `$81C0` RTS (`BarbaCancelBurst`/`BarbaArmBurst`). `build.py`
+guards each full original range.
 
 ## HUD timing correction
 
@@ -101,6 +120,8 @@ native collision rules; it does not copy aimed enemy-projectile code.
 - `gameplay.lua`, `tall_geometry.lua`, `routines.lua`: movement, jumps, ceilings,
   item/Fairy cleanup, disabled thrust collisions, lava and roar.
 - `hud_timing.lua`: 900 Palace 1 frames with a stable line-31 split.
+- `meteor.lua`: dive, fall cap, two flat fire-class floor waves at `$29+$12`,
+  a floor Bot hit, and no dive without the spell.
 
 Remaining: shield/boss balance, projectile walls, vertical-technique redesign,
 crowded-room sprite review and complete human playtesting.

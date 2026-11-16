@@ -33,7 +33,7 @@ local function update(name,setup,verify)step(name,LABELS.BarbaProjectiles,setup,
 local function fire(name,setup,verify)step(name,LABELS.BarbaFireSpell,setup,verify)end
 local function base(level,health,spell)
     shots=0;maxSlots=0;updateNumber=0;shotFrames={};allocatingExtra=false
-    expectedClass=spell==0 and 0xD2 or 0
+    expectedClass=0 -- breath is always fire class (METEOR replaced the Fire spell)
     w(0x769,0);w(0x736,11);w(0xB5,1);w(0x76F,spell)
     w(0x74C,0);w(0x524,0);w(0x726,0);w(0x13,0);w(0xDE,0)
     w(0x777,level);w(0x784,4);w(0x774,health)
@@ -186,7 +186,7 @@ emu.addMemoryCallback(function()
         if allocatingExtra and active(r(0x6440))then count=count+1 end
         maxSlots=math.max(maxSlots,count)
         local slot=emu.getState()['cpu.x']
-        check(r(0x5CA+slot)==expectedClass,'shot '..shots..': spell selects vulnerability class')
+        check(r(0x5CA+slot)==expectedClass,'shot '..shots..': breath is fire class')
         check((r(0x5FC+slot)%128)==33 and r(0x7D+slot)==0x20,'shot '..shots..': finite lifetime and diagonal speed')
         local world=r(0x5A+slot)+256*r(0x48+slot)
         check(world==r(0x5F2)+496 and r(0x36+slot)==r(0x5F3),

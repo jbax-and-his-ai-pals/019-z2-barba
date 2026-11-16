@@ -12,6 +12,11 @@ VOLLEY_SLOT = $05FC ; two independent projectile lifetime counters (33 updates)
 VOLLEY_LIFE = $21 ; 33 updates / 32 movement steps = 64 px
 BREATH_UP = $646B ; volley aim latch: 0 forward, $40 upward
 BREATH_REMAINING = $05FE ; pending shots, initially four after first allocation
+METEOR_STATE = $6474 ; 0 idle, 1 diving (METEOR spell, slot 4 / $076F bit 4)
+METEOR_WAVE = $C0 ; INFERNO_AIM / VOLLEY_SLOT flag pair: flat floor shockwave
+METEOR_WAVE_LIFE = VOLLEY_LIFE ; 33 updates (64 px each way); longer waves hold the 2-live-shot cap and throttle the next volley
+METEOR_WAVE_DY = $12 ; shockwave Y below the player's $29 (floor-level enemies)
+METEOR_DIVE_VY = $06 ; forced fall speed while diving (6 px/frame)
 
 ; Spell dispatch precedes the timing-critical HUD split. Do not emit here.
 BarbaSpellDeferred:
@@ -23,11 +28,13 @@ BarbaProjectiles:
     lda #$00
     sta INFERNO_TIMER
     sta INFERNO_AIM
+    sta METEOR_STATE
     jsr BarbaCancelBurst
     jsr BarbaExtraReset
     jmp @update
 @allowed:
     jsr BarbaInfernoTick
+    jsr BarbaMeteorTick
     lda BREATH_BURST_STATE
     cmp #$02
     bne @start
@@ -200,15 +207,6 @@ BarbaLoadOk:
     rts
 LOAD_LIMIT = 7
 
-BarbaCancelBurst:
-    lda #$00
-    sta BREATH_REMAINING
-    sta BREATH_BURST_DELAY
-    sta BURST_DEADLINE
-    lda #$02
-    sta BREATH_BURST_STATE
-    rts
-
 ; Both damage classes share aim and expiry. Fire changes vulnerability,
 ; not the lifetime, which guarantees that a two-slot pool can emit five shots.
 BarbaAdvanceVolley:
@@ -231,6 +229,7 @@ BarbaAdvanceVolley:
 
 ; Advance slot X: low 6 bits lifetime, bit 6 upward (-3 px). Bit 7 selects
 ; crouched shallow descent (0.5 px/frame) so low fireballs clear high shields.
+; Bits 6+7 together (METEOR_WAVE) fly flat along the floor.
 ; Carry set if still alive, clear if expired/clipped.
 BarbaStepSlotY:
     dec VOLLEY_SLOT,x
@@ -257,6 +256,8 @@ BarbaStepSlotY:
     sec
     rts
 @up:
+    lda VOLLEY_SLOT,x
+    bmi @alive          ; METEOR_WAVE: flat
     lda $36,x
     sec
     sbc #$03
@@ -327,19 +328,6 @@ BarbaBreathSfx:
 @skip:
     rts
 
-BarbaArmBurst:
-    ; Initial emission and scheduler run in the same update. Nine compensates
-    ; for that first decrement, yielding eight full updates between all shots.
-    lda #$09
-    sta BREATH_BURST_DELAY
-    lda #$04
-    sta BREATH_REMAINING
-    lda #$78
-    sta BURST_DEADLINE
-    lda #$01
-    sta BREATH_BURST_STATE
-    rts
-
 ; Health and the Fire spell never gate basic dragon breath.
 BarbaBurstAllowed:
     lda $0736
@@ -378,6 +366,15 @@ BarbaPlaceNewFlameCached:
     lda #$50
     sta BREATH_MUZZLE_Y
 @geom_ok:
+    lda INFERNO_AIM
+    cmp #METEOR_WAVE
+    bcc @muzzle_y
+    lda $29             ; METEOR shockwave hugs the floor, not the mouth
+    clc
+    adc #METEOR_WAVE_DY
+    bcc @set_y
+    jmp BarbaClipped
+@muzzle_y:
     lda BREATH_MUZZLE_Y
     ldy BREATH_UP
     bne @up_y
@@ -400,19 +397,21 @@ BarbaPlaceNewFlameCached:
     lda $072A
     adc #$00
     sta $48,x
+    ; Dragon breath is always fire class ($05CA = 0): fire-only enemies are
+    ; vulnerable without a spell, and slot 4 is the METEOR slam instead.
+    ; Flame class strictly dominates the native beam ($D2) in bank 7 $E6CB.
     lda #$00
     sta $05CA,x
-    lda $076F
-    and #$10
-    bne :+
-    lda #$D2
-    sta $05CA,x
-:
     lda INFERNO_AIM
     beq @normal_aim
     and #$03
     sta $6D,x
     lda INFERNO_AIM
+    cmp #METEOR_WAVE
+    bcc :+
+    lda #(METEOR_WAVE | METEOR_WAVE_LIFE)
+    bne @store_slot
+:
     and #$40
     bne @up_life
     lda INFERNO_AIM
@@ -502,3 +501,81 @@ BarbaInfernoTick:
     rts
 InfernoWaveDirs:
     .byte $01, $02, $41, $42 ; R, L, up-R, up-L
+
+; METEOR (slot 4, $076F bit 4; lasts like vanilla Fire until side-view init $8CF4 clears it).
+; Airborne Down + B dives at the native fall cap; landing sends one flat
+; floor shockwave each way. Runs after the HUD split, from BarbaProjectiles.
+; Lives in the dead vanilla Check_for_Fire_Spell body ($9847-$9877, 49 bytes;
+; its only caller, fixed-bank $D50D, is the BarbaUpdate hook).
+.segment "FIRE_CHECK"
+BarbaMeteorTick:
+    lda $0479           ; airborne
+    beq @ground
+    lda METEOR_STATE
+    bne @dive
+    lda $076F
+    and #$10
+    beq @done
+    lda $F7
+    and #$04            ; Down held
+    beq @done
+    lda $F5
+    and #$40            ; B pressed this frame
+    beq @done
+    inc METEOR_STATE
+    jsr BarbaCancelBurst ; this B press is the slam, not a volley
+@dive:
+    lda #METEOR_DIVE_VY
+    sta $057D
+@done:
+    rts
+@ground:
+    lda METEOR_STATE
+    beq @done
+    jmp MeteorLand
+
+; Dead vanilla Fire spell body ($97F1-$9814, 36 bytes; its spell pointer is
+; BarbaSpellDeferred and its other entry $97FA was only called from $985E).
+.segment "FIRE_SPELL"
+MeteorLand:
+    lda #$00
+    sta METEOR_STATE
+    lda $ED
+    ora #$10            ; impact thud (the stomp-kill sound)
+    sta $ED
+    lda #$84            ; short decor flash
+    sta $074B
+    lda #(METEOR_WAVE | $01)
+    jsr MeteorEmit
+    lda #(METEOR_WAVE | $02)
+MeteorEmit:
+    sta INFERNO_AIM
+    jsr BarbaEmitOne
+    lda #$00
+    sta INFERNO_AIM
+    rts
+
+; Dead vanilla raft-avatar tail ($81C1-$81E4, 36 bytes): the "Sea crossing
+; avatar" RTS at $81C0 skips it and only its own branch targets $81E4.
+.segment "RAFT_TAIL"
+BarbaCancelBurst:
+    lda #$00
+    sta BREATH_REMAINING
+    sta BREATH_BURST_DELAY
+    sta BURST_DEADLINE
+    lda #$02
+    bne BurstState
+BarbaArmBurst:
+    ; Initial emission and scheduler run in the same update. Nine compensates
+    ; for that first decrement, yielding eight full updates between all shots.
+    lda #$09
+    sta BREATH_BURST_DELAY
+    lda #$04
+    sta BREATH_REMAINING
+    lda #$78
+    sta BURST_DEADLINE
+    lda #$01
+BurstState:
+    sta BREATH_BURST_STATE
+    rts
+.segment "BANK0"

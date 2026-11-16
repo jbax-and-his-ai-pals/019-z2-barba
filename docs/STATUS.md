@@ -4,10 +4,10 @@ Current playable alpha. Built locally from `roms/z2.nes` via `python tools/build
 
 ## Implemented features
 
-- **Player (24x48 Barba)**: Boss-derived 24x48 side-view poses (`src/tall_player.inc`, `src/tall_layout.inc`), full-body jumps, compact 24px crouch, ceiling folding, partly submerged lava and swamp-water pose (`GEOMETRY` bit 2 via `LAVA_CONTACT` or `$0752`, `tests/swamp_submerge.lua`), 8x16 flying Wyrmling, and 16x16 overworld avatar. Terrain and enemy-contact hitboxes keep native dimensions. CHR allocation reserves `$4E`/`$50` (Ache/bat enemy frames) and `$5E`/`$62` (ending ash) so enemy sprites in caves/forests stay intact. Tall head OAM moved from `$F8` to `$C4` (and town combo OAM `$C4` to `$64`) so Barba no longer clobbers the native HUD magic partial-bar sprite at `$02F8` (verified in `tests/hud_timing.lua`).
+- **Player (24x48 Barba)**: Boss-derived 24x48 side-view poses (`src/tall_player.inc`, `src/tall_layout.inc`), full-body jumps, compact 24px crouch, ceiling folding, partly submerged lava and swamp-water pose (`GEOMETRY` bit 2 via `LAVA_CONTACT` or `$0752`, `tests/swamp_submerge.lua`), 8x16 flying Wyrmling, and 16x16 overworld avatar. Terrain and enemy-contact hitboxes keep native dimensions. CHR allocation reserves `$4E`/`$50` (Ache/bat enemy frames) and `$5E`/`$62` (ending ash) so enemy sprites in caves/forests stay intact, plus `$60` (the XP "3" score digit, also the first digit of "30"; the down pose had overwritten it, 2026-11-15). The budget is full, so `tools/assets.py` reuses any allocated pair within 1 pixel (attack head = idle head, crouch-attack tail = crouch tail), freeing `$5C`. Tall head OAM moved from `$F8` to `$C4` (and town combo OAM `$C4` to `$64`) so Barba no longer clobbers the native HUD magic partial-bar sprite at `$02F8` (verified in `tests/hud_timing.lua`).
 - **Attacks & techniques**:
   - Five-shot diagonal volley at all health levels (`src/breath.inc`, `src/extra_fire.inc`) with shared mouth placement, 8-update cadence, `LOAD_LIMIT = 7` governor, native Barba fireball SFX (`$ED |= $40`), and glove-gated brick breaking (`src/blocks.inc`, all palace groups `$0707 >= 3`). Standing post-slash recovery (`$0400 == 4`) with B released re-arms the volley so standing cancel-slashes fire without moving first.
-  - Geldarm (West Hyrule sand worm, `$20`) hurtbox (`$E90E`, type 5) widened to `12x64` px (`$FE, $0C, $00, $40`) so standing, crouching, and extra-slot fireballs hit its body as well as its head (`tests/geldarm.lua`).
+  - Geldarm (West Hyrule sand worm, `$20`) hurtbox (`$E90E`, type 5) widened to `12x64` px (`$FE, $0C, $00, $40`) so standing, crouching, and extra-slot fireballs hit its body as well as its head. HP 8 -> 4 (bank 1 `$9441`; attack 1-2 = 2 hits, 3+ = 1 hit). A lethal hit (any source) no longer explodes it at full height: `src/geldarm.inc` (bank-1 pad `$9EB9`, hooks `$9BB5`/`$9C3D`) keeps it alive at HP 0, flashing and immune, sinking into the sand 2 px/frame (~1/2 s), then runs the native death `$E880` at the sand line (`tests/geldarm.lua`).
   - Upward breath (airborne `Up+B` column) and rising head-butt (`Up` while ascending), both gated on Upward Thrust; rising head-butt breaks glove-gated overhead bricks via `BarbaBlocks` (`tests/stab_blocks.lua`).
   - Downstab (`Down` while airborne with Downward Thrust) with 64px visual double-torso pose, 18x12 centered foot hitbox (`BarbaSetThrusts`), and glove-gated floor brick breaking via `BarbaBlocks` (`tests/stab_blocks.lua`).
   - Easy-enemy jump stomp (`$C2` 1..16, full-body foot reach `$29 + $22 - $2A,x < $1E`, excluding shielded palace
@@ -22,7 +22,12 @@ Current playable alpha. Built locally from `roms/z2.nes` via `python tools/build
   - Sleeping Zelda in North Palace can be scorched with `"OOPS..."` shout.
 - **Overworld dragon fire**: Pressing `B` on the overworld breathes an animated 8x16 flame (`$60/$62` in CHR bank 30) with dragon fire SFX (`$ED |= $40`), splits the WRAM RLE map (`BarbaSplitBurnForest`) so only the single facing forest tile (`$06` -> `$04` Desert/Plains) is scorched without affecting neighboring trees across battles/scrolling, reveals Hidden Kasuto without needing the Hammer, and triggers magic/rumble reactions (`$EC = $04`) when aimed at towns or palaces (`A` keeps Hammer on boulders; `B` plays Flute on Spiders/open ground once owned) (`src/barba.asm`, `tests/overworld_fire.lua`).
 - **Title, menus, bosses & ending**:
-  - `BARBA I / THE ADVENTURE OF / BARBA` title screen with molten lava, animated roaring Barba, and scrolling story; Barba 1-Up dolls across all 13 even sprite banks; dragon spell names (`SCALES`, `JUMP`, `LIFE`, `WYRMLNG`, `FIRE`, `REFLECT`, `SPELL`, `INFERNO`) with native noise-channel Inferno roar, extended decor flash, and 4-wave 4-way firestorm barrage (`BarbaInfernoTick` in `src/breath.inc`, `tests/inferno.lua`); post-flash palette restore (`$16/$27/$30`).
+  - `BARBA I / THE ADVENTURE OF / BARBA` title screen with molten lava, animated roaring Barba, and scrolling story; Barba 1-Up dolls across all 13 even sprite banks; dragon spell names (`SCALES`, `JUMP`, `LIFE`, `WYRMLNG`, `METEOR`, `REFLECT`, `SPELL`, `INFERNO`) with native noise-channel Inferno roar, extended decor flash, and 4-wave 4-way firestorm barrage (`BarbaInfernoTick` in `src/breath.inc`, `tests/inferno.lua`); post-flash palette restore (`$16/$27/$30`).
+  - **METEOR** (2026-11-15) replaces the Fire spell (slot 4, `$076F` bit 4, lasts like vanilla Fire): mid-air
+    `Down + B` dives at 6 px/frame (`$057D = 6`); landing thuds, flashes and sends one flat, fire-class
+    floor shockwave each way (`METEOR_WAVE` = `$C0` flags, 33 updates like breath). Breath is now always fire class
+    (`$05CA = 0`), so Fire-only enemies no longer need a spell; range stays 33 updates. Code lives in reclaimed
+    dead vanilla bank-0 code (`$97F1`, `$9847`, `$81C1`; original bytes guarded). `tests/meteor.lua`.
   - Palace 6 boss converted to **Lava Link** (hand-drawn Link head/tunic in CHR 25, Sprite Palette 3, Spear/sword-beam breath, fireball damage).
   - **Dark Barba** ("Dark Link", 24x48 in `src/dark_barba.inc`) takes 1 HP fireball damage and yields the Triforce-hold pose.
   - **Boss fireball coverage** (2026-11-15): all six palace bosses die to fireballs alone, with no thrust
@@ -36,6 +41,8 @@ Current playable alpha. Built locally from `roms/z2.nes` via `python tools/build
     Verified by one-off probes (2026-11-15): downstab on mounted Rebonack (unhorses `$20` into `$0A`) and Reflect vs Carock (reflected beams damage and kill `$22`).
   - **Ending sequence**: 24x48 Barba beside woken Zelda, custom wake-up dialogue, curtain-fall behind-curtain fireball toast finale turning Zelda to ash, 20-entry credits, and New Game+ (`$07A0 = 1`).
 
+- **Boss checkpoint set** (2026-11-15): `play/Test Barba - Bosses.cmd` maps F1-F8 to the left edge of every boss room (Horsehead through Dark Link) with route-appropriate loadouts; all 8 reload-validated (`docs/TEST-PACK.md`).
+
 ## Performance & bank headroom
 
 - `BarbaDisplay` fast path + `BarbaGeometry` terrain cache + `BarbaExtraUpdate` fast path + tightened `ExtraNearEnemy` + direct `BarbaExtraBlocks` + `BarbaLoadOk` 2-shot cap with `>= 2` enemies + odd-frame OAM priority rotation: Palace 1 `perf_volley.lua` achieves **0/900 lag frames** (idle avg 15,831 / peak 16,055 cycles; volley avg 19,356 / peak 25,512 cycles (2026-11-15), 0 near-budget >27k frames). Palace 3 room `$0D` (2 Ironknuckles + breakable blocks) drops from 28,095 avg / 30,049+ peak (4 lag frames) to **25,338 avg / 28,155 peak (0 lag frames)**.
@@ -44,6 +51,12 @@ Current playable alpha. Built locally from `roms/z2.nes` via `python tools/build
 ## Remaining / open items
 
 - Full end-to-end human playthrough across all palaces, spell unlocks, item gates, and ending.
+- METEOR (2026-11-15, awaiting producer playtest): magic cost still uses vanilla Fire's table (`$8D9B`);
+  slams are unlimited while the spell lasts. Retune after the feel check.
+- Trailing torso (shelved 2026-11-15): the producer liked a lagged 16x16 segment behind the lower body (OAM `$20/$24`,
+  Y from an 8-entry ring of past actor Y) "with minor adjustments", but reverted it for cost: +190 cycles/frame,
+  volley over-8 frames 34 -> 224 of 900, Rebonack bot fight lag 28 -> 60. Patch (renderer compaction that frees
+  ~250 bank-0 bytes, trail, test updates): `docs/archive/trailing-torso-prototype.patch`.
 - Cross-check on a second accurate NES emulator / hardware-accurate MMC1 behavior.
 - Audio listening pass on Inferno roar vs. music and transitions.
 - Fireball range (producer decision pending, 2026-11-15): an uncommitted change raised volley lifetime from 33 to 63

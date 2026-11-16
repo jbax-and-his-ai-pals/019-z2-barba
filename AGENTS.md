@@ -26,7 +26,7 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
   shield_enemies, title_roar, overworld_side, farcall, town_fire, town_combo,
   castle_zelda_burn, upstab, perf_upward, look_up, ending, horsehead, helmethead, rebonack, carock,
   gooma, lava_link_kill, stomp, geldarm, encounter_hazard, heal_door, spell_door, stab_blocks,
-  swamp_submerge, town_nontown_burn, inferno, overworld_fire, forest_burn_limit, plus `state_pack` via create_test_pack.
+  swamp_submerge, town_nontown_burn, inferno, overworld_fire, forest_burn_limit, meteor, perf_meteor, plus `state_pack` via create_test_pack.
   (`boss_fight.lua` is the shared fireball-only boss driver, not a scenario.)
 
 ## Hard rules
@@ -46,9 +46,10 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
 | Path | What |
 | --- | --- |
 | `src/barba.asm` | includes everything; overworld avatar, hitbox, lava, roar, fixed-bank gateways |
-| `src/breath.inc` | five-shot volley scheduler, load governor (`BarbaLoadOk`), mouth placement |
+| `src/breath.inc` | five-shot volley scheduler, load governor (`BarbaLoadOk`), mouth placement, Inferno and METEOR |
 | `src/extra_fire.inc` | 3 extra projectile records multiplexed through native slot 0; enemy/shield collision wrappers |
 | `src/blocks.inc` | fireballs break glove-gated blocks |
+| `src/geldarm.inc` | bank 1: desert worm sinks into the sand before its death explosion |
 | `src/tall_player.inc`, `tall_layout.inc` | 24x48 boss-derived player renderer and head geometry |
 | `src/dark_barba.inc` | bank 5 24x48 Dark Barba renderer and Triforce-hold pose |
 | `src/town*.inc`, `shouts.inc`, `ash_layout.inc` | fleeing/burning villagers, panic dialogue and shouts |
@@ -59,7 +60,9 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
 
 ## Free space and RAM in use (check before allocating)
 
-- ROM: bank 0 `$A89E-$A97D` (BANK0_OW; `BarbaSplitBurnForest`) + `$AA40-$BF6F` (BANK0; 3 free) +
+- ROM: bank 0 `$A89E-$A97D` (BANK0_OW; `BarbaSplitBurnForest`) + `$AA40-$BF6F` (BANK0; 12 free) +
+  reclaimed dead vanilla bank-0 code `$81C1-$81E4`, `$97F1-$9814`, `$9847-$9877` (METEOR; 0 free; originals guarded) +
+  bank 1 `$9EB9-$9FFF` (BANK1, vanilla pad after Geldarm draw code; `geldarm.inc`; 240 free) +
   `$BFE0-$BFF9` (BANK0_TAIL, vanilla pad before vectors; `BurnMapEndGuard`, 0 free), bank 3 `$B803-$BF6F` (TOWN; 125 free), bank 6 `$BA00-$BF6F` (BANK6; `shouts.inc` + `combo.inc`).
   Bank 4 `$A765-$A8FF` is vanilla `$FF` pad patched by raw bytes in `build.py`: Lava Link helpers `$A765-$A7A8`,
   `CarockHit` `$A7B0-$A7BE`; `$A7BF-$A8FF` free.
@@ -70,7 +73,7 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
   No new fixed-bank padding was claimed. Never allocate live JMP operands `$FF4B` or `$E02C`.
 - RAM `$05EA`, `$05EB` (lava contact), `$05F0-$05FF` (roar, breath, tall renderer, extra guard). Cleared by the native reset loop.
 - WRAM `$6400-$642F` extra projectile records; `$6440-$645F` scratch (`$6457` lazy-save flag,
-  `$6458-$645F` geometry terrain cache, `$645C` EXTRA_LIVE); `$6460-$6469` shouts (`$6465` actor, `$6467` word, `$6468` timer, `$6469` cycle); `$646A` + `$6490-$64D0` town scorch ring (16-slot FIFO + head/page); `$646B` volley aim latch (0 forward / $40 upward); `$646C-$646F` + `$6488` town combo banner; `$6470-$6473` Inferno firestorm (`$6470` timer, `$6473` wave aim) and overworld flame (`$6471` timer, `$6472` dir). Don't touch collision/room/save regions elsewhere in `$6000-$7FFF`.
+  `$6458-$645F` geometry terrain cache, `$645C` EXTRA_LIVE); `$6460-$6469` shouts (`$6465` actor, `$6467` word, `$6468` timer, `$6469` cycle); `$646A` + `$6490-$64D0` town scorch ring (16-slot FIFO + head/page); `$646B` volley aim latch (0 forward / $40 upward); `$646C-$646F` + `$6488` town combo banner; `$6470-$6473` Inferno firestorm (`$6470` timer, `$6473` wave aim) and overworld flame (`$6471` timer, `$6472` dir); `$6474` METEOR dive state. Don't touch collision/room/save regions elsewhere in `$6000-$7FFF`.
 - OAM in use: tall head `$04/$4C/$C4`, extra fireballs `$3C/$44/$48`; enemy projectiles use `$28/$2C/$30`;
   town shout word `$DC-$F4` (7 glyphs, only while a word is live and no enemy projectile exists); overworld flame `$FC` (`$02FC-$02FF`).
 - CHR: player art in even sprite banks 0-24; overworld flame pairs `$60/$62` in dedicated overworld bank 30; ash `$7E/$80` **bank 6 only** (shared sprites elsewhere);
@@ -83,8 +86,9 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
 
 The game logic runs in NMI. Over about 29.7k cycles the next frame lags. Vanilla peaks near 26.6k
 with 6 enemies. Palace 1 `perf_volley.lua` probe (with direct `BarbaExtraBlocks` and `BarbaLoadOk`
-2-shot cap for `>= 2` enemies): idle avg/peak 15,831/16,055 cycles, volley 19,356/25,512 (2026-11-15),
-lag 0/300 idle and **0/900 volley**, `nearBudget(>27000)=0`. Palace 3 room `$0D` (2 Ironknuckles
+2-shot cap for `>= 2` enemies): idle avg/peak 15,860/16,084 cycles, volley 19,369/25,533 (2026-11-15,
+fire-class breath), lag 0/300 idle and **0/900 volley**, `nearBudget(>27000)=0`. `perf_meteor.lua`
+(same room, slam + volley every 90 frames): 17,862/20,745, 0/900 lag, 10 slams / 20 waves. Palace 3 room `$0D` (2 Ironknuckles
 + breakable blocks) drops from 28,095 avg / 30,049+ peak (4 lag frames) to 25,338 avg / 28,155
 peak (0 lag frames). `BarbaDisplay` bypasses
 `$EBF0` on normal frames (using `$F27D` + unrolled 9-sprite

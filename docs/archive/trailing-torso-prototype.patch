@@ -1,0 +1,493 @@
+diff --git a/src/tall_player.inc b/src/tall_player.inc
+index 0dba16a..09f9f78 100644
+--- a/src/tall_player.inc
++++ b/src/tall_player.inc
+@@ -12,6 +12,8 @@ GEOMETRY = $05F6
+ DRAW_INDEX = $05F9
+ DRAW_FRAME = $05FA
+ DRAW_ATTR = $05FB
++TRAIL_HEAD = $6475 ; trailing torso Y ring index (0-7); bit 7 = refill
++TRAIL_RING = $6476 ; 8 bytes: recent actor Y ($29), oldest = lagged segment
+ 
+ BarbaGeometry:
+     txa
+@@ -233,6 +235,8 @@ BarbaDisplay:
+     cmp #$0C
+     bcc @fast_prep
+ @fallback:
++    lda #$80
++    sta TRAIL_HEAD
+     jsr $EBF0
+     ; Keep only the gated rising head-butt and the existing downstab.
+     jsr BarbaSetThrusts
+@@ -326,21 +330,18 @@ BarbaDisplay:
+     asl
+     clc
+     adc DRAW_FRAME
+-.macro TALL_SPRITE tile_off, oam, col
++; One draw path for both facings: tile column c lands at the screen X in
++; $05+c (mirrored when facing right) and row r at the Y in $00+r ($F8 hides).
++.macro TALL_CELL tile_off, oam, col, row
+     .local @skip
+     lda BarbaTallTiles+tile_off,x
+     cmp #$F5
+     beq @skip
+     sta oam+1
+     sty oam+2
+-    lda DRAW_LEFT
+-    .if col <> 0
+-    clc
+-    adc #col
+-    bcs @skip
+-    .endif
++    lda $05+col
+     sta oam+3
+-    lda $00
++    lda $00+row
+     sta oam
+ @skip:
+ .endmacro
+@@ -353,95 +354,158 @@ BarbaDisplay:
+     sta $0214
+     sta $0218
+     sta $021C
+-    ldx DRAW_FRAME
+-    ldy DRAW_ATTR
+-    bit DRAW_ATTR
+-    bvc :+
+-    jmp @draw_right
++    ; Row Y: tucked drops row 0 by 16px and hides row 1; submerged hides row 2.
++    ldy #$00
++    lda GEOMETRY
++    and #$02
++    beq :+
++    ldy #$10
+ :
++    jsr TallRowY
++    sta $00
++    ldy #$10
+     lda GEOMETRY
+     and #$02
++    beq :+
++    ldy #$FF
++:
++    jsr TallRowY
+     sta $01
+-    ; Top row (0, 1, 2): DRAW_TOP (+ $10 if tucked)
+-    lda DRAW_TOP
+-    ldy $01
++    ldy #$20
++    lda GEOMETRY
++    and #$04
+     beq :+
+-    clc
+-    adc #$10
+-    bcs @l_mid
++    ldy #$FF
+ :
+-    cmp #$20
+-    bcc @l_mid
+-    cmp #$F0
+-    bcs @l_mid
+-    sta $00
++    jsr TallRowY
++    sta $02
++    ; Column X for tile columns 0..2, mirrored when facing right.
++    lda DRAW_LEFT
++    bit DRAW_ATTR
++    bvs @cols_right
++    sta $05
++    clc
++    adc #$08
++    sta $06
++    adc #$08
++    sta $07
++    jmp @cols_set
++@cols_right:
++    sta $07
++    clc
++    adc #$08
++    sta $06
++    adc #$08
++    sta $05
++@cols_set:
++    ldx DRAW_FRAME
+     ldy DRAW_ATTR
+-        TALL_SPRITE 0, $0204, 0
+-    TALL_SPRITE 1, $024C, 8
+-    TALL_SPRITE 2, $02C4, 16
+-@l_mid:
+-    lda $01
+-    bne @l_bot
+-    lda DRAW_TOP
++    bit DRAW_ATTR
++    bvs @cells_right
++    jmp @cells_left
++@cells_right:
++    ; Facing right: OAM slots follow screen columns, as in the old mirrored path.
++    TALL_CELL 0, $02C4, 0, 0
++    TALL_CELL 1, $024C, 1, 0
++    TALL_CELL 2, $0204, 2, 0
++    TALL_CELL 3, $0210, 0, 1
++    TALL_CELL 4, $020C, 1, 1
++    TALL_CELL 5, $0208, 2, 1
++    TALL_CELL 6, $021C, 0, 2
++    TALL_CELL 7, $0218, 1, 2
++    TALL_CELL 8, $0214, 2, 2
++    jmp @cells_done
++@cells_left:
++    TALL_CELL 0, $0204, 0, 0
++    TALL_CELL 1, $024C, 1, 0
++    TALL_CELL 2, $02C4, 2, 0
++    TALL_CELL 3, $0208, 0, 1
++    TALL_CELL 4, $020C, 1, 1
++    TALL_CELL 5, $0210, 2, 1
++    TALL_CELL 6, $0214, 0, 2
++    TALL_CELL 7, $0218, 1, 2
++    TALL_CELL 8, $021C, 2, 2
++@cells_done:
++    ; Near the right screen edge a screen column can wrap to the left: hide it.
++    ; Both paths keep OAM slots in screen-column order ($04/$08/$14 leftmost).
++    lda DRAW_LEFT
++    cmp #$F0
++    bcc @cols_ok
++    lda #$F8
++    sta $02C4
++    sta $0210
++    sta $021C
++    lda DRAW_LEFT
++    cmp #$F8
++    bcc @cols_ok
++    lda #$F8
++    sta $024C
++    sta $020C
++    sta $0218
++@cols_ok:
++    ; Trailing torso: one 16x16 segment behind the lower body in the unused
++    ; native sword/shield OAM ($0220/$0224). Its Y lags TRAIL_LAG updates
++    ; behind the actor, so it whips behind on jumps, upstab and downstab.
++    ldx TRAIL_HEAD
++    bmi @trail_fill
++    lda $29
++    sec
++    sbc TRAIL_RING,x
++    clc
++    adc #$20
++    cmp #$40
++    bcs @trail_fill
++    inx
++    txa
++    and #$07
++    tax
++    stx TRAIL_HEAD
++    lda $29
++    sta TRAIL_RING,x
++    inx
++    txa
++    and #$07
++    tax
++    lda TRAIL_RING,x
++    jmp @trail_y
++@trail_fill:
++    lda $29
++    ldx #$07
++:
++    sta TRAIL_RING,x
++    dex
++    bpl :-
++    inx
++    stx TRAIL_HEAD
++@trail_y:
+     clc
+     adc #$10
+-    bcs @l_bot
++    bcs @no_trail
+     cmp #$20
+-    bcc @l_bot
++    bcc @no_trail
+     cmp #$F0
+-    bcs @l_bot
++    bcs @no_trail
+     sta $00
+-    ldy DRAW_ATTR
+-    TALL_SPRITE 3, $0208, 0
+-    TALL_SPRITE 4, $020C, 8
+-    TALL_SPRITE 5, $0210, 16
+-@l_bot:
+     lda GEOMETRY
+     and #$04
+-    bne @done_draw
+-    lda DRAW_TOP
++    bne @no_trail
++    bit DRAW_ATTR
++    bvs @trail_rt
++    lda DRAW_LEFT
+     clc
+-    adc #$20
+-    bcs @done_draw
+-    cmp #$20
+-    bcc @done_draw
+-    cmp #$F0
+-    bcs @done_draw
+-    sta $00
+-    ldy DRAW_ATTR
+-    TALL_SPRITE 6, $0214, 0
+-    TALL_SPRITE 7, $0218, 8
+-    TALL_SPRITE 8, $021C, 16
+-@done_draw:
+-    ; Downstab (pose 9, DRAW_FRAME == $51) adds a second torso chunk above
+-    ; Row 0 using the unused native sword/shield OAM slots ($0220/$0224).
+-    lda DRAW_FRAME
+-    cmp #$51
+-    bne @no_extra_torso
+-    lda GEOMETRY
+-    and #$06
+-    bne @no_extra_torso
+-    lda DRAW_TOP
+-    sec
+-    sbc #$10
+-    cmp #$20
+-    bcc @no_extra_torso
+-    cmp #$F0
+-    bcs @no_extra_torso
+-    sta $00
++    adc #$18
++    bcs @no_trail
+     ldx #$06
+     ldy #$08
++    bcc @trail_place
++@trail_rt:
+     lda DRAW_LEFT
+-    bit DRAW_ATTR
+-    bvc @extra_left
++    sec
++    sbc #$10
++    bcc @no_trail
+     ldx #$08
+     ldy #$06
+-    bcc @extra_place
+-@extra_left:
+-    clc
+-    adc #$08
+-    bcs @no_extra_torso
+-@extra_place:
++@trail_place:
+     sta $0223
+     stx $0221
+     ldx $00
+@@ -450,13 +514,13 @@ BarbaDisplay:
+     stx $0222
+     clc
+     adc #$08
+-    bcs @no_extra_torso
++    bcs @no_trail
+     sta $0227
+     sty $0225
+     lda $00
+     sta $0224
+     stx $0226
+-@no_extra_torso:
++@no_trail:
+     lda $12
+     and #$01
+     beq @no_rot
+@@ -497,61 +561,21 @@ BarbaDisplay:
+ @no_rot:
+     rts
+ 
+-@draw_right:
+-    lda GEOMETRY
+-    and #$02
+-    sta $01
+-    lda DRAW_TOP
+-    ldy $01
+-    beq :+
+-    clc
+-    adc #$10
+-    bcs @r_mid
+-:
+-    cmp #$20
+-    bcc @r_mid
+-    cmp #$F0
+-    bcs @r_mid
+-    sta $00
+-    ldy DRAW_ATTR
+-        TALL_SPRITE 2, $0204, 0
+-    TALL_SPRITE 1, $024C, 8
+-    TALL_SPRITE 0, $02C4, 16
+-@r_mid:
+-    lda $01
+-    bne @r_bot
+-    lda DRAW_TOP
+-    clc
+-    adc #$10
+-    bcs @r_bot
+-    cmp #$20
+-    bcc @r_bot
+-    cmp #$F0
+-    bcs @r_bot
+-    sta $00
+-    ldy DRAW_ATTR
+-    TALL_SPRITE 5, $0208, 0
+-    TALL_SPRITE 4, $020C, 8
+-    TALL_SPRITE 3, $0210, 16
+-@r_bot:
+-    lda GEOMETRY
+-    and #$04
+-    bne @r_done
+-    lda DRAW_TOP
++TallRowY:
++    cpy #$FF
++    beq @hide
++    tya
+     clc
+-    adc #$20
+-    bcs @r_done
++    adc DRAW_TOP
++    bcs @hide
+     cmp #$20
+-    bcc @r_done
++    bcc @hide
+     cmp #$F0
+-    bcs @r_done
+-    sta $00
+-    ldy DRAW_ATTR
+-    TALL_SPRITE 8, $0214, 0
+-    TALL_SPRITE 7, $0218, 8
+-    TALL_SPRITE 6, $021C, 16
+-@r_done:
+-    jmp @done_draw
++    bcc @ok
++@hide:
++    lda #$F8
++@ok:
++    rts
+ ; No horizontal melee. Downstab sits under the feet; upward thrust uses the
+ ; native head top, never the visually raised 48px head. Both are centered.
+ BarbaSetThrusts:
+diff --git a/tests/gameplay.lua b/tests/gameplay.lua
+index d127231..874dcd6 100644
+--- a/tests/gameplay.lua
++++ b/tests/gameplay.lua
+@@ -33,12 +33,12 @@ local function tick()
+         if pose==5 and not seenStand then
+             seenStand=true; captures[frame+2]='barba-standing-volley'
+             check(read(0x480)==0xF8,'standing attack disables melee collision')
+-            check(read(0x220)==0xF8 and read(0x224)==0xF8,'standing attack has no attached plume')
++            check((read(0x220)==0xF8 or read(0x221)==0x08 or read(0x221)==0x06) and (read(0x224)==0xF8 or read(0x225)==0x08 or read(0x225)==0x06),'standing attack has no attached plume (trail only)')
+         end
+         if pose==7 and not seenCrouch then
+             seenCrouch=true; captures[frame+2]='barba-crouched-volley'
+             check(read(0x480)==0xF8,'crouched attack disables melee collision')
+-            check(read(0x220)==0xF8 and read(0x224)==0xF8,'crouched attack has no attached plume')
++            check((read(0x220)==0xF8 or read(0x221)==0x08 or read(0x221)==0x06) and (read(0x224)==0xF8 or read(0x225)==0x08 or read(0x225)==0x06),'crouched attack has no attached plume (trail only)')
+         end
+         if frame>=1170 and read(0x479)>0 then seenJump=true end
+     end
+diff --git a/tests/routines.lua b/tests/routines.lua
+index 1f63f2f..c9fa780 100644
+--- a/tests/routines.lua
++++ b/tests/routines.lua
+@@ -27,16 +27,16 @@ for _,pose in ipairs({5,7,8,9})do
+         w(0x17,pose==7 and 0 or 1);w(0x479,pose>=8 and 2 or 0)
+         w(0xCC,0x50);w(0x4D,0x48);w(0x3B,0);w(0x29,0x90);w(0x9F,1)
+         w(0x72A,0);w(0x72C,0);w(0xC8,0);w(0x48D,0);w(0x50C,0)
+-        w(0x70E,0);w(0x752,0);w(0x480,0x80);w(0x47E,0x60)
++        w(0x70E,0);w(0x752,0);w(0x480,0x80);w(0x47E,0x60);w(0x6475,0x80)
+     end,function()
+         if pose==9 then
+             -- Native $F27D derives screen X=$48 from the world coordinate.
+             check(r(0x480)==0xAC and r(0x47E)==0x53,'downstab preserves the existing foot hitbox')
+-            check(r(0x220)==0x70 and r(0x224)==0x70 and r(0x221)==0x08 and r(0x225)==0x06,
+-                'downstab draws a second torso chunk at the top')
++            check(r(0x220)==0xA0 and r(0x224)==0xA0 and r(0x221)==0x08 and r(0x225)==0x06,
++                'downstab draws the trailing torso')
+         else
+             check(r(0x480)==0xF8,'pose '..pose..' disables native sword/thrust collision')
+-            check(r(0x220)==0xF8 and r(0x224)==0xF8,'pose '..pose..' hides both attached-flame sprites')
++            check(r(0x221)==0x08 and r(0x225)==0x06,'pose '..pose..' uses $0220/$0224 only for the trailing torso')
+         end
+         check(r(0x80)==pose,'renderer preserves native attack pose')
+         check(emu.getState()['mapper.prgReg']==0,'renderer retains player PRG bank')
+diff --git a/tests/tall_geometry.lua b/tests/tall_geometry.lua
+index 688e872..537b599 100644
+--- a/tests/tall_geometry.lua
++++ b/tests/tall_geometry.lua
+@@ -25,7 +25,7 @@ local function baseline()
+     w(0x769,4);w(0x707,4);w(0x13,0);w(0x80,3);w(0x17,1)
+     w(0xCC,0x50);w(0x4D,0x48);w(0x3B,0);w(0x29,0x90);w(0x9F,1)
+     w(0x72A,0);w(0x72C,0);w(0xC8,0);w(0x48D,0);w(0x50C,0)
+-    w(0x70E,0);w(0x752,0);w(0x479,0);w(0x5F6,0)
++    w(0x70E,0);w(0x752,0);w(0x479,0);w(0x5F6,0);w(0x6475,0x80)
+ end
+ local function geometry(name,setup,x,y,flags)
+     add(name,'BarbaGeometry',setup,function()
+@@ -102,35 +102,48 @@ end,function()check(allHidden(extraHead),'Fairy owns no extra tall-head OAM')end
+ add('item hold does not leave extra head sprites','BarbaDisplay',function()
+     w(0x80,0x0C);w(0x49D,0)
+ end,function()check(allHidden(extraHead),'item hold owns no extra tall-head OAM')end)
+-add('downstab right draws second torso chunk above row 0','BarbaDisplay',function()
+-    w(0x80,9);w(0x479,2);w(0x9F,1)
++add('trailing torso sits behind a right-facing lower body','BarbaDisplay',function()
++    w(0x9F,1)
++end,function()
++    check(r(0x220)==0xA0 and r(0x224)==0xA0,'trail right sits on the bottom row (actor Y +16)')
++    check(r(0x221)==0x08 and r(0x225)==0x06,'trail right uses mirrored neck tiles 08,06')
++    check(r(0x223)==0x3C and r(0x227)==0x44,'trail right is 16px behind column 0')
++end)
++add('trailing torso sits behind a left-facing lower body','BarbaDisplay',function()
++    w(0x9F,2)
+ end,function()
+-    check(r(0x220)==0x70 and r(0x224)==0x70,'downstab right places extra torso at DRAW_TOP-16')
+-    check(r(0x221)==0x08 and r(0x225)==0x06,'downstab right uses mirrored neck tiles 08,06')
+-    check(r(0x223)==0x4C and r(0x227)==0x54,'downstab right aligns X to columns 0 and 8')
+-    check(r(0x204)==0x80 and r(0x24C)==0x80,'downstab right keeps row 0 torso below it')
++    check(r(0x220)==0xA0 and r(0x224)==0xA0,'trail left sits on the bottom row')
++    check(r(0x221)==0x06 and r(0x225)==0x08,'trail left uses neck tiles 06,08')
++    check(r(0x223)==0x64 and r(0x227)==0x6C,'trail left starts right after column 16')
+ end)
+-add('downstab left draws second torso chunk above row 0','BarbaDisplay',function()
+-    w(0x80,9);w(0x479,2);w(0x9F,2)
++add('trailing torso lags a rising body','BarbaDisplay',function()
++    w(0x6475,0);for a=0x6476,0x647D do w(a,0x90)end
++    w(0x29,0x80);w(0x479,2)
+ end,function()
+-    check(r(0x220)==0x70 and r(0x224)==0x70,'downstab left places extra torso at DRAW_TOP-16')
+-    check(r(0x221)==0x06 and r(0x225)==0x08,'downstab left uses neck tiles 06,08')
+-    check(r(0x223)==0x54 and r(0x227)==0x5C,'downstab left aligns X to columns 8 and 16')
++    check(r(0x220)==0xA0,'trail keeps the old Y while the body rises (got '..r(0x220)..')')
++    check(r(0x6475)==1 and r(0x6477)==0x80,'trail ring records the new actor Y')
+ end)
+-add('downstab near HUD hides second torso chunk','BarbaDisplay',function()
+-    w(0x80,9);w(0x479,2);w(0x29,0x30)
++add('trailing torso refills after a large Y jump','BarbaDisplay',function()
++    w(0x6475,0);for a=0x6476,0x647D do w(a,0x90)end
++    w(0x29,0x40)
+ end,function()
+-    check(allHidden({0x220,0x224}),'downstab does not draw extra torso into the HUD')
++    check(r(0x220)==0x50,'room-change sized Y jump snaps the trail (got '..r(0x220)..')')
+ end)
+-add('downstab under ceiling tuck hides second torso chunk','BarbaDisplay',function()
+-    w(0x80,9);w(0x479,2);w(0x6064,0x4C)
++add('downstab keeps the trailing torso','BarbaDisplay',function()
++    w(0x80,9);w(0x479,2);w(0x9F,1)
++end,function()
++    check(r(0x220)==0xA0 and r(0x221)==0x08,'downstab draws the trailing torso')
++    check(r(0x204)==0x80 and r(0x24C)==0x80,'downstab keeps row 0 in place')
++end)
++add('trailing torso is hidden in swamp water','BarbaDisplay',function()
++    w(0x752,0x20)
+ end,function()
+-    check(allHidden({0x220,0x224}),'tucked downstab hides extra torso chunk')
++    check(allHidden({0x220,0x224}),'submerged body has no trailing torso')
+ end)
+-add('downstab near right edge hides wrapped torso sprite','BarbaDisplay',function()
+-    w(0x80,9);w(0x479,2);w(0x9F,1);w(0x4D,0xF4)
++add('trailing torso near the right edge is hidden, not wrapped','BarbaDisplay',function()
++    w(0x9F,2);w(0x4D,0xF4);w(0x479,2)
+ end,function()
+-    check(r(0x220)==0x70 and r(0x224)==0xF8,'downstab clips offscreen right half of extra torso')
++    check(allHidden({0x220,0x224}),'left-facing trail past the right edge is hidden')
+ end)
+ add('swamp water shifts head down and hides bottom row','BarbaDisplay',function()
+     w(0x752,0x20)
