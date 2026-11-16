@@ -25,7 +25,8 @@ for _,c in ipairs({
     {world=1,room=0,kind=0x19,origin=5,fear=true},
     {world=1,room=0x1C,kind=0x19,origin=255,fear=false},
     {world=1,room=0,kind=0x1D,origin=5,fear=true},
-    {world=1,room=0,kind=0x17,origin=255,fear=true},
+    {world=1,room=0,kind=0x17,origin=255,fear=false,text=LABELS.TownHealerText},
+    {world=1,room=0,kind=0x18,origin=255,fear=false,text=LABELS.TownMagicText},
     {world=1,room=0,kind=0x0C,origin=255,fear=false},
     {world=1,room=0,kind=0x10,origin=255,fear=true},
     {world=1,room=0,kind=0x11,origin=255,fear=true},
@@ -38,7 +39,7 @@ for _,c in ipairs({
 })do c.alive=1;c.dialog=true;cases[#cases+1]=c end
 -- All eight frame-dependent phrases, plus protected custom service text.
 for phase=0,7 do
-    for _,kind in ipairs({0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x18,0x19,0x1A,0x1B,0x1C,0x1D,0x1E,0x1F,0x20}) do
+    for _,kind in ipairs({0x10,0x11,0x12,0x19,0x1A,0x1B,0x1C,0x1D,0x1E,0x1F,0x20}) do
         cases[#cases+1]={world=1,room=1,kind=kind,origin=5,alive=1,dialog=true,fear=true,phase=phase}
     end
 end
@@ -79,7 +80,7 @@ emu.addMemoryCallback(function()
         end
         advance();return
     end
-    local want=c.alive==1 and c.kind>=0x10 and c.kind<=0x20
+    local want=c.alive==1 and ((c.kind>=0x10 and c.kind<=0x12) or (c.kind>=0x19 and c.kind<=0x20))
         and (c.world==1 or c.world==2) and c.room<0x14 and c.room~=6
     local actual=(emu.getState()['cpu.ps']&1)~=0
     if want~=actual or emu.getState()['cpu.x']~=0 then

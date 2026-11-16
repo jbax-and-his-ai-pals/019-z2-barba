@@ -9,6 +9,7 @@ BURST_DEADLINE = $05F1 ; finite 120-update lifetime, including blocked spawns
 BREATH_BURST_DELAY = $05F7
 BREATH_BURST_STATE = $05F8 ; 0 ready, 1 active, 2 wait for release/attack idle
 VOLLEY_SLOT = $05FC ; two independent projectile lifetime counters (33 updates)
+VOLLEY_LIFE = $21 ; 33 updates / 32 movement steps = 64 px
 BREATH_UP = $646B ; volley aim latch: 0 forward, $40 upward
 BREATH_REMAINING = $05FE ; pending shots, initially four after first allocation
 
@@ -253,7 +254,8 @@ BarbaStepSlotY:
     cmp #$E0
     bcs @kill
     sta $36,x
-    jmp @alive
+    sec
+    rts
 @up:
     lda $36,x
     sec
@@ -415,12 +417,12 @@ BarbaPlaceNewFlameCached:
     bne @up_life
     lda INFERNO_AIM
     and #$80
-    ora #$21
+    ora #VOLLEY_LIFE
     bne @store_slot
 @normal_aim:
     lda BREATH_UP
     bne @up_life
-    lda #$21
+    lda #VOLLEY_LIFE
     ldy $17
     bne :+
     ldy $0479

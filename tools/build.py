@@ -104,6 +104,18 @@ def build(source_path: Path, output: Path) -> dict:
     hook(3, 0xB5F8, 'TownDialog', 0x4C, '0a a8 ad 07 07', 2)
     hook(3, 0xB74D, 'TownLetterDelay', 0x20, 'a9 05 8d 66 05', 2)
     hook(3, 0xB65E, 'TownLineDelay', 0x20, '8c 66 05')
+    emerged = labels['TownDoorEmerged']
+    coords = labels['TownDoorCoords']
+    overlay.prg(
+        3,
+        0x98AB,
+        bytes([0xB5, 0xAF, 0xC9, 0x81, 0xD0, 0x03,
+               0x4C, emerged & 255, emerged >> 8,
+               0x4C, coords & 255, coords >> 8]) + b'\xEA' * 4,
+        bytes.fromhex('b4 60 b5 4e 18 79 80 97 9d 99 05 b5 3c 9d 9f 05'),
+        'Town door coordinates hook',
+    )
+    hook(3, 0x9A2C, 'TownNativeTalk', 0x20, 'ad f5 00 29 40', 2)
     dest = labels['TownUpdate']
     overlay.prg(3, 0x949F, dest.to_bytes(2, 'little'), bytes.fromhex('78 98'),
                 'Indoor NPC update 949F')
@@ -391,6 +403,9 @@ def build(source_path: Path, output: Path) -> dict:
     # Generous Downstab hitbox ($E9A2): 18 px wide ($0E->$12) x 12 px tall ($03->$0C).
     overlay.prg(7, 0xE9A1, b'\x0C', b'\x03', 'Downstab hitbox height (12 px)')
     overlay.prg(7, 0xE9B5, b'\x12', b'\x0E', 'Sword/Downstab hitbox width (18 px)')
+    # Geldarm (sand worm) hurtbox ($E90E, type 5): widen 8->12 px (dx=-2) and extend height 8->64 px
+    # so Barba's standing and crouching fireballs hit its body as well as its head.
+    overlay.prg(7, 0xE90E, b'\xFE\x0C\x00\x40', b'\x00\x08\x00\x08', 'Geldarm (sand worm) hurtbox (12x64 px)')
 
     # Existing menu stores 14-byte rows. Preserve border, cost digits and spacing.
     for i, name in enumerate(['SCALES','JUMP','LIFE','WYRMLNG','FIRE','REFLECT','SPELL','INFERNO']):

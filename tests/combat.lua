@@ -12,6 +12,7 @@ assert(blockTile==0x4C,'guarded bank-4 $851E breakable code must be $4C')
 local cases={
     {name='live shot without glove',glove=0,active=1,slot=0,broken=false},
     {name='slot zero shot with glove',glove=1,active=1,slot=0,broken=true},
+    {name='palace group 3 shot with glove',glove=1,active=1,slot=0,world=3,broken=true},
     {name='slot one shot with glove',glove=1,active=1,slot=1,broken=true},
     {name='inactive shot with glove',glove=1,active=0,slot=0,broken=false},
     {name='disintegrating shot with glove',glove=1,active=0x80,slot=0,broken=false},
@@ -24,7 +25,7 @@ end
 local function setup(c)
     for address=0x6000,0x633F do w(address,0x42)end
     for address=0x41A,0x43C do w(address,0)end
-    w(0x769,4);w(0x707,4);w(0x786,c.glove)
+    w(0x769,4);w(0x707,c.world or 4);w(0x786,c.glove)
     w(0x80,5);w(0x47E,0xA6);w(0x480,0xF8);w(0x57D,0x37)
     w(0x4D,0xA0);w(0x3B,0);w(0xCC,0xA0);w(0x29,0x90)
     w(0x72C,0);w(0x72A,0);w(0x70,0x13);w(0xED,0)

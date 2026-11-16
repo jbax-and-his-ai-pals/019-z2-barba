@@ -6,7 +6,7 @@ dofile(TEST_DIR..'/newgame.lua')
 local mem=emu.memType.nesMemory
 local function r(a)return emu.read(a,mem)end
 local function w(a,v)emu.write(a,v,mem)end
-local frame,failures=0,0
+local frame,failures,magicBarDropped=0,0,0
 local report=assert(io.open(OUTPUT_DIR..'/hud-timing.txt','w'))
 local trace=assert(io.open(OUTPUT_DIR..'/hud-timing.csv','w'))
 trace:write('testFrame,phase,event,ppuFrame,scanline,dot,cpuCycle,pc,address,value\n')
@@ -102,7 +102,13 @@ emu.addEventCallback(function()
         w(0x4D,96);w(0x3B,0);w(0x29,144);w(0x57D,0);w(0x479,0)
     end
     if frame>=1300 and frame<2200 then
-        if active()then local p=stats[phase()];p.samples=p.samples+1 end
+        if active()then
+            local p=stats[phase()];p.samples=p.samples+1
+            local expectedX=(r(0x564)>>2)+0x20
+            if frame>=1305 and (r(0x2F8)~=0x0F or r(0x2F9)~=0x70 or r(0x2FA)~=0x21 or r(0x2FB)~=expectedX) then
+                magicBarDropped=magicBarDropped+1
+            end
+        end
         w(0x774,frame>=1750 and frame<1975 and 223 or 255);w(0x773,255)
         w(0x76F,frame>=1525 and 0x10 or 0)
         -- Exercise HUD number rewriting, without opening a level menu.
@@ -119,6 +125,7 @@ emu.addEventCallback(function()
             check(p.topWrites==0,name..' no scroll/address writes inside upper HUD')
             check(p.maxNmi<29781,name..' NMI game work finishes inside one NTSC frame')
         end
+        check(magicBarDropped==0,'HUD magic partial-bar OAM $02F8 intact at full magic')
         report:write('RESULT '..(failures==0 and 'PASS' or 'FAIL')..'\n')
         report:close();trace:close();stopScenario(failures==0 and 0 or 1)
     end

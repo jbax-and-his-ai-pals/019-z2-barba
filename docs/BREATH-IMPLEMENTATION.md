@@ -21,15 +21,20 @@ adds the 16-bit scroll with carry. Clipped origins suppress new shots.
 
 Four head corners use the area's native solid-tile predicate through a
 single batched bank round-trip at fixed-bank `$FF4C`. Under stone the head shifts down sixteen pixels and the
-middle neck row disappears. Crouch now draws a 24px body while retaining the native 16px physical lane.
+middle neck row disappears. When grounded on lava (`LAVA_CONTACT != 0`) or in
+swamp water (`$0752 != 0`), `GEOMETRY` bit 2 (`$04`) shifts the head and upper
+neck down sixteen pixels into the native box and omits the bottom row. Crouch now draws a 24px body while retaining the native 16px physical lane.
 Movement and enemy-contact collision retain their native sizes: the extra
 head height is visual and needs human review.
 
 All native melee origins are hidden after rendering, including up/down thrusts.
 There is no attached plume. Item-holding and Wyrmling drawing remain native.
 `BarbaBlocks` samples each live fireball's center using the original glove-gated
-block handler. It restores player pose and velocity, avoiding sword recoil or
-bouncing Barba when a remote fireball breaks a brick.
+block handler, restoring player pose and velocity so remote fireballs avoid
+sword recoil or bouncing Barba. After restoring held thrusts via `BarbaSetThrusts`,
+it also runs `$E1DD` for active downstab (`$80 == $09`, temporarily offset +5px
+to `$29 + $21` for the tile check and restored to `$29 + $1C` afterwards) and
+rising upstab (`$80 == $08`, `$29 - $08`).
 
 ## Five-shot volley at every health level
 
@@ -54,7 +59,7 @@ They reset on invalid scenes. The backed slots temporarily alias native slot 0
 for movement, damage, shields and glove-gated blocks, then restore native state.
 Collision wrappers skip inactive/distant shots to preserve frame headroom.
 
-Extra fireballs use OAM `$3C/$44/$48`. The raised head moved to `$04/$4C/$F8`,
+Extra fireballs use OAM `$3C/$44/$48`. The raised head moved to `$04/$4C/$C4` (avoiding `$F8`, which holds the native HUD magic partial-bar sprite),
 avoiding the original enemy-projectile slots at `$28/$2C/$30`. During downstab
 (`DRAW_FRAME == $51`), unused native sword/shield slots `$20/$24` draw a second
 16x16 torso chunk (`$06/$08`) at `DRAW_TOP - $10` unless tucked or clipped by

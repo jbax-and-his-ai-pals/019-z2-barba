@@ -1,15 +1,20 @@
 # Reactive town prototype
 
-All live outdoor town villagers (`$10..$20`, stationary, static, generated, scripted and
-house-opening actors) can flee, shout, burn and retreat. Eligibility (`TownEligible`) requires
-slot value 1, town world 1 or 2, and an outdoor street room `$00..$13` except
-`$06`; origin `$BC` does not restrict eligibility. Single-area non-town and indoor
-NPCs (`$0A..$21` excluding `$0C`, in world 1 or 2 rooms except North Palace `$3C`)
-are covered by `TownBurnable`: they do not flee and retain their native or custom
-service dialogue (`$0F` wise-man, `$17` healer, `$18` magic), but ignite into
-temporary ash when hit by a player fireball. Invisible triggers (`$0C`, `$22`)
-and North Palace (`$3C`, handled separately) are excluded. Leaving/re-entering
-repopulates the room normally. Every action rechecks eligibility in `src/town.inc`.
+All live outdoor wandering villagers (`$10..$12`, `$19..$20`) can flee, shout, burn and retreat.
+Eligibility (`TownEligible`) requires slot value 1, town world 1 or 2, and an outdoor street
+room `$00..$13` except `$06`; origin `$BC` does not restrict eligibility. House-opening
+villagers (`$13..$18`, including `$17` healer and `$18` magic-house openers) are excluded from
+both `TownEligible` and `TownBurnable`: they keep their native `$97D4` door-emerge/door-open
+behavior, stay invulnerable to fireballs, and talk on `B` (or `Up` via `TownCanTalk` /
+`TownNativeTalk` at `$9A2C`) using `TownHealerText`, `TownMagicText`, or
+native dialogue; when `$17`/`$18` are inside their open doorway (`$AF` `$40..$7F`),
+entering (`$0736 == #$16`) jumps directly to `$99E6` so stale off-screen `$C9` never
+blocks healing or magic restoration (`tests/heal_door.lua`). Single-area non-town and indoor NPCs (`$0A..$21` excluding `$0C` and `$13..$18`,
+in world 1 or 2 rooms except North Palace `$3C`) are covered by `TownBurnable`: they do not flee
+and retain their native or custom service dialogue (`$0F` wise-man), but ignite into temporary
+ash when hit by a player fireball. Invisible triggers (`$0C`, `$22`) and North Palace (`$3C`,
+handled separately) are excluded. Leaving/re-entering repopulates the room normally. Every
+action rechecks eligibility in `src/town.inc`.
 
 ## Behavior
 
@@ -25,7 +30,10 @@ repopulates the room normally. Every action rechecks eligibility in `src/town.in
   PPU tiles (`$9946`/`$994A`), walks the villager inside (`$0C..$2B`), hides
   their sprites at `$2C`, and closes the door behind them (`$38..$40` via
   `$9946`/`$994E`) without altering collision RAM (`$6000..$633F`) or
-  house/quest flags. PPU writes are skipped if the doorway has scrolled
+  house/quest flags. Native door entry (`$98AB`) is also hooked to
+  `TownDoorCoords` / `TownDoorEmerged` so calm/non-panicked villagers entering a door derive the
+  exact column and page from `$DC/$DD` instead of `$4E,x + L9780,y` (which
+  drew a duplicate door one column left of the real doorway), and house-openers emerging from inside (`L97F5`, `$AF = $81`) recover their doorway from `($4E,x - L9740,y)` and `$3C,x` before `LEA32` probes an adjacent column. PPU writes are skipped if the doorway has scrolled
   offscreen and deferred if the `$0302` PPU buffer is busy. Without a door
   they run offscreen. House-opening villagers (`$13..$18`) that spawn hidden
   inside a closed door (`$AF = $80`, `Y = $A8`) stay hidden (`TownHideOAM`)
@@ -48,6 +56,9 @@ repopulates the room normally. Every action rechecks eligibility in `src/town.in
   The native conversation engine handles text, cancellation and movement lock.
   The guarded dialogue hook preserves native selection for other NPCs, except
   the custom wise-man/healer/magic service lines (native timing retained).
+  All `TownLine` strings in `src/town_dialogue.inc` are asserted `<= 11`
+  characters so text (which starts at tile 2 of the 14-tile box) never
+  overwrites the right border at tile 13.
   Panic pointer selection uses `($12 XOR type) AND 7`, not the old type-mod-4
   table.
 
@@ -215,7 +226,7 @@ keeps the short 24-update flame stage).
   spacing, fire palette 1, and tier-up jitter; tiers 4–5 use 10 px spacing, palette 1/2
   strobe, continuous `±1`/`±2 px` shake, and two flanking `$84` flame sprites on `GODLIKE!`.
   New tiers trigger `$ED |= $10` SFX and an 8-frame drop-in slam (`COMBO_SLAM` `$6488`).
-- **OAM & lifecycle:** Uses 16 town-free OAM slots (`$DC..$F4, $FC, $28..$34, $D8, $C4, $AC, $94`) on disjoint
+- **OAM & lifecycle:** Uses 16 town-free OAM slots (`$DC..$F4, $FC, $28..$34, $D8, $64, $AC, $94`) on disjoint
   rows (`+$10` for `KILL!` on tiers 1–4; `+$20` for the centered `X<pts>` combo counter on tiers 1–4, or `+$10`
   directly under `GODLIKE!`, so 8x16 scanlines never overlap; on
   `GODLIKE!`, the two flanking `$84` flames sit at `+$03` to align vertically with the

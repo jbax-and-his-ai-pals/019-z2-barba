@@ -56,8 +56,10 @@ geometry('right screen edge invalidates wrapped muzzle',function()w(0xCC,0xF0)en
 geometry('left screen edge invalidates wrapped muzzle',function()w(0xCC,2);w(0x9F,2)end,nil,nil,0)
 geometry('Fairy excludes tall geometry',function()w(0x13,8)end,nil,nil,0)
 geometry('item pose excludes tall geometry',function()w(0x80,0x0C)end,nil,nil,0)
+geometry('swamp water submerges grounded Barba',function()w(0x752,0x20)end,0x6C,0x94,5)
+geometry('airborne over swamp water stays full height',function()w(0x752,0x20);w(0x479,2)end,0x6C,0x84,1)
 
-local extraHead={0x204,0x24C,0x2F8}
+local extraHead={0x204,0x24C,0x2C4}
 local function allHidden(addresses)
     for _,address in ipairs(addresses)do if r(address)~=0xF8 then return false end end
     return true
@@ -129,6 +131,13 @@ add('downstab near right edge hides wrapped torso sprite','BarbaDisplay',functio
     w(0x80,9);w(0x479,2);w(0x9F,1);w(0x4D,0xF4)
 end,function()
     check(r(0x220)==0x70 and r(0x224)==0xF8,'downstab clips offscreen right half of extra torso')
+end)
+add('swamp water shifts head down and hides bottom row','BarbaDisplay',function()
+    w(0x752,0x20)
+end,function()
+    check(r(0x204)==0x90 and r(0x24C)==0x90,'swamp shifts head row down to actor Y')
+    check(r(0x208)==0xA0 and r(0x20C)==0xA0,'swamp shifts torso row down 16px')
+    check(allHidden({0x214,0x218,0x21C}),'swamp hides bottom row')
 end)
 
 local function nextTest()

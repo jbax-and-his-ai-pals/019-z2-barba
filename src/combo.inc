@@ -384,7 +384,7 @@ ComboDraw:
     rts
 
 ComboOam:
-    .byte $DC, $E0, $E4, $E8, $EC, $F0, $F4, $FC, $28, $2C, $30, $34, $D8, $C4, $AC, $94
+    .byte $DC, $E0, $E4, $E8, $EC, $F0, $F4, $FC, $28, $2C, $30, $34, $D8, $64, $AC, $94
 ComboDigits:
     .byte ShoutTile_O, ShoutTile_1, ShoutTile_2, ShoutTile_3, ShoutTile_4
     .byte ShoutTile_5, ShoutTile_6, ShoutTile_7, ShoutTile_8, ShoutTile_9

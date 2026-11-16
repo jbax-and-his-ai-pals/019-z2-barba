@@ -4,7 +4,7 @@
 ; NPCs ($0B, $0D..$0F, $22..$24, and all indoor actors) always keep their native routines.
 .segment "TOWN"
 .export TownUpdate, TownEligible, TownBurnable, TownOutdoorRooms, TownEnd, TownDialog, TownFearText, TownFearPointers, TownHide
-.export TownFastDialogReady, TownLetterDelay, TownLineDelay, TownAsh
+.export TownFastDialogReady, TownLetterDelay, TownLineDelay, TownAsh, TownDoorCoords, TownDoorEmerged, TownNativeTalk
 .include "ash_layout.inc"
 
 ; Native generator $96E0 clears AF before initializing each new actor.
@@ -14,11 +14,61 @@
 
 TownUpdate:
     jsr TownEligible
-    bcs @eligible
-    jsr TownBurnable
-    bcc @native
+    bcc :+
+    jmp @eligible
+:
     lda $05C3,x
     bne @native
+    lda $A1,x
+    cmp #$13
+    bcc @check_burnable
+    cmp #$19
+    bcs @check_burnable
+    ; House-openers ($13..$18) outside on the street (AF == 0) talk on B
+    ; (like vanilla) or held/pressed Up via TownCanTalk.
+    ; Healer/Magic ($17..$18) inside doorway (AF $40..$7F) intercept mode $16
+    ; to trigger native $99E6 heal/magic restore without stale $C9 blocking it.
+    lda $AF,x
+    beq @opener_outside
+    bmi @native
+    cmp #$40
+    bcc @native
+    lda $A1,x
+    cmp #$17
+    bcc @native
+    lda $0736
+    cmp #$16
+    bne @native
+    lda $4E,x
+    sec
+    sbc $4D
+    clc
+    adc #$20
+    cmp #$40
+    bcs @native
+    stx $048B
+    lda $A1,x
+    jmp $99E6
+@opener_outside:
+    lda $F5
+    and #$40
+    bne @opener_talk
+    lda TALK_LATCH
+    bne @native
+    lda $F7
+    and #$08
+    beq @native
+@opener_talk:
+    jsr TownCanTalk
+    bcc @native
+    stx $048B
+    lda #$01
+    sta TALK_LATCH
+    jsr $9A33
+    jmp $9A8A
+@check_burnable:
+    jsr TownBurnable
+    bcc @native
     lda $AF,x
     cmp #$C0
     bcc :+
@@ -67,15 +117,6 @@ TownUpdate:
     jmp TownAsh
 :
     cmp #$80
-    bne :+
-    ldy $A1,x
-    cpy #$19
-    bcs @canHit
-    ; Native $13..$18 house-openers spawn hidden inside a door with AF=$80, Y=$A8.
-    ; Keep them hidden inside instead of mistaking native $80 for TownFlee.
-    jmp TownHideOAM
-:
-    cmp #$82
     beq @canHit
     cmp #$00
     beq @canHit
@@ -121,11 +162,6 @@ TownUpdate:
     jmp @native
 :
     lda #$80
-    ldy $A1,x
-    cpy #$19
-    bcs :+
-    lda #$82
-:
     sta $AF,x
     jsr TownPickEscapeDir
 
@@ -216,7 +252,7 @@ TownPickEscapeDir:
 
 ; Derive the exact door column and page from LEA32's collision pointer ($DC/$DD)
 ; so the PPU door macro always targets the real doorway, even across page seams.
-TownDoorStart:
+TownDoorCoords:
     lda $DD
     sec
     sbc #$60
@@ -251,9 +287,30 @@ TownDoorStart:
     asl
     asl
     ldx $10
+TownDoorStore:
     sta $0599,x
     tya
     sta $059F,x
+    sec
+    rts
+
+; House-openers emerging from inside a house (L97F5, AF=$81) had $4E,x offset
+; by L9740,y before LEA32, so LEA32 can probe an adjacent column; recover their
+; real doorway directly from ($4E,x - L9740,y) and $3C,x.
+TownDoorEmerged:
+    ldy $60,x
+    lda $4E,x
+    sec
+    sbc $9740,y
+    and #$F0
+    ldy $3C,x
+    jmp TownDoorStore
+
+TownDoorStart:
+    jsr TownDoorCoords
+    bcs :+
+    rts
+:
     lda #$41
     sta $AF,x
     lda $71,x
@@ -499,8 +556,8 @@ TownAsh:
 @hide:
     jmp TownHide
 
-; Carry set iff this is a live outdoor villager ($10..$20 in world 1/2 outdoor room).
-; Story-necessary NPCs ($0B..$0F, $21..$24) and indoor actors are excluded.
+; Carry set iff this is a live outdoor villager ($10..$12 or $19..$20 in world 1/2 outdoor room).
+; Story-necessary NPCs ($0B..$0F, $13..$18 house-openers, $21..$24) and indoor actors are excluded.
 TownEligible:
     lda $B6,x
     cmp #$01
@@ -508,6 +565,11 @@ TownEligible:
     lda $A1,x
     cmp #$10
     bcc @no
+    cmp #$13
+    bcc @elig_world
+    cmp #$19
+    bcc @no
+@elig_world:
     cmp #$21
     bcs @no
     lda $0707
@@ -531,8 +593,8 @@ TownOutdoorRooms:
     .byte 1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1
 
 ; Carry set iff this is a live burnable person in world 1/2 (including
-; single-area non-town places and indoor rooms, excluding North Palace $3C
-; and invisible triggers $0C/$22-$24).
+; single-area non-town places and indoor rooms, excluding North Palace $3C,
+; house-openers $13..$18, and invisible triggers $0C/$22-$24).
 TownBurnable:
     lda $B6,x
     cmp #$01
@@ -551,12 +613,36 @@ TownBurnable:
     bcc @burn_no
     cmp #$0C
     beq @burn_no
+    cmp #$13
+    bcc :+
+    cmp #$19
+    bcc @burn_no
+:
     cmp #$22
     bcs @burn_no
     sec
     rts
 @burn_no:
     clc
+    rts
+
+; Native $9A2C check: press B (like vanilla) or Up (outside open doorways)
+; to talk to native NPCs ($13..$18 house-openers, $21 Error/Bagu, etc.).
+TownNativeTalk:
+    lda $F5
+    and #$40
+    bne @yes_talk
+    lda $C8
+    and #$06
+    bne @no_talk
+    lda $F5
+    and #$08
+    rts
+@yes_talk:
+    lda #$40
+    rts
+@no_talk:
+    lda #$00
     rts
 
 ; Carry set when a native live player projectile overlaps this actor's body.

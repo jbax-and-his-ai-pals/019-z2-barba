@@ -333,9 +333,9 @@ RoarPitch:
 .include "farcall.inc"
 
 .segment "LAVA"
-; Only palace groups use this new path. Water outside palaces retains its
-; exact original death state. Below-collision lets normal landing/jump code
-; snap to the lava surface, preventing a fall below the level.
+; Side-view encounters ($0707=0) and palaces ($0707>=3) use this surface path.
+; Town groups ($0707=1,2) retain the original death state. Below-collision lets
+; normal landing/jump code snap to the surface, preventing a fall below the level.
 LavaSurface:
     jsr FarCall0
     .word LavaSurfaceBody

@@ -5,7 +5,6 @@ BarbaBlocks:
     lda $0707
     beq @castle
     cmp #$03
-    beq @done
     bcs @blocks
     ; Town ($0707 = 1/2) or North Palace ($0707 = 0, $0706 = 0, $0561 = 0):
     ; advance scorch marks first.
@@ -29,7 +28,27 @@ BarbaBlocks:
 @extra:
     jsr BarbaExtraBlocks
 @done:
-    jmp BarbaSetThrusts ; restore held thrust after temporary projectile origins
+    jsr BarbaSetThrusts ; restore held thrust after temporary projectile origins
+    lda $0480
+    cmp #$F8
+    bcs @ret
+    ldy $80
+    cpy #$09
+    bne @up_block
+    pha
+    adc #$05            ; carry is clear from cmp #$F8
+    bcs @restore_down
+    cmp #$F8
+    bcs @restore_down
+    sta $0480
+    jsr $E1DD
+@restore_down:
+    pla
+    sta $0480
+@ret:
+    rts
+@up_block:
+    jmp $E1DD
 BarbaNativeBlocks:
     lda $8D
     ora $8E
@@ -182,22 +201,18 @@ BarbaTownBurn:
     asl
     asl
     pha
-    lda $39
-    and #$F0
-    sta $02
-    lda $5D
-    and #$F0
-    sta $03
     lda #$08
     sta $00
-    lda $02
+    lda $39
+    and #$F0
     asl
     rol $00
     asl
     rol $00
     and #$E0
     sta $01
-    lda $03
+    lda $5D
+    and #$F0
     lsr
     lsr
     lsr
@@ -244,16 +259,8 @@ BarbaTownBurn:
     pha
     lda $01
     pha
-    lda SCORCH_HI,x
-    sta $00
-    lda SCORCH_LO,x
-    sta $01
-    txa
-    pha
     ldy #$04
-    jsr ScorchQueue
-    pla
-    tax
+    jsr ScorchQueueSlot
     pla
     sta $01
     pla
@@ -265,17 +272,16 @@ BarbaTownBurn:
     sta SCORCH_LO,x
     lda $4B
     sta SCORCH_PAGE,x
-    txa
-    clc
-    adc #$01
-    and #SCORCH_MASK
-    sta SCORCH_HEAD
     lda #SCORCH_TOWN_TIME
     ldy $0707
     bne :+
     lda #SCORCH_PALACE_TIME
 :
     sta SCORCH_TIME,x
+    inx
+    txa
+    and #SCORCH_MASK
+    sta SCORCH_HEAD
     lda #$04
     sta $ED
     lda $0707
@@ -325,6 +331,19 @@ ScorchQueue:
     sta $0362
     lda #$01
     sta $0725
+    rts
+
+; Queue a 2x2 tile write for scorch slot X from ScorchTiles,Y, preserving X.
+ScorchQueueSlot:
+    lda SCORCH_HI,x
+    sta $00
+    lda SCORCH_LO,x
+    sta $01
+    txa
+    pha
+    jsr ScorchQueue
+    pla
+    tax
     rts
 
 ; Carry set if slot X's metatile is within [-16, +255] px of the camera ($072A/$072C).
@@ -393,16 +412,8 @@ ScorchRun:
     inc SCORCH_TIME,x       ; PPU queue full: retry next tick
     bne @next
 @char:
-    lda SCORCH_HI,x
-    sta $00
-    lda SCORCH_LO,x
-    sta $01
-    txa
-    pha
     ldy #$04
-    jsr ScorchQueue
-    pla
-    tax
+    jsr ScorchQueueSlot
 @next:
     dex
     bpl @entry
@@ -410,13 +421,10 @@ ScorchRun:
     bne @anim
     rts
 @anim:
-    lda #$00
-    ldy $12
-    tya
+    lda $12
+    tay
     and #$08
-    beq :+
-    lda #$10
-:
+    asl
     sta $02                 ; $00 = flame A, $10 = flame B
     tya
     and #$07
@@ -432,16 +440,8 @@ ScorchAnimOne:
     lda $0362
     cmp #$28
     bcs @skip_anim
-    lda SCORCH_HI,x
-    sta $00
-    lda SCORCH_LO,x
-    sta $01
-    txa
-    pha
     ldy $02
-    jsr ScorchQueue
-    pla
-    tax
+    jsr ScorchQueueSlot
 @skip_anim:
 @anim_done:
     rts

@@ -44,9 +44,11 @@ BarbaGeometry:
     bne @standing
     jmp @duck
 @standing:
-    ; When grounded on palace lava, submerge the lower body: shift the head
-    ; and upper neck down 16px into the native box and omit the bottom row.
+    ; When grounded on palace lava or swamp water ($0752 != 0), submerge the
+    ; lower body: shift the head and upper neck down 16px into the native box
+    ; and omit the bottom row.
     lda LAVA_CONTACT
+    ora $0752
     beq @not_lava
     lda $0479
     bne @not_lava
@@ -223,7 +225,7 @@ BarbaDisplay:
     lda #$F8
     sta $0204
     sta $024C
-    sta $02F8
+    sta $02C4
     lda $13
     ora $048D
     bne @fallback
@@ -374,9 +376,9 @@ BarbaDisplay:
     bcs @l_mid
     sta $00
     ldy DRAW_ATTR
-    TALL_SPRITE 0, $0204, 0
+        TALL_SPRITE 0, $0204, 0
     TALL_SPRITE 1, $024C, 8
-    TALL_SPRITE 2, $02F8, 16
+    TALL_SPRITE 2, $02C4, 16
 @l_mid:
     lda $01
     bne @l_bot
@@ -464,14 +466,14 @@ BarbaDisplay:
     cmp #$02
     beq @no_rot
     ; Alternate OAM priority on odd frames in combat/palaces: swap outer head
-    ; tiles ($0204 <-> $02F8) and swap lower body ($0214..$021F) with enemy
+    ; tiles ($0204 <-> $02C4) and swap lower body ($0214..$021F) with enemy
     ; slot 5 ($02C8..$02D3) when enemies are active so Barba, fireballs, and
     ; enemies share 8-sprite drops.
     ldx #$03
 @rot_head:
     lda $0204,x
-    ldy $02F8,x
-    sta $02F8,x
+    ldy $02C4,x
+    sta $02C4,x
     tya
     sta $0204,x
     dex
@@ -512,9 +514,9 @@ BarbaDisplay:
     bcs @r_mid
     sta $00
     ldy DRAW_ATTR
-    TALL_SPRITE 2, $0204, 0
+        TALL_SPRITE 2, $0204, 0
     TALL_SPRITE 1, $024C, 8
-    TALL_SPRITE 0, $02F8, 16
+    TALL_SPRITE 0, $02C4, 16
 @r_mid:
     lda $01
     bne @r_bot

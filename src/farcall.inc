@@ -115,17 +115,20 @@ FarCall0Finish:
     pla
     jmp FarCall0Return
 
-; Move the cold hazard body out of the fixed bank. C retains the original
-; CMP #3 result: palace goes to $E12B, water returns to the original caller.
+; Move the cold hazard body out of the fixed bank. C=1 for encounters ($0707=0)
+; and palaces ($0707>=3) so LavaSurface continues to $E12B; C=0 for towns
+; ($0707=1,2), returning to the original caller with the death state.
 LavaSurfaceBody:
     lda $0707
+    beq @surface
     cmp #$03
     bcc @water
+@surface:
     lda #$04
     sta LAVA_CONTACT
-    lda $A7
-    ora #$04
+    ora $A7
     sta $A7
+    sec
     rts
 @water:
     lda #$01

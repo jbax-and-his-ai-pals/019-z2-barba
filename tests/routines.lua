@@ -47,11 +47,11 @@ for group=0,5 do
     add('hazard group '..group,'lava',function()
         w(0x707,group);w(0xB5,1);w(0xA7,2);w(0xE9,7);w(0x50C,0);w(0x769,4)
     end,function()
-        if group>=3 then
-            check(r(0xB5)==1 and r(0xA7)==6,'palace lava sets floor without entering death state')
-            check(r(0x50C)==0 and r(0xE9)==7,'lava does not trigger injury or hazard flag')
+        if group==0 or group>=3 then
+            check(r(0xB5)==1 and r(0xA7)==6,'encounter/palace hazard sets floor without entering death state')
+            check(r(0x50C)==0 and r(0xE9)==7,'encounter/palace hazard does not trigger injury or hazard flag')
         else
-            check(r(0xB5)==2 and r(0x50C)==16 and r(0xE9)==1,'water retains original death state')
+            check(r(0xB5)==2 and r(0x50C)==16 and r(0xE9)==1,'town water retains original death state')
         end
     end)
 end
@@ -100,7 +100,7 @@ end
 -- The palace path deliberately continues to normal horizontal collision.
 -- Observe it before that unrelated code runs, then return to the harness.
 emu.addMemoryCallback(function()
-    if phase=='lava' and r(0x707)>=3 then
+    if phase=='lava' and (r(0x707)==0 or r(0x707)>=3) then
         emu.setState({['cpu.pc']=0x0606})
     end
 end,emu.callbackType.exec,0xE12B)
