@@ -358,6 +358,7 @@ RoarPitch:
 .include "shouts.inc"
 .include "town.inc"
 .include "sign.inc"
+.include "scales.inc"
 .include "farcall.inc"
 
 .segment "LAVA"

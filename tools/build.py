@@ -413,6 +413,10 @@ def build(source_path: Path, output: Path) -> dict:
         overlay.put(offset, new_palette, old_palette, f'Dragon palette at {offset:05X}')
     # Strided WRAM flash-restore palette table ($69CE/$69D4/$69DA + 4) and side-view init ($90D9).
     overlay.prg(0, 0x90DA, b'\x30', b'\x2A', 'Dragon palette restore ($69DE) on side-view init')
+    # SCALES (Shield): vanilla turns colour 3 red ($16), which Barba already is. Keep the white belly (byte still sets the $070F flag);
+    # src/scales.inc turns the outline navy and the body sky blue.
+    # instead; the same byte is the $070F active flag (src/scales.inc adds the cast/hit feedback).
+    overlay.prg(0, 0x8E8E, b'\x30', b'\x16', 'SCALES white belly colour ($69DE/$070F)')
     overlay.prg(0, 0xA9FA, b'\x16', b'\x18', 'Dragon flash-restore palette color 1 ($69D2)')
     overlay.prg(0, 0xAA00, b'\x27', b'\x36', 'Dragon flash-restore palette color 2 ($69D8)')
     overlay.prg(0, 0xAA06, b'\x30', b'\x2A', 'Dragon flash-restore palette color 3 ($69DE)')

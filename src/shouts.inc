@@ -47,6 +47,7 @@ BarbaShouts6:
     pha
     tya
     pha
+    jsr ScalesHop       ; SCALES cast/hit feedback (bank 3, src/scales.inc)
     lda SHOUT_READY
     cmp #$01
     beq @scene

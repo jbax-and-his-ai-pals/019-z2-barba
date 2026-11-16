@@ -24,7 +24,7 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
   extra_fire, left_fire, damage, hud_timing, breath_height, town, town_safety, shouts,
   shout_follow, doors, dialogue_speed, perf_volley, perf_lava, link_boss, dark_link,
   shield_enemies, title_roar, overworld_side, farcall, town_fire, town_combo,
-  castle_zelda_burn, sign_burn, upstab, perf_upward, look_up, ending, horsehead, helmethead, rebonack, carock,
+  castle_zelda_burn, sign_burn, upstab, perf_upward, look_up, ending, scales, horsehead, helmethead, rebonack, carock,
   gooma, opener_far, lava_link_kill, stomp, geldarm, encounter_hazard, heal_door, spell_door, stab_blocks,
   swamp_submerge, town_nontown_burn, inferno, overworld_fire, forest_burn_limit, meteor, perf_meteor, death_continue, plus `state_pack` via create_test_pack.
   (`newgame.lua` and `checkpoint_features.lua` are shared helpers, not scenarios. Check each `build/<name>.txt`
@@ -56,6 +56,7 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
 | `src/dark_barba.inc` | bank 5 24x48 Dark Barba renderer and Triforce-hold pose |
 | `src/town*.inc`, `shouts.inc`, `ash_layout.inc` | fleeing/burning villagers, panic dialogue and shouts |
 | `src/sign.inc` | bank 3 pad: burned-sign mark and rotating burned-sign text |
+| `src/scales.inc` | SCALES (Shield): bank-6 hop to bank-3 `ScalesTick`; navy outline + sky-blue body, cast roar/decor flash, shielded-hit clang/flash |
 | `tools/build.py` | assemble + guarded patch list (all hooks are listed here) |
 | `tools/assets.py`, `assets/*.json` | sprite compilation; `tools/boss_art.py` extracts boss tiles |
 | `tools/state_scenarios.lua` | builds the F-key checkpoints (scene list must match `create_test_pack.py` and `tests/state_pack.lua`) |
@@ -66,7 +67,7 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
 - ROM: bank 0 `$A89E-$A97D` (BANK0_OW; `BarbaSplitBurnForest` + `BurnAbort`; 1 free) + `$AA40-$BF6F` (BANK0; 4 free) +
   reclaimed dead vanilla bank-0 code `$81C1-$81E4`, `$97F1-$9814`, `$9847-$9877` (METEOR; 0/1/0 free respectively; originals guarded) +
   bank 1 `$9EB9-$9FFF` (BANK1, vanilla pad after Geldarm draw code; `geldarm.inc`; 240 free) +
-  `$BFE0-$BFF9` (BANK0_TAIL, vanilla pad before vectors; `BurnMapEndGuard`, 1 free), bank 3 `$9D0A-$9FFF` (BANK3_SIGN, vanilla pad `bank3_UNUSED_9D0A`; `sign.inc` + `TownOpenerGate`, 474 free; more vanilla pad untouched at `$8BB1-$90EF` and `$9134-$93FF`), bank 3 `$B803-$BF6F` (TOWN; 2 free), bank 6 `$BA00-$BF6F` (BANK6; `shouts.inc` + `combo.inc`; 16 free), bank 5 `$BDE0-$BF5F` (BANK5; `dark_barba.inc` + `HiddenJarHit`; 33 free).
+  `$BFE0-$BFF9` (BANK0_TAIL, vanilla pad before vectors; `BurnMapEndGuard`, 1 free), bank 3 `$9D0A-$9FFF` (BANK3_SIGN, vanilla pad `bank3_UNUSED_9D0A`; `sign.inc` + `TownOpenerGate` + `ScalesTick`, 373 free; more vanilla pad untouched at `$8BB1-$90EF` and `$9134-$93FF`), bank 3 `$B803-$BF6F` (TOWN; 2 free), bank 6 `$BA00-$BF6F` (BANK6; `shouts.inc` + `combo.inc` + `ScalesHop`; 2 free), bank 5 `$BDE0-$BF5F` (BANK5; `dark_barba.inc` + `HiddenJarHit`; 33 free).
   Bank 4 `$A765-$A8FF` is vanilla `$FF` pad patched by raw bytes in `build.py`: Lava Link helpers `$A765-$A7A8`,
   `CarockHit` `$A7B0-$A7BE`, `HiddenJarHit` `$A7BF-$A7CF`; `$A7D0-$A8FF` free.
   Fixed bank 7: LAVA `$D39A-$D3C9` (0 free), GATEWAY `$FEAA-$FECF` (0 free),
@@ -74,7 +75,7 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
   hooks at 5 fixed bytes/call (6 with standalone RTS), 369-482 bridge cycles plus target work;
   see `docs/BUILD.md` for ABI/recipe and `docs/FIXED-BANK-AUDIT.md` for ownership/padding evidence.
   No new fixed-bank padding was claimed. Never allocate live JMP operands `$FF4B` or `$E02C`.
-- RAM `$05EA`, `$05EB` (lava contact), `$05F0-$05FF` (roar, breath, tall renderer, extra guard). Cleared by the native reset loop.
+- RAM `$05EA`, `$05EB` (lava contact), `$05EC`/`$05ED` (SCALES cast latch / last injured timer), `$05F0-$05FF` (roar, breath, tall renderer, extra guard). Cleared by the native reset loop.
 - WRAM `$6400-$642F` extra projectile records; `$6440-$645F` scratch (`$6457` lazy-save flag,
   `$6458-$645F` geometry terrain cache, `$645C` EXTRA_LIVE); `$6460-$6469` shouts (`$6465` actor, `$6467` word, `$6468` timer, `$6469` cycle); `$646A` + `$6490-$64D0` town scorch ring (16-slot FIFO + head/page); `$646B` volley aim latch (0 forward / $40 upward); `$646C-$646F` + `$6488` town combo banner; `$6470-$6473` Inferno firestorm (`$6470` timer, `$6473` wave aim) and overworld flame (`$6471` timer, `$6472` dir); `$6474` METEOR dive state; `$64D1` `SIGN_PENDING` (sign board scorched, cleared with the ring). Actor byte `$04A0,x` = burned-sign line for sign readers `$21`/`$22` (native spawn clears it). Don't touch collision/room/save regions elsewhere in `$6000-$7FFF`.
 - OAM in use: tall head `$04/$4C/$C4`, extra fireballs `$3C/$44/$48`; enemy projectiles use `$28/$2C/$30`;
@@ -89,8 +90,8 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
 
 The game logic runs in NMI. Over about 29.7k cycles the next frame lags. Vanilla peaks near 26.6k
 with 6 enemies. Palace 1 `perf_volley.lua` probe (with direct `BarbaExtraBlocks` and `BarbaLoadOk`
-2-shot cap for `>= 2` enemies): idle avg/peak 15,862/16,086 cycles, volley 19,373/25,533 (2026-11-15,
-fire-class breath), lag 0/300 idle and **0/900 volley**, `nearBudget(>27000)=0`. `perf_meteor.lua`
+2-shot cap for `>= 2` enemies): idle avg/peak 15,980/16,204 cycles, volley 19,491/25,652 (2026-11-16,
+fire-class breath, incl. per-frame `ScalesTick`), lag 0/300 idle and **0/900 volley**, `nearBudget(>27000)=0`. `perf_meteor.lua`
 (same room, slam + volley every 90 frames): 17,353/19,142, 0/900 lag, 10 slams / 2 waves (`MeteorEmit`
 uses `BarbaLoadOk`, throttling waves when an active volley already holds 2 shots in a busy room). Palace 3 room `$0D` (2 Ironknuckles
 + breakable blocks) drops from 28,095 avg / 30,049+ peak (4 lag frames) to 25,338 avg / 28,155
