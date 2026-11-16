@@ -12,7 +12,8 @@ from assets import (ASH_TILES, CASTLE_FIRE_BANK, CASTLE_FIRE_TILE_SHA256,
                     TITLE_CHR_BANK, TITLE_TILE_SHA256,
                     TOWN_FIRE_BANK, TOWN_FIRE_TILE_SHA256,
                     TEXT_GLYPH_BANK, TEXT_GLYPH_SHA256, TEXT_GLYPHS,
-                    compile_assets, compile_castle_fire,
+                    BREATH_ICON_BANKS, BREATH_ICON_SHA256, BREATH_ICON_TILE,
+                    compile_assets, compile_breath_icon, compile_castle_fire,
                     compile_castle_shout_glyphs, compile_file_select_doll,
                     compile_shout_glyphs, compile_text_glyphs, compile_title_logo,
                     compile_town_fire)
@@ -232,6 +233,16 @@ def build(source_path: Path, output: Path) -> dict:
         if hashlib.sha256(original).hexdigest()[:16] != TEXT_GLYPH_SHA256[tile]:
             raise ValueError(f'Text glyph tile {tile:02X} is not the audited original')
         overlay.put(offset, data, original, f'CHR {TEXT_GLYPH_BANK:02X}: dialogue glyph {tile:02X}')
+    # Level-up pane: ATTACK -> BREATH (same six tiles) and the sword icon -> fireball.
+    overlay.prg(0, 0x9BE9, bytes.fromhex('db eb de da ed e1'), bytes.fromhex('da ed ed da dc e4'),
+                'Level-up pane label BREATH')
+    breath_icon = compile_breath_icon()
+    for bank in BREATH_ICON_BANKS:
+        offset = CHR_OFFSET + bank*4096 + BREATH_ICON_TILE*16
+        original = source[offset:offset+16]
+        if hashlib.sha256(original).hexdigest()[:16] != BREATH_ICON_SHA256:
+            raise ValueError(f'Breath icon tile {bank:02X}:{BREATH_ICON_TILE:02X} is not the vanilla sword')
+        overlay.put(offset, breath_icon, original, f'CHR {bank:02X}: level-up breath icon {BREATH_ICON_TILE:02X}')
     # North Palace sleeping-princess scorch marks & Barba shout glyphs in CHR bank 3.
     for tile, data in sorted(compile_castle_fire(ROOT).items()):
         offset = CHR_OFFSET + CASTLE_FIRE_BANK*4096 + tile*16

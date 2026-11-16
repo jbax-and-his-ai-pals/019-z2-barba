@@ -197,6 +197,29 @@ TEXT_GLYPHS = {
 TEXT_GLYPH_SHA256 = {0x35: '374708fff7719dd5'}   # blank in vanilla bank 7
 
 
+# Level-up pane / File Select attack icon: BG tile $C9 (vanilla sword) in every
+# odd side-view BG bank $01-$19, redrawn as an original fireball. The level-up
+# pane draws it once per attack level (bank 0 $9E23); File Select draws it
+# beside each save's levels (bank 5 $BC4E). The status bar never uses it.
+# Pixel values: 1 = white core, 2 = font shade, 3 = red (heart colour).
+BREATH_ICON_TILE = 0xC9
+BREATH_ICON_BANKS = tuple(range(1, 26, 2))
+BREATH_ICON_SHA256 = '1dd9fbe8bb7dd961'   # vanilla sword, identical in all 13 banks
+BREATH_ICON = ["00300030",   # flame-crowned fireball (picked 2026-11-16)
+               "03303330",
+               "03313130",
+               "33111133",
+               "31111113",
+               "31111113",
+               "03111130",
+               "00333300"]
+
+
+def compile_breath_icon() -> bytes:
+    """Encode the level-up BREATH fireball icon (original pixels)."""
+    return encode_tile(BREATH_ICON)
+
+
 def compile_text_glyphs() -> dict[int, bytes]:
     """Encode authored dialogue glyphs (original pixels) for TEXT_GLYPH_BANK."""
     if set(TEXT_GLYPHS) != set(TEXT_GLYPH_SHA256) or set(TEXT_GLYPHS) & set(TOWN_FIRE_TILE_SHA256):
