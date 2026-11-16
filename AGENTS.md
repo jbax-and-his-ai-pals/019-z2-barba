@@ -60,12 +60,12 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
 
 ## Free space and RAM in use (check before allocating)
 
-- ROM: bank 0 `$A89E-$A97D` (BANK0_OW; `BarbaSplitBurnForest`) + `$AA40-$BF6F` (BANK0; 12 free) +
-  reclaimed dead vanilla bank-0 code `$81C1-$81E4`, `$97F1-$9814`, `$9847-$9877` (METEOR; 0 free; originals guarded) +
+- ROM: bank 0 `$A89E-$A97D` (BANK0_OW; `BarbaSplitBurnForest` + `BurnAbort`; 1 free) + `$AA40-$BF6F` (BANK0; 0 free) +
+  reclaimed dead vanilla bank-0 code `$81C1-$81E4`, `$97F1-$9814`, `$9847-$9877` (METEOR; 0/1/0 free respectively; originals guarded) +
   bank 1 `$9EB9-$9FFF` (BANK1, vanilla pad after Geldarm draw code; `geldarm.inc`; 240 free) +
-  `$BFE0-$BFF9` (BANK0_TAIL, vanilla pad before vectors; `BurnMapEndGuard`, 0 free), bank 3 `$B803-$BF6F` (TOWN; 125 free), bank 6 `$BA00-$BF6F` (BANK6; `shouts.inc` + `combo.inc`).
+  `$BFE0-$BFF9` (BANK0_TAIL, vanilla pad before vectors; `BurnMapEndGuard`, 1 free), bank 3 `$B803-$BF6F` (TOWN; 8 free), bank 6 `$BA00-$BF6F` (BANK6; `shouts.inc` + `combo.inc`; 16 free), bank 5 `$BDE0-$BF5F` (BANK5; `dark_barba.inc` + `HiddenJarHit`; 33 free).
   Bank 4 `$A765-$A8FF` is vanilla `$FF` pad patched by raw bytes in `build.py`: Lava Link helpers `$A765-$A7A8`,
-  `CarockHit` `$A7B0-$A7BE`; `$A7BF-$A8FF` free.
+  `CarockHit` `$A7B0-$A7BE`, `HiddenJarHit` `$A7BF-$A7CF`; `$A7D0-$A8FF` free.
   Fixed bank 7: LAVA `$D39A-$D3C9` (0 free), GATEWAY `$FEAA-$FECF` (0 free),
   TERRAIN `$FF4C-$FF6E` (1 free). `FarCall0` provides cold bank-0
   hooks at 5 fixed bytes/call (6 with standalone RTS), 369-482 bridge cycles plus target work;
@@ -86,15 +86,23 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
 
 The game logic runs in NMI. Over about 29.7k cycles the next frame lags. Vanilla peaks near 26.6k
 with 6 enemies. Palace 1 `perf_volley.lua` probe (with direct `BarbaExtraBlocks` and `BarbaLoadOk`
-2-shot cap for `>= 2` enemies): idle avg/peak 15,860/16,084 cycles, volley 19,369/25,533 (2026-11-15,
+2-shot cap for `>= 2` enemies): idle avg/peak 15,862/16,086 cycles, volley 19,373/25,533 (2026-11-15,
 fire-class breath), lag 0/300 idle and **0/900 volley**, `nearBudget(>27000)=0`. `perf_meteor.lua`
-(same room, slam + volley every 90 frames): 17,862/20,745, 0/900 lag, 10 slams / 20 waves. Palace 3 room `$0D` (2 Ironknuckles
+(same room, slam + volley every 90 frames): 17,353/19,142, 0/900 lag, 10 slams / 2 waves (`MeteorEmit`
+uses `BarbaLoadOk`, throttling waves when an active volley already holds 2 shots in a busy room). Palace 3 room `$0D` (2 Ironknuckles
 + breakable blocks) drops from 28,095 avg / 30,049+ peak (4 lag frames) to 25,338 avg / 28,155
 peak (0 lag frames). `BarbaDisplay` bypasses
 `$EBF0` on normal frames (using `$F27D` + unrolled 9-sprite
 draw) and `BarbaGeometry` caches `TerrainBatch` in `$6458-$645F`, cutting display cost from ~4.0k
 to ~1.2k cycles/frame. `BarbaLoadOk` uses `LOAD_LIMIT = 7` and caps queued shots at 2 live shots
 when 2+ enemies are active.
+
+Audit resolution (2026-11-15): six-Bot METEOR + volley stress now runs at **0/900 lag**
+(`maxLiveShots = 1`, peak `28,983` cycles), down from `160/900` lag, with `BarbaLoadOk` gating
+`BarbaFireSpell` and `MeteorEmit`. All 9 audit findings in `docs/AUDIT-2026-11-15.md` (Thunderbird
+Inferno softlock, METEOR load governor, Dark Barba tile table + shadow palette, hidden red jars,
+checkpoint room/palette fixes, test failure propagation, town scorch page aliasing, refused forest
+burn PPU cancel, and Geldarm stomp sink) are resolved and verified.
 
 ## Status and docs (read only what you need)
 
@@ -110,7 +118,7 @@ when 2+ enemies are active.
 When you finish a task: update the one relevant doc plus STATUS.md, and keep this file's
 memory map and perf facts current. Then hand the producer a short playtest: what changed, which F-key, what to look for.
 
-Upstab branch performance: standard volley peak 30,158 (+39 versus 262501a), unchanged 1/900 lag;
-lava peak 21,699 (+22), 0/300 lag. Six-active-Bot `perf_upward`: 27,839 peak, 0/900 lag,
-25 upward emissions (base forward 27,888). `BarbaSetThrusts` restores rising technique-gated
+Historical upstab branch performance: standard volley peak 30,158 (+39 versus 262501a), unchanged 1/900 lag;
+lava peak 21,699 (+22), 0/300 lag. Current fresh-audit six-active-Bot `perf_upward`: 28,829 peak, 0/900 lag,
+25 upward emissions. `BarbaSetThrusts` restores rising technique-gated
 head-butt after block checks; `VOLLEY_SLOT` bit 6 up, bit 7 crouch, low 6 bits lifetime.

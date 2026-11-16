@@ -18,11 +18,11 @@ Press the same key again at any time to restart that test and refill its meters.
 | F3 | All spells and techniques | Safe castle, full health/magic, all spells and both thrusts. Inferno is selected: Left Shift casts it. Use Enter for the spell menu; reload F3 to refill or leave the flying form. |
 | F4 | Palace 6 lava ledge | Walk right into the lava, stop, move, jump and return. |
 | F5 | Standing on lava | Already on the lava surface. Check for sinking and test jumps immediately. |
-| F6 | Palace 6 Barba encounter | Original Barba is above the lava. Test player/boss graphics, attacks and movement around the platforms. Ice Barba is not implemented. |
+| F6 | Palace 6 boss encounter | Test the playable dragon against Lava Link in Palace 6. |
 | F7 | Sea crossing in progress | Watch the dragon complete the normal raft route to East Hyrule. Reload F7 to repeat. |
-| F8 | Rauru town street | Approach outdoor wanderers, watch slower fleeing/immediate door despawn, and test fireballs. Watch automatic shouts and ash piles; hold Up while approaching for faster dialogue. Scripted and indoor NPCs are protected. |
+| F8 | Rauru town street | Approach random outdoor wanderers, watch them flee, and test fireballs and town scorch/combo. |
 | F9 | Before Palace 6 boss | Left edge of the boss room with level 8 attack/magic/life, all spells and full meters. Walk right to start the fight against Lava Link. |
-| F10 | Great Palace final boss | Low-ceiling corridor before Thunderbird and Dark Link with max stats, all spells and full meters. Test `INFERNO`, Dark Link combat and ending progression. |
+| F10 | Great Palace final boss | Great Palace room $35 corridor before Thunderbird and Dark Link with max stats, all spells and full meters. Test `INFERNO`, Dark Link combat and ending progression. |
 
 Controls: arrows move, **X** jumps, **Z** attacks, **Enter** starts/pauses, and
 **Left Shift** is Select/cast. State-load keys work independently of the game menu.
@@ -168,7 +168,7 @@ itself (no door to walk through) with that boss's pre-boss loadout. Reload the k
 | F4 | Carock (Palace 4) | world 4, room $1C, page 0 | p4boss |
 | F5 | Gooma (Palace 5) | world 3, room $29, page 0 | p5boss |
 | F6 | Lava Link (Palace 6) | world 4, room $3A, page 0 | p6boss |
-| F7 | Thunderbird (Great Palace) | world 5, room $36, page 0 | gp |
+| F7 | Thunderbird (Great Palace) | world 5, room $35, page 0 | gp |
 | F8 | Dark Link (Great Palace) | world 5, room $36, page 1 | gp |
 
 Rooms match the boss scenarios in tests/ (horsehead.lua ... dark_link.lua). Dark Link's
@@ -198,8 +198,8 @@ returns: the fight is already live. F9/F10 are unused.
 | F2 | Palace 1 low tunnel (world 3, room $03, entry 1, x=288, y=176) | p1boss; keys 0 | Walk and crouch under the ceiling. |
 | F3 | Palace 1 elevator shaft (world 3, room $01, entry 0, x=112, y=160) | p1; keys 0 | Start on the native elevator. Hold Down to descend; Up to return. |
 | F4 | Palace 2 floor corridor (world 3, room $14, entry 1) | p2boss; keys 0 | Inspect floor and jump clearance. |
-| F5 | West Hyrule water bridge (world 0, room $01, native right-hand entry) | saria; keys 0 | Cross the bridge, test jumps and crouch clearance; water remains lethal. |
-| F6 | Medicine cave collapsing bridge (world 0, room $0E, native left-hand entry) | p3; keys 0 | Cross the collapsing bridge above lava; non-palace lava is lethal. |
+| F5 | West Hyrule water bridge (world 0, room $01, native right-hand entry) | saria; keys 0 | Cross the bridge, test jumps, crouch clearance, and water surface wading. |
+| F6 | Medicine cave collapsing bridge (world 0, room $0E, native left-hand entry) | p3; keys 0 | Cross the collapsing bridge above lava and test lava surface recovery. |
 | F7 | Palace 6 drop-shaft edge (world 4, room $28, entry 1, x=300, y=176) | p6boss; keys 0 | Stand safely at the gap; jump across or fall to the lower room. This is not a lethal bottomless pit. |
 
 ### Evidence, omissions and limits

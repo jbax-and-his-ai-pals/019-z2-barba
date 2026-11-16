@@ -115,7 +115,18 @@ BarbaStomp:
     sta $ED
     lda #$00
     sta $C2,x
+    lda $0707
+    ora $0706
+    bne @kill_now
+    lda $A1,x
+    cmp #$20
+    bne @kill_now
+    lda #$00
+    sta $AF,x
+    beq @bounce
+@kill_now:
     jsr $E880
+@bounce:
     lda #$FC
     sta $057D
     lda #$01

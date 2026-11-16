@@ -231,6 +231,9 @@ BarbaTownBurn:
     bne @next_find
     lda SCORCH_HI,x
     cmp $00
+    bne @next_find
+    lda SCORCH_PAGE,x
+    cmp $4B
     beq @skip
 @next_find:
     dex

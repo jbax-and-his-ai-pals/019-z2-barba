@@ -89,6 +89,7 @@ local function tick()
         for i=1,#snap do if snap[i]~=now[i] then same=false break end end
         check(guardCalls==1,'at limit: guard ran for the second burn (calls='..guardCalls..')')
         check(same,'at limit: overworld map bytes and row pointers unchanged')
+        check(r(0x0301)==0 and r(0x0302)==0xFF,'at limit: refused burn cancelled PPU redraw queue ($0301=0, $0302=$FF)')
         check(r(0x0736)==5,'at limit: still on the overworld (mode $0736 = '..r(0x0736)..')')
         phase='alive'
         actionFrame=frame

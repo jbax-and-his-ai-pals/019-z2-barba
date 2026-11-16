@@ -21,6 +21,7 @@ local maxDelta=0
 local sawHurtTimer=false
 local sawDeath=false
 local sawTallDarkBarba=false
+local sawShadowPalette=false
 local sawVictory=false
 local stompCheckFrame=nil
 local stompSurvived=false
@@ -96,6 +97,9 @@ emu.addEventCallback(function()
                 end
                 if r(0x81)<6 and r(0x026C)==(r(0x2A)-0x10) then
                     sawTallDarkBarba=true
+                    if r(0x0753)==2 and (r(0x0252)&3)==2 then
+                        sawShadowPalette=true
+                    end
                 end
             elseif phase>=4 then
                 sawVictory=true
@@ -104,6 +108,15 @@ emu.addEventCallback(function()
     end
     if (frame==3200 or sawVictory) and not finished then
         finished=true
+        local prg=emu.memType.nesPrgRom
+        local tilesMatch=LABELS and LABELS.DarkBarbaTiles and LABELS.BarbaTallTiles
+        if tilesMatch then
+            for i=0,116 do
+                local a=emu.read(5*0x4000+LABELS.DarkBarbaTiles-0x8000+i,prg)
+                local b=emu.read(LABELS.BarbaTallTiles-0x8000+i,prg)
+                if a~=b then tilesMatch=false break end
+            end
+        end
         report:write(string.format('frame=%d startHp=%s lastHp=%s hits=%d maxDelta=%d\n',
             frame,tostring(startHp),tostring(lastHp),hits,maxDelta))
         check(sawTrigger,'Dark Link (0x23) spawned in Great Palace')
@@ -114,9 +127,11 @@ emu.addEventCallback(function()
         check(sawDeath,'Dark Link reached 0 HP with death state ($050D == 0xFF)')
         check(stompSurvived,'Descending onto 4-HP Dark Barba does not stomp-kill him')
         check(sawTallDarkBarba,'Dark Barba renders 24x48 tall top row ($026C at Y - 16)')
+        check(sawShadowPalette,'Dark Barba uses shadow palette 2 ($0753 == 2, OAM attr & 3 == 2)')
+        check(tilesMatch,'DarkBarbaTiles matches BarbaTallTiles across all 117 tile bytes')
         check(sawVictory,'Dark Link defeat triggered victory phase ($63 >= 4)')
         report:write('RESULT '..(errors==0 and 'PASS' or 'FAIL')..string.char(10))
         report:close()
-        emu.stop()
+        stopScenario(errors==0 and 0 or 1)
     end
 end,emu.eventType.endFrame)

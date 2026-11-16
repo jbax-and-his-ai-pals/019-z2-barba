@@ -1,9 +1,11 @@
 ; Bank 5 helpers for Dark Link ("Dark Barba") 24x48 rendering and
 ; post-Dark-Link Triforce-hold height/position alignment.
 .segment "BANK5"
-.export DarkBarbaDraw, DarkBarbaTriforcePose
+.export DarkBarbaDraw, DarkBarbaTriforcePose, HiddenJarHit
 
 DarkBarbaDraw:
+    lda #$02
+    sta $0753
     jsr $EC02
     lda #$F8
     sta $026C
@@ -90,19 +92,9 @@ DarkBarbaDraw:
     .byte $02, $01, $00, $05, $04, $03, $08, $07, $06
 
 DarkBarbaTiles:
-    .byte $00, $02, $04, $F5, $06, $08, $0A, $0C, $0E ; walk0
-    .byte $00, $02, $04, $F5, $10, $12, $14, $16, $18 ; walk1
-    .byte $00, $02, $04, $0A, $0C, $0E, $F5, $06, $08 ; walk2
-    .byte $00, $02, $04, $F5, $06, $08, $0A, $0C, $0E ; idle
-    .byte $1A, $1C, $04, $F5, $06, $08, $0A, $0C, $0E ; windup
-    .byte $1E, $20, $22, $F5, $06, $08, $0A, $0C, $0E ; attack
-    .byte $F5, $F5, $F5, $F5, $24, $26, $28, $2A, $2C ; crouch
-    .byte $F5, $F5, $F5, $2E, $30, $26, $34, $36, $38 ; crouch-attack
-    .byte $3A, $3C, $3E, $40, $42, $44, $46, $48, $4A ; up
-    .byte $F5, $06, $08, $4C, $4E, $56, $58, $5A, $5C ; down
-    .byte $1A, $1C, $04, $F5, $10, $12, $14, $16, $18 ; hurt
-    .byte $F5, $F5, $F5, $F5, $24, $26, $28, $2A, $2C ; death
-    .byte $00, $02, $04, $0A, $0C, $0E, $F5, $06, $08 ; jump
+.scope
+.include "tall_layout.inc"
+.endscope
 
 ; Render 48px Barba looking up ($08) and raise only the Triforce 16px above his head
 ; (leaving $2A at $B0 so the old man stays on the floor; $91 is enemy 0's rotating OAM base).
@@ -117,4 +109,16 @@ DarkBarbaTriforcePose:
     sbc #$10
     sta $0208,y
     sta $020C,y
+    rts
+
+; Hooked at $A525 in Great Palace Hidden Red Jar ($A521).
+HiddenJarHit:
+    lda #$FF
+    sta $C2,x
+    jsr $E677
+    lda $A8,x
+    and #$20
+    bne @done
+    jmp $E48B
+@done:
     rts

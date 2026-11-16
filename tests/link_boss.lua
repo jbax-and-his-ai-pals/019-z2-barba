@@ -120,6 +120,6 @@ emu.addEventCallback(function()
         check(bossHits>0 and hurtSfx==bossHits,'Link hurt sound once per boss hit (hits '..bossHits..', sounds '..hurtSfx..')')
         report:write('RESULT '..(errors==0 and 'PASS' or 'FAIL')..'\n')
         report:close()
-        emu.stop()
+        stopScenario(errors==0 and 0 or 1)
     end
 end,emu.eventType.endFrame)

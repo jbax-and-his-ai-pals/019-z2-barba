@@ -20,6 +20,7 @@ local phases={
     {name='left-facing fireball hits full-height Geldarm',dir=2,duck=false,dx=-44,busy=false},
     {name='extra-slot fireball hits full-height Geldarm',dir=1,duck=false,dx=68,busy=true},
     {name='attack-1 fireball wounds Geldarm (4 -> 2 HP)',dir=1,duck=false,dx=68,busy=false,atk=1},
+    {name='stomp on full-height Geldarm',dir=1,duck=false,dx=0,busy=false,stomp=true},
 }
 local hitSeen=false
 local sankY,minY,deathY,hp0=nil,999,nil,false
@@ -40,6 +41,10 @@ local function setupPhase()
     w(0x777,p.atk or 4)
     w(0x8D,0);w(0x8E,0)
     w(0x05F8,0);w(0x05FC,0);w(0x05FD,0)
+    if p.stomp then
+        w(0x29,144-24);w(0x0479,1);w(0x057D,2);w(0x0728,0)
+        w(0x0518,0);w(0x050C,0)
+    end
     if p.busy then
         -- Keep native projectile slots occupied with far-away dummy shots so the new shot uses EXTRA_BASE.
         w(0x8D,1);w(0x36,24);w(0x5A,0);w(0x48,0);w(0x7D,0)
@@ -57,7 +62,7 @@ emu.addEventCallback(function()
             b.left=(p.dir==2 and age>=1 and age<3)
             b.right=(p.dir==1 and age>=1 and age<3)
             b.down=p.duck
-            b.b=(age>=4 and age<16)
+            b.b=not p.stomp and (age>=4 and age<16)
         end
     end
     emu.setInput(b,0)
@@ -101,7 +106,7 @@ emu.addEventCallback(function()
     end
     if pending or not phases[phase] then return end
     age=age+1
-    if r(0xB6+slot)==0 or r(0x040E+slot)~=0 then hitSeen=true end
+    if r(0xB6+slot)~=1 or r(0x040E+slot)~=0 then hitSeen=true end
     local st=r(0xB6+slot)
     if st==1 and r(0xC2+slot)==0 then
         hp0=true

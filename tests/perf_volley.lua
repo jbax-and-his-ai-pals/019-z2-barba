@@ -125,6 +125,8 @@ emu.addEventCallback(function()
                 name,p.frames,p.lag,p.sumNmi//n,p.maxNmi,p.overBudget,p.sumProj//n,p.maxProj,
                 p.sumExtra//n,p.maxExtra,p.maxColl,p.sumBlocks//n,p.maxBlocks,p.maxLine,p.overFrames,p.overLines))
         end
-        report:close();csv:close();stopScenario(0)
+        local ok=stats.idle.lag==0 and stats.volley.lag==0
+        report:write('RESULT '..(ok and 'PASS' or 'FAIL')..'\n')
+        report:close();csv:close();stopScenario(ok and 0 or 1)
     end
 end,emu.eventType.endFrame)

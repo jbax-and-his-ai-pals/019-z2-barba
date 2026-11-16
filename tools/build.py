@@ -97,7 +97,8 @@ def build(source_path: Path, output: Path) -> dict:
         data = bytes([opcode, dest & 255, dest >> 8]) + b'\xEA'*pad
         overlay.prg(bank, address, data, bytes.fromhex(expected), label+' hook')
     hook(0, 0x877C, 'BarbaOverworld', 0x20, 'a2 0e a0 00', 1)
-    hook(0, 0x84F2, 'BarbaOverworldA', 0x4C, 'a5 f5 29 80 f0 1a', 3)
+    hook(0, 0x8518, 'BarbaOverworldA', 0x4C, 'ad 89 07')
+    hook(0, 0x922A, 'ThunderHit', 0x20, '20 26 e7')
     hook(7, 0xD52D, 'BarbaDisplay', 0x20, '20 f0 eb')
     hook(7, 0xE0A4, 'LavaSurface', 0x4C, 'a9 01 85')
     hook(7, 0xD4FE, 'BarbaPreEnemy', 0x20, '20 25 99')
@@ -132,8 +133,6 @@ def build(source_path: Path, output: Path) -> dict:
                 'Indoor NPC update 949F')
     overlay.prg(3, 0x94AB, dest.to_bytes(2, 'little'), bytes.fromhex('a9 97'),
                 'Wise Man NPC update 94AB')
-    overlay.prg(3, 0x94CF, dest.to_bytes(2, 'little'), bytes.fromhex('bd 9a'),
-                'Special NPC update 94CF')
     for address in (0x94A1, 0x94A7, 0x94A9, 0x94AD, 0x94AF, 0x94B1):
         overlay.prg(3, address, dest.to_bytes(2, 'little'), bytes.fromhex('93 97'),
                     f'Stationary villager/NPC update {address:04X}')
@@ -490,6 +489,16 @@ def build(source_path: Path, output: Path) -> dict:
         'CarockHit helper',
     )
     overlay.prg(4, 0xAEB4, bytes.fromhex('20 b0 a7'), bytes.fromhex('20 d9 e4'), 'Carock fireball hit check')
+    # Hidden Red Jars ($05): allow breath as well as melee to reveal them.
+    hook(5, 0xA525, 'HiddenJarHit', 0x20, '20 77 e6')
+    overlay.prg(
+        4, 0xA7BF,
+        bytes.fromhex('a9 ff 95 c2 20 77 e6 b5 a8 29 20 d0 03 4c 8b e4 60'),
+        b'\xff' * 17,
+        'HiddenJarHit bank 4 helper',
+    )
+    overlay.prg(4, 0xB842, bytes.fromhex('20 bf a7'), bytes.fromhex('20 77 e6'), 'Hidden Red Jar Type A fireball hit check')
+    overlay.prg(4, 0xAF65, bytes.fromhex('20 bf a7'), bytes.fromhex('20 77 e6'), 'Hidden Red Jar Type B fireball hit check')
 
     # Ending sequence (PRG bank 5): replace Link & half-Link chimera with full 24x48 Barba + Zelda,
     # update Zelda's wake-up dialogue, and add Barba Edition credits.

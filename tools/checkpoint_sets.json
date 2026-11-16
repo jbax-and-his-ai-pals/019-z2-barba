@@ -48,7 +48,7 @@
       {"id":"boss-carock","name":"Carock (Palace 4)","profile":"p4boss","world":4,"region":1,"number":4,"room":28,"page":0,"instructions":"Walk right to start the fight. Reload this key to retry with full meters."},
       {"id":"boss-gooma","name":"Gooma (Palace 5)","profile":"p5boss","world":3,"region":2,"number":5,"room":41,"page":0,"instructions":"Walk right to start the fight. Reload this key to retry with full meters."},
       {"id":"boss-lava-link","name":"Lava Link (Palace 6)","profile":"p6boss","world":4,"region":2,"number":6,"room":58,"page":0,"frames":60,"instructions":"Walk right to start the fight. Reload this key to retry with full meters."},
-      {"id":"boss-thunderbird","name":"Thunderbird (Great Palace)","profile":"gp","world":5,"region":2,"number":7,"room":54,"page":0,"frames":60,"instructions":"Walk right to start the fight. Reload this key to retry with full meters."},
+      {"id":"boss-thunderbird","name":"Thunderbird (Great Palace)","profile":"gp","world":5,"region":2,"number":7,"room":53,"page":0,"frames":60,"instructions":"Walk right to start the fight. Reload this key to retry with full meters."},
       {"id":"boss-dark-link","name":"Dark Link (Great Palace)","profile":"gp","world":5,"region":2,"number":7,"room":54,"page":1,"frames":590,"instructions":"Starts the moment the intro ends: the shadow dragon is already beside you. Reload this key to retry with full meters."}
     ],
     "world": [
@@ -68,8 +68,8 @@
       {"id":"p1-low-ceiling","name":"Palace 1 low tunnel","profile":"p1boss","world":3,"region":0,"number":1,"room":3,"page":1,"instructions":"Walk and crouch under the ceiling.","position":{"x":288,"y":176},"feature":"ceiling"},
       {"id":"p1-shaft","name":"Palace 1 elevator shaft","profile":"p1","world":3,"region":0,"number":1,"room":1,"page":0,"instructions":"Start on the native elevator. Hold Down to descend; Up to return.","position":{"x":112,"y":160},"feature":"elevator"},
       {"id":"p2-floor","name":"Palace 2 floor corridor","profile":"p2boss","world":3,"region":0,"number":2,"room":20,"page":1,"instructions":"Inspect floor and jump clearance."},
-      {"id":"west-water","name":"West Hyrule water bridge","profile":"saria","world":0,"region":0,"number":0,"room":1,"page":0,"entry":{"1801":0,"1864":19,"1897":1},"instructions":"Cross the bridge, test jumps and crouch clearance; water remains lethal."},
-      {"id":"medicine-bridge","name":"Medicine cave collapsing bridge","profile":"p3","world":0,"region":0,"number":0,"room":14,"page":0,"position":{"x":112,"y":128},"entry":{"1801":0,"1864":15,"1897":1},"instructions":"Cross the collapsing bridge above lava; non-palace lava is lethal."},
+      {"id":"west-water","name":"West Hyrule water bridge","profile":"saria","world":0,"region":0,"number":0,"room":1,"page":0,"entry":{"1801":0,"1864":19,"1897":1},"instructions":"Cross the bridge, test jumps, crouch clearance, and water surface wading."},
+      {"id":"medicine-bridge","name":"Medicine cave collapsing bridge","profile":"p3","world":0,"region":0,"number":0,"room":14,"page":0,"position":{"x":112,"y":128},"entry":{"1801":0,"1864":15,"1897":1},"instructions":"Cross the collapsing bridge above lava and test lava surface recovery."},
       {"id":"p6-drop-shaft","name":"Palace 6 drop-shaft edge","profile":"p6boss","world":4,"region":2,"number":6,"room":40,"page":1,"position":{"x":300,"y":176},"feature":"pit","instructions":"Stand safely at the gap; jump across or fall to the lower room. This is not a lethal bottomless pit."},
       {"id":"p2-blocks","name":"Palace 2 breakable blocks","profile":"p2boss","world":3,"region":0,"number":2,"room":26,"page":1,"instructions":"Shoot through the 2x3 breakable block wall with the Glove."}
     ]

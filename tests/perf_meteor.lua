@@ -132,7 +132,9 @@ emu.addEventCallback(function()
                 name,p.frames,p.lag,p.sumNmi//n,p.maxNmi,p.overBudget,p.sumProj//n,p.maxProj,
                 p.sumExtra//n,p.maxExtra,p.maxColl,p.sumBlocks//n,p.maxBlocks,p.maxLine,p.overFrames,p.overLines))
         end
+        local ok=stats.idle.lag==0 and stats.meteor.lag==0 and slams>=1 and waves>=1
         report:write(string.format('slams=%d wavesPlaced=%d',slams,waves)..string.char(10))
-        report:close();csv:close();stopScenario(0)
+        report:write('RESULT '..(ok and 'PASS' or 'FAIL')..string.char(10))
+        report:close();csv:close();stopScenario(ok and 0 or 1)
     end
 end,emu.eventType.endFrame)

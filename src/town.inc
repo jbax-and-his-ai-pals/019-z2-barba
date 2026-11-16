@@ -1,7 +1,7 @@
 ; Town-only prototype. This module runs in PRG bank 3, not the bank 0 hooks.
-; Install TownUpdate in routine-0 pointers for outdoor villager types $0C and $10..$21.
-; Every mutation requires an explicit outdoor room in world 1 or 2. Story-necessary
-; NPCs ($0B, $0D..$0F, $22..$24, and all indoor actors) always keep their native routines.
+; Install TownUpdate in routine-0 pointers for villager/NPC types $09..$0A and $0D..$20.
+; Every mutation requires an explicit outdoor room in world 1 or 2. Invisible triggers
+; ($0C, $21..$23) and $0B always keep their native routines.
 .segment "TOWN"
 .export TownUpdate, TownEligible, TownBurnable, TownOutdoorRooms, TownEnd, TownDialog, TownFearText, TownFearPointers, TownHide
 .export TownFastDialogReady, TownLetterDelay, TownLineDelay, TownAsh, TownDoorCoords, TownDoorEmerged, TownNativeTalk
@@ -86,8 +86,6 @@ TownUpdate:
     beq @native_19_20
     cmp #$0F
     beq @native_0F
-    cmp #$21
-    beq @native_21
     cmp #$13
     bcc @native_10_12
     cmp #$19
@@ -96,8 +94,6 @@ TownUpdate:
     jmp $9878
 @native_0F:
     jmp $97A9
-@native_21:
-    jmp $9ABD
 @native_10_12:
     jmp $9793
 @native_13_18:
@@ -447,8 +443,7 @@ TownDoor:
     jmp TownHide
 
 TownHide:
-    lda #$00
-    sta $B6,x
+    jsr $DD3D
     sta $AF,x
     sta $71,x
 TownHideOAM:
@@ -594,7 +589,7 @@ TownOutdoorRooms:
 
 ; Carry set iff this is a live burnable person in world 1/2 (including
 ; single-area non-town places and indoor rooms, excluding North Palace $3C,
-; house-openers $13..$18, and invisible triggers $0C/$22-$24).
+; house-openers $13..$18, and invisible triggers $0C/$21-$23).
 TownBurnable:
     lda $B6,x
     cmp #$01
@@ -618,7 +613,7 @@ TownBurnable:
     cmp #$19
     bcc @burn_no
 :
-    cmp #$22
+    cmp #$21
     bcs @burn_no
     sec
     rts
@@ -627,7 +622,7 @@ TownBurnable:
     rts
 
 ; Native $9A2C check: press B (like vanilla) or Up (outside open doorways)
-; to talk to native NPCs ($13..$18 house-openers, $21 Error/Bagu, etc.).
+; to talk to native NPCs/triggers ($0D..$18, $21 Mirror/Fountain, $22 signs, etc.).
 TownNativeTalk:
     lda $F5
     and #$40

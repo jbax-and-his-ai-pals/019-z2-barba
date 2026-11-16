@@ -89,6 +89,9 @@ emu.addEventCallback(function()
             for address,value in pairs(spec.expected) do
                 check(r(address)==value,ids[index]..string.format(' progression $%04X = %d',address,value))
             end
+            if ids[index]=='boss-dark-link' then
+                check(r(0xB6)==1 and r(0xA1)==0x23 and r(0x753)==2 and (r(0x0252)&3)==2,'boss-dark-link has active shadow-palette Dark Barba')
+            end
         end
         check(r(0xB5)==1,ids[index]..' player is alive after load')
         local pixels=emu.getScreenBuffer()
@@ -125,7 +128,7 @@ emu.addEventCallback(function()
             check(r(0x499)~=2,'boss-door begins before the boss rises')
         end
         if not PACK_SCENES and index==10 then
-            check(r(0x736)==11 and r(0x561)==0x36 and r(0x707)==5,'great-palace is in Great Palace room $36')
+            check(r(0x736)==11 and r(0x561)==0x35 and r(0x707)==5,'great-palace is in Great Palace room $35')
         end
     end
     if not PACK_SCENES and index==6 and age==90 then screenshot('test-pack-boss-active') end

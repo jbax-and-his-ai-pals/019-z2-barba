@@ -442,7 +442,7 @@ def compile_assets(root: Path, source_path: Path | None = None) -> tuple[bytes, 
               [[ash_colors[int(pixel)] for pixel in row] for row in ash_rows], 12)
     (root / 'build/barba-assets.json').write_text(json.dumps({
         'poses': list(TALL_POSES), 'size': [24, 48],
-        'body_pairs': len(pairs)-1, 'available_body_pairs': 43,
+        'body_pairs': len(set(pairs.values()) - {0xF5}), 'available_body_pairs': len([i for i in range(0, 0x64, 2) if i not in PLAYER_RESERVED_PAIRS]),
         'weapon_pairs': [0x32, 0x54], 'wyrmling_pairs': [0x68, 0x6A],
         'ash_pairs': list(ASH_TILES), 'ash_visible_size': [16,8],
         'ash_sprite_npc_y_offset': 24,

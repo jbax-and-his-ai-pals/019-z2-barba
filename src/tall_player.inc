@@ -56,9 +56,7 @@ BarbaGeometry:
     sta GEOMETRY
     lda $29
     sta DRAW_TOP
-    clc
-    adc #$04
-    jmp @mouth_y
+    jmp @add_4
 @not_lava:
     ; Check both edges of the raised head against the area's solid-tile
     ; predicate. Its bank switch lives in fixed ROM, never in swapped code.
@@ -177,21 +175,20 @@ BarbaGeometry:
     lda $29
     sec
     sbc #$0C
-    jmp @mouth_y
+    bne @mouth_y
 @cache_tuck:
     lda #$02
     sta GEO_CACHE_RES
 @tuck:
     lda #$02
     sta GEOMETRY
-    lda $29
-    clc
-    adc #$04
-    jmp @mouth_y
+@add_4:
+    lda #$04
+    .byte $2C
 @duck:
-    lda $29
+    lda #$0A
     clc
-    adc #$0A
+    adc $29
 @mouth_y:
     sta BREATH_MUZZLE_Y
     cmp #$20
@@ -298,17 +295,12 @@ BarbaDisplay:
     bne @not_windup
     ldx $0479
     beq @not_windup
-    tax
-    lda $F7
-    and #$08
-    beq @windup_fwd
-    lda $0796
-    and #$04
-    beq @windup_fwd
-    lda #$08
+    bit $0796
+    beq @not_windup
+    asl
+    bit $F7
     bne @not_windup
-@windup_fwd:
-    txa
+    lsr
 @not_windup:
     cmp #$05
     bne :+

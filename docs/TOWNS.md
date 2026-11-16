@@ -9,11 +9,12 @@ behavior, stay invulnerable to fireballs, and talk on `B` (or `Up` via `TownCanT
 `TownNativeTalk` at `$9A2C`) using `TownHealerText`, `TownMagicText`, or
 native dialogue; when `$17`/`$18` are inside their open doorway (`$AF` `$40..$7F`),
 entering (`$0736 == #$16`) jumps directly to `$99E6` so stale off-screen `$C9` never
-blocks healing or magic restoration (`tests/heal_door.lua`). Single-area non-town and indoor NPCs (`$0A..$21` excluding `$0C` and `$13..$18`,
+blocks healing or magic restoration (`tests/heal_door.lua`). Single-area non-town and indoor NPCs (`$0A..$20` excluding `$0C` and `$13..$18`,
 in world 1 or 2 rooms except North Palace `$3C`) are covered by `TownBurnable`: they do not flee
 and retain their native or custom service dialogue (`$0F` wise-man), but ignite into temporary
-ash when hit by a player fireball. Invisible triggers (`$0C`, `$22`) and North Palace (`$3C`,
-handled separately) are excluded. Leaving/re-entering repopulates the room normally. Every
+ash when hit by a player fireball; `TownHide` clears the slot via `jsr $DD3D` so room-table
+NPCs repopulate normally when leaving/re-entering. Invisible triggers (`$0C`, `$21..$22`, including Saria's Mirror and Nabooru's Water of Life Fountain) and North Palace (`$3C`,
+handled separately) are excluded. Every
 action rechecks eligibility in `src/town.inc`.
 
 ## Behavior

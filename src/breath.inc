@@ -310,10 +310,13 @@ BarbaFireSpell:
     lda BREATH_GEOMETRY_FLAGS
     and #$01
     beq @done
+    jsr BarbaLoadOk
+    bcc @arm
     jsr BarbaEmitOneCached
     bcc @done
-    jsr BarbaArmBurst
     jsr BarbaBreathSfx
+@arm:
+    jmp BarbaArmBurst
 @done:
     rts
 
@@ -530,29 +533,30 @@ BarbaMeteorTick:
 @done:
     rts
 @ground:
-    lda METEOR_STATE
-    beq @done
+    lsr METEOR_STATE
+    bcc @done
     jmp MeteorLand
 
 ; Dead vanilla Fire spell body ($97F1-$9814, 36 bytes; its spell pointer is
 ; BarbaSpellDeferred and its other entry $97FA was only called from $985E).
 .segment "FIRE_SPELL"
 MeteorLand:
-    lda #$00
-    sta METEOR_STATE
     lda $ED
     ora #$10            ; impact thud (the stomp-kill sound)
     sta $ED
     lda #$84            ; short decor flash
     sta $074B
-    lda #(METEOR_WAVE | $01)
+    ldy #(METEOR_WAVE | $01)
     jsr MeteorEmit
-    lda #(METEOR_WAVE | $02)
+    ldy #(METEOR_WAVE | $02)
 MeteorEmit:
-    sta INFERNO_AIM
+    jsr BarbaLoadOk
+    bcc @done
+    sty INFERNO_AIM
     jsr BarbaEmitOne
     lda #$00
     sta INFERNO_AIM
+@done:
     rts
 
 ; Dead vanilla raft-avatar tail ($81C1-$81E4, 36 bytes): the "Sea crossing

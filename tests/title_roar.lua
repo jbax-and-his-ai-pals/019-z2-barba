@@ -23,7 +23,7 @@ local function endFrame()
         f:write('RESULT '..(ok and 'PASS' or 'FAIL')..'\n')
         f:close()
         local stop = emu.exit or emu.stop
-        stop(0)
+        stop(ok and 0 or 1)
     end
 end
 emu.addEventCallback(endFrame, emu.eventType.endFrame)

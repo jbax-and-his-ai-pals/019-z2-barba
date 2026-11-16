@@ -113,7 +113,7 @@ emu.addEventCallback(function()
             check(sawNewGamePlus,'Pressing Start on ending enters New Game+ ($07A0 == 1)')
             report:write('RESULT '..(errors==0 and 'PASS' or 'FAIL')..string.char(10))
             report:close()
-            emu.stop()
+            stopScenario(errors==0 and 0 or 1)
         end
     end
 end,emu.eventType.endFrame)

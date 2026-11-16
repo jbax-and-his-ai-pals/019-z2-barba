@@ -1,6 +1,6 @@
 ; Original Barba Edition routines. CPU addresses refer to the guarded source ROM.
 .setcpu "6502"
-.export BarbaOverworld, BarbaOverworldA, BarbaDisplay, BarbaUpdate, BarbaInferno
+.export BarbaOverworld, BarbaOverworldA, BarbaDisplay, BarbaUpdate, BarbaInferno, ThunderHit
 .export LavaSurface
 .export EnemyFireGateway, ShieldFireGateway, LagNmiBank6
 
@@ -69,31 +69,10 @@ OwFlameX:
 OwFlameY:
     .byte $6D, $6D, $6D, $6D, $7D, $6D, $6D, $6D, $5D
 
-; Overworld A/B handler at $84F2:
-; - A button: vanilla Hammer on Rock ($0E) or Forest ($06).
+; Overworld B-button handler at $8518 (entered after $8512 verifies $F5 & $40 != 0):
 ; - B button: Dragon fire on Forest ($06), Town ($00), Palace ($02), or when no Flute ($0789==0);
-;             otherwise plays Flute ($851B) on Spider/open ground when Flute is owned.
+;             otherwise plays Flute ($851D) on Spider/open ground when Flute is owned.
 BarbaOverworldA:
-    lda $F5
-    and #$80
-    beq @check_b
-    lda $0563
-    cmp #$0E            ; Rock
-    beq @hammer_check
-    cmp #$06            ; Forest
-    bne @check_b
-@hammer_check:
-    lda $078B           ; Have Hammer?
-    beq @check_b
-    lda #$04
-    sta $ED
-    jsr $E024
-    jmp $DFD2
-@check_b:
-    lda $F5
-    and #$40
-    bne BarbaOverworldB
-    rts
 BarbaOverworldB:
     lda $0563
     cmp #$06            ; Forest
@@ -104,7 +83,7 @@ BarbaOverworldB:
     beq @fire_react
     lda $0789           ; Have Flute?
     beq @fire_fx
-    jmp $851B           ; play Flute
+    jmp $851D           ; play Flute
 @fire_react:
     lda #$04            ; magic/rumble reaction SFX
     sta $EC
@@ -128,16 +107,16 @@ BarbaOverworldB:
 ; Turns ONLY the single facing forest tile into Desert ($04) so neighboring trees survive battles/scrolling.
 BarbaSplitBurnForest:
     lda ($0E),y
-    and #$0F
     cmp #$06
-    bne @done
-    lda ($0E),y
-    and #$F0
-    bne @split
+    bne @check_multi
     lda #$04            ; single-tile run ($06): no shift needed
     sta ($0E),y
 @done:
     rts
+@check_multi:
+    and #$0F
+    cmp #$06
+    bne @done
 @split:
     tya
     pha                 ; save Y (byte index in row)
@@ -188,6 +167,7 @@ BarbaSplitBurnForest:
 @found_end:
     jmp BurnMapEndGuard ; computes end_lo/end_hi; refuses a split that would overflow WRAM
 BurnMapEndBack = *
+    sta $0B             ; $0B = dst_hi
     lda #$00
     sta $08             ; $08 = 0 (page base)
     lda $05
@@ -268,6 +248,13 @@ BurnMapEndBack = *
     sta ($0E),y
 @split_done:
     rts
+BurnAbort:
+    pla                 ; drop saved row index; map unchanged
+    lda #$00
+    sta $0301           ; cancel queued PPU macro byte count
+    lda #$FF
+    sta $0302           ; mark PPU macro buffer empty ($FF terminator)
+    rts
 
 .segment "BANK0_TAIL"
 ; Bank 0 pad $BFE0-$BFF9 (between the unused reset stub and the vectors).
@@ -283,13 +270,11 @@ BurnMapEndGuard:
     lda $09
     adc #$00
     sta $09             ; $09 = end_hi
-    sta $0B             ; $0B = dst_hi
     cmp #$7F
     bcc @ok
     cpy #$F0
     bcc @ok
-    pla                 ; drop saved row index; map unchanged
-    rts
+    jmp BurnAbort
 @ok:
     jmp BurnMapEndBack
 
@@ -300,6 +285,30 @@ BarbaInferno:
     lda #$30
     sta ROAR_TIMER
     jmp $91E6 ; original Thunder effect, including Thunderbird interaction
+
+; Hooked at $922A (JSR $E726 inside Thunder_Spell $91E6).
+; Thunderbird ($22, the only enemy where $9228 sets Y = 1) needs its bank-5
+; boss-death state ($6E3F = $FF, $B6,x = 1, $0504,x = $FF, $040E,x = $7F from $A3E1)
+; when killed by Thunder, instead of generic death ($B6,x = 2) before $A359 runs.
+ThunderHit:
+    cpy #$01
+    bne @normal
+    bit $6E3F
+    bmi @done
+    jsr $E726
+    lda #$01
+    cmp $B6,x
+    beq @done
+    sta $B6,x
+    lda #$FF
+    sta $6E3F
+    sta $0504,x
+    lsr
+    sta $040E,x
+@done:
+    rts
+@normal:
+    jmp $E726
 
 ; Update mouth-anchored breath and diagonal full-life volleys (breath.inc).
 ; The short roar borrows only noise,

@@ -14,9 +14,9 @@ SCENES=[
     ('spells','All spells and techniques','Safe castle with all eight spells, up/down thrust, full meters and level 4 attack. Inferno is selected; Shift casts it. Reload F3 to refill.'),
     ('lava-ledge','Palace 6 lava ledge','Walk right off the ledge and into the lava; stop, jump and return.'),
     ('lava-surface','Standing on palace lava','Already on lava. Test moving, jumping and standing still.'),
-    ('barba','Palace 6 boss encounter','Test the playable dragon against the original Palace 6 boss. Ice Barba is not implemented.'),
+    ('barba','Palace 6 boss encounter','Test the playable dragon against Lava Link in Palace 6.'),
     ('raft','Sea crossing','Observe the dragon crossing on the original raft route; no free-flight cheat.'),
-    ('town','Rauru town street','Approach random outdoor wanderers, watch them flee, and test fireballs. Important and indoor NPCs are protected.'),
+    ('town','Rauru town street','Approach random outdoor wanderers, watch them flee, and test fireballs and town scorch/combo.'),
     ('boss-door','Before Palace 6 boss','Left edge of the Palace 6 boss room with max stats, all spells and full meters. Walk right to start the fight.'),
     ('great-palace','Great Palace final boss','Great Palace Thunderbird / Dark Link corridor with max stats, all spells and full meters. Test Inferno, fireballs and ending progression.')
 ]
