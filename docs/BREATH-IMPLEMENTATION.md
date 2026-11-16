@@ -29,6 +29,9 @@ head height is visual and needs human review.
 
 All native melee origins are hidden after rendering, including up/down thrusts.
 There is no attached plume. Item-holding and Wyrmling drawing remain native.
+The Wyrmling art (tiles `$68`/`$6A`, wings up / wings down) is the front-facing
+`wyrmling` pair in `assets/barba.json`; the native draw never flips it, so the design
+stays facing-neutral. The healing-fairy pickup shares these tiles.
 `BarbaBlocks` samples each live fireball's center using the original glove-gated
 block handler, restoring player pose and velocity so remote fireballs avoid
 sword recoil or bouncing Barba. After restoring held thrusts via `BarbaSetThrusts`,

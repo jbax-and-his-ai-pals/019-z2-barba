@@ -343,7 +343,7 @@ def compile_file_select_doll(root: Path) -> bytes:
 def compile_assets(root: Path, source_path: Path | None = None) -> tuple[bytes, dict[int, bytes], bytes, list[list[str]]]:
     art = json.loads((root / 'assets/barba.json').read_text())
     small = art['small']
-    for name in ('body', 'small', 'small_step', 'front', 'back'):
+    for name in ('body', 'small', 'small_step', 'front', 'front_step', 'back', 'back_step'):
         for row in art.get(name, []):
             if len(row) != 16 or set(row) - set('0123'):
                 raise ValueError(f'Invalid pixel row in {name}: {row!r}')
@@ -409,20 +409,25 @@ def compile_assets(root: Path, source_path: Path | None = None) -> tuple[bytes, 
         '12333222','12322121','12211010','12100000','10000000'] + ['00000000']*3
     for tile, rows in ((0x32, flame), (0x54, flame)):
         graphics[tile] = sprite_pairs([row[::-1] for row in rows])[0]
-    # Fairy's existing 8x16 slot becomes a tiny dragon, preserving flight logic.
-    hatchling = [row[::2] for row in small]
-    graphics[0x68] = sprite_pairs(hatchling)[0]
-    graphics[0x6A] = sprite_pairs(hatchling[1:]+['00000000'])[0]
+    # Fairy's 8x16 slot becomes a front-facing Wyrmling, preserving flight logic.
+    # The native draw never flips it, so the design is facing-neutral; frames
+    # $68/$6A alternate every 4 frames (wings up / wings down).
+    wyrmling = art['wyrmling']
+    if len(wyrmling) != 2 or any(len(f) != 16 or any(len(r) != 8 or set(r) - set('0123') for r in f)
+                                 for f in wyrmling):
+        raise ValueError('wyrmling needs two 8x16 frames of 0-3 pixels')
+    graphics[0x68] = sprite_pairs(wyrmling[0])[0]
+    graphics[0x6A] = sprite_pairs(wyrmling[1])[0]
     ash_graphics, ash_rows = compile_ash(root)
     if graphics.keys() & ash_graphics.keys():
         raise ValueError('Ash sprites overlap another graphics allocation')
     graphics.update(ash_graphics)
 
     ow = bytearray()
-    # Side view has an explicit walk frame (head/neck bob, planted coil); the others bob the whole sprite.
+    # Each view may have an explicit walk frame (`<view>_step`); without one the whole sprite bobs.
     small_step = art.get('small_step')
     for rows, step_rows in ((small, small_step), ([r[::-1] for r in small], small_step and [r[::-1] for r in small_step]),
-                            (art['front'], None), (art['back'], None)):
+                            (art['front'], art.get('front_step')), (art['back'], art.get('back_step'))):
         for step in (0, 1):
             animated = rows if step == 0 else (step_rows or ['0'*16] + rows[:-1])
             ow.extend(b''.join(sprite_pairs(animated)))

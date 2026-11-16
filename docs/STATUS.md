@@ -8,6 +8,15 @@ follow-up are fixed and verified (ROM SHA-256
 `92bfdbacfc66e1ce56902fba20a69b70716b5ae082b35c354fd2b253d855b5dc`), with all 17
 unit tests, town/progression checks, and regenerated test-pack checkpoints passing.
 
+2026-11-16: Wyrmling redrawn as a front-facing baby dragon (two flap frames, original
+art in `assets/barba.json`). burst, tall_geometry, ending and boot pass; producer
+approved the look.
+
+2026-11-16: Overworld dragon redrawn as a mini Barba (croc snout, crest, back spikes,
+banded belly, slim coil) in all directions; up/down now have real walk frames
+(`front_step`/`back_step`: jaws chomp, neck sways). overworld_side, overworld_fire,
+forest_burn_limit, encounter_hazard, gameplay and boot pass; awaiting producer playtest.
+
 ## Implemented features
 
 - **Player (24x48 Barba)**: Boss-derived 24x48 side-view poses (`src/tall_player.inc`, `src/tall_layout.inc`), full-body jumps, compact 24px crouch, ceiling folding, partly submerged lava and swamp-water pose (`GEOMETRY` bit 2 via `LAVA_CONTACT` or `$0752`, `tests/swamp_submerge.lua`), 8x16 flying Wyrmling, and 16x16 overworld avatar. Terrain and enemy-contact hitboxes keep native dimensions. CHR allocation reserves `$4E`/`$50` (Ache/bat enemy frames) and `$5E`/`$62` (ending ash) so enemy sprites in caves/forests stay intact, plus `$60` (the XP "3" score digit, also the first digit of "30"; the down pose had overwritten it, 2026-11-15). The budget is full, so `tools/assets.py` reuses any allocated pair within 1 pixel (attack head = idle head, crouch-attack tail = crouch tail), freeing `$5C`. Tall head OAM moved from `$F8` to `$C4` (and town combo OAM `$C4` to `$64`) so Barba no longer clobbers the native HUD magic partial-bar sprite at `$02F8` (verified in `tests/hud_timing.lua`).
