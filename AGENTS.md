@@ -26,7 +26,9 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
   shield_enemies, title_roar, overworld_side, farcall, town_fire, town_combo,
   castle_zelda_burn, upstab, perf_upward, look_up, ending, horsehead, helmethead, rebonack, carock,
   gooma, lava_link_kill, stomp, geldarm, encounter_hazard, heal_door, spell_door, stab_blocks,
-  swamp_submerge, town_nontown_burn, inferno, overworld_fire, forest_burn_limit, meteor, perf_meteor, plus `state_pack` via create_test_pack.
+  swamp_submerge, town_nontown_burn, inferno, overworld_fire, forest_burn_limit, meteor, perf_meteor, death_continue, plus `state_pack` via create_test_pack.
+  (`newgame.lua` and `checkpoint_features.lua` are shared helpers, not scenarios. Check each `build/<name>.txt`
+  for FAIL lines and a fresh mtime, not just the exit code; some reports use hyphens, e.g. `perf-volley.txt`.)
   (`boss_fight.lua` is the shared fireball-only boss driver, not a scenario.)
 
 ## Hard rules

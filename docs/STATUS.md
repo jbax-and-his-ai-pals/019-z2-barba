@@ -55,6 +55,18 @@ unit tests, town/progression checks, and regenerated test-pack checkpoints passi
 - `BarbaDisplay` fast path + `BarbaGeometry` terrain cache + `BarbaExtraUpdate` fast path + tightened `ExtraNearEnemy` + direct `BarbaExtraBlocks` + `BarbaLoadOk` 2-shot cap with `>= 2` enemies + odd-frame OAM priority rotation: Palace 1 `perf_volley.lua` achieves **0/900 lag frames** (idle avg 15,862 / peak 16,086 cycles; volley avg 19,373 / peak 25,533 cycles, 0 near-budget >27k frames). `perf_meteor.lua` passes with **0/900 lag** (`17,353` avg / `19,142` peak, `slams=10 wavesPlaced=2`), and the six-Bot METEOR + volley stress probe (`build/audit_perf_meteor_six.lua`) now achieves **0/900 lag** (`maxLiveShots = 1`, peak `28,983` cycles, down from `160/900` lag). Palace 3 room `$0D` (2 Ironknuckles + breakable blocks) previously measured **25,338 avg / 28,155 peak (0 lag frames)**, down from 28,095 avg / 30,049+ peak (4 lag frames).
 - `FarCall0` cold-hook ABI in fixed bank 7 (`src/farcall.inc`) keeps fixed-bank padding free without hot-path bank-switch overhead.
 
+## Final end-to-end review (2026-11-16)
+
+These checks found no progression blocker and no bank or WRAM fault:
+
+- the full suite, including `tests/death_continue.lua`
+- a static cross-bank scan of the source and hooks
+- a WRAM write-watch
+- a death and game over → continue probe
+- a check of the flute gates (Palace 6 call spot and River Devil)
+
+Two cosmetic P3 limits are logged in [AUDIT-2026-11-15.md](AUDIT-2026-11-15.md#final-end-to-end-review-2026-11-16-rom-92bfdbac-unchanged): leftover fire for under 1 s after a respawn, and the scorch ring keyed only on room number.
+
 ## Remaining / open items
 
 - Full end-to-end human playthrough across all palaces, spell unlocks, item gates, and ending.
