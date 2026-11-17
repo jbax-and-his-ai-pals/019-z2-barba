@@ -86,6 +86,30 @@ The town checkpoint now uses Rauru's normal street room rather than its
 lookalike entrance copy. Load the newly prepared F8 state; old snapshots can
 retain fake door tiles made by the retired villager animation.
 
+## Busy Areas checkpoints
+
+Open **Test Barba - Busy Areas.cmd** and press F1–F10 in Mesen. The set
+combines rooms with high frame cost or heavy sprite overlap in the busy-room
+probe with three Palace 5 Mago rooms for the red-duplicate playtest.
+
+| Key | Checkpoint | What to try |
+| --- | --- | --- |
+| F1 | Palace 5 room 62, two Magos | Alternate upstab and downstab, then let a shot hit Barba in midair. |
+| F2 | Palace 5 room 48, Mago and statue hall | Fight through the statues while the Mago teleports. |
+| F3 | Palace 5 room 44, first Mago room | Watch the Mago appear, fire and vanish while Barba jumps. |
+| F4 | Palace 5 before Gooma | Turn and fire with the Ironknuckles on screen. |
+| F5 | Palace 2 crowded floor corridor | Jump and fire volleys through the crowd while watching the HUD. |
+| F6 | Palace 3 Ironknuckles and breakable blocks | Move right and breathe into the blocks as the Ironknuckles approach. |
+| F7 | Palace 6 Wizzrobe hall | Fight the Wizzrobe with other enemies and shots on screen. |
+| F8 | Palace 1 before Horsehead | Fire through the enemy groups in the approach corridor. |
+| F9 | Old Kasuto monster street | Turn and breathe through the Moas. Let one hit Barba in midair. |
+| F10 | Rauru street crowd | Breathe through the crowd and watch panic, shout and scorch effects. |
+
+Each load restores the room and loadout. Palace 5 has both thrust techniques.
+On F1–F3, watch for dragon art away from Barba during the normal hurt flash.
+To regenerate the set, run `python tools/create_test_pack.py --set busy --force`.
+To repeat the automated stress run, use `python tools/busy_rooms.py --sets busy --frames 620`.
+
 ## Playthrough checkpoint sets
 
 Core remains the default. Use **Test Barba - Palaces.cmd**, **- Endgame.cmd**, **- Bosses.cmd**,
@@ -150,7 +174,8 @@ Crystals are $078D-$0792, in palace order; $0794 is 6 minus placed. Keys $0793=0
 | start | 1/1/1 | 4/4 | 1 | none | none | 0 | none |
 | ruto | 3/2/3 | 5/5 | 2 | Candle | none | 1 | T |
 | saria | 3/3/3 | 5/5 | 3 | Candle | none | 1 | T, R, B |
-| mido | 4/4/4 | 5/5 | 4 | Candle, Glove, Hammer | D | 2 | T, R, B, M |
+| mido | 4/4/4 | 5/5 | 4 | Candle, Glove, Hammer | none | 2 | T, R, B, M |
+| darunia | 5/5/5 | 6/6 | 6 | Candle, Glove, Raft, Hammer | D | 3 | T, R, B, M, W, C |
 | nabooru | 5/4/5 | 6/6 | 5 | Candle, Glove, Raft, Hammer | D | 3 | T, R, B, M, W |
 
 ### palaces
@@ -207,9 +232,9 @@ returns: the fight is already live. F9/F10 are unused.
 | F1 | Rauru street (world 1, room $00, entry 1) | start; keys 0 | Check outdoor NPCs, doorways, palette and head clearance. |
 | F2 | Ruto street (world 1, room $03, entry 1) | ruto; keys 0 | Check outdoor NPCs, doorways, palette and head clearance. |
 | F3 | Saria street (world 1, room $06, entry 1) | saria; keys 0 | Check outdoor NPCs, doorways, palette and head clearance. |
-| F4 | Mido street (world 1, room $09, entry 1) | mido; keys 0 | Check outdoor NPCs, doorways, palette and head clearance. |
+| F4 | Mido street (world 1, room $09, entry 1) | mido; keys 0 | Find the knight and talk to him for the first downstab lesson. |
 | F5 | Nabooru street (world 2, room $0C, entry 1) | nabooru; keys 0 | Check outdoor NPCs, doorways, palette and head clearance. |
-| F6 | Darunia street (world 2, room $0F, entry 1) | p4; keys 0 | Check outdoor NPCs, doorways, palette and head clearance. |
+| F6 | Darunia street (world 2, room $0F, entry 1) | darunia; keys 0 | Find the knight and talk to him for the first upstab lesson. |
 | F7 | New Kasuto street (world 2, room $12, entry 1) | p6; keys 0 | Check outdoor NPCs, doorways, palette and head clearance. |
 | F8 | Old Kasuto street (world 2, room $15, entry 1) | p6boss; keys 0 | Check outdoor NPCs, doorways, palette and head clearance. |
 | F9 | Death Mountain entrance (overworld DM) | saria; keys 0 | Walk the native overworld; enter nearby caves or Palace 4. |
@@ -226,6 +251,8 @@ returns: the fight is already live. F9/F10 are unused.
 | F5 | West Hyrule water bridge (world 0, room $01, native right-hand entry) | saria; keys 0 | Cross the bridge, test jumps, crouch clearance, and water surface wading. |
 | F6 | Medicine cave collapsing bridge (world 0, room $0E, native left-hand entry) | p3; keys 0 | Cross the collapsing bridge above lava and test lava surface recovery. |
 | F7 | Palace 6 drop-shaft edge (world 4, room $28, entry 1, x=300, y=176) | p6boss; keys 0 | Stand safely at the gap; jump across or fall to the lower room. This is not a lethal bottomless pit. |
+| F8 | Palace 2 breakable blocks (world 3, room $1A, entry 1) | p2boss; keys 0 | Shoot through the 2x3 breakable block wall with the Glove. |
+| F9 | West Hyrule Myu cave (world 0, room $10, entry 0) | ruto; keys 0 | Watch the Myu to the right through both crawl frames, then crouch nearby. |
 
 ### Evidence, omissions and limits
 

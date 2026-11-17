@@ -10,10 +10,11 @@ COLORS = [(20, 22, 28), (194, 43, 25), (255, 168, 57), (255, 243, 205)]
 TALL_POSES = ('walk0', 'walk1', 'walk2', 'idle', 'windup', 'attack',
               'crouch', 'crouch-attack', 'up', 'down', 'hurt', 'death', 'jump')
 ASH_TILES = (0x7E, 0x80)
-# Player-bank pairs the tall renderer must never allocate: weapon/candle (0x32, 0x52,
-# 0x54), Ache/bat enemy (0x4E, 0x50), ending ash (0x5E, 0x62, patched in build.py),
+# Player-bank pairs the tall renderer must never allocate: Myu crawl frame (0x24,
+# mirrored by the bank-7 sprite table at $EE7B), weapon/candle (0x32, 0x52, 0x54),
+# Ache/bat enemy (0x4E, 0x50), ending ash (0x5E, 0x62, patched in build.py),
 # and the XP "3" score digit (0x60, drawn by the bank-7 score table at $DD4C).
-PLAYER_RESERVED_PAIRS = frozenset({0x32, 0x4E, 0x50, 0x52, 0x54, 0x5E, 0x60, 0x62})
+PLAYER_RESERVED_PAIRS = frozenset({0x24, 0x32, 0x4E, 0x50, 0x52, 0x54, 0x5E, 0x60, 0x62})
 
 # Two poses of the ending projectile, facing right. Index 0 is transparent.
 # The warm palette progresses from red (1) to orange (2) to white (3).

@@ -2,6 +2,22 @@
 
 Current playable alpha. Built locally from `roms/z2.nes` via `python tools/build.py`.
 
+2026-11-17 technique lessons. Mido teaches the wyrm dive and Darunia teaches
+Barba to ram headfirst. Both lessons include the jump and direction inputs.
+Open `play/Test Barba - Towns and World.cmd` and use F4 for Mido or F6 for
+Darunia. Each checkpoint starts before its knight's first lesson. Mesen
+verified both messages on screen and both technique unlocks.
+
+2026-11-17 Myu crawl sprite. The player tile allocator now reserves `$24`
+for one of the Myu's two frames and uses the spare player pair `$5C`.
+In the West Hyrule cave, Mesen saw both frames and confirmed their pixels
+match the source ROM. The previous build failed that check on `$24`.
+Tall geometry, death and continue, Dark Barba, and the Palace 1 volley
+passed, with 0/900 volley lag frames. All 68 checkpoints were regenerated
+and validated.
+Open `play/Test Barba - Tricky Movement.cmd`, press F9, and watch the
+Myu on the right crawl. Crouch nearby to check Barba's pose.
+
 2026-11-17 fatal-hit silhouette. Black Barba now has two full torso chunks
 with the feet anchored. The transition lifts the head one row and fills the
 gap with a full segment. Build/play ROM `2141a5dbe2ad`. Mesen verified both
@@ -347,7 +363,7 @@ enemy records; this is a candidate fix for the reported red downstab/busy-room
 ghost, whose exact appearance still needs producer confirmation. Unit tests and
 title_roar, tall_geometry, routines, upstab, look_up, stab_blocks, meteor, damage,
 dark_link, hud_timing, perf_volley, perf_upward, perf_meteor and town pass.
-Latest volley: 16,657 avg / 22,308 peak, 0/900 lag; six-Bot upward: 25,300 avg /
+That build's volley: 16,657 avg / 22,308 peak, 0/900 lag; six-Bot upward: 25,300 avg /
 25,984 peak, 0/900 lag, 25 upward shots. All 25 Palace/Movement/Endgame busy-room
 probes report zero lag and zero status-bar jitter (500 frames per checkpoint;
 transition time can inflate the raw NMI maximum). See BREATH-IMPLEMENTATION.md.
@@ -416,7 +432,7 @@ frame. Both live in rewritten vanilla fixed-bank code, with no padding claimed
     (`$05CA = 0`), so Fire-only enemies no longer need a spell; range stays 33 updates. Code lives in reclaimed
     dead vanilla bank-0 code (`$97F1`, `$9847`, `$81C1`; original bytes guarded). `tests/meteor.lua`.
   - Palace 6 boss converted to **Lava Link** (hand-drawn Link head/tunic in CHR 25, Sprite Palette 3, Spear/sword-beam breath, fireball damage).
-  - **Dark Barba** ("Dark Link", 24x48 in `src/dark_barba.inc`, sharing `src/tall_layout.inc` directly and enforcing `$0753 = 2` shadow palette on entry) takes 1 HP fireball damage and yields the Triforce-hold pose (`tests/dark_link.lua`).
+  - **Dark Barba** ("Dark Link", 24x48 in `src/dark_barba.inc`, sharing `src/tall_layout.inc`) takes 1 HP fireball damage and yields the Triforce-hold pose. On 2026-11-17 the Great Palace fight reproduced the native hurt flash switching the shadow to a colored palette. The renderer now keeps every shadow sprite black through the entrance and fight. The palette RAM regression in `tests/dark_link.lua` fails on the previous ROM and passes on the rebuilt ROM. `tall_geometry` also verifies player sprite ownership and palette during downstab, upstab and their hurt flashes with six live enemy slots. All nine checkpoint sets were regenerated. The sampled volley still measures 16,788 avg / 22,490 peak, 0/900 lag.
   - **Boss fireball coverage** (2026-11-15): all six palace bosses die to fireballs alone, with no thrust
     techniques, then drop the key that unlocks the room: `tests/horsehead.lua`, `helmethead.lua`, `rebonack.lua`
     (both phases), `carock.lua`, `gooma.lua`, `lava_link_kill.lua` (shared driver `tests/boss_fight.lua`).
@@ -437,6 +453,15 @@ frame. Both live in rewritten vanilla fixed-bank code, with no padding claimed
   - **Ending sequence**: 24x48 Barba beside woken Zelda, custom wake-up dialogue, a 16px fireball with a white-hot core and two flickering tail poses, ash, 20-entry credits, and New Game+ (`$07A0 = 1`). The shot travels down and right from behind the curtain until the tip reaches Zelda. Both poses, impact, ash, credits, and New Game+ passed `tests/ending.lua` (2026-11-17).
 
 - **Boss checkpoint set** (2026-11-15): `play/Test Barba - Bosses.cmd` maps F1-F8 to the left edge of every boss room (Horsehead through Dark Link) with route-appropriate loadouts; all 8 reload-validated (`docs/TEST-PACK.md`).
+
+- **Busy Areas checkpoint set** (2026-11-17). `play/Test Barba - Busy Areas.cmd`
+  opens ten reload-validated combat and town checkpoints. F1–F3 start in Palace 5
+  rooms 62, 48 and 44 with two, one and one live Magos respectively. F4–F10
+  cover the Gooma approach, Palace 2 floor, Palace 3 blocks, Palace 6 Wizzrobe hall,
+  Horsehead approach, Old Kasuto and Rauru. The 620-frame-per-state probe saw zero
+  gameplay lag frames and zero shifted HUD frames. Old Kasuto had the highest
+  measured NMI cost (29,167 cycles), and the Gooma approach had 13 sprites on
+  one scanline. See `docs/TEST-PACK.md` for the key list.
 
 ## Performance & bank headroom
 

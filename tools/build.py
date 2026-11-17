@@ -211,11 +211,25 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
     dest = labels['SignUpdate']
     for address, kind in ((0x94CF, '$21'), (0x94D1, '$22')):
         overlay.prg(3, address, dest.to_bytes(2, 'little'), bytes.fromhex('bd 9a'), f'Sign reader {kind} update {address:04X}')
-    # Message-box padding (max 10 chars/line): end three 11-char vanilla lines one byte
-    # early by turning the final period into the terminator ("A STRANGER", "THE CASTLE",
-    # "UP TO STAB"). The original $FF after it is left unread.
-    for address, line in ((0xA423, 'A STRANGER'), (0xA612, 'THE CASTLE'), (0xADDD, 'UP TO STAB')):
+    # Message-box padding (max 10 chars/line): end two 11-char vanilla lines one byte
+    # early by turning the final period into the terminator. The following $FF is left unread.
+    for address, line in ((0xA423, 'A STRANGER'), (0xA612, 'THE CASTLE')):
         overlay.prg(3, address, b'\xff', b'\xcf', f'Vanilla dialogue width trim: {line}')
+    # The Mido and Darunia knights teach Barba's aerial techniques in place.
+    town_glyphs = {chr(ord('A') + i): 0xDA + i for i in range(26)}
+    town_glyphs.update({' ': 0xF4, '.': 0xCF, '\n': 0xFD})
+    for address, name, original, lesson in (
+        (0xA99E, 'Mido downstab', 'WHEN YOU\nJUMP PRESS\nDOWNWARD\nTO STAB.',
+         'JUMP. HOLD\nDOWN FOR A\nWYRM DIVE.'),
+        (0xADBF, 'Darunia upstab', 'WHEN YOU\nJUMP PRESS\nUP TO STAB.',
+         'JUMP. HOLD\nUP TO RAM\nHEADFIRST.'),
+    ):
+        expected = bytes(town_glyphs[ch] for ch in original) + b'\xff'
+        replacement = bytes(town_glyphs[ch] for ch in lesson) + b'\xff'
+        lines = lesson.splitlines()
+        if len(replacement) > len(expected) or len(lines) > 3 or any(len(line) > 10 for line in lines):
+            raise ValueError(f'{name} lesson exceeds its dialogue space')
+        overlay.prg(3, address, replacement.ljust(len(expected), b'\xff'), expected, name + ' lesson')
     # East message 36 is five mid-height dots (tile $32), which is now shout glyph D's
     # upper half. Draw them with the period glyph instead.
     overlay.prg(3, 0xAE19, b'\xcf' * 5, b'\x32' * 5, 'Vanilla dialogue ellipsis uses periods')

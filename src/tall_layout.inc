@@ -7,10 +7,10 @@ BarbaTallTiles:
     .byte $00, $02, $04, $F5, $06, $08, $0A, $0C, $0E ; idle
     .byte $1A, $1C, $04, $F5, $06, $08, $0A, $0C, $0E ; windup
     .byte $1E, $20, $04, $F5, $06, $08, $0A, $0C, $0E ; attack
-    .byte $F5, $F5, $F5, $F5, $22, $24, $26, $28, $2A ; crouch
-    .byte $F5, $F5, $F5, $2C, $2E, $24, $30, $34, $2A ; crouch-attack
-    .byte $36, $38, $3A, $3C, $3E, $40, $42, $44, $46 ; up
-    .byte $F5, $08, $06, $48, $4A, $4C, $56, $58, $5A ; down
+    .byte $F5, $F5, $F5, $F5, $22, $26, $28, $2A, $2C ; crouch
+    .byte $F5, $F5, $F5, $2E, $30, $26, $34, $36, $2C ; crouch-attack
+    .byte $38, $3A, $3C, $3E, $40, $42, $44, $46, $48 ; up
+    .byte $F5, $08, $06, $4A, $4C, $56, $58, $5A, $5C ; down
     .byte $1A, $1C, $04, $F5, $10, $12, $14, $16, $18 ; hurt
-    .byte $F5, $F5, $F5, $F5, $22, $24, $26, $28, $2A ; death
+    .byte $F5, $F5, $F5, $F5, $22, $26, $28, $2A, $2C ; death
     .byte $00, $02, $04, $0A, $0C, $0E, $F5, $06, $08 ; jump

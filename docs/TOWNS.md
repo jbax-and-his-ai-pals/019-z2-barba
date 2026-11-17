@@ -19,6 +19,10 @@ action rechecks eligibility in `src/town.inc`.
 
 ## Behavior
 
+- The Mido knight teaches downstab with “JUMP. HOLD / DOWN FOR A / WYRM DIVE.”
+  The Darunia knight teaches upstab with “JUMP. HOLD / UP TO RAM / HEADFIRST.”
+  Both first-time lessons use their original bank-3 message slots (`$A99E` and
+  `$ADBF`) and the native unlock and dialogue timing.
 - Wanderers panic within 72 pixels, or 96 during an attack, on the same floor.
   `TownPickEscapeDir` picks the direction away from Barba toward the nearest
   doorway (`$8B` / `$91`) or room edge (`$69C4` / `$69C7+1`). They flee at
@@ -68,8 +72,8 @@ action rechecks eligibility in `src/town.inc`.
   `<= 10` and encodes A-Z, space, `.` (`$CF`), `!` (`$36`), `?` (`$34`) and an
   apostrophe (`$35`, original art in `TEXT_GLYPHS`, `tools/assets.py`). Text tiles
   must be in `$00-$3F` or `$C0-$FC` (the native engine draws byte = tile there).
-  Three 11-char vanilla lines end one byte early (`A STRANGER`, `THE CASTLE`,
-  `UP TO STAB`), and East message 36's five mid-dots (`$32`, now shout glyph D)
+  Two 11-char vanilla lines end one byte early (`A STRANGER`, `THE CASTLE`),
+  and East message 36's five mid-dots (`$32`, now shout glyph D)
   are drawn as periods (`tools/build.py`). The 66 four-line vanilla messages are
   not yet rewritten. A post-build guard keeps the font, punctuation and box tiles
   vanilla in bank 7 and fails if any vanilla message byte leaves that set (the

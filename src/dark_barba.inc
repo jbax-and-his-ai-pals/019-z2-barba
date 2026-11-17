@@ -15,7 +15,9 @@ DarkBarbaDraw:
     and #$F0
     bne @done
     lda $0252
-    sta $02             ; $02 = attribute byte (palette, priority, hflip)
+    and #$FC           ; drop the native hurt flash's palette bits
+    ora #$02           ; keep the shadow black, preserving priority and facing
+    sta $02
     lda $81
     cmp #$0D
     bcc :+
@@ -28,7 +30,6 @@ DarkBarbaDraw:
     sta $03             ; $03 = base index into DarkBarbaTiles
     ldx #$08
 @loop:
-    stx $04
     lda $02
     and #$40
     bne @right
@@ -44,7 +45,6 @@ DarkBarbaDraw:
     cmp #$F5
     beq @skip
     sta $05
-    ldx $04
     lda $2A
     clc
     adc @row_y,x
@@ -69,12 +69,10 @@ DarkBarbaDraw:
     sta $0203,y
     jmp @next
 @skip:
-    ldx $04
     ldy @oam_off,x
     lda #$F8
     sta $0200,y
 @next:
-    ldx $04
     dex
     bpl @loop
 @done:

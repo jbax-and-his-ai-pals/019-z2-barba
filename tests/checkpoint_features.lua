@@ -30,6 +30,12 @@ function checkpointFeature(spec)
         local floor=tile(x+4,y)
         return (floor==0x4B or floor==0x4C) and empty and r(0x479)==0,
             detail..string.format(' support=$%02X next-column-x=%d tiles=%s grounded=%d',floor,edge,table.concat(values,','),r(0x479))
+    elseif spec.feature=='magos' then
+        local count=0
+        for slot=0,5 do
+            if r(0xA1+slot)==0x1D and r(0xB6+slot)==1 then count=count+1 end
+        end
+        return count>=spec.magos,detail..string.format(' live Magos=%d (need %d)',count,spec.magos)
     end
     return true,detail
 end

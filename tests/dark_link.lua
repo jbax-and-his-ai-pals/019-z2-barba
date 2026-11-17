@@ -22,6 +22,8 @@ local sawHurtTimer=false
 local sawDeath=false
 local sawTallDarkBarba=false
 local sawShadowPalette=false
+local sawBlackHurtShadow=false
+local shadowAlwaysBlack=true
 local sawVictory=false
 local sampledAudio=LABELS and LABELS.RoarAudio
 local fanfareEnd,roarStart,roarTail,endingStart
@@ -33,6 +35,26 @@ local lastVoice=0
 local stompCheckFrame=nil
 local stompSurvived=false
 local finished=false
+
+-- Inspect the shadow's finished sprites after the draw hook, including the
+-- frames where the native renderer would select a flashing hurt palette.
+emu.addMemoryCallback(function()
+    if r(0x8506)~=0x2F or r(0xA1)~=0x23 then return end
+    local palette=emu.memType.nesPaletteRam
+    for sprite=0x250,0x274,4 do
+        if r(sprite)<0xEF then
+            local slot=r(sprite+2)&3
+            local black=slot==2
+            for color=1,3 do
+                black=black and emu.read(0x10+4*slot+color,palette)==0x0F
+            end
+            shadowAlwaysBlack=shadowAlwaysBlack and black
+            if r(0x050D)~=0 and (r(0x050D)&2)~=0 then
+                sawBlackHurtShadow=sawBlackHurtShadow or black
+            end
+        end
+    end
+end,emu.callbackType.exec,0x9A82)
 
 emu.addEventCallback(function()
     local buttons=newGameInput(frame)
@@ -157,6 +179,8 @@ emu.addEventCallback(function()
         check(stompSurvived,'Descending onto 4-HP Dark Barba does not stomp-kill him')
         check(sawTallDarkBarba,'Dark Barba renders 24x48 tall top row ($026C at Y - 16)')
         check(sawShadowPalette,'Dark Barba uses shadow palette 2 ($0753 == 2, OAM attr & 3 == 2)')
+        check(shadowAlwaysBlack and sawBlackHurtShadow,
+            'Every visible Dark Barba sprite uses black, including native hurt-flash frames')
         check(tilesMatch,'DarkBarbaTiles matches BarbaTallTiles across all 117 tile bytes')
         check(sawVictory,'Dark Link defeat triggered victory phase ($63 >= 4)')
         if sampledAudio then

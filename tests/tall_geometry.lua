@@ -106,9 +106,16 @@ for _,attack in ipairs({0,2})do
         check(r(0x80)==3 and r(0x17)==1 and r(0x754)==0x10,'elevator pose leaves native control state intact')
     end)
 end
-for _,pose in ipairs({3,9})do
-    add('busy odd frame preserves enemy OAM pose='..pose,'BarbaDisplay',function()
-        w(0x12,1);w(0x80,pose);w(0x479,pose==9 and 1 or 0)
+for _,case in ipairs({
+    {name='standing',pose=3,air=0,hurt=0},
+    {name='upstab',pose=8,air=2,hurt=0},
+    {name='downstab',pose=9,air=1,hurt=0},
+    {name='hit during upstab',pose=8,air=2,hurt=0x32},
+    {name='hit during downstab',pose=9,air=1,hurt=0x32},
+})do
+    add('busy odd frame: '..case.name,'BarbaDisplay',function()
+        w(0x12,1);w(0x80,case.pose);w(0x479,case.air)
+        w(0x796,0x14);w(0x57D,case.air==2 and 0xFC or 2);w(0x50C,case.hurt)
         for address=0xB6,0xBB do w(address,1)end
         -- A complete native enemy record, including a different palette.
         for offset=0,23 do w(0x2C8+offset,0x80+offset)end
@@ -117,6 +124,12 @@ for _,pose in ipairs({3,9})do
         for offset=0,23 do if r(0x2C8+offset)~=0x80+offset then intact=false end end
         check(intact,'player rendering preserves all six enemy sprites on busy odd frames')
         check(r(0x218)==0xA0,'lower body stays in player OAM')
+        local palette=(case.hurt>>1)&3
+        local matches=true
+        for _,sprite in ipairs({0x204,0x208,0x20C,0x210,0x214,0x218,0x21C,0x220,0x224,0x24C,0x2C4})do
+            if r(sprite)<0xEF and (r(sprite+2)&3)~=palette then matches=false end
+        end
+        check(matches,'all visible player pieces use the same expected palette')
     end)
 end
 for _,facing in ipairs({1,2})do

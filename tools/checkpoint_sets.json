@@ -16,7 +16,8 @@
     "start": {"levels":[1,1,1],"magic":4,"hearts":4,"spells":1,"items":[],"tech":0,"placed":0,"flags":{}},
     "ruto": {"levels":[3,2,3],"magic":5,"hearts":5,"spells":2,"items":[0],"tech":0,"placed":1,"flags":{"1944":16}},
     "saria": {"levels":[3,3,3],"magic":5,"hearts":5,"spells":3,"items":[0],"tech":0,"placed":1,"flags":{"1944":16,"1945":1,"1946":8}},
-    "mido": {"levels":[4,4,4],"magic":5,"hearts":5,"spells":4,"items":[0,1,6],"tech":16,"placed":2,"flags":{"1944":16,"1945":1,"1946":72}},
+    "mido": {"levels":[4,4,4],"magic":5,"hearts":5,"spells":4,"items":[0,1,6],"tech":0,"placed":2,"flags":{"1944":16,"1945":1,"1946":72}},
+    "darunia": {"levels":[5,5,5],"magic":6,"hearts":6,"spells":6,"items":[0,1,2,6],"tech":16,"placed":3,"flags":{"1944":16,"1945":1,"1946":72,"1947":1,"1948":32}},
     "nabooru": {"levels":[5,4,5],"magic":6,"hearts":6,"spells":5,"items":[0,1,2,6],"tech":16,"placed":3,"flags":{"1944":16,"1945":1,"1946":72,"1947":1}}
   },
   "sets": {
@@ -58,9 +59,9 @@
       {"id":"rauru","name":"Rauru street","profile":"start","world":1,"region":0,"number":0,"room":0,"page":1,"instructions":"Check outdoor NPCs, doorways, palette and head clearance.","town":true},
       {"id":"ruto","name":"Ruto street","profile":"ruto","world":1,"region":0,"number":1,"room":3,"page":1,"instructions":"Check outdoor NPCs, doorways, palette and head clearance.","town":true},
       {"id":"saria","name":"Saria street","profile":"saria","world":1,"region":0,"number":2,"room":6,"page":1,"instructions":"Check outdoor NPCs, doorways, palette and head clearance.","town":true},
-      {"id":"mido","name":"Mido street","profile":"mido","world":1,"region":0,"number":3,"room":9,"page":1,"instructions":"Check outdoor NPCs, doorways, palette and head clearance.","town":true},
+      {"id":"mido","name":"Mido street","profile":"mido","world":1,"region":0,"number":3,"room":9,"page":1,"instructions":"Find the knight and talk to him for the first downstab lesson.","town":true},
       {"id":"nabooru","name":"Nabooru street","profile":"nabooru","world":2,"region":2,"number":4,"room":12,"page":1,"instructions":"Check outdoor NPCs, doorways, palette and head clearance.","town":true},
-      {"id":"darunia","name":"Darunia street","profile":"p4","world":2,"region":2,"number":5,"room":15,"page":1,"instructions":"Check outdoor NPCs, doorways, palette and head clearance.","town":true},
+      {"id":"darunia","name":"Darunia street","profile":"darunia","world":2,"region":2,"number":5,"room":15,"page":1,"instructions":"Find the knight and talk to him for the first upstab lesson.","town":true},
       {"id":"new-kasuto","name":"New Kasuto street","profile":"p6","world":2,"region":2,"number":6,"room":18,"page":1,"instructions":"Check outdoor NPCs, doorways, palette and head clearance.","town":true},
       {"id":"old-kasuto","name":"Old Kasuto street","profile":"p6boss","world":2,"region":2,"number":7,"room":21,"page":1,"instructions":"Check outdoor NPCs, doorways, palette and head clearance.","town":true},
       {"id":"death-mountain","name":"Death Mountain entrance","profile":"saria","world":0,"region":1,"number":0,"room":0,"page":0,"mode":5,"frames":90,"entry":{"115":42,"116":0,"1801":1,"1802":0,"1846":0,"1897":1},"instructions":"Walk the native overworld; enter nearby caves or Palace 4."},
@@ -68,6 +69,18 @@
     ],
     "gem": [
       {"id":"palace-gem","name":"Palace 6 gem placement","profile":"p6boss","world":4,"region":2,"number":6,"room":58,"page":3,"frames":120,"position":{"x":848,"y":144},"instructions":"Boss is behind you. Walk right to the crystal statue; listen for the victory fanfare then immediate roar and watch Barba look up. Reload F1 to repeat."}
+    ],
+    "busy": [
+      {"id":"p5-two-magos","name":"Palace 5 two-Mago room","profile":"p5boss","world":3,"region":2,"number":5,"room":62,"page":0,"feature":"magos","magos":2,"instructions":"Jump and alternate upstab and downstab while both Magos are active. Let a shot hit you and watch for a red duplicate."},
+      {"id":"p5-mago-statues","name":"Palace 5 Mago and statue hall","profile":"p5boss","world":3,"region":2,"number":5,"room":48,"page":0,"feature":"magos","magos":1,"instructions":"Fight through the statue hall while the Mago teleports and fires."},
+      {"id":"p5-first-mago","name":"Palace 5 first Mago room","profile":"p5boss","world":3,"region":2,"number":5,"room":44,"page":0,"feature":"magos","magos":1,"instructions":"Let the Mago appear and fire, then try both aerial stabs during its next teleport."},
+      {"id":"p5-gooma-approach","name":"Palace 5 before Gooma","profile":"p5boss","world":3,"region":2,"number":5,"room":40,"page":1,"instructions":"Turn and breathe in both directions with the Ironknuckles on screen."},
+      {"id":"p2-crowded-floor","name":"Palace 2 crowded floor corridor","profile":"p2boss","world":3,"region":0,"number":2,"room":20,"page":1,"instructions":"Jump and fire volleys through the crowded corridor. Watch the HUD and the enemies around Barba."},
+      {"id":"p3-ironknuckle-blocks","name":"Palace 3 Ironknuckles and breakable blocks","profile":"p3boss","world":4,"region":0,"number":3,"room":13,"page":1,"instructions":"Walk right and breathe into the breakable blocks with the Ironknuckles nearby."},
+      {"id":"p6-wizzrobe-hall","name":"Palace 6 Wizzrobe hall","profile":"p6boss","world":4,"region":2,"number":6,"room":60,"page":1,"instructions":"Fight the Wizzrobe while other enemies and shots are on screen."},
+      {"id":"p1-horsehead-approach","name":"Palace 1 before Horsehead","profile":"p1boss","world":3,"region":0,"number":1,"room":12,"page":0,"position":{"x":112,"y":176},"instructions":"Walk and fire toward the enemy groups in the approach corridor."},
+      {"id":"old-kasuto","name":"Old Kasuto monster street","profile":"p6boss","world":2,"region":2,"number":7,"room":21,"page":1,"town":true,"instructions":"Turn and breathe through the Moas. Watch the HUD and let a Moa hit you in midair."},
+      {"id":"rauru","name":"Rauru street crowd","profile":"start","world":1,"region":0,"number":0,"room":0,"page":1,"town":true,"instructions":"Breathe through the crowd and watch the sprites during panic, shouts and scorch effects."}
     ],
     "movement": [
       {"id":"p6-water-lava","name":"Palace 6 lava ledge","profile":"p6boss","world":4,"region":2,"number":6,"room":51,"page":0,"instructions":"Walk onto lava, jump back, check native body and folded head."},
@@ -77,7 +90,8 @@
       {"id":"west-water","name":"West Hyrule water bridge","profile":"saria","world":0,"region":0,"number":0,"room":1,"page":0,"entry":{"1801":0,"1864":19,"1897":1},"instructions":"Cross the bridge, test jumps, crouch clearance, and water surface wading."},
       {"id":"medicine-bridge","name":"Medicine cave collapsing bridge","profile":"p3","world":0,"region":0,"number":0,"room":14,"page":0,"position":{"x":112,"y":128},"entry":{"1801":0,"1864":15,"1897":1},"instructions":"Cross the collapsing bridge above lava and test lava surface recovery."},
       {"id":"p6-drop-shaft","name":"Palace 6 drop-shaft edge","profile":"p6boss","world":4,"region":2,"number":6,"room":40,"page":1,"position":{"x":300,"y":176},"feature":"pit","instructions":"Stand safely at the gap; jump across or fall to the lower room. This is not a lethal bottomless pit."},
-      {"id":"p2-blocks","name":"Palace 2 breakable blocks","profile":"p2boss","world":3,"region":0,"number":2,"room":26,"page":1,"instructions":"Shoot through the 2x3 breakable block wall with the Glove."}
+      {"id":"p2-blocks","name":"Palace 2 breakable blocks","profile":"p2boss","world":3,"region":0,"number":2,"room":26,"page":1,"instructions":"Shoot through the 2x3 breakable block wall with the Glove."},
+      {"id":"myu-cave","name":"West Hyrule Myu cave","profile":"ruto","world":0,"region":0,"number":0,"room":16,"page":0,"position":{"x":112,"y":176},"entry":{"1801":0,"1864":16,"1897":1},"instructions":"Let the little Myu crawl through both frames. Crouch nearby and check that both sprites look right."}
     ]
   }
 }

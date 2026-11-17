@@ -11,6 +11,11 @@ full-body jump pose while airborne, leaving native animation and physics state
 intact. Airborne low attacks also retain the whole body. Only grounded crouch
 uses a compact 24px pose with eight pixels of segmented neck beneath the head.
 
+The player tile allocator reserves sprite pair `$24` for the Myu. The native
+draw mirrors that pair for one crawl frame and `$B0` for the other. Barba's
+crouch art had overwritten `$24`; the revised layout fits by using the free
+player pair `$5C`.
+
 Elevator contact (`$0754 != 0`, set by the native enemy pass) also selects the
 compact crouch/crouch-attack art and crouched mouth origin. This is a visual fold:
 `$80`, `$17`, movement and the elevator's Up/Down controller stay native. Riding
@@ -115,7 +120,16 @@ removes dragon art from enemy-owned records and is the candidate fix for the
 producer's intermittent red ghost during downstab/busy palace combat. The exact
 reported ghost has not been reproduced; human confirmation remains open.
 `tall_geometry` seeds six live enemies and verifies all six sprites of the native
-record survive standing/downstab drawing on odd frames.
+record survive standing, upstab and downstab drawing on odd frames. The upstab
+and downstab fixtures also check that the player's hurt flash covers every visible
+part of the pose.
+
+2026-11-17 Dark Barba hurt flash. The native renderer could OR its injury
+palette into the shadow's sprite attributes, selecting palette 3 when Dark
+Barba took a hit. `DarkBarbaDraw` now preserves facing and priority from the
+native attributes and sets the low bits to palette 2 on every visible shadow
+sprite. `dark_link` checks the actual palette RAM colors during the entrance
+and fight, including the former hurt-flash frames.
 
 The title jaw tables now come from the compiled idle/windup/attack head rows.
 The old open-jaw right column `$22` had become crouch art after tile allocation

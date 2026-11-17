@@ -15,8 +15,9 @@ python tools/create_test_pack.py --force       # F1-F10 human checkpoints for th
 python tools/create_test_pack.py --set edges   # F1 last-life danger, F2 GAME OVER portrait
 python tools/create_test_pack.py --set gem     # F1 beside Palace 6 gem; walk right for victory roar/look-up
 python tools/create_test_pack.py --set items   # F1 beside Palace 1 Candle; walk left and hold a direction through the celebration
+python tools/create_test_pack.py --set busy    # F1-F3 Palace 5 Magos; F4-F10 busy palace and town rooms
 python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-per-line report
-python tools/busy_rooms.py [--sets palaces,movement,world]  # lag + status-bar jitter over test-pack rooms (needs the pack)
+python tools/busy_rooms.py [--sets busy]        # lag + status-bar jitter over test-pack rooms (needs the pack)
 ```
 
 - Results go to `build/<scenario>.txt` (PASS/FAIL lines plus RESULT). Errors go to `build/<scenario>-error.txt`.
@@ -82,7 +83,7 @@ python tools/busy_rooms.py [--sets palaces,movement,world]  # lag + status-bar j
   (425 bytes); the gem helper occupies bank 4 `$A7E5-$A803` (31 bytes). `$9B47`
   queues the roar at fanfare end and holds the ceremony until the roar drains.
   Native refill and its shared XP sound start afterward. Dark Barba's
-  bank-5 `$9BAC` hook and `$BF3F-$BF5E` helper reuse the victory roar and
+  bank-5 `$9BAC` hook and `$BF3B-$BF5A` helper reuse the victory roar and
   wait for it to drain before Zelda's awakening. Early cached-pad
   helper uses displaced laugh bytes `$F3C1-$F3DF` (31 bytes), not new padding.
   First-title-pop DAC ramp uses bank 6 `$8F40-$8F65` (38 bytes).
@@ -128,8 +129,8 @@ python tools/busy_rooms.py [--sets palaces,movement,world]  # lag + status-bar j
 - ROM: bank 0 `$A89E-$A97D` (BANK0_OW; `BarbaSplitBurnForest` + `BurnAbort`; 1 free) + `$AA40-$BF6F` (BANK0; default sampled 2 free, legacy native 0 free) +
   reclaimed dead vanilla bank-0 code `$81C1-$81E4`, `$97F1-$9814`, `$9847-$9877` (METEOR; 0/1/0 free respectively; originals guarded) +
   bank 1 `$9EB9-$9FFF` (BANK1, vanilla pad after Geldarm draw code; `geldarm.inc`; 240 free) +
-  `$BFE0-$BFF9` (BANK0_TAIL, vanilla pad before vectors; `BurnMapEndGuard`, 1 free), bank 3 `$9D0A-$9FFF` (BANK3_SIGN, vanilla pad `bank3_UNUSED_9D0A`; `sign.inc` + `TownOpenerGate` + `ScalesTick` + `LateSplit` + `BarbaDeathDisplay`, default sampled 146 free, legacy native 154 free; more vanilla pad untouched at `$8BB1-$90EF` and `$9134-$93FF`), bank 3 `$B803-$BF6F` (TOWN; 2 free), bank 6 `$BA00-$BF6F` (BANK6; `shouts.inc` + `combo.inc` + `ScalesHop`; 2 free), bank 5 `$BDE0-$BF5F` (BANK5; `dark_barba.inc` + `HiddenJarHit`; 33 free).
-  Default sampled bank 5 also holds `DarkBarbaVictory` (1 free; legacy native 33 free).
+  `$BFE0-$BFF9` (BANK0_TAIL, vanilla pad before vectors; `BurnMapEndGuard`, 1 free), bank 3 `$9D0A-$9FFF` (BANK3_SIGN, vanilla pad `bank3_UNUSED_9D0A`; `sign.inc` + `TownOpenerGate` + `ScalesTick` + `LateSplit` + `BarbaDeathDisplay`, default sampled 146 free, legacy native 154 free; more vanilla pad untouched at `$8BB1-$90EF` and `$9134-$93FF`), bank 3 `$B803-$BF6F` (TOWN; 2 free), bank 6 `$BA00-$BF6F` (BANK6; `shouts.inc` + `combo.inc` + `ScalesHop`; 2 free), bank 5 `$BDE0-$BF5F` (BANK5; `dark_barba.inc` + `HiddenJarHit`; 37 free).
+  Default sampled bank 5 also holds `DarkBarbaVictory` (5 free; legacy native 37 free).
   Bank 4 `$A765-$A8FF` is vanilla `$FF` pad patched by raw bytes in `build.py`: Lava Link helpers `$A765-$A7A8`,
   `HiddenJarHit` `$A7BF-$A7CF`, `CarockHit` `$A7D0-$A7E4` (shared with the P3/4/6 Wizzrobe tail `$AEB2`; boss death gated on `$22`);
   `$A7B0-$A7BE` and `$A804-$A8FF` free; default sampled gem helper uses `$A7E5-$A803`.
@@ -149,7 +150,7 @@ python tools/busy_rooms.py [--sets palaces,movement,world]  # lag + status-bar j
   item celebrations use `$34/$40` for the raised item and `$20/$24` for the raised-head torso only;
   victory roar lifts existing art 8px and overlaps its partial torso by 8px for two complete chunks (56px tall, feet anchored);
   town shout word `$DC-$F4` (7 glyphs, only while a word is live and no enemy projectile exists); overworld flame `$FC` (`$02FC-$02FF`).
-- CHR: game-over front-facing black Link in bank 17 tiles `$00-$31` (narrowed source-Ganon torso + authored cap/ears/face, mouthless thin split collar, soft cap with right-ear notch, both stray neck marks filled black; bank-0 map `$801F-$80C8`, no new padding/RAM); player art in even sprite banks 0-24; overworld flame pairs `$60/$62` in dedicated overworld bank 30; ash `$7E/$80` **bank 6 only** (shared sprites elsewhere);
+- CHR: game-over front-facing black Link in bank 17 tiles `$00-$31` (narrowed source-Ganon torso + authored cap/ears/face, mouthless thin split collar, soft cap with right-ear notch, both stray neck marks filled black; bank-0 map `$801F-$80C8`, no new padding/RAM); player art in even sprite banks 0-24 reserves `$24` for Myu and uses the former spare `$5C`; overworld flame pairs `$60/$62` in dedicated overworld bank 30; ash `$7E/$80` **bank 6 only** (shared sprites elsewhere);
   shout glyphs in town BG bank 7 pairs `$32/$7E/$80,$84-$BE` (odd 8x16 bytes) plus `H` (`$7C`) and combo X/1-9/B in town sprite
   bank 6 pairs `$6C-$AE` (even bytes); town scorch art in bank 7 tiles `$AC/$A4` (flame top), `$C1/$C0` (char top),
   `$A7/$C2` (shared bottom); dialogue `?` `$34` and apostrophe `$35` (guarded post-build; text tiles must be `$00-$3F`/`$C0-$FC`). Bank 7 `$00-$27` are villager 8x16 sprites (a byte draws both tiles of its pair):
@@ -161,6 +162,11 @@ Latest (2026-11-16, block animation allocation fix): Palace 1 idle 13,618/13,682
 Busiest test-pack rooms (`tools/busy_rooms.py`): P2 floor 24.5k avg / 28.5k worst, P5 before boss 22.9k/27.4k,
 Old Kasuto 22.0k/29.0k, 0 lag. The native enemy pass (~9-12k) dominates; Barba's hooks are ~4-5k. Any overrun
 that ends inside the next vblank is repaired by `LateSplit` (no status-bar jitter); a longer one still is not.
+
+The Busy Areas set (2026-11-17) adds ten native rooms, including Palace 5 rooms
+62/48/44. In its 620-frame-per-state probe, Old Kasuto peaked at 29,167 cycles,
+Palace 2 floor at 29,119, and the Gooma approach at 27,640 with 13 sprites on one
+scanline. Zero gameplay lag or shifted HUD frames across the set.
 
 The game logic runs in NMI. Over about 29.7k cycles the next frame lags. Vanilla peaks near 26.6k
 with 6 enemies. Palace 1 `perf_volley.lua` probe (with direct `BarbaExtraBlocks` and `BarbaLoadOk`
