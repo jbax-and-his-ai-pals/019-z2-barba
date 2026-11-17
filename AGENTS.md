@@ -14,6 +14,7 @@ python tools/emulator_test.py tests/boot.lua --rom roms/z2.nes
 python tools/create_test_pack.py --force       # F1-F10 human checkpoints for the current build
 python tools/create_test_pack.py --set edges   # F1 last-life danger, F2 GAME OVER portrait
 python tools/create_test_pack.py --set gem     # F1 beside Palace 6 gem; walk right for victory roar/look-up
+python tools/create_test_pack.py --set items   # F1 beside Palace 1 Candle; walk left and hold a direction through the celebration
 python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-per-line report
 python tools/busy_rooms.py [--sets palaces,movement,world]  # lag + status-bar jitter over test-pack rooms (needs the pack)
 ```
@@ -56,6 +57,7 @@ python tools/busy_rooms.py [--sets palaces,movement,world]  # lag + status-bar j
 | `src/blocks.inc` | fireballs break glove-gated blocks |
 | `src/geldarm.inc` | bank 1: desert worm sinks into the sand before its death explosion |
 | `src/tall_player.inc`, `tall_layout.inc` | 24x48 boss-derived player renderer and head geometry |
+| `src/death_display.inc` | fatal-hit silhouette with two full torso chunks |
 | `src/dark_barba.inc` | bank 5 24x48 Dark Barba renderer and Triforce-hold pose |
 | `src/town*.inc`, `shouts.inc`, `ash_layout.inc` | fleeing/burning villagers, panic dialogue and shouts |
 | `src/sign.inc` | bank 3 pad: burned-sign mark and rotating burned-sign text |
@@ -76,22 +78,32 @@ python tools/busy_rooms.py [--sets palaces,movement,world]  # lag + status-bar j
   (two 20-byte helpers), and hooks `$810F`/`$8116`; pulse volume halves while
   roaring, normal envelopes continue. Sample DAC amplitude 34 (previously 28;
   initially 20), increased for all sampled voice uses on 2026-11-17.
-  Gameplay coordinator/controller/pulse/rate/gem-torso helpers occupy bank 6 `$8C00-$8DF1`
-  (498 bytes); gem hook helper bank 4 `$A7E5-$A7F0` (12 bytes), called at
-  `$9B4D` after the fanfare, before refill/XP. Early cached-pad
+  Gameplay coordinator/controller/pulse/rate helpers occupy bank 6 `$8C00-$8DA8`
+  (425 bytes); the gem helper occupies bank 4 `$A7E5-$A803` (31 bytes). `$9B47`
+  queues the roar at fanfare end and holds the ceremony until the roar drains.
+  Native refill and its shared XP sound start afterward. Dark Barba's
+  bank-5 `$9BAC` hook and `$BF3F-$BF5E` helper reuse the victory roar and
+  wait for it to drain before Zelda's awakening. Early cached-pad
   helper uses displaced laugh bytes `$F3C1-$F3DF` (31 bytes), not new padding.
   First-title-pop DAC ramp uses bank 6 `$8F40-$8F65` (38 bytes).
-  Initial Game Over laugh delay uses bank 6 `$8F70-$8FAE` (63 guarded pad bytes):
+  Initial Game Over laugh delay uses bank 6 `$8F70-$8FB3` (68 guarded pad bytes):
   latches `$E9` in `$05EE` bit 0 and waits 36 frames (~0.60 s) using native
   `$0501`; no new RAM. Pending latch clears outside Game Over.
   Inter-laugh spacing remains 23 frames. Gameplay path and sample bytes unchanged.
-  Sampled RAM `$05EE` = request/active bits (7 active, 6 gem/spell pending,
-  5 injury pitch tail, 3 gem looking-up pose, 2 hurt, 0 delayed Game Over laugh),
+  Item pickup uses fixed hook `$E547` via FarCall0 and bank-0 helpers
+  `$BF70-$BF96` (39 guarded bytes in the unused reset entry). Preserve mapper
+  code at `$BF9D-$BFDF`, including the live overworld call at `$BFB1`.
+  Qualifying items lock the standing pose and player input via `$9341/$9D96/$8DC3`.
+  Bank-6 pickup logic, `$9B73/$9B24` hooks and shared celebration renderer occupy
+  `$8A00-$8B3E` (319 guarded pad bytes). WRAM `$64D4` holds 1 during the
+  pickup fanfare and `$80` through the roar and its buffered tail.
+  Sampled RAM `$05EE` = request/active bits (7 active, 6 full voice pending,
+  5 injury pitch tail, 4 victory draining or complete, 3 raised-head pose, 2 hurt, 1 item roar, 0 delayed Game Over laugh),
   `$05EF` = legacy start timer; WRAM `$64D2/$64D3` = stable raw pads
   captured after the HUD split (one-frame input latency only during playback).
-  Default build bank0 has 2 free, bank3-sign 250 free (legacy native: 0/258).
+  Default build bank0 has 2 free, bank3-sign 146 free (legacy native: 0/154).
   Random attack roars removed (2026-11-17); native fireball SFX retained.
-  Latest normal sampled volley: 16,769 avg / 22,466 peak, 0/900 lag; HUD zero late splits.
+  Latest normal sampled volley: 16,788 avg / 22,490 peak, 0/900 lag.
   Approved roar stays exactly 2,177 bytes `$F400-$FC80`; Game Over uses four
   octave-up native waveforms: 65 bytes `$FC80-$FCC0`, then 49 bytes each at
   `$FCC0`, `$FD00`, `$FD40` (last ends `$FD70`). Verified silent `$55` endpoints
@@ -116,10 +128,11 @@ python tools/busy_rooms.py [--sets palaces,movement,world]  # lag + status-bar j
 - ROM: bank 0 `$A89E-$A97D` (BANK0_OW; `BarbaSplitBurnForest` + `BurnAbort`; 1 free) + `$AA40-$BF6F` (BANK0; default sampled 2 free, legacy native 0 free) +
   reclaimed dead vanilla bank-0 code `$81C1-$81E4`, `$97F1-$9814`, `$9847-$9877` (METEOR; 0/1/0 free respectively; originals guarded) +
   bank 1 `$9EB9-$9FFF` (BANK1, vanilla pad after Geldarm draw code; `geldarm.inc`; 240 free) +
-  `$BFE0-$BFF9` (BANK0_TAIL, vanilla pad before vectors; `BurnMapEndGuard`, 1 free), bank 3 `$9D0A-$9FFF` (BANK3_SIGN, vanilla pad `bank3_UNUSED_9D0A`; `sign.inc` + `TownOpenerGate` + `ScalesTick` + `LateSplit`, default sampled 250 free, legacy native 258 free; more vanilla pad untouched at `$8BB1-$90EF` and `$9134-$93FF`), bank 3 `$B803-$BF6F` (TOWN; 2 free), bank 6 `$BA00-$BF6F` (BANK6; `shouts.inc` + `combo.inc` + `ScalesHop`; 2 free), bank 5 `$BDE0-$BF5F` (BANK5; `dark_barba.inc` + `HiddenJarHit`; 33 free).
+  `$BFE0-$BFF9` (BANK0_TAIL, vanilla pad before vectors; `BurnMapEndGuard`, 1 free), bank 3 `$9D0A-$9FFF` (BANK3_SIGN, vanilla pad `bank3_UNUSED_9D0A`; `sign.inc` + `TownOpenerGate` + `ScalesTick` + `LateSplit` + `BarbaDeathDisplay`, default sampled 146 free, legacy native 154 free; more vanilla pad untouched at `$8BB1-$90EF` and `$9134-$93FF`), bank 3 `$B803-$BF6F` (TOWN; 2 free), bank 6 `$BA00-$BF6F` (BANK6; `shouts.inc` + `combo.inc` + `ScalesHop`; 2 free), bank 5 `$BDE0-$BF5F` (BANK5; `dark_barba.inc` + `HiddenJarHit`; 33 free).
+  Default sampled bank 5 also holds `DarkBarbaVictory` (1 free; legacy native 33 free).
   Bank 4 `$A765-$A8FF` is vanilla `$FF` pad patched by raw bytes in `build.py`: Lava Link helpers `$A765-$A7A8`,
   `HiddenJarHit` `$A7BF-$A7CF`, `CarockHit` `$A7D0-$A7E4` (shared with the P3/4/6 Wizzrobe tail `$AEB2`; boss death gated on `$22`);
-  `$A7B0-$A7BE` and `$A7F1-$A8FF` free; default sampled gem helper uses `$A7E5-$A7F0`.
+  `$A7B0-$A7BE` and `$A804-$A8FF` free; default sampled gem helper uses `$A7E5-$A803`.
   Fixed bank 7: LAVA `$D39A-$D3C9` (0 free), GATEWAY `$FEAA-$FECF` (0 free),
   TERRAIN `$FF4C-$FF6E` (1 free). `FarCall0` provides cold bank-0
   hooks at 5 fixed bytes/call (6 with standalone RTS), 369-482 bridge cycles plus target work;
@@ -129,10 +142,12 @@ python tools/busy_rooms.py [--sets palaces,movement,world]  # lag + status-bar j
   tail `$C182-$C1B5` (tail now starts `$C19D`; RTI still `$C1B5`), fast offscreen mask `$F27D-$F2D1` (`$F2D2` spare).
   Block animation allocation (2026-11-16): same-size guarded rewrites `$E0FC-$E109`, `$E23A-$E247`, `$E29C-$E29D` defer brick/floor breaks when all five records are busy; no new space or RAM.
 - RAM `$05EA`, `$05EB` (lava contact), `$05EC`/`$05ED` (SCALES cast latch / last injured timer), `$05F0-$05FF` (roar, breath, tall renderer, extra guard). Cleared by the native reset loop.
+- Ending fireball uses bank 5 `$8CEB-$8D4D` (existing cutscene patch, 2 bytes free), `$05F8` (state), `$05FA` (X), and OAM `$0240-$0247`. CHR bank 14 pairs `$E0/$E2` (tail) and `$E4/$E6` (head) reuse the displaced ending Link art. Both sprites are hidden on impact.
 - WRAM `$6400-$642F` extra projectile records; `$6440-$645F` scratch (`$6457` lazy-save flag,
   `$6458-$645F` geometry terrain cache, `$645C` EXTRA_LIVE); `$6460-$6469` shouts (`$6465` actor, `$6467` word, `$6468` timer, `$6469` cycle); `$646A` + `$6490-$64D0` town scorch ring (16-slot FIFO + head/page); `$646B` volley aim latch (0 forward / $40 upward); `$646C-$646F` + `$6488` town combo banner; `$6470-$6473` Inferno firestorm (`$6470` timer, `$6473` wave aim) and overworld flame (`$6471` timer, `$6472` dir); `$6474` METEOR dive state; `$64D1` `SIGN_PENDING` (sign board scorched, cleared with the ring). Actor byte `$04A0,x` = burned-sign line for sign readers `$21`/`$22` (native spawn clears it). Don't touch collision/room/save regions elsewhere in `$6000-$7FFF`.
-- OAM in use: tall head `$04/$4C/$C4`, extra torso (downstab/gem roar) `$20/$24`, extra fireballs `$3C/$44/$48`; enemy projectiles use `$28/$2C/$30`;
-  gem roar lifts existing art 8px and overlaps its partial torso by 8px for two complete chunks (56px tall, feet anchored);
+- OAM in use: tall head `$04/$4C/$C4`, extra torso (downstab, celebrations and fatal-hit transition) `$20/$24`, extra fireballs `$3C/$44/$48`; enemy projectiles use `$28/$2C/$30`;
+  item celebrations use `$34/$40` for the raised item and `$20/$24` for the raised-head torso only;
+  victory roar lifts existing art 8px and overlaps its partial torso by 8px for two complete chunks (56px tall, feet anchored);
   town shout word `$DC-$F4` (7 glyphs, only while a word is live and no enemy projectile exists); overworld flame `$FC` (`$02FC-$02FF`).
 - CHR: game-over front-facing black Link in bank 17 tiles `$00-$31` (narrowed source-Ganon torso + authored cap/ears/face, mouthless thin split collar, soft cap with right-ear notch, both stray neck marks filled black; bank-0 map `$801F-$80C8`, no new padding/RAM); player art in even sprite banks 0-24; overworld flame pairs `$60/$62` in dedicated overworld bank 30; ash `$7E/$80` **bank 6 only** (shared sprites elsewhere);
   shout glyphs in town BG bank 7 pairs `$32/$7E/$80,$84-$BE` (odd 8x16 bytes) plus `H` (`$7C`) and combo X/1-9/B in town sprite

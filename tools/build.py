@@ -13,7 +13,7 @@ from assets import (ASH_TILES, CASTLE_FIRE_BANK, CASTLE_FIRE_TILE_SHA256,
                     TOWN_FIRE_BANK, TOWN_FIRE_TILE_SHA256,
                     TEXT_GLYPH_BANK, TEXT_GLYPH_SHA256, TEXT_GLYPHS,
                     BREATH_ICON_BANKS, BREATH_ICON_SHA256, BREATH_ICON_TILE,
-                    compile_assets, compile_breath_icon, compile_castle_fire,
+                    compile_assets, compile_breath_icon, compile_castle_fire, compile_ending_fire,
                     compile_castle_shout_glyphs, compile_file_select_doll,
                     compile_shout_glyphs, compile_text_glyphs, compile_title_logo,
                     compile_town_fire, validate_layout)
@@ -115,6 +115,9 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
     hook(0, 0x8518, 'BarbaOverworldA', 0x4C, 'ad 89 07')
     hook(0, 0x922A, 'ThunderHit', 0x20, '20 26 e7')
     hook(7, 0xD52D, 'BarbaDisplay', 0x20, '20 f0 eb')
+    death_draw = labels['BarbaDeathDisplay'].to_bytes(2, 'little')
+    overlay.prg(7, 0xC9EE, bytes.fromhex('a9 03 20 cc ff 20') + death_draw + b'\xea\xea',
+                bytes.fromhex('20 c5 ff a9 0a 85 80 20 f0 eb'), 'Fatal-hit transition renderer')
     hook(7, 0xE0A4, 'LavaSurface', 0x4C, 'a9 01 85')
     hook(7, 0xD4FE, 'BarbaPreEnemy', 0x20, '20 25 99')
     hook(7, 0xD535, 'BarbaBlocks', 0x20, '20 dd e1')
@@ -137,6 +140,8 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
     hook(7, 0xE617, 'ShieldFireGateway', 0x4C, 'a5 c8 0a')
     hook(5, 0x9A7F, 'DarkBarbaDraw', 0x20, '20 02 ec')
     hook(5, 0x9BB1, 'DarkBarbaTriforcePose', 0x4C, 'a9 0b 85 80 e6 af 4c 11 ef', 6)
+    if title_roar_wav:
+        hook(5, 0x9BAC, 'DarkBarbaVictory', 0x4C, 'ac 12 05')
     lag_dest = labels['LagNmiBank6']
     overlay.prg(7, 0xC065, bytes.fromhex('ad 06 85 48') + bytes([0x4C, lag_dest & 255, lag_dest >> 8]),
                 bytes.fromhex('a9 06 20 cc ff 20 00'), 'Lag-frame NMI bank preservation')
@@ -252,6 +257,13 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
                 continue
             offset = CHR_OFFSET + bank*4096 + tile*16
             overlay.put(offset, pair, source[offset:offset+32], f'CHR {bank:02X}: dragon tile {tile:02X}')
+    # Ending sprite bank: reuse the four Link pairs displaced by Barba and Zelda.
+    ending_fire_graphics = compile_ending_fire()
+    fire_off = CHR_OFFSET + 14 * 4096 + 0xE0 * 16
+    original = source[fire_off:fire_off+len(ending_fire_graphics)]
+    if hashlib.sha256(original).hexdigest() != 'bd229b13118d533415235815b40458d5e292cd88ac776be66674586dbc28eaa0':
+        raise ValueError('Ending fireball CHR allocation changed')
+    overlay.put(fire_off, ending_fire_graphics, original, 'CHR 0E: ending fireball frames')
     # Ending '?' glyph in CHR bank 15 tile $0F (matching the shaded font of !/$07 and A/$DA).
     question_tile = encode_tile([
         '01111120',
@@ -390,16 +402,40 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
     if title_roar_wav:
         sampled_title_code, roar_update, roar_jaw = roar_sample.title_code(sample, roar_info)
         for filename, bank, address in [('sampled-roar', 6, 0x8C00), ('sample-gem', 4, 0xA7E5),
+                                         ('item-roar', 6, 0x8A00),
                                          ('laugh-delay', 6, 0x8F70)]:
             data = (output/f'barba-{filename}.bin').read_bytes()
             overlay.prg(bank, address, data, b'\xff'*len(data), f'Sampled roar {filename} helpers')
+        # Only the bank-0 copy of the reset entry is dead. The mapper
+        # routines beginning at $BF9D are also called by gameplay.
+        item_hold = (output/'barba-item-hold.bin').read_bytes()
+        expected_stub = bytes.fromhex(
+            '78d8a2008e0020e8ad022010fbcaf0f89a8e00808e00a08e00c08e00e0'
+            'a90f209dbf20b1bfa90720ccbf4c00c0'
+        )
+        overlay.prg(0, 0xBF70, item_hold, expected_stub[:len(item_hold)], 'Item celebration pickup and input helpers')
+        overlay.prg(7, 0xE547, b'\x20' + labels['FarCall0'].to_bytes(2, 'little')
+                    + labels['ItemHoldPickup'].to_bytes(2, 'little') + b'\x60\xea\xea',
+                    bytes.fromhex('b5 af 29 7f 8d 9d 04 60'), 'Start the key item hold at pickup')
+        for address, target, original in [(0x9341, 'ItemHoldPose', 'ad 9c 04'),
+                                          (0x8DC3, 'ItemHoldSpell', 'ad 4c 07')]:
+            hook(0, address, target, 0x4C, original)
+        # Block Start during the hold. Otherwise use the native rising-edge
+        # test, written as (current XOR previous) AND current AND Start.
+        overlay.prg(0, 0x9D96, bytes.fromhex('ad d4 64 d0 31 a5 f7 4d 44 07 25 f7 29 10 f0 26 ea'),
+                    bytes.fromhex('ad 44 07 29 10 85 00 a5 f7 29 10 f0 29 c5 00 f0 25'),
+                    'Block the side-view pause pane during item celebrations')
         overlay.prg(6, 0x9010, b'\x20' + labels['RoarAudio'].to_bytes(2, 'little'),
                     bytes.fromhex('20 0b 92'), 'Sampled gameplay DMC coordinator')
+        overlay.prg(6, 0x9B24, b'\x20' + labels['RoarItemFanfareEnd'].to_bytes(2, 'little'),
+                    bytes.fromhex('ad 07 07'), 'Key item roar after native pickup fanfare')
+        overlay.prg(6, 0x9B73, b'\x20' + labels['RoarItemFanfareStart'].to_bytes(2, 'little'),
+                    bytes.fromhex('8d fb 07'), 'Retire interrupted item fanfares on a track change')
         for address, target, original in [(0x9031, 'RoarPulse1', '8e 00 40'), (0x9038, 'RoarPulse2', '8e 04 40')]:
             overlay.prg(6, address, b'\x20' + labels[target].to_bytes(2, 'little'),
                         bytes.fromhex(original), f'Gameplay music ducking {target}')
-        overlay.prg(4, 0x9B4D, b'\x20' + labels['RoarGemEnd'].to_bytes(2, 'little'),
-                    bytes.fromhex('8c 0c 07'), 'Victory roar immediately after palace gem fanfare')
+        overlay.prg(4, 0x9B47, b'\x4c' + labels['RoarGemEnd'].to_bytes(2, 'little'),
+                    bytes.fromhex('ac fb 07'), 'Palace victory roar before refill, control unlock and XP')
         overlay.prg(7, 0xE314, b'\x20' + labels['FarCall0'].to_bytes(2, 'little')
                     + labels['BarbaHurtRoar'].to_bytes(2, 'little') + b'\xea',
                     bytes.fromhex('a9 01 85 e9 85 00'), 'Barba short hurt roar; native recoil setup preserved')
@@ -809,18 +845,19 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
         bytes.fromhex('a9'),
         'Ending keep Barba distance from Zelda',
     )
-    # Ending toast finale ($8CEB..$8D4D + @ash at $8F6F -> $8B4A):
+    # Ending toast finale ($8CEB..$8D4D + ash at $8F6F and $93F7):
     # When the curtain reaches $22A0 (covering Barba's head), Barba fires a behind-curtain fireball
     # (attr $20) that drops below the curtain into view right before hitting Zelda and turning her to ash.
+    # Ash inherits the lower Zelda sprites' $22 attributes from the draw helper.
+    ending_ash = bytes.fromhex(
+        'a9 f8 8d 30 02 8d 34 02 8d 40 02 8d 44 02 '
+        'a9 5e 8d 39 02 a9 62 8d 3d 02 '
+        '4c f7 93'
+    )
     overlay.prg(
         5, 0x8F6F,
-        bytes.fromhex(
-            'a9 f8 8d 30 02 8d 34 02 8d 40 02 '
-            'a9 5e 8d 39 02 a9 62 8d 3d 02 '
-            'a9 22 8d 3a 02 8d 3e 02 '
-            '4c f7 93'
-        ),
-        source[prg_offset(5, 0x8F6F):prg_offset(5, 0x8F6F + 32)],
+        ending_ash + b'\xea' * 5,
+        source[prg_offset(5, 0x8F6F):prg_offset(5, 0x8F8F)],
         'Ending Zelda-to-ash helper',
     )
     overlay.prg(
@@ -829,36 +866,14 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
         b'\xff' * 9,
         'Ending Zelda-to-ash Y=$C8 tail',
     )
-    ending_toast = bytes.fromhex(
-        # $8CEB:
-        'ad f8 05 d0 27 '                  # lda $05F8; bne @not_idle (+$27)
-        'ad 61 07 c9 06 d0 1f '            # lda $0761; cmp #6; bne @done (+$1F)
-        'a5 27 c9 22 d0 19 '               # lda $27; cmp #$22; bne @done (+$19)
-        'a5 28 c9 a0 90 13 '               # lda $28; cmp #$A0; bcc @done (+$13)
-        'ee f8 05 '                        # inc $05F8 (start fire)
-        'a9 aa 8d f9 05 '                  # lda #$AA; sta $05F9 (Y)
-        'a9 72 8d fa 05 '                  # lda #$72; sta $05FA (X)
-        'a5 ed 09 40 85 ed '               # lda $ED; ora #$40; sta $ED (SFX)
-        '60 '                              # @done: rts
-        # @not_idle ($8D17):
-        'c9 01 d0 2a '                     # cmp #1; bne @ash (+$2A -> jmp $8F6F)
-        'ee f9 05 '                        # inc $05F9 (Y += 1)
-        'a5 12 29 01 f0 03 ee fa 05 '      # odd frame: X += 1
-        'ad f9 05 c9 bc b0 14 '            # cmp #$BC; bcs @hit (+$14)
-        '8d 40 02 a9 32 8d 41 02 '         # OAM $0240: Y, tile $32
-        'a9 20 8d 42 02 ad fa 05 8d 43 02 ' # attr $20 (behind BG/curtain), X
-        '60 '                              # rts
-        # @hit:
-        'ee f8 05 '                        # inc $05F8 ($05F8 = 2)
-        # @ash:
-        '4c 6f 8f'                         # jmp $8F6F
-    )
-    assert len(ending_toast) <= 0x8D4E - 0x8CEB, f'ending_toast too big: {len(ending_toast)}'
-    assert ending_toast[5 + 0x27 + 4 + 0x2a:] == bytes.fromhex('4c 6f 8f')
+    ending_toast = (output/'barba-ending-fire.bin').read_bytes()
+    original = source[prg_offset(5, 0x8CEB):prg_offset(5, 0x8D4E)]
+    if hashlib.sha256(original).hexdigest() != 'b4717dc1b5c51ec741afd9288f02627d2f438a158397e07caec2dcb9dd8e27d6':
+        raise ValueError('Ending fireball PRG allocation changed')
     overlay.prg(
         5, 0x8CEB,
         ending_toast,
-        source[prg_offset(5, 0x8CEB):prg_offset(5, 0x8CEB + len(ending_toast))],
+        original[:len(ending_toast)],
         'Ending curtain fireball toast logic',
     )
     def encode_ending_text(text: str) -> bytes:

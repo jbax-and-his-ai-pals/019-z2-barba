@@ -222,13 +222,42 @@ the selected ROM hash and are reloaded/validated normally.
 
 Gameplay additions (`src/sampled_roar.inc`, default `SAMPLED_ROAR` assembly):
 
+- Permanent equipment, the Child, Trophy and Medicine, and Heart and Magic
+  Containers start a celebration at pickup. Barba keeps the item overhead
+  while the native fanfare plays. He then tilts his head and roars with the
+  item still raised. The standing pose already has two full torso chunks.
+  During the roar, the gem renderer overlaps the bottom eight rows of
+  the tilted pose with a full chunk to complete its second torso chunk
+  and keep the feet anchored. The native item tiles and palettes use
+  OAM `$0234/$0240` and follow the head, with a HUD clamp.
+  Movement, spells and pausing resume after the roar's buffered tail.
+  Fixed hook `$E547` uses FarCall0 to set `$64D4=1` as the item is collected.
+  The bank-0 helpers occupy `$BF70-$BF96`, the unused reset entry before
+  the mapper routines. Bank-0 hooks at `$9341/$9D96/$8DC3` guard movement,
+  pause and spell casting. The bank-6 pickup helper applies native alignment.
+  The bank-6 music hooks cancel an interrupted fanfare at `$9B73` and
+  start the roar at `$9B24` by setting `$64D4=$80` and queuing `$4A`.
+  Playback steps through `$8A` and `$9A` before clearing the hold and pose.
+  The pickup, fanfare and shared renderer helpers use guarded bank-6 padding
+  at `$8A00-$8B3E`.
+  Generate the Candle checkpoint with `python tools/create_test_pack.py --set items`.
+  The controller-driven check is `python tools/emulator_test.py tests/item_roar.lua`.
 - Gem victory voice starts immediately after the crystal-placement fanfare
-  finishes (2026-11-17). Bank-4 `$9B4D` calls the 12-byte helper at
-  `$A7E5-$A7F0`, preserving `STY $070C` and native life/magic refill. It queues
-  `$48`: full voice plus gem pose. This bypasses XP/menu deferral and becomes
-  `$88` during playback. The renderer holds looking-up frame 8, then returns
-  to normal. `$9B83` retains its original save-bit update; final crystal
-  removal/XP award cannot queue a second roar. Spell timing stays unchanged.
+  finishes. Bank-4 `$9B47` queues `$48` and keeps the statue in the fanfare stage.
+  Playback changes the request to `$88` and holds looking-up frame 8. When DMC
+  reports no bytes remaining, `$98` holds the pose and ceremony for one more
+  audio tick so the buffered bits can finish. The statue consumes `$10` and
+  resumes at `$9B4C` to start the native refill. Meter refill and XP share the
+  same `$EF=$10` sound, so delaying refill also moves the first tally sound
+  after the roar. The native XP stage then releases control, removes the
+  crystal and updates its save flag. The helper uses `$A7E5-$A803` (31 bytes).
+- After Dark Barba's defeat, bank 5 `$9BAC` holds the Triforce scene until
+  the victory fanfare ends (`$07FB` and `$EB` both zero). Barba stands during
+  the fanfare, then uses the same raised-head roar as the gem ceremony.
+  The hook consumes `$10` after the buffered tail and goes directly to
+  `$9BBA` to start Zelda's awakening. This replaces the silent remainder
+  of the native Triforce hold. The helper uses `$BF3F-$BF5E` (32 bytes)
+  and the existing voice state.
 - Breath attacks use only their native fireball SFX; random attack roars were
   removed on 2026-11-17. SCALES and INFERNO casts still queue full voices.
 - Player injury hook `$E314-$E319` uses the existing FarCall0 bridge to a
@@ -243,14 +272,14 @@ Gameplay additions (`src/sampled_roar.inc`, default `SAMPLED_ROAR` assembly):
   21% higher target amplitude); sample allocation, rate and full duration match.
   Pending gem victory survives it. Native `$E9=1` (Lava Link hurt) retains the
   original 193-byte `$F300` sample at rate 15, including its last byte `$F3C0`.
-- Bank-6 pad `$8C00-$8DF1` (498 bytes) contains the audio coordinator, stable
-  controller capture, gameplay pulse ducking and gem torso renderer helper.
+- Bank-6 pad `$8C00-$8DA8` (425 bytes) contains the audio coordinator, stable
+  controller capture, gameplay pulse ducking and native laugh rate helper.
   A 14-byte bank-0 call/hop maps the torso helper, which restores bank 0.
   Hook `$9010` owns only DMC
   scheduling; `$9031/$9038` halve pulse volumes while the roar is active and
   restore normal values afterward. Pitches, envelopes and tempo keep advancing.
-- `$05EE` is request/active bits (7 active, 6 gem/spell, 5 injury pitch tail,
-  3 gem looking-up pose, 2 hurt, 0 pending Game Over laugh), `$05EF`
+- `$05EE` is request/active bits (7 active, 6 full voice pending, 5 injury pitch tail,
+  4 victory draining or complete, 3 raised-head pose, 2 hurt, 1 item roar, 0 pending Game Over laugh), `$05EF`
   retains the legacy start timer, both cleared by native reset. `$64D2/$64D3` cache both raw pads.
   Repeated reads happen in the late audio tick, after the HUD split. Early
   polling hook `$D367-$D36B` uses a 31-byte helper at displaced laugh data

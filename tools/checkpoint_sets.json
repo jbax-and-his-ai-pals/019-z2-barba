@@ -20,6 +20,9 @@
     "nabooru": {"levels":[5,4,5],"magic":6,"hearts":6,"spells":5,"items":[0,1,2,6],"tech":16,"placed":3,"flags":{"1944":16,"1945":1,"1946":72,"1947":1}}
   },
   "sets": {
+    "items": [
+      {"id":"candle-pickup","name":"Palace 1 Candle pickup","profile":"p1","world":3,"region":0,"number":1,"room":8,"page":0,"position":{"x":180,"y":160},"instructions":"Walk left to pick up the Candle. Listen for the roar after the fanfare and watch Barba tilt his head up."}
+    ],
     "palaces": [
       {"id":"p1-entrance","name":"Palace 1 entrance","profile":"p1","world":3,"region":0,"number":1,"room":0,"page":0,"position":{"x":64,"y":176},"instructions":"Check movement, head clearance, combat and HUD."},
       {"id":"p1-before-boss","name":"Before Horsehead","profile":"p1boss","world":3,"region":0,"number":1,"room":12,"page":0,"position":{"x":112,"y":176},"instructions":"Check movement, head clearance, combat and HUD."},

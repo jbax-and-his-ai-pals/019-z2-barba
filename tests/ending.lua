@@ -3,6 +3,7 @@
 -- 2) Updated Zelda wake-up dialogue ("BARBA? HOLY SHIT! THE FUCK ARE YOU DOING HERE?")
 -- 3) 20-entry credits including BARBA EDITION / JERBTRUNDLES and LAVA RECLAIMED.
 -- 4) Pressing Start on the final screen starts New Game+ ($07A0 == 1)
+-- 5) Both behind-curtain fireball poses reach Zelda, then disappear as she turns to ash.
 dofile(TEST_DIR..'/newgame.lua')
 local frame=0
 local mem=emu.memType.nesMemory
@@ -20,7 +21,8 @@ local sawBarbaWait=false
 local sawBarbaAndZelda=false
 local sawNoLinkTiles=true
 local sawCleanPaletteInS2=true
-local sawCurtainFireball=false
+local sawFireballPose={}
+local fireballReachedZelda=false
 local sawZeldaAsh=false
 local sawNoCloserStep=true
 local maxCreditsIndex=0
@@ -73,12 +75,20 @@ emu.addEventCallback(function()
             if r(0x0213)~=0x60 or r(0x0217)~=0x68 or r(0x021B)~=0x70 then
                 sawNoCloserStep=false
             end
-            if r(0x0241)==0x32 and r(0x0242)==0x20 and r(0x0240)>=0xB6 and not sawCurtainFireball then
-                sawCurtainFireball=true
-                local f=assert(io.open(OUTPUT_DIR..'/ending_fire.png','wb'))
-                f:write(emu.takeScreenshot());f:close()
+            local tail=r(0x0241)
+            local x,y=r(0x0243),r(0x0240)
+            if r(0x05F8)==1 and (tail==0xE0 or tail==0xE2) and r(0x0245)==tail+4
+                and r(0x0242)==0x20 and r(0x0246)==0x20 and r(0x0247)==x+8
+                and r(0x0244)==y and y==x+0x43 then
+                sawFireballPose[tail]=true
+                if x+15>=r(0x0233) and y>=0xB6 then fireballReachedZelda=true end
+                if x==0x72 then
+                    local f=assert(io.open(OUTPUT_DIR..'/ending_fire.png','wb'))
+                    f:write(emu.takeScreenshot());f:close()
+                end
             end
-            if s==8 and r(0x0230)==0xF8 and r(0x0234)==0xF8 and r(0x0239)==0x5E and r(0x023D)==0x62 and not sawZeldaAsh then
+            if s==8 and r(0x0230)==0xF8 and r(0x0234)==0xF8 and r(0x0239)==0x5E and r(0x023D)==0x62
+                and r(0x0240)==0xF8 and r(0x0244)==0xF8 and not sawZeldaAsh then
                 sawZeldaAsh=true
                 local f=assert(io.open(OUTPUT_DIR..'/ending_ash.png','wb'))
                 f:write(emu.takeScreenshot());f:close()
@@ -106,8 +116,9 @@ emu.addEventCallback(function()
             check(sawBarbaAndZelda,'Ending renders Barba alongside woken Zelda')
             check(sawNoLinkTiles,'Ending OAM contains zero Link tiles ($E0-$E6)')
             check(sawNoCloserStep,'Barba stays in place without stepping closer to Zelda')
-            check(sawCurtainFireball,'Curtain fireball ($32, attr $20) drops below curtain toward Zelda')
-            check(sawZeldaAsh,'Zelda turns into pile of ash ($5E/$62) before credits')
+            check(sawFireballPose[0xE0] and sawFireballPose[0xE2],'Both fireball poses draw with the two halves aligned behind the curtain')
+            check(fireballReachedZelda,'Fireball reaches Zelda before impact')
+            check(sawZeldaAsh,'Both fireball sprites disappear and Zelda turns into ash before credits')
             check(maxCreditsIndex>=19,'Ending credits roll all 20 entries (max index '..maxCreditsIndex..')')
             check(sawReplayWait,'Ending reaches LAVA RECLAIMED / PUSH START TO REPLAY')
             check(sawNewGamePlus,'Pressing Start on ending enters New Game+ ($07A0 == 1)')

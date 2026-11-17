@@ -15,6 +15,42 @@ ASH_TILES = (0x7E, 0x80)
 # and the XP "3" score digit (0x60, drawn by the bank-7 score table at $DD4C).
 PLAYER_RESERVED_PAIRS = frozenset({0x32, 0x4E, 0x50, 0x52, 0x54, 0x5E, 0x60, 0x62})
 
+# Two poses of the ending projectile, facing right. Index 0 is transparent.
+# The warm palette progresses from red (1) to orange (2) to white (3).
+ENDING_FIRE_FRAMES = (
+    (
+        "0000000001100000",
+        "0000000011221000",
+        "0011000112232100",
+        "0001111122333210",
+        "0111222223333321",
+        "1111122223333321",
+        "0001122222333210",
+        "0011101112222100",
+        "0000000011111000",
+    ),
+    (
+        "0000000001110000",
+        "0000000011221000",
+        "0000011112232100",
+        "1100111122333210",
+        "0111122223333321",
+        "0012222223333321",
+        "0111112222333210",
+        "1100011112222100",
+        "0000000011111000",
+    ),
+)
+
+
+def compile_ending_fire() -> bytes:
+    """Pack tail A/B then head A/B, matching the ending renderer."""
+    first, second = (
+        sprite_pairs(['0' * 16] * 2 + list(frame) + ['0' * 16] * 5)
+        for frame in ENDING_FIRE_FRAMES
+    )
+    return b''.join((first[0], second[0], first[1], second[1]))
+
 
 def _pair_pixel_diff(a: bytes, b: bytes) -> int:
     """Count differing pixels between two 32-byte 8x16 sprite pairs."""

@@ -288,7 +288,7 @@ BarbaDisplay:
     and #$88
     cmp #$88
     bne :+
-    lda #$08           ; gem victory: open jaw, head raised for the full roar
+    lda #$08           ; celebration roar: open jaw with the head raised
     bne @pose
 :
 .endif

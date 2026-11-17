@@ -100,6 +100,14 @@ The helper restores bank 0 before returning. No new CHR, OAM slots or RAM.
 their original OAM remain intact. Native enemy and shield entry hooks execute
 through fixed-bank gateways and retain the original vulnerability routines.
 
+The fatal-hit transition calls `BarbaDeathDisplay` in bank 3 through the
+guarded driver at `$C9EE-$C9F7`. It lifts the compact death head by 16px
+and fills that row's former space with the full `$06/$08` torso in OAM
+`$20/$24`. The original lower torso stays at the feet, yielding one head
+row and two full torso rows. The new row inherits native facing, palette
+and per-column clipping. The helper restores bank 0 for the native palette
+flash. `death_continue` checks the three rows in both directions.
+
 2026-11-16 sprite follow-up: odd-frame priority rotation now swaps only Barba's
 outer head sprites. The lower body stays in `$0214-$021F`; the renderer no longer
 exchanges it with `$02C8-$02D3` inside the rotating native enemy records. This

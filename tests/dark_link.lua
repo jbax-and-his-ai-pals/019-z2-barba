@@ -23,6 +23,13 @@ local sawDeath=false
 local sawTallDarkBarba=false
 local sawShadowPalette=false
 local sawVictory=false
+local sampledAudio=LABELS and LABELS.RoarAudio
+local fanfareEnd,roarStart,roarTail,endingStart
+local roarStarts=0
+local roarPoseHeld=true
+local standingDuringFanfare=false
+local lastMusic=0
+local lastVoice=0
 local stompCheckFrame=nil
 local stompSurvived=false
 local finished=false
@@ -106,7 +113,29 @@ emu.addEventCallback(function()
             end
         end
     end
-    if (frame==3200 or sawVictory) and not finished then
+    if sampledAudio and sawVictory and not finished then
+        local music,voice=r(0x07FB),r(0x05EE)
+        if r(0x63)==7 then
+            if music==0x20 and r(0x05FA)==0x1B then
+                standingDuringFanfare=true
+            end
+            if lastMusic==0x20 and music==0 then
+                fanfareEnd=frame
+            end
+            if voice==0x88 and lastVoice~=0x88 then
+                roarStarts=roarStarts+1
+                roarStart=frame
+            end
+            if voice==0x98 then roarTail=frame end
+            if voice==0x88 or voice==0x98 then
+                roarPoseHeld=roarPoseHeld and music==0 and r(0x076C)~=3
+                    and r(0x05FA)==0x48 and r(0x0220)-r(0x0204)==0x28
+            end
+        end
+        if r(0x076C)==3 then endingStart=frame end
+        lastMusic,lastVoice=music,voice
+    end
+    if (frame==3600 or endingStart or (sawVictory and not sampledAudio)) and not finished then
         finished=true
         local prg=emu.memType.nesPrgRom
         local tilesMatch=LABELS and LABELS.DarkBarbaTiles and LABELS.BarbaTallTiles
@@ -130,6 +159,16 @@ emu.addEventCallback(function()
         check(sawShadowPalette,'Dark Barba uses shadow palette 2 ($0753 == 2, OAM attr & 3 == 2)')
         check(tilesMatch,'DarkBarbaTiles matches BarbaTallTiles across all 117 tile bytes')
         check(sawVictory,'Dark Link defeat triggered victory phase ($63 >= 4)')
+        if sampledAudio then
+            report:write(string.format('fanfare end=%s roar start=%s buffered tail=%s ending start=%s\n',
+                tostring(fanfareEnd),tostring(roarStart),tostring(roarTail),tostring(endingStart)))
+            check(standingDuringFanfare,'Barba stands during the Triforce fanfare')
+            check(roarStarts==1 and fanfareEnd and roarStart==fanfareEnd+1,
+                'Full roar starts once on the first audio tick after the fanfare')
+            check(roarStart and roarPoseHeld,'Barba raises his head and torso throughout the roar')
+            check(roarTail and endingStart==roarTail+1 and lastVoice==0,
+                'Zelda awakening starts after the buffered roar tail')
+        end
         report:write('RESULT '..(errors==0 and 'PASS' or 'FAIL')..string.char(10))
         report:close()
         stopScenario(errors==0 and 0 or 1)

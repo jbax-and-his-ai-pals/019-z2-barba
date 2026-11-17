@@ -62,7 +62,7 @@ emu.addEventCallback(function()
     end
     if frame==1530 then
         if LABELS.RoarAudio then
-            check(r(0x5EE)==0 and r(DRAW_INDEX)==27,'gem voice ends and returns to idle automatically')
+            check(r(0x5EE)==0x10 and r(DRAW_INDEX)==27,'gem voice ends and returns to idle automatically')
         end
         f:write('RESULT '..(errors==0 and 'PASS' or 'FAIL')..'\n');f:close();stopScenario(errors==0 and 0 or 1)
     end

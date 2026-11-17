@@ -2,6 +2,47 @@
 
 Current playable alpha. Built locally from `roms/z2.nes` via `python tools/build.py`.
 
+2026-11-17 fatal-hit silhouette. Black Barba now has two full torso chunks
+with the feet anchored. The transition lifts the head one row and fills the
+gap with a full segment. Build/play ROM `2141a5dbe2ad`. Mesen verified both
+facings, death and continue in both audio builds, and the natural fatal hit
+from Edge Scenarios F1. Tall geometry and all 23 unit tests pass. All 57
+checkpoints were regenerated and validated.
+Open `play/Test Barba - Edge Scenarios.cmd`, press F1 and wait for the enemy
+hit. Watch for two complete segments under the black head during the flash.
+
+2026-11-17 key item celebrations. Equipment, quest pickups and Heart/Magic
+Containers stay overhead through the native fanfare and the full head-tilt
+roar. Standing uses its two full torso chunks. The raised-head pose uses
+the gem overlap to complete its second chunk. Barba regains control after
+the roar's buffered tail. Build/play ROM `1b742549e495`. The Candle, gem,
+Dark Barba, roar, tall geometry and look-up scenarios pass, as do all 23
+unit tests and 57 regenerated and reloaded checkpoints. Palace 1 volley
+averages 16,788 cycles, peaks at 22,490 and has 0/900 lag.
+Open `play/Test Barba - Key Items.cmd`, press F1, walk left into the Candle,
+and watch for two torso chunks during both the fanfare and the roar.
+
+2026-11-17 Dark Barba victory. The full sampled roar begins on the first
+audio tick after the Triforce fanfare. Barba tilts his head back and rises
+into the 56-pixel pose. Zelda's awakening starts as soon as the buffered
+roar tail finishes. Build/play ROM `207318fb945d`. Mesen verifies the timing
+and pose from a normal fireball win in `tests/dark_link.lua`. The ending,
+gem, sampled roar and controller regressions pass, along with all 23 unit
+tests and 56 regenerated and reloaded checkpoints.
+Playtest in `play/Test Barba - Bosses.cmd` with F8.
+
+2026-11-17 palace gem timing. The victory fanfare leads directly into the
+full roar. Life and magic refill shares the XP tally sound, so the statue
+waits for the buffered roar tail before starting refill. The native ceremony
+then returns control and queues crystal XP. Build/play ROM `389f2f64c4dc`.
+The Palace 6 gem regression reproduced the early refill blip on the previous
+build and now confirms that the shared tally sound starts after the roar.
+Movement lock, XP award, roar routine, pose and controller checks pass, along
+with all 23 unit tests and 56 regenerated/reloaded checkpoints.
+Palace 1 volley averages 16,769 cycles, peaks at 22,466 and has 0/900 lag.
+Playtest in `play/Test Barba - Gem Celebration.cmd`. Press F1 and hold Right
+at the statue. Listen for fanfare, then the full roar, then the tally sound.
+
 2026-11-17 main integration verification: default build and all 23 ROM-free
 unit tests pass. Fresh title_sample, game_over_audio, roar_gameplay,
 roar_controls, death_continue, tall_geometry, combat, and look_up emulator
@@ -393,7 +434,7 @@ frame. Both live in rewritten vanilla fixed-bank code, with no padding claimed
     Thunderbird keeps vanilla's rule (producer decision, 2026-11-15): immune until Inferno, then fireballs
     hurt it; `ThunderHit` (`$922A` hook in `src/barba.asm`) preserves Thunderbird's boss-death state (`$6E3F = $FF`) even when a second Inferno deals lethal native Thunder damage so the Key drops cleanly.
     Verified by one-off probes (2026-11-15): downstab on mounted Rebonack (unhorses `$20` into `$0A`) and Reflect vs Carock (reflected beams damage and kill `$22`).
-  - **Ending sequence**: 24x48 Barba beside woken Zelda, custom wake-up dialogue, curtain-fall behind-curtain fireball toast finale turning Zelda to ash, 20-entry credits, and New Game+ (`$07A0 = 1`).
+  - **Ending sequence**: 24x48 Barba beside woken Zelda, custom wake-up dialogue, a 16px fireball with a white-hot core and two flickering tail poses, ash, 20-entry credits, and New Game+ (`$07A0 = 1`). The shot travels down and right from behind the curtain until the tip reaches Zelda. Both poses, impact, ash, credits, and New Game+ passed `tests/ending.lua` (2026-11-17).
 
 - **Boss checkpoint set** (2026-11-15): `play/Test Barba - Bosses.cmd` maps F1-F8 to the left edge of every boss room (Horsehead through Dark Link) with route-appropriate loadouts; all 8 reload-validated (`docs/TEST-PACK.md`).
 

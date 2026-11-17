@@ -4,6 +4,8 @@
 .export RoarPulse1, RoarPulse2
 .export RoarNativeRate
 .export RoarGemTorso
+.export RoarItemFanfareStart, RoarItemFanfareEnd
+.export ItemHoldPickup, ItemHoldPose, ItemHoldSpell
 .segment "SAMPLED_ROAR"
 RoarAudio:
     lda $0736
@@ -14,6 +16,20 @@ RoarAudio:
     lda ROAR_COOLDOWN
     beq :+
     dec ROAR_COOLDOWN
+:
+    lda ROAR_REQUEST
+    and #$02
+    beq :+
+    ; The item ceremony owns DMC through its buffered tail.
+    lda ROAR_REQUEST
+    and #$04
+    beq @itemPhase
+    eor ROAR_REQUEST   ; recoil cannot replace an item roar already in progress
+    sta ROAR_REQUEST
+@itemPhase:
+    bit ROAR_REQUEST
+    bpl @full
+    jmp @active
 :
     lda ROAR_REQUEST
     and #$04
@@ -29,13 +45,14 @@ RoarAudio:
     jmp @active
 :
     and #$40
-    bne @gemWait
-    ; Attacks never start a voice; only injury, spells and gem completion do.
-    lda #$00
+    bne @fullWait
+    ; Attacks never start a voice; only injury, spells and victories do.
+    lda ROAR_REQUEST
+    and #$10           ; keep victory completion latched until the scene consumes it
     sta ROAR_REQUEST
     jmp @native
-@gemWait:
-    ; Gem requests arrive exactly when the fanfare ends, before refill/XP.
+@fullWait:
+    ; Victory requests arrive as their fanfare ends.
     ; Spell requests retain their menu/tally deferral.
     lda ROAR_REQUEST
     and #$08
@@ -50,8 +67,8 @@ RoarAudio:
 :
 @full:
     lda ROAR_REQUEST
-    and #$08
-    ora #$80           ; bit 3 holds the gem's looking-up pose during playback
+    and #$0A           ; keep the raised-head pose and item marker
+    ora #$80
     sta ROAR_REQUEST
     ldx #ROAR_LENGTH
     bne @start
@@ -112,13 +129,29 @@ RoarAudio:
     and #$10
     bne @done
     lda ROAR_REQUEST
-    and #$40
+    cmp #$88
+    beq @drain
+    cmp #$8A
+    bne @retire
+@drain:
+    ; DMC reports no bytes remaining before its buffered output finishes.
+    ; Hold the pose and lock for one more audio tick.
+    ora #$10
+    sta ROAR_REQUEST
+    rts
+@retire:
+    cmp #$9A
+    bne :+
+    lda #$00
+    sta ITEM_HOLD
+:
+    and #$50           ; keep a queued full voice or completed victory
     sta ROAR_REQUEST
 @native:
     jmp $920B
 @nativeHurt:
     lda ROAR_REQUEST
-    and #$40
+    and #$50
     sta ROAR_REQUEST
     jmp $920B
 @done:
@@ -220,11 +253,17 @@ RoarNativeRate:
 @rates:
     .byte 15,15,15,15,6,15,15,15,6,15,6,15,10,15,10,15
 
-; Called from the player's bank-0 renderer. Extend the gem's raised-head pose to
-; 56px: lift its three rows 8px and finish the existing half-segment with a
-; normal torso chunk at the original feet, overlapping the matching top 8px.
+.segment "ITEM_ROAR"
+; Called from the player's bank-0 renderer. The standing item pose already
+; has two full torso chunks. For the raised-head pose, lift its three rows
+; 8px and complete the second torso chunk at the original feet by overlapping
+; the matching top 8px.
 ; A frozen/menu frame may reuse OAM, so shift only freshly drawn coordinates.
 RoarGemTorso:
+    lda ITEM_HOLD
+    beq @victory
+    jsr DrawHeldItem
+@victory:
     lda ROAR_REQUEST
     and #$88
     cmp #$88
@@ -277,17 +316,98 @@ RoarGemTorso:
     adc #$08
     sta $0227
     sty $0225
+    lda ITEM_HOLD
+    beq @done
+    lda $0204
+    jsr PlaceHeldItem
 @done:
     jmp $FFC5          ; restore bank 0 before returning to the player renderer
 @rows:
     .byte $04,$4C,$C4,$08,$0C,$10,$14,$18,$1C
 
+; Keep the native item tiles, horizontal placement and palette. Move them from
+; the native hold slots to the spare side-view records, above the taller head.
+DrawHeldItem:
+    jsr $ED21
+    ldx #$03
+@copy:
+    lda $0220,x
+    sta $0234,x
+    lda $0224,x
+    sta $0240,x
+    dex
+    bne @copy
+    lda #$F8
+    sta $0220
+    sta $0224
+    lda DRAW_TOP
+PlaceHeldItem:
+    sec
+    sbc #$10
+    bcc @hud
+    cmp #$20
+    bcs @place
+@hud:
+    lda #$20
+@place:
+    sta $0234
+    sta $0240
+    rts
+
+; A track change can interrupt the fanfare. Once the roar starts, the native
+; return to the background track must leave the hold in place.
+RoarItemFanfareStart:
+    sta $07FB          ; displaced track selection
+    cmp #$10
+    beq @done
+    pha                ; the sequencer still needs the selected track in A
+    lda ITEM_HOLD
+    bmi @keep          ; background music resumes during the roar
+    lda #$00
+    sta ITEM_HOLD
+@keep:
+    pla
+@done:
+    rts
+
+; The music sequencer reaches this hook when a track runs out of parts.
+RoarItemFanfareEnd:
+    lda ITEM_HOLD
+    cmp #$01
+    bne @resume
+    lda $07FB
+    cmp #$10
+    bne @resume
+    lda #$00
+    sta ITEM_HOLD
+    lda ROAR_REQUEST
+    and #$18           ; leave a palace or ending ceremony's state alone
+    bne @resume
+    lda #$80
+    sta ITEM_HOLD
+    lda #$4A           ; full voice + raised head + no ceremony completion latch
+    sta ROAR_REQUEST
+@resume:
+    lda $0707          ; displaced world load for native music restart
+    rts
+
 .segment "SAMPLE_GEM"
 RoarGemEnd:
-    sty $070C          ; original fanfare-end magic refill (Y = FF)
     lda ROAR_REQUEST
-    ora #$48           ; once at fanfare end: full voice + gem pose
+    and #$18
+    beq @fanfare
+    cmp #$10
+    bne @wait          ; pending, playing or draining: keep the native $DE lock
+    lda #$00
     sta ROAR_REQUEST
+    tay
+    jmp $9B4C          ; native refill and advance to the XP stage
+@fanfare:
+    ldy $07FB          ; original fanfare status check
+    bne @wait
+    lda #$48           ; queue full voice and raised-head pose
+    sta ROAR_REQUEST
+@wait:
     rts
 
 .segment "LAUGH_DELAY"
@@ -296,6 +416,8 @@ RoarLaughDelay:
     ; GAME OVER screen timer starts at F0; subsequent 23-frame gaps stay native.
     ; E9 is cleared by the native driver every frame, so latch its request in
     ; spare ROAR_REQUEST bit 0. Other sound channels keep running normally.
+    lda #$00
+    sta ITEM_HOLD
     lda $0736
     cmp #$04
     beq @gameOver
@@ -326,3 +448,66 @@ RoarLaughDelay:
     sta $E9
 @native:
     jmp $920B
+
+; Arm the hold during the actual pickup so even input on the next frame is
+; locked. Ordinary keys, bags, jars and dolls retain their native behavior.
+.segment "ITEM_ROAR"
+ItemHoldPickupBody:
+    lda $AF,x
+    and #$7F
+    sta $049D          ; displaced item presented above the player
+    cmp #$08           ; permanent equipment (including the Magic Key)
+    bcc @hold
+    cmp #$0E
+    bcc @done
+    cmp #$10           ; Magic or Heart Container
+    bcc @hold
+    cmp #$13           ; Child, Trophy or Medicine
+    bcc @done
+    cmp #$16
+    bcs @done
+@hold:
+    lda #$01
+    sta ITEM_HOLD
+    lda $29            ; align like the native item hold
+    clc
+    adc #$08
+    and #$F0
+    sta $29
+    lda #$00
+    sta $049C
+    sta $0497
+    lda #$01
+    sta $17
+    lda #$02
+    sta $9F
+    lda #$03           ; normal tall standing pose until the roar begins
+    sta $80
+@done:
+    jmp $FFC5          ; restore bank 0 for the FarCall0 return
+
+.segment "ITEM_HOLD"
+ItemHoldPickup:
+    lda #>(ItemHoldPickupBody-1)
+    pha
+    lda #<(ItemHoldPickupBody-1)
+    pha
+    lda #$06
+    jmp $FFCC
+
+ItemHoldPose:
+    lda ITEM_HOLD
+    bne @hold
+    lda $049C          ; displaced native hold timer check
+    jmp $9344
+@hold:
+    ldy #$03
+    jmp $9364          ; native pose and facing store, then return
+
+ItemHoldSpell:
+    lda ITEM_HOLD
+    bne ItemHoldReturn
+    lda $074C          ; displaced spell casting check
+    jmp $8DC6
+ItemHoldReturn:
+    rts

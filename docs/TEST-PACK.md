@@ -177,7 +177,7 @@ Crystals are $078D-$0792, in palace order; $0794 is 6 minus placed. Keys $0793=0
 | F3 | Great Palace elevator (world 5, room $01, entry 0, x=112, y=160) | gp; keys 0 | Start on the native elevator. Hold Down to descend; Up to return. |
 | F4 | Great Palace low tunnel (world 5, room $2C, entry 0, x=64, y=176) | gp; keys 0 | Walk through the 32-pixel-high lane; the raised head must fold under stone. |
 | F5 | Before Thunderbird (world 5, room $35, entry 0) | gp; keys 0 | Check movement, head clearance, combat and HUD. |
-| F6 | Before Dark Link (world 5, room $36, entry 0) | gp; keys 0 | Check movement, head clearance, combat and HUD. |
+| F6 | Before Dark Link (world 5, room $36, entry 0) | gp; keys 0 | Defeat Dark Link and watch the ending. As the curtain drops, look for the bright fireball with a flickering tail traveling down and right into Zelda, then disappearing as she turns to ash. |
 | F7 | Palace 6 boss and crystal approach (world 4, room $3A, entry 0) | p6boss; keys 0 | Walk right to Lava Link; win normally and approach the crystal statue. |
 
 ### bosses

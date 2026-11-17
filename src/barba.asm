@@ -6,7 +6,8 @@
 
 ROAR_TIMER = $05F0 ; cleared by the original $0500..$05FF reset loop; no original references
 .ifdef SAMPLED_ROAR
-ROAR_REQUEST = $05EE ; bit 7 playing, bit 6 gem/spell, bit 5 injury tail, bit 3 gem pose, bit 2 hurt
+ROAR_REQUEST = $05EE ; bit 7 playing, bit 6 full pending, bit 5 injury tail, bit 4 victory draining/done, bit 3 raised head, bit 2 hurt, bit 1 item roar
+ITEM_HOLD = $64D4 ; 1 holding through pickup fanfare, $80 holding through roar
 ROAR_COOLDOWN = $05EF ; start timer; drives injury pitch tail, attacks never roar
 .endif
 LAVA_CONTACT = $05EB ; 4-frame grace timer while supported by palace lava
@@ -344,7 +345,7 @@ BarbaUpdate:
     sta ROAR_TIMER
     rts
 
-; Fixed-bank player injury hook uses FarCall0, preserving native recoil setup.
+; Fixed-bank player injury hook preserves the native recoil argument.
 BarbaHurtRoar:
     lda ROAR_REQUEST
     ora #$04
@@ -386,6 +387,8 @@ RoarPitch:
 .include "scales.inc"
 .include "farcall.inc"
 .include "late_split.inc"
+.include "death_display.inc"
+.include "ending_fire.inc"
 .ifdef SAMPLED_ROAR
 .include "sampled_roar.inc"
 .endif

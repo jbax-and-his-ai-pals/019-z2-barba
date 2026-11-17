@@ -96,10 +96,14 @@ DarkBarbaTiles:
 .include "tall_layout.inc"
 .endscope
 
-; Render 48px Barba looking up ($08) and raise only the Triforce 16px above his head
-; (leaving $2A at $B0 so the old man stays on the floor; $91 is enemy 0's rotating OAM base).
+; Raise only the Triforce, leaving $2A at $B0 so the old man stays on the floor.
+; $91 is enemy 0's rotating OAM base.
 DarkBarbaTriforcePose:
+.ifdef SAMPLED_ROAR
+    lda #$03           ; stand until the renderer sees the victory roar
+.else
     lda #$08
+.endif
     sta $80
     inc $AF
     jsr $EF11
@@ -122,3 +126,24 @@ HiddenJarHit:
     jmp $E48B
 @done:
     rts
+
+.ifdef SAMPLED_ROAR
+.export DarkBarbaVictory
+; Phase 7 holds the Triforce during the victory fanfare and the full roar.
+DarkBarbaVictory:
+    lda ROAR_REQUEST
+    and #$18
+    beq @fanfare
+    eor #$10
+    bne @hold
+    sta ROAR_REQUEST
+    jmp $9BBA          ; native transition into Zelda's awakening
+@fanfare:
+    lda $07FB          ; active music
+    ora $EB            ; music request before the driver starts it
+    bne @hold
+    lda #$48           ; queue the full roar and raised-head pose
+    sta ROAR_REQUEST
+@hold:
+    jmp $9BB1          ; draw the Triforce pose even if the native timer expires
+.endif

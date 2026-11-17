@@ -19,6 +19,9 @@ local barbaRanges={{0x81C1,0x81E4},{0x97F1,0x9814},{0x9847,0x9877},{0x9D0A,0x9DF
     {0xA765,0xA7CF},{0xA89E,0xA97D},{0xAA40,0xBFF9},{0xD39A,0xD3C9},{0xFEAA,0xFECF},{0xFF4C,0xFF6E}}
 local function isBarba(pc)
     if LABELS.RoarAudio and pc>=LABELS.RoarAudio and pc<0x8E00 then return true end
+    if LABELS.RoarItemFanfareStart and pc>=LABELS.RoarItemFanfareStart
+        and pc<LABELS.RoarItemFanfareEnd then return true end
+    if LABELS.RoarLaughDelay and pc>=LABELS.RoarLaughDelay and pc<0x8FB4 then return true end
     for _,rg in ipairs(barbaRanges) do if pc>=rg[1] and pc<=rg[2] then return true end end
     return false
 end
@@ -42,6 +45,8 @@ local phase='boot'
 local leftSide=false
 local held={}
 local shotSeen=false
+local deathFrames=0
+local deathPoseValid=true
 local cases={
     {name='Inferno firestorm',setup=function()
         w(0x0782,1);w(0x0749,7);w(0x074A,0);w(0x0773,0xFF)
@@ -65,6 +70,30 @@ end
 local function wramIdle()
     return r(0x6470)==0 and r(0x6473)==0 and r(0x6474)==0
 end
+
+-- Face each way when the native death transition takes over. Sample its completed
+-- OAM before the palette and scene updates can reuse any sprite records.
+emu.addMemoryCallback(function()
+    if phase=='dead' then w(0x9F,caseIndex==1 and 1 or 2) end
+end,emu.callbackType.exec,0xC9EE)
+emu.addMemoryCallback(function()
+    if phase~='dead' or r(0x048D)~=0 then return end
+    local y=r(0x29)
+    local right=r(0x9F)==1
+    local column=right and 0x0208 or 0x020C
+    deathFrames=deathFrames+1
+    for i=0,4,4 do
+        local head=column+i
+        local torso=0x0220+i
+        local tile=(right==(i==0)) and 0x08 or 0x06
+        deathPoseValid=deathPoseValid and r(head)==y-16 and r(head+12)==y+16
+            and r(torso)==y and r(torso+1)==tile
+            and r(torso+2)==r(head+2) and r(torso+3)==r(head+3)
+    end
+    local outerHead=right and 0x0210 or 0x0208
+    deathPoseValid=deathPoseValid and r(outerHead)==y-16
+        and r(0x0204)>=0xF0 and r(0x024C)>=0xF0 and r(0x02C4)>=0xF0
+end,emu.callbackType.exec,0xC9F8)
 
 emu.addEventCallback(function()
     local b=newGameInput(frame)
@@ -109,6 +138,7 @@ local function nextCase()
     end
     emu.loadSavestate(base)
     held={}; age=0; phase='act'; leftSide=false; shotSeen=false
+    deathFrames=0; deathPoseValid=true
     c.setup()
 end
 
@@ -134,6 +164,8 @@ emu.addEventCallback(function()
     elseif phase=='dead' then
         if r(0x0736)~=0x0B then leftSide=true end
         if leftSide and r(0x0736)==0x0B and r(0x074C)==0 and age>60 then
+            check(deathFrames>0 and deathPoseValid,string.format(
+                '%s: one head row and two full torso rows on %d death frames',c.name,deathFrames))
             phase='settle'; age=0
         end
         if age>4000 then check(false,c.name..': never returned to side view after death'); pendingNext=true; phase='wait' end
