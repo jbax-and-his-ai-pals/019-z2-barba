@@ -26,6 +26,8 @@ local function baseline()
     w(0xCC,0x50);w(0x4D,0x48);w(0x3B,0);w(0x29,0x90);w(0x9F,1)
     w(0x72A,0);w(0x72C,0);w(0xC8,0);w(0x48D,0);w(0x50C,0)
     w(0x70E,0);w(0x752,0);w(0x479,0);w(0x5F6,0)
+    w(0x754,0);w(0x400,0);w(0x12,0)
+    for address=0xB6,0xBB do w(address,0)end
 end
 local function geometry(name,setup,x,y,flags)
     add(name,'BarbaGeometry',setup,function()
@@ -40,6 +42,7 @@ end
 geometry('standing right in open space',function()end,0x6C,0x84,1)
 geometry('standing left in open space',function()w(0x9F,2)end,0x4C,0x84,1)
 geometry('crouch keeps native low lane',function()w(0x17,0);w(0x80,6)end,0x6C,0x9A,1)
+geometry('elevator folds mouth even with standing shield',function()w(0x754,0x10)end,0x6C,0x9A,1)
 geometry('airborne low shield retains full-body mouth',function()
     w(0x17,0);w(0x80,6);w(0x479,2)
 end,0x6C,0x84,1)
@@ -80,6 +83,29 @@ end)
 add('crouching does not leave a raised head ghost','BarbaDisplay',function()
     w(0x17,0);w(0x80,6)
 end,function()check(allHidden(extraHead),'crouch hides all extra head sprites')end)
+for _,attack in ipairs({0,2})do
+    add('elevator duck attack='..attack,'BarbaDisplay',function()
+        w(0x754,0x10);w(0x400,attack)
+    end,function()
+        check(allHidden(extraHead),'elevator hides raised head')
+        check(r(0x5FA)==(attack==0 and 54 or 63),'elevator selects compact idle/attack art')
+        check(r(0x5F3)==0x9A,'elevator fire origin follows compact head')
+        check(r(0x80)==3 and r(0x17)==1 and r(0x754)==0x10,'elevator pose leaves native control state intact')
+    end)
+end
+for _,pose in ipairs({3,9})do
+    add('busy odd frame preserves enemy OAM pose='..pose,'BarbaDisplay',function()
+        w(0x12,1);w(0x80,pose);w(0x479,pose==9 and 1 or 0)
+        for address=0xB6,0xBB do w(address,1)end
+        -- A complete native enemy record, including a different palette.
+        for offset=0,23 do w(0x2C8+offset,0x80+offset)end
+    end,function()
+        local intact=true
+        for offset=0,23 do if r(0x2C8+offset)~=0x80+offset then intact=false end end
+        check(intact,'player rendering preserves all six enemy sprites on busy odd frames')
+        check(r(0x218)==0xA0,'lower body stays in player OAM')
+    end)
+end
 for _,facing in ipairs({1,2})do
     add('ascent displays full body facing '..facing,'BarbaDisplay',function()
         w(0x80,6);w(0x479,2);w(0x9F,facing)

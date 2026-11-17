@@ -2,6 +2,24 @@
 
 Current playable alpha. Built locally from `roms/z2.nes` via `python tools/build.py`.
 
+2026-11-16 title/elevator/ghost follow-up: title jaw graphics now follow the
+compiled head layout (fixes stale `$22` crouch tile in the open jaw). Barba folds
+into crouch/crouch-attack while riding an elevator, with matching breath origin
+and native Up/Down controls. Player lower-body OAM no longer swaps with rotating
+enemy records; this is a candidate fix for the reported red downstab/busy-room
+ghost, whose exact appearance still needs producer confirmation. Unit tests and
+title_roar, tall_geometry, routines, upstab, look_up, stab_blocks, meteor, damage,
+dark_link, hud_timing, perf_volley, perf_upward, perf_meteor and town pass.
+Latest volley: 16,657 avg / 22,308 peak, 0/900 lag; six-Bot upward: 25,300 avg /
+25,984 peak, 0/900 lag, 25 upward shots. All 25 Palace/Movement/Endgame busy-room
+probes report zero lag and zero status-bar jitter (500 frames per checkpoint;
+transition time can inflate the raw NMI maximum). See BREATH-IMPLEMENTATION.md.
+
+Playtest: title screen, wait for the jaw to open; Movement F3 or Endgame F3,
+ride Down and Up while ducked, breathe, then step off; Palaces F10, jump/downstab
+and breathe among enemies, watching for any red duplicate. All 53 checkpoints
+regenerated and reload-validated for ROM `ba1c79a15e61`.
+
 2026-11-15 audit findings resolved: all 9 findings and maintenance items from
 [the 2026-11-15 audit](AUDIT-2026-11-15.md) plus the 2026-11-16 town trigger/respawn
 follow-up are fixed and verified (ROM SHA-256
@@ -16,6 +34,19 @@ approved the look.
 banded belly, slim coil) in all directions; up/down now have real walk frames
 (`front_step`/`back_step`: jaws chomp, neck sways). overworld_side, overworld_fire,
 forest_burn_limit, encounter_hazard, gameplay and boot pass; awaiting producer playtest.
+
+2026-11-16: Busy-room performance and status-bar jitter (awaiting producer playtest).
+When a busy room's NMI work ran past the next vblank, that frame's NMI was lost
+and the PPU drew the whole next frame with the playfield scroll still latched, so
+the status bar slid sideways by the camera position. `LateSplit`
+(`src/late_split.inc`, bank 3) catches overruns that end inside the missed vblank.
+It puts the status bar back at scroll 0, waits for sprite 0 and redoes the native
+playfield split, so the lag frame becomes a clean repeat; it restores the
+interrupted bank by its `$8506` fingerprint. Separately, the native offscreen-column
+mask (`$F27D`, run for every drawn object, about a third of the enemy pass) is now
+one 16-bit subtraction instead of a 4-pass loop, which saves 3-4k cycles per busy
+frame. Both live in rewritten vanilla fixed-bank code, with no padding claimed
+(`docs/FIXED-BANK-AUDIT.md`). Probe: `python tools/busy_rooms.py`.
 
 ## Implemented features
 
@@ -53,8 +84,16 @@ forest_burn_limit, encounter_hazard, gameplay and boot pass; awaiting producer p
     techniques, then drop the key that unlocks the room: `tests/horsehead.lua`, `helmethead.lua`, `rebonack.lua`
     (both phases), `carock.lua`, `gooma.lua`, `lava_link_kill.lua` (shared driver `tests/boss_fight.lua`).
     Carock was immune in vanilla (bank 4 `$B1E9` skips the hit check for `$22`; Reflect only); `CarockHit`
-    (bank 4 `$A7B0`) adds the projectile/sword check in his visible window and runs the native boss death on a
+    (bank 4 `$A7D0`) adds the projectile/sword check in his visible window and runs the native boss death on a
     kill (a raw kill drew him into OAM 0 and hung the sprite-0 wait). Dark Link: `tests/dark_link.lua`.
+    **Wizzrobe fix (2026-11-16):** that visible-window tail (`$AEB2`) is shared with the Palace 3/4/6 Wizzrobe
+    (`$1D`, routine `$AE4F`). Until the fix, a Wizzrobe killed by breath also ran the boss death `$B1F6`: it
+    came back to life (`$B6 = 1`, HP wrapped; seen in the emulator) and `$6E1D+$1D` became `$FF`, the boss flag
+    the native death code reads (`$DCC4`, `$DE07`) to run the boss explosion and key drop (the key sequence is
+    read from the code; the probes did not capture it on screen). `CarockHit` now calls `$B1F6` only for `$22`; Wizzrobes keep
+    breath damage (vanilla had sword only) and die normally. The table reloads on each room load, so saves
+    are unaffected. Barba's stomp also now skips palace `$1D` (P5 Mago / P6 Wizzrobe): it used to kill them
+    during their invisible teleport phase. `tests/wizzrobe.lua`, `tests/stomp.lua`.
     Thunderbird keeps vanilla's rule (producer decision, 2026-11-15): immune until Inferno, then fireballs
     hurt it; `ThunderHit` (`$922A` hook in `src/barba.asm`) preserves Thunderbird's boss-death state (`$6E3F = $FF`) even when a second Inferno deals lethal native Thunder damage so the Key drops cleanly.
     Verified by one-off probes (2026-11-15): downstab on mounted Rebonack (unhorses `$20` into `$0A`) and Reflect vs Carock (reflected beams damage and kill `$22`).
@@ -65,6 +104,12 @@ forest_burn_limit, encounter_hazard, gameplay and boot pass; awaiting producer p
 ## Performance & bank headroom
 
 - `BarbaDisplay` fast path + `BarbaGeometry` terrain cache + `BarbaExtraUpdate` fast path + tightened `ExtraNearEnemy` + direct `BarbaExtraBlocks` + `BarbaLoadOk` 2-shot cap with `>= 2` enemies + odd-frame OAM priority rotation: Palace 1 `perf_volley.lua` achieves **0/900 lag frames** (idle avg 15,862 / peak 16,086 cycles; volley avg 19,373 / peak 25,533 cycles, 0 near-budget >27k frames). `perf_meteor.lua` passes with **0/900 lag** (`17,353` avg / `19,142` peak, `slams=10 wavesPlaced=2`), and the six-Bot METEOR + volley stress probe (`build/audit_perf_meteor_six.lua`) now achieves **0/900 lag** (`maxLiveShots = 1`, peak `28,983` cycles, down from `160/900` lag). Palace 3 room `$0D` (2 Ironknuckles + breakable blocks) previously measured **25,338 avg / 28,155 peak (0 lag frames)**, down from 28,095 avg / 30,049+ peak (4 lag frames).
+- Busy rooms (2026-11-16, `tools/busy_rooms.py` autopilot over test-pack checkpoints): before the fixes, P2 floor
+  (5 enemies) lagged 77/480 frames, P5 before boss 14/480 and Old Kasuto 5/480, and every lag frame shifted the
+  status bar. With the fast `$F27D` mask, NMI averages / worsts are 24.5k/28.5k (P2 floor, was 28.1k/32.1k),
+  22.9k/27.4k (P5, was 27.0k/31.4k) and 22.0k/29.0k (Old Kasuto, was 25.0k/31.8k), with 0 lag. Palace 1
+  `perf_volley`: idle 13,766/13,990, volley 16,776/22,532, 0/900 lag. Known limit: an overrun longer than vblank
+  (~2.27k cycles) ends after the pre-render line and still shows one shifted frame; none were seen after the mask fix.
 - `FarCall0` cold-hook ABI in fixed bank 7 (`src/farcall.inc`) keeps fixed-bank padding free without hot-path bank-switch overhead.
 
 ## Final end-to-end review (2026-11-16)

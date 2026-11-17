@@ -51,6 +51,11 @@ emu.addEventCallback(function()
     age=age+1
     if PACK_SCENES and age>10 and age<42 and (PACK_SCENES[index].mode==5 and r(0x73)*256+r(0x74) or r(0x3B)*256+r(0x4D))~=initialX then moved=true end
     if PACK_SCENES and PACK_SCENES[index].feature=='elevator' then
+        if age==23 or age==38 then
+            check(r(0x754)~=0 and r(0x5FA)==54 and r(0x204)==0xF8 and r(0x24C)==0xF8 and r(0x2C4)==0xF8,
+                ids[index]..' ducks while riding elevator age='..age)
+            if age==23 then screenshot('elevator-duck-'..index)end
+        end
         if age==23 then downY=r(0x29);elevatorDown=downY>initialY end
         if age==38 then
             elevatorUp=r(0x29)<downY;moved=elevatorDown and elevatorUp

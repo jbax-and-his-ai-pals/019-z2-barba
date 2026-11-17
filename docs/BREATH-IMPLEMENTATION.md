@@ -11,6 +11,13 @@ full-body jump pose while airborne, leaving native animation and physics state
 intact. Airborne low attacks also retain the whole body. Only grounded crouch
 uses a compact 24px pose with eight pixels of segmented neck beneath the head.
 
+Elevator contact (`$0754 != 0`, set by the native enemy pass) also selects the
+compact crouch/crouch-attack art and crouched mouth origin. This is a visual fold:
+`$80`, `$17`, movement and the elevator's Up/Down controller stay native. Riding
+up or down therefore keeps the head inside the shaft; leaving restores the
+ordinary pose. `tall_geometry` checks both poses and mouth placement; `state_pack`
+checks the pose during real elevator travel in both directions.
+
 ## Shared geometry
 
 `BarbaGeometry` publishes the 8x16 fireball origin in `$05F2/$05F3` and
@@ -70,6 +77,20 @@ avoiding the original enemy-projectile slots at `$28/$2C/$30`. During downstab
 the HUD/screen edges. Native shots and
 their original OAM remain intact. Native enemy and shield entry hooks execute
 through fixed-bank gateways and retain the original vulnerability routines.
+
+2026-11-16 sprite follow-up: odd-frame priority rotation now swaps only Barba's
+outer head sprites. The lower body stays in `$0214-$021F`; the renderer no longer
+exchanges it with `$02C8-$02D3` inside the rotating native enemy records. This
+removes dragon art from enemy-owned records and is the candidate fix for the
+producer's intermittent red ghost during downstab/busy palace combat. The exact
+reported ghost has not been reproduced; human confirmation remains open.
+`tall_geometry` seeds six live enemies and verifies all six sprites of the native
+record survive standing/downstab drawing on odd frames.
+
+The title jaw tables now come from the compiled idle/windup/attack head rows.
+The old open-jaw right column `$22` had become crouch art after tile allocation
+changed; the correct shared horn column is `$04`. `title_roar` checks all three
+complete jaws as well as the unchanged noise-channel roar.
 
 ## METEOR slam (spell slot 4)
 

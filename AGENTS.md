@@ -13,6 +13,7 @@ python tools/emulator_test.py tests/<name>.lua # one Mesen scenario, headless. R
 python tools/emulator_test.py tests/boot.lua --rom roms/z2.nes
 python tools/create_test_pack.py --force       # F1-F10 human checkpoints for the current build
 python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-per-line report
+python tools/busy_rooms.py [--sets palaces,movement,world]  # lag + status-bar jitter over test-pack rooms (needs the pack)
 ```
 
 - Results go to `build/<scenario>.txt` (PASS/FAIL lines plus RESULT). Errors go to `build/<scenario>-error.txt`.
@@ -26,7 +27,7 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
   shield_enemies, title_roar, overworld_side, farcall, town_fire, town_combo,
   castle_zelda_burn, sign_burn, upstab, perf_upward, look_up, ending, scales, horsehead, helmethead, rebonack, carock,
   gooma, opener_far, lava_link_kill, stomp, geldarm, encounter_hazard, heal_door, spell_door, stab_blocks,
-  swamp_submerge, town_nontown_burn, inferno, overworld_fire, forest_burn_limit, meteor, perf_meteor, death_continue, levelup_pane, plus `state_pack` via create_test_pack.
+  swamp_submerge, town_nontown_burn, inferno, overworld_fire, forest_burn_limit, meteor, perf_meteor, death_continue, levelup_pane, wizzrobe, plus `state_pack` via create_test_pack.
   (`newgame.lua` and `checkpoint_features.lua` are shared helpers, not scenarios. Check each `build/<name>.txt`
   for FAIL lines and a fresh mtime, not just the exit code; some reports use hyphens, e.g. `perf-volley.txt`.)
   (`boss_fight.lua` is the shared fireball-only boss driver, not a scenario.)
@@ -56,6 +57,7 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
 | `src/dark_barba.inc` | bank 5 24x48 Dark Barba renderer and Triforce-hold pose |
 | `src/town*.inc`, `shouts.inc`, `ash_layout.inc` | fleeing/burning villagers, panic dialogue and shouts |
 | `src/sign.inc` | bank 3 pad: burned-sign mark and rotating burned-sign text |
+| `src/late_split.inc` | bank 3 pad: `LateSplit`, redoes the status-bar/playfield split when NMI work overruns into the next vblank |
 | `src/scales.inc` | SCALES (Shield): bank-6 hop to bank-3 `ScalesTick`; navy outline + sky-blue body, cast roar/decor flash, shielded-hit clang/flash |
 | `tools/build.py` | assemble + guarded patch list (all hooks are listed here) |
 | `tools/assets.py`, `assets/*.json` | sprite compilation; `tools/boss_art.py` extracts boss tiles |
@@ -64,17 +66,20 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
 
 ## Free space and RAM in use (check before allocating)
 
-- ROM: bank 0 `$A89E-$A97D` (BANK0_OW; `BarbaSplitBurnForest` + `BurnAbort`; 1 free) + `$AA40-$BF6F` (BANK0; 4 free) +
+- ROM: bank 0 `$A89E-$A97D` (BANK0_OW; `BarbaSplitBurnForest` + `BurnAbort`; 1 free) + `$AA40-$BF6F` (BANK0; 11 free after elevator fold / removal of body-enemy OAM exchange, 2026-11-16) +
   reclaimed dead vanilla bank-0 code `$81C1-$81E4`, `$97F1-$9814`, `$9847-$9877` (METEOR; 0/1/0 free respectively; originals guarded) +
   bank 1 `$9EB9-$9FFF` (BANK1, vanilla pad after Geldarm draw code; `geldarm.inc`; 240 free) +
-  `$BFE0-$BFF9` (BANK0_TAIL, vanilla pad before vectors; `BurnMapEndGuard`, 1 free), bank 3 `$9D0A-$9FFF` (BANK3_SIGN, vanilla pad `bank3_UNUSED_9D0A`; `sign.inc` + `TownOpenerGate` + `ScalesTick`, 370 free; more vanilla pad untouched at `$8BB1-$90EF` and `$9134-$93FF`), bank 3 `$B803-$BF6F` (TOWN; 2 free), bank 6 `$BA00-$BF6F` (BANK6; `shouts.inc` + `combo.inc` + `ScalesHop`; 2 free), bank 5 `$BDE0-$BF5F` (BANK5; `dark_barba.inc` + `HiddenJarHit`; 33 free).
+  `$BFE0-$BFF9` (BANK0_TAIL, vanilla pad before vectors; `BurnMapEndGuard`, 1 free), bank 3 `$9D0A-$9FFF` (BANK3_SIGN, vanilla pad `bank3_UNUSED_9D0A`; `sign.inc` + `TownOpenerGate` + `ScalesTick` + `LateSplit`, 258 free; more vanilla pad untouched at `$8BB1-$90EF` and `$9134-$93FF`), bank 3 `$B803-$BF6F` (TOWN; 2 free), bank 6 `$BA00-$BF6F` (BANK6; `shouts.inc` + `combo.inc` + `ScalesHop`; 2 free), bank 5 `$BDE0-$BF5F` (BANK5; `dark_barba.inc` + `HiddenJarHit`; 33 free).
   Bank 4 `$A765-$A8FF` is vanilla `$FF` pad patched by raw bytes in `build.py`: Lava Link helpers `$A765-$A7A8`,
-  `CarockHit` `$A7B0-$A7BE`, `HiddenJarHit` `$A7BF-$A7CF`; `$A7D0-$A8FF` free.
+  `HiddenJarHit` `$A7BF-$A7CF`, `CarockHit` `$A7D0-$A7E4` (shared with the P3/4/6 Wizzrobe tail `$AEB2`; boss death gated on `$22`);
+  `$A7B0-$A7BE` and `$A7E5-$A8FF` free.
   Fixed bank 7: LAVA `$D39A-$D3C9` (0 free), GATEWAY `$FEAA-$FECF` (0 free),
   TERRAIN `$FF4C-$FF6E` (1 free). `FarCall0` provides cold bank-0
   hooks at 5 fixed bytes/call (6 with standalone RTS), 369-482 bridge cycles plus target work;
   see `docs/BUILD.md` for ABI/recipe and `docs/FIXED-BANK-AUDIT.md` for ownership/padding evidence.
   No new fixed-bank padding was claimed. Never allocate live JMP operands `$FF4B` or `$E02C`.
+  Rewritten vanilla NMI/sprite code (guarded, 2026-11-16): prologue `$C091-$C0A7` (LateSplit trampoline at `$C09F`),
+  tail `$C182-$C1B5` (tail now starts `$C19D`; RTI still `$C1B5`), fast offscreen mask `$F27D-$F2D1` (`$F2D2` spare).
 - RAM `$05EA`, `$05EB` (lava contact), `$05EC`/`$05ED` (SCALES cast latch / last injured timer), `$05F0-$05FF` (roar, breath, tall renderer, extra guard). Cleared by the native reset loop.
 - WRAM `$6400-$642F` extra projectile records; `$6440-$645F` scratch (`$6457` lazy-save flag,
   `$6458-$645F` geometry terrain cache, `$645C` EXTRA_LIVE); `$6460-$6469` shouts (`$6465` actor, `$6467` word, `$6468` timer, `$6469` cycle); `$646A` + `$6490-$64D0` town scorch ring (16-slot FIFO + head/page); `$646B` volley aim latch (0 forward / $40 upward); `$646C-$646F` + `$6488` town combo banner; `$6470-$6473` Inferno firestorm (`$6470` timer, `$6473` wave aim) and overworld flame (`$6471` timer, `$6472` dir); `$6474` METEOR dive state; `$64D1` `SIGN_PENDING` (sign board scorched, cleared with the ring). Actor byte `$04A0,x` = burned-sign line for sign readers `$21`/`$22` (native spawn clears it). Don't touch collision/room/save regions elsewhere in `$6000-$7FFF`.
@@ -87,6 +92,11 @@ python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-p
   never allocate there; `TOWN_SPRITE_PAIRS` in `tools/assets.py` guards them. Bank 7 has no free pair left.
 
 ## Performance facts (from tests/perf_volley.lua)
+
+Latest (2026-11-16, elevator fold / no body-enemy OAM exchange): Palace 1 idle 13,617/13,681, volley 16,657/22,308, 0/900 lag.
+Busiest test-pack rooms (`tools/busy_rooms.py`): P2 floor 24.5k avg / 28.5k worst, P5 before boss 22.9k/27.4k,
+Old Kasuto 22.0k/29.0k, 0 lag. The native enemy pass (~9-12k) dominates; Barba's hooks are ~4-5k. Any overrun
+that ends inside the next vblank is repaired by `LateSplit` (no status-bar jitter); a longer one still is not.
 
 The game logic runs in NMI. Over about 29.7k cycles the next frame lags. Vanilla peaks near 26.6k
 with 6 enemies. Palace 1 `perf_volley.lua` probe (with direct `BarbaExtraBlocks` and `BarbaLoadOk`
@@ -123,6 +133,6 @@ When you finish a task: update the one relevant doc plus STATUS.md, and keep thi
 memory map and perf facts current. Then hand the producer a short playtest: what changed, which F-key, what to look for.
 
 Historical upstab branch performance: standard volley peak 30,158 (+39 versus 262501a), unchanged 1/900 lag;
-lava peak 21,699 (+22), 0/300 lag. Current fresh-audit six-active-Bot `perf_upward`: 28,829 peak, 0/900 lag,
+lava peak 21,699 (+22), 0/300 lag. Current fresh-audit six-active-Bot `perf_upward`: 25,984 peak, 0/900 lag,
 25 upward emissions. `BarbaSetThrusts` restores rising technique-gated
 head-butt after block checks; `VOLLEY_SLOT` bit 6 up, bit 7 crouch, low 6 bits lifetime.

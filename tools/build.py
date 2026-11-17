@@ -16,7 +16,7 @@ from assets import (ASH_TILES, CASTLE_FIRE_BANK, CASTLE_FIRE_TILE_SHA256,
                     compile_assets, compile_breath_icon, compile_castle_fire,
                     compile_castle_shout_glyphs, compile_file_select_doll,
                     compile_shout_glyphs, compile_text_glyphs, compile_title_logo,
-                    compile_town_fire)
+                    compile_town_fire, validate_layout)
 from bps import apply, encode
 from boss_art import compile_lava_link
 from nes import CHR_OFFSET, SOURCE_SHA256, encode_tile, load_source, prg_offset
@@ -114,6 +114,49 @@ def build(source_path: Path, output: Path) -> dict:
     lag_dest = labels['LagNmiBank6']
     overlay.prg(7, 0xC065, bytes.fromhex('ad 06 85 48') + bytes([0x4C, lag_dest & 255, lag_dest >> 8]),
                 bytes.fromhex('a9 06 20 cc ff 20 00'), 'Lag-frame NMI bank preservation')
+    # Overrun status-bar fix (src/late_split.inc). No new fixed-bank space: the
+    # NMI prologue's dead LDA $0727/BEQ +0/LDY #0 and a shorter equivalent of the
+    # NMI's random-number update pay for it. Prologue: same $FE result and Y,
+    # with a 7-byte hole behind an always-taken BNE (A has $18 set) that holds
+    # the bank-3 trampoline.
+    late = labels['LateSplit']
+    overlay.prg(7, 0xC091, bytes.fromhex('a5 fe ac 26 07 d0 0e 09 18 0d 68 07 d0 09 20 cc ff 4c')
+                + bytes([late & 255, late >> 8]) + bytes.fromhex('ea 29 e0'),
+                bytes.fromhex('ad 27 07 f0 00 a0 00 a5 fe 29 e0 ac 26 07 d0 07 a5 fe 09 18 0d 68 07'),
+                'NMI prologue compaction + LateSplit trampoline')
+    # The three early-outs that branch to the NMI tail, which moves $C1A8 -> $C19D
+    # (a byte scan of $C07B-$C1A7 finds exactly these; build check below re-verifies).
+    overlay.prg(7, 0xC156, bytes([0x46]), bytes([0x51]), 'NMI tail branch (dialogue)')
+    overlay.prg(7, 0xC163, bytes([0x39]), bytes([0x44]), 'NMI tail branch (talking)')
+    overlay.prg(7, 0xC168, bytes([0x34]), bytes([0x3F]), 'NMI tail branch (routine)')
+    # RNG: carry = bit 1 of ($051A xor $051B), as before, without the $00 temp
+    # (watched: nothing reads $00 before its next write). Tail: on a vblank
+    # overrun push the $8506 fingerprint and enter LateSplit with A=3; LateSplit
+    # returns to $C1AB. RTI stays at $C1B5 (tests hook it).
+    overlay.prg(7, 0xC182, bytes.fromhex(
+        'e6 12 a2 00 a0 09 ad 1a 05 4d 1b 05 4a 4a 7e 1a 05 e8 88 d0 f9 20 50 d2 20 ca c2'
+        '2c 02 20 10 09 ad 06 85 48 a9 03 4c 9f c0'
+        'a5 ff 09 80 85 ff 8d 00 20 68 40'),
+        bytes.fromhex('ee 12 00 a2 00 a0 09 ad 1a 05 29 02 85 00 ad 1b 05 29 02 45 00 18 f0 01 38 7e 1a 05'
+                      'e8 88 d0 f9 20 50 d2 20 ca c2 ad 02 20 a5 ff 09 80 85 ff 8d 00 20 68 40'),
+        'NMI RNG compaction + overrun tail')
+    # Offscreen-column mask ($F27D, called for every drawn object): the native
+    # 4-pass loop costs ~300 cycles/call (a third of the enemy pass in busy rooms).
+    # Same $C8,y/$CC,y/A/Y/flags from one 16-bit subtraction (~60 cycles): with
+    # d = objX - scroll, page 0 marks the right-hand columns past 256, page $FF
+    # the complement, any other page all four. $01/$0E/$0F are no longer written
+    # (watched: 311k calls over all checkpoints, never read before rewritten).
+    # BIT $F27C (table byte $40) sets V on page $FF. $F2D2 (RTS) stays as spare.
+    overlay.prg(7, 0xF27D, bytes.fromhex(
+        '84 00 b5 4d 38 ed 2c 07 a8 b5 3b ed 2a 07 b8 f0 0b c9 ff f0 04 a9 0f d0 15'
+        '2c 7c f2 c0 e8 a9 00 90 08 98 4a 4a 4a a8 b9 b2 f2 50 02 49 0f'
+        'a4 00 99 c8 00 b5 29 18 69 10 b5 19 69 00 c9 01 f0 08 a9 f0 19 c8 00 99 c8 00'
+        'b5 4d 38 ed 2c 07 99 cc 00 60 01 03 07'),
+        bytes.fromhex(
+        '84 00 a9 00 99 c8 00 a0 03 b5 4d 18 79 74 f2 85 0e b5 3b 69 00 85 0f a5 0e cd 2c 07'
+        'a5 0f ed 2a 07 f0 0f 84 01 b9 70 f2 a4 00 19 c8 00 99 c8 00 a4 01 88 10 d4 a4 00 b5 29'
+        '18 69 10 b5 19 69 00 c9 01 f0 08 a9 f0 19 c8 00 99 c8 00 b5 4d 38 ed 2c 07 99 cc 00'),
+        'Fast offscreen-column mask ($F27D)')
     overlay.prg(7, 0xE6E2, bytes.fromhex('4c f3 e6 ea'), bytes.fromhex('29 20 f0 0d'),
                 'Allow fireballs against sword-only enemies')
     hook(3, 0xB5F8, 'TownDialog', 0x4C, '0a a8 ad 07 07', 2)
@@ -317,6 +360,11 @@ def build(source_path: Path, output: Path) -> dict:
     # pulse melodies and the triangle alone. The hook now enters TitleRoarUpdate ($A5AE), which runs the roar
     # envelope each frame and then jumps to the jaw animation at $A54F.
     overlay.prg(5, 0xA8CF, bytes.fromhex('4c ae a5 ea'), bytes.fromhex('a2 6b a5 12'), 'Title Barba animate hook')
+    # Keep the title's three jaw columns synchronized with the compiled player
+    # art. A stale $22 right-column byte selected crouch art on the open frame.
+    tall_layout = validate_layout(ROOT)
+    title_heads = [tall_layout[pose*9:pose*9+3] for pose in (3, 4, 5)]
+    title_jaws = bytes(head[col] for col in range(3) for head in title_heads)
     overlay.prg(
         5, 0xA54F,
         bytes.fromhex(
@@ -326,8 +374,7 @@ def build(source_path: Path, output: Path) -> dict:
             'a2 02 d0 06 a2 01 d0 02 a2 00 '
             'bd 95 a5 8d 1d 02 bd 98 a5 8d 21 02 bd 9b a5 8d 3d 02 '
             'a2 6b a5 12 4c d3 a8 '
-            '00 1a 1e 02 1c 20 04 04 22'
-        ),
+        ) + title_jaws,
         b'\xff' * 79,
         'Title Barba mouth animation',
     )
@@ -514,19 +561,23 @@ def build(source_path: Path, output: Path) -> dict:
 
     # Carock takes fireball damage (producer, 2026-11-14). Vanilla's shared boss helper ($B1E9) skips the
     # projectile/sword checks for enemy $22, so beams and fireballs pass through and only Reflect hurts him.
-    # In his visible window ($AF $E0-$EF, $AEB2) the $E4D9 call goes to CarockHit ($A7B0, bank-4 pad):
+    # In his visible window ($AF $E0-$EF, $AEB2) the $E4D9 call goes to CarockHit ($A7D0, bank-4 pad):
     # JSR $DE63 runs the native projectile check ($E48B, Barba's fireball gateway), the sword check, then
     # the same $E4D9. A kill there leaves the generic death state ($B6 = 2), which would draw Carock into
     # OAM 0 (the HUD sprite-0 split) and hang the NMI; so on a kill call $B1F6, the native boss-death
     # bookkeeping that $B1E9 runs after a Reflect kill. Teleport/fade phases stay untouchable; Reflect path unchanged.
+    # $AEB2 is shared with the Palace 3/4/6 Wizzrobe ($1D, routine $AE4F), so the $B1F6 call is gated on
+    # $A1 = $22. Ungated (2026-11-14..16), a Wizzrobe kill ran $B1F6: it revived the Wizzrobe ($B6 = 1, HP
+    # wrapped) and wrote $FF to $6E1D+$1D, so every later Wizzrobe death in that palace dropped a boss key.
+    # Wizzrobes keep the breath/sword checks from $DE63 (vanilla only had $E4D9) and die normally.
     overlay.prg(
-        4, 0xA7B0,
-        # JSR $DE63 / LDX $10 / LDA $B6,X / CMP #1 / BEQ +3 / JSR $B1F6 / RTS
-        bytes.fromhex('20 63 de a6 10 b5 b6 c9 01 f0 03 20 f6 b1 60'),
-        b'\xff' * 15,
+        4, 0xA7D0,
+        # JSR $DE63 / LDX $10 / LDA $B6,X / CMP #1 / BEQ rts / LDA $A1,X / CMP #$22 / BNE rts / JSR $B1F6 / RTS
+        bytes.fromhex('20 63 de a6 10 b5 b6 c9 01 f0 09 b5 a1 c9 22 d0 03 20 f6 b1 60'),
+        b'\xff' * 21,
         'CarockHit helper',
     )
-    overlay.prg(4, 0xAEB4, bytes.fromhex('20 b0 a7'), bytes.fromhex('20 d9 e4'), 'Carock fireball hit check')
+    overlay.prg(4, 0xAEB4, bytes.fromhex('20 d0 a7'), bytes.fromhex('20 d9 e4'), 'Carock fireball hit check')
     # Hidden Red Jars ($05): allow breath as well as melee to reveal them.
     hook(5, 0xA525, 'HiddenJarHit', 0x20, '20 77 e6')
     overlay.prg(
@@ -759,6 +810,21 @@ def build(source_path: Path, output: Path) -> dict:
         offset = prg_offset(bank, 0x8506 if bank < 7 else 0xC506)
         if target[offset] != expected:
             raise ValueError(f'Patch overwrote FarCall0 bank fingerprint: {bank}')
+    # LateSplit: the source NMI body has exactly three branches into the old tail
+    # $C1A8, all retargeted to $C19D; the output must have none left inside $C19E-$C1B5.
+    def nmi_branches(rom: bytes, lo: int, hi: int) -> list[tuple[int, int]]:
+        found = []
+        for a in range(0xC07B, 0xC19D):
+            op = rom[prg_offset(7, a)]
+            if op in (0x10, 0x30, 0x50, 0x70, 0x90, 0xB0, 0xD0, 0xF0):
+                t = a + 2 + ((rom[prg_offset(7, a + 1)] ^ 0x80) - 0x80)
+                if lo <= t <= hi:
+                    found.append((a, t))
+        return found
+    if [a for a, _ in nmi_branches(source, 0xC1A8, 0xC1A8)] != [0xC155, 0xC162, 0xC167] \
+            or nmi_branches(target, 0xC19E, 0xC1B5) \
+            or [t for _, t in nmi_branches(target, 0xC19D, 0xC19D)] != [0xC19D] * 3:
+        raise ValueError('NMI tail branch retargeting incomplete (LateSplit)')
     # The FF byte at FF4B is the high operand of a live JMP, not filler.
     # Keep its whole instruction untouched beside the new terrain allocation.
     anchor = prg_offset(7, 0xFF49)

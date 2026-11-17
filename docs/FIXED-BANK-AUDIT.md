@@ -92,3 +92,24 @@ return. No persistent RAM is allocated. Existing combat gateways retain their
 faster specialized ABI. Sharing the NativeReturn0 tail saves 3 bytes and adds
 only a JMP (3 cycles) to NativeShieldFire; TerrainBatch and EnemyFireGateway's
 fast path are unchanged.
+
+## 2026-11-16: busy-room fixes (no padding claimed)
+
+Both changes pay for themselves inside vanilla code, so no padding region was used:
+
+- **NMI prologue `$C091-$C0A7`** (23 bytes, guarded): the vanilla `LDA $0727 / BEQ +0 /
+  LDY #0` is dead (A, flags and Y are overwritten before use). It is rewritten to the same
+  `$FE` result and Y in 16 bytes. The else path ends `ORA #$18 / ORA $0768 / BNE`, which is
+  always taken, so `$C09F-$C0A5` is a 7-byte hole behind it. That hole holds the
+  `JSR $FFCC / JMP LateSplit` trampoline; `$C0A5` is a spare `EA`.
+- **NMI tail `$C182-$C1B5`** (52 bytes, guarded): the RNG carry
+  (bit 1 of `$051A` xor `$051B`) is computed without the `$00` temp, and `INC a:$12`
+  becomes `INC $12`; the 11 bytes saved hold the overrun test. Read-before-write watch:
+  `$00` is never read after the RNG before it is rewritten (the only hit was the dummy
+  base read of `STA $00,X` in the memory-clear loop). The tail moves from `$C1A8` to
+  `$C19D`. The three vanilla branches into it (`$C155`, `$C162`, `$C167`) are retargeted,
+  and the build re-scans the NMI body so that no branch can land in `$C19E-$C1B5`.
+  `RTI` stays at `$C1B5`.
+- **Offscreen-column mask `$F27D-$F2D1`** (85 bytes, guarded): same outputs from one
+  16-bit subtraction. `$F2D2` (old RTS) is now 1 unused byte. The table byte
+  `$F27C = $40` is read by `BIT` and must stay.

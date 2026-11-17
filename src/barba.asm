@@ -360,6 +360,7 @@ RoarPitch:
 .include "sign.inc"
 .include "scales.inc"
 .include "farcall.inc"
+.include "late_split.inc"
 
 .segment "LAVA"
 ; Side-view encounters ($0707=0) and palaces ($0707>=3) use this surface path.

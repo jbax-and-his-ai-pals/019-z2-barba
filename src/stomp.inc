@@ -66,9 +66,9 @@ BarbaStomp:
     lda $0728
     bne StompRet
     lda $0479
-    beq @done
+    beq StompRet
     lda $057D
-    bmi @done
+    bmi StompRet
     ldx #$05
 @loop:
     lda $B6,x
@@ -91,6 +91,11 @@ BarbaStomp:
     cmp #$03
     bcc @next
     cmp #$07
+    beq @next
+    ; $1D: Mago (P1/2/5) / Wizzrobe (P3/4/6) teleport and spend most of their
+    ; cycle invisible and intangible; a stomp would kill an unseen enemy. No world
+    ; check (bank 0 is full), so Great Palace $1D (Fokkeru) is unstompable too.
+    cmp #$05
     beq @next
 @hp_check:
     lda $C2,x

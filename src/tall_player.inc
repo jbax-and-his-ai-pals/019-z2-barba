@@ -36,12 +36,17 @@ BarbaGeometry:
 @to_done:
     jmp @done
 :
+    ; Native elevator contact is set by the enemy pass before this renderer.
+    ; Fold visually without taking Down away from the elevator controller.
+    lda $0754
+    bne @fold
     lda $17
     bne @standing
     ; A low shield in the air is not a grounded crouch. Match the full-body
     ; airborne drawing for both the attached flame and new Fire shots.
     lda $0479
     bne @standing
+@fold:
     jmp @duck
 @standing:
     ; When grounded on palace lava or swamp water ($0752 != 0), submerge the
@@ -271,6 +276,14 @@ BarbaDisplay:
     and #$03
     ora DRAW_ATTR
     sta DRAW_ATTR
+    lda $0754
+    beq @native_pose
+    lda #$06
+    ldx $0400
+    beq @pose
+    lda #$07
+    bne @pose
+@native_pose:
     lda $80
     ; Vanilla reuses crouch frame 6 on ascent. Select an independent full-body
     ; jump pose without changing its physics, shield state or technique gates.
@@ -457,10 +470,9 @@ BarbaDisplay:
     beq @no_rot
     cmp #$02
     beq @no_rot
-    ; Alternate OAM priority on odd frames in combat/palaces: swap outer head
-    ; tiles ($0204 <-> $02C4) and swap lower body ($0214..$021F) with enemy
-    ; slot 5 ($02C8..$02D3) when enemies are active so Barba, fireballs, and
-    ; enemies share 8-sprite drops.
+    ; Alternate only our outer head tiles. Enemy records keep native ownership:
+    ; never move their sprites into the player's record or leave dragon tiles
+    ; inside a rotating enemy record.
     ldx #$03
 @rot_head:
     lda $0204,x
@@ -470,22 +482,6 @@ BarbaDisplay:
     sta $0204,x
     dex
     bpl @rot_head
-    lda $B6
-    ora $B7
-    ora $B8
-    ora $B9
-    ora $BA
-    ora $BB
-    beq @no_rot
-    ldx #$0B
-@rot_body:
-    lda $0214,x
-    ldy $02C8,x
-    sta $02C8,x
-    tya
-    sta $0214,x
-    dex
-    bpl @rot_body
 @no_rot:
     rts
 

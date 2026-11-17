@@ -1,5 +1,6 @@
 -- Jump-stomp kills easy unshielded enemies (HP 1..16) while sparing
--- shielded palace enemies ($18-$1A, $1F, $23) and high-HP (>16) enemies.
+-- shielded palace enemies ($18-$1A, $1F, $23), teleporting Mago/Wizzrobe ($1D)
+-- and high-HP (>16) enemies.
 dofile(TEST_DIR..'/newgame.lua')
 local m=emu.memType.nesMemory
 local function r(a)return emu.read(a,m)end
@@ -19,6 +20,8 @@ local phases={
     {name='palace Moa (HP 16)',world=3,id=0x07,hp=16,ey=176,expectKill=true},
     {name='palace Red Stalfos shielded (HP 8)',world=3,id=0x1F,hp=8,ey=160,expectKill=false},
     {name='palace Orange Ironknuckle shielded (HP 16)',world=3,id=0x18,hp=16,ey=160,expectKill=false},
+    -- Mago/Wizzrobe teleport and are invisible most of the time: never stompable.
+    {name='palace Mago teleporter (HP 8)',world=3,id=0x1D,hp=8,ey=176,expectKill=false},
     {name='west Red Moblin (HP 12)',world=0,id=0x15,hp=12,ey=160,expectKill=true},
     {name='west Orange Goriya (HP 12)',world=0,id=0x19,hp=12,ey=160,expectKill=true},
     {name='west Megmat (HP 4)',world=0,id=0x1F,hp=4,ey=176,expectKill=true},
