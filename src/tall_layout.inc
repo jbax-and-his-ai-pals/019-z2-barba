@@ -10,7 +10,7 @@ BarbaTallTiles:
     .byte $F5, $F5, $F5, $F5, $22, $24, $26, $28, $2A ; crouch
     .byte $F5, $F5, $F5, $2C, $2E, $24, $30, $34, $2A ; crouch-attack
     .byte $36, $38, $3A, $3C, $3E, $40, $42, $44, $46 ; up
-    .byte $F5, $06, $08, $48, $4A, $4C, $56, $58, $5A ; down
+    .byte $F5, $08, $06, $48, $4A, $4C, $56, $58, $5A ; down
     .byte $1A, $1C, $04, $F5, $10, $12, $14, $16, $18 ; hurt
     .byte $F5, $F5, $F5, $F5, $22, $24, $26, $28, $2A ; death
     .byte $00, $02, $04, $0A, $0C, $0E, $F5, $06, $08 ; jump

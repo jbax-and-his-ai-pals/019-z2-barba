@@ -2,6 +2,302 @@
 
 Current playable alpha. Built locally from `roms/z2.nes` via `python tools/build.py`.
 
+2026-11-17 main integration verification: default build and all 23 ROM-free
+unit tests pass. Fresh title_sample, game_over_audio, roar_gameplay,
+roar_controls, death_continue, tall_geometry, combat, and look_up emulator
+reports all end in RESULT PASS.
+
+2026-11-17 Game Over laugh onset: wait 36 frames (~0.60 seconds) before the
+first laugh so the introductory sound has more room. The four following gaps
+remain exactly 23 frames. A 63-byte bank-6 helper uses the existing screen timer
+and a spare bit in the existing voice-request byte for the pending request;
+no new RAM or fixed-bank space. All loud laugh, Barba roar, and native hurt sample
+bytes are unchanged. Build/play ROM `9894b8b6b063`. 23 unit tests pass.
+Fresh emulator checks confirm the added 36-frame onset delay, all five laughs,
+four 23-frame gaps, sampled gameplay audio and death/continue. All 56 checkpoints
+regenerated/reloaded; Edge profile installed for playtesting.
+Playtest: Edge Scenarios F1, wait for death; listen for the added pause before
+the first laugh, followed by the familiar five-laugh rhythm. F1 repeats.
+
+2026-11-17 louder Game Over laugh: low-pass at 1 kHz before boosting the four
+waveforms' targets 4x/4x/4x/2x. Decoded RMS is about 8-12 dB above the previous
+four-waveform build, with some loss of treble detail to the louder output.
+Pitch, sample lengths, all 23-frame gaps, allocations, Barba roar, and native
+hurt are unchanged. Build/play ROM `c06fd072b9b9`. 23 unit tests pass, including
+encoded loudness/pitch and shared silent-byte checks. Fresh Game Over (all five
+starts and four 23-frame gaps) and death/continue scenarios pass; all 56
+checkpoints regenerated/reloaded and Edge profile installed.
+Playtest: Edge Scenarios, F1, wait for death; F1 repeats. Updated preview:
+`build/game-over-laugh-preview.wav`.
+
+2026-11-17 Game Over laugh fidelity revision: replaced the two-waveform pitch
+approximation with four native waveforms shifted up an octave. The final three
+laughs now retain their own native timbres and pitches. The similar opening pair
+shares the first waveform with different lengths (second pitch about 4% sharp).
+Single-pass conversion removes DC and scales excursion to reduce low-rate DAC
+slew distortion. Silent-byte sharing fits all four after the approved roar;
+the roar's full 2,177 bytes and native hurt bytes remain identical. No new RAM,
+fixed-bank padding, or runtime code size. Build/play ROM `d080781db1a5`.
+23 unit tests, actual Game Over rate/address/length and all four 23-frame gaps,
+title sample, sampled gameplay and death/continue checks pass. All 56 checkpoints
+regenerated/reloaded. Local A/B WAVs: `python tools/game_over_audio.py`; see BUILD.
+Playtest: `play/Test Barba - Edge Scenarios.cmd`, F1, wait for death and listen
+to all five laughs. F1 repeats. The small sample budget still limits fidelity;
+producer listening is needed to judge the improvement.
+
+2026-11-17 gem torso seam correction: lift the look-up art 8px rather than
+16px, overlapping its existing half-segment with the identical top half of
+the added torso. The final 56px pose has two whole torso chunks without the
+third partial chunk; feet stay anchored. ROM `42d216c886c2`: gem reload/native
+celebration and torso alignment/guards pass; the eight overlapping art rows
+match exactly. No size, allocation, RAM or performance-path changes.
+All 22 unit tests and 56 regenerated/reloaded checkpoints pass; gem profile
+refreshed. Reopen Gem Celebration, F1, walk right to inspect the corrected join.
+
+2026-11-17 gem roar torso follow-up: the raised-head victory pose gains one
+16x16 torso chunk, extending to 64px while keeping its feet anchored. Existing
+sword/shield OAM slots and torso tiles are reused. Other poses are unchanged.
+ROM `9780cd08a423`: native gem checkpoint sequence, torso facing/clipping,
+geometry, look-up, audio coordinator, HUD and volley checks pass. Volley
+16,769 avg / 22,466 peak, 0/900 lag; HUD zero late splits.
+All 22 unit tests pass; all 56 checkpoints regenerated/reloaded, with the gem
+profile installed for immediate playtesting. Build/play ROMs match.
+Playtest: `play/Test Barba - Gem Celebration.cmd`, F1, walk right; inspect the
+longer torso during the victory roar. F1 repeats.
+
+2026-11-17 instant gem playtest: `play/Test Barba - Gem Celebration.cmd`, F1,
+starts beside the Palace 6 statue past the boss, before placing the final gem.
+Walk right to test; F1 repeats. Separate `gem` profile preserves other sets.
+Generated/reloaded checkpoint and native end-to-end `gem_checkpoint` check pass:
+walking triggers placement, fanfare, one roar with raised head, then pose release.
+
+2026-11-17 palace gem celebration: the full roar now starts immediately after
+the crystal-placement victory fanfare, before health/magic refill and XP tally.
+Barba holds looking-up frame 8 while roaring, then returns to his normal pose.
+Native refill, crystal removal, save flags and XP award remain intact; the
+final gem step cannot trigger a second roar. Spell roar timing stays unchanged.
+ROM `22f98416c673`: 22 unit tests and fresh roar_gameplay, tall_geometry,
+look_up (including real playback/pose release), roar_controls, scales, inferno,
+hud_timing and perf_volley pass. Volley 16,671 avg / 22,363 peak, 0/900 lag.
+All 55 checkpoints regenerated and validated; build/play ROMs match.
+Playtest: `play/Test Barba.cmd`, F9, defeat Lava Link and place the gem.
+Listen for fanfare then immediate roar; watch Barba raise his head for the roar.
+
+2026-11-17 approved sampled audio promoted to the normal build:
+`python tools/build.py` now uses ignored local `roms/roar.wav` and installs
+the approved voice in `build/barba.nes` and `play/barba.nes` (ROM `22f98416c673`).
+Roar bytes match the approved experiment exactly: 1.557 seconds, rate 9,
+34-step amplitude. No attack roars. Hit audio keeps the ~0.627-second descending
+tail. Title, SCALES/INFERNO and gem victory retain the full voice.
+Original ROM analysis confirms Ganon's laugh descends: approximate fundamentals
+270/260/235/205/195 Hz, encoded in different samples while hardware rate stays 15.
+Game Over now approximates that contour one octave up, rather than repeating
+one note or alternating low/high. The first two native octave-up waveforms are
+re-encoded at rate 6: 65 bytes `$FCC0-$FD00` and 49 bytes `$FD40-$FD70`.
+Five starts use first/second/second/second/second at rates 6/6/5/4/3, retaining
+native 23-frame spacing. Lower data rate gives finer descending pitch steps;
+the later three notes approximate the original contour with the second waveform.
+Native Link hurt remains untouched. All writes
+are guarded; no extra fixed-bank padding or RAM. `--native-audio` retains the
+legacy noise-roar/five-waveform build. Normal playtest: `play/Test Barba.cmd`,
+F2 for quiet attacks and descending hurt, F3 for spells, F9 for boss/gem;
+`play/Test Barba - Edge Scenarios.cmd`, F1 for all five laughs.
+Promotion validation: 21 unit tests, 23 emulator scenarios (including actual Game
+Over pitches/spacing, sampled gameplay/title/controls, spells, combat, damage,
+death/continue, far-call, bosses and ending), and all 55 regenerated/reloaded
+checkpoints pass. Build/play ROM and patch match; native hurt bytes and the
+approved roar bytes match exactly. Latest volley 16,662 avg / 22,352 peak,
+0/900 lag; METEOR 14,917 avg / 16,792 peak, 0/900 lag; HUD zero late splits.
+Legacy `--native-audio` rebuild still matches `aecf65b52c82`.
+Descending-contour correction: 22 unit tests plus fresh Game Over rate/spacing, sampled
+gameplay/title and death/continue checks pass; all 55 checkpoints regenerated.
+Raw original and new audio comparisons: `build/original-game-over-laughs.wav`
+and `build/game-over-descending-preview.wav` (decoded DPCM, before NES mixing).
+
+Earlier 2026-11-17 Link Game Over laugh revision (legacy `--native-audio`): raises all five native laughs
+one octave, with shorter individual laughs and original 23-frame start
+spacing. Hurt audio is preserved. No new ROM padding, code or RAM; conversion
+recipe only, source bytes guarded. The separate sampled-roar experiment keeps
+its existing allocation. Playtest: launch `play/Test Barba - Edge Scenarios.cmd`,
+press F1 and wait for death; listen for five higher laughs at the familiar
+rhythm. Reload F1 to repeat (F2 loads after the laugh has begun).
+ROM `aecf65b52c82`: 21 unit tests, actual Game Over audio scenario (all five
+sample addresses/shortened lengths and all four 23-frame gaps), and
+death_continue pass. All 55 checkpoints regenerated/validated; Edge F1/F2
+profile installed. Build/play ROMs match; entire native hurt sample unchanged.
+
+2026-11-17 sampled Famicom roar gameplay (now normal): the producer-approved
+1.557-second, 2,177-byte roar (11,186 Hz, 34-step DAC excursion) now also plays
+after the palace gem's XP tally/level-up pane finishes. Random attack roars
+removed on 2026-11-17; breath retains its native fireball sound.
+Barba's enemy-hit sound uses a 0.527-second prefix (extended from 0.344 seconds),
+with an injury-only downward pitch tail: rate 9->5 over four steps near its end.
+Playback lasts ~0.627 seconds; full roars keep their original pitch and 1.557-second
+duration. Injury interrupts a full roar.
+Lava Link retains native Link hurt audio. SCALES/INFERNO use the sampled voice
+in the normal build. Title and gameplay pulse melodies halve volume during a
+roar; envelopes and tempo keep advancing. First-title-roar pop fixed by easing
+the DAC to its midpoint in 32 two-step writes before the first opening.
+
+`play/Test Barba - Sampled Roar.cmd` tests the title. The new
+`play/Test Barba - Sampled Roar Checkpoints.cmd` uses its own version-matched
+Core profile: F2 combat/hurt, F6 Lava Link hurt comparison, F9 boss then gem.
+Latest sound revision raises all sampled voice uses from 28 to 34 DAC steps
+(21% higher target amplitude), including title, hurt, spells and victory.
+Approved pre-promotion experimental ROM `b394d8a50887`.
+All 21 unit tests and fresh title/gameplay/controller audio scenarios pass.
+Legacy native-audio baseline was `aecf65b52c82`.
+Gameplay/control, title, gem/XP/menu, hurt priority, original Lava Link sample,
+music duck/restore, SCALES, INFERNO, combat, death/continue and far-call checks
+pass. Controller capture now runs after the HUD split during playback, with a
+one-frame raw-button cache and a native-read fallback when DMC stops (including
+pause). HUD timing passes with zero late splits; volley 16,674 avg / 22,358 peak,
+0/900 lag. This allocation is now permanent, with the compact laugh after it.
+Build details/memory ownership: BUILD.md, "Sampled roar audio". Earlier actual title audio:
+`build/roar-prototype/title-listening-smooth-start.wav`; short raw sample preview:
+`build/roar-prototype/roar-hurt-preview.wav`.
+
+2026-11-16 edge-scenario launcher: `play/Test Barba - Edge Scenarios.cmd`
+uses the normal rebuild, version-matched pack and isolated profile workflow.
+F1 loads the last-life/one-health Palace 1 danger scene; F2 loads the actual
+final GAME OVER portrait immediately. Both states are generated from the
+current ROM, reloaded and checked: F1 reaches native GAME OVER in 218 frames;
+F2 Start returns to gameplay with three lives. The standalone danger-state
+copy is also refreshed. All 17 unit tests and launcher PrepareOnly pass;
+F1/F2 slot files and bindings are installed in the `edges` profile.
+All 55 checkpoints across seven sets regenerated and validated for unchanged
+ROM `8910a0e152ef` (53 existing plus the two new edge states).
+Playtest: launch Edge Scenarios, press F1 and wait, then F2 to inspect the
+portrait directly; press Start to continue or reload either key to repeat.
+
+2026-11-16 final game-over portrait approved: right-ear join candidate 1 is
+now the default (`thin_split`, `cap='soft'`, `neck_mark='none'`,
+`ear_join='notch'`). Softened cap, small right-ear notch, no left stray dot,
+mouthless face, thin split collar and black right neck seam. Fifty CHR tiles,
+same guarded map allocation, no new RAM or padding. Actual screen checked;
+all 17 unit tests and death_continue pass. All 53 checkpoints regenerated and
+reload-validated for ROM `8910a0e152ef`; build/play ROMs match.
+Extra standalone state: `play/Game Over Danger.mss`, Palace 1 combat corridor,
+one life and one health unit. Reload verified; native enemy contact reaches
+GAME OVER without input after 218 frames (about four seconds). Health HUD is
+refreshed before capture. Preview `build/game-over-danger.png`.
+Playtest: load that state in Mesen with `play/barba.nes`, wait for GAME OVER,
+inspect the final portrait, then press Start. Core F2 remains the normal
+combat checkpoint with its regular test loadout.
+
+2026-11-16 right hat/ear join candidates: using selected refinement A
+(`cap='soft', neck_mark='none'`) as the base, four close variations adjust
+only the right hat/ear join: 1 small notch, 2 lower ear tip, 3 filled join,
+4 rounded edge (`ear_join='notch'/'lower_ear'/'blend'/'round'`). All rendered
+and visually checked in Mesen, fitting 48-50 tiles; all 17 unit tests pass.
+Candidate ROMs/screenshots and enlarged comparison are in
+`build/game-over-ear-candidates/`. Default build/play ROM and checkpoints
+remain `49e80365f5bf` pending the final join choice.
+Playtest: compare captures 1-4; Core F1 still uses the preceding approved
+portrait after losing all lives in the normal play build.
+
+2026-11-16 cap/left-neck refinement candidates: six close variants combine
+two softened right cap folds with three left-neck treatments. A/B/C use
+`cap='soft'`; D/E/F use `cap='tucked'`. Within each row the left mark is
+removed, retained as one dot, or extended to a three-pixel diagonal seam
+(`neck_mark='none'/'original'/'accent'`). Mouthless face, thin split collar,
+filled right neck seam and body are preserved. All six rendered and visually
+checked in Mesen, with 49-51 tiles within the existing allocation; all 17 unit
+tests pass. ROMs/screenshots and enlarged `comparison.png` are in
+`build/game-over-cap-candidates/`. Default build/play ROM and 53-checkpoint
+pack remain `49e80365f5bf`, pending choice.
+Playtest: compare A-F in the actual GAME OVER captures; Core F1 retains the
+approved portrait after losing all lives in the normal play build.
+
+2026-11-16 selected game-over portrait: candidate C (`thin_split`) is now the
+default, with a mouthless face and one-pixel split collar. Filled the seven-pixel
+vertical red seam on the right side of the neck with black. All other portrait
+details are preserved. Fifty CHR tiles (`$00-$31`, bank 17), same nametable
+macro, no new RAM or padding. Screen visually checked; all 17 unit tests and
+death_continue pass, including game-over continue and restored breath.
+Screenshot comparison against C confirms exactly seven pixels changed, all
+in the requested stripe. All 53 checkpoints regenerated and reload-validated
+for ROM `49e80365f5bf`; play/build ROMs match.
+Playtest: Core F1, lose all lives, check the thin split collar and black right
+neck area on GAME OVER, then press Start to continue.
+
+2026-11-16 thin collar candidates: replaced filled clothing cutouts with
+one-pixel red seams for A shallow collar (`thin_shallow`), B V collar
+(`thin_v`) and C split collar (`thin_split`). Face remains mouthless; the rest
+of the portrait is unchanged. All three rendered and visually checked in
+Mesen, using 51/52/50 tiles within the existing allocation. Candidate ROMs,
+screenshots and enlarged comparison are in `build/game-over-thin-collars/`.
+Default build/play ROM and checkpoints remain `b5b9c138bb05`, pending choice.
+Playtest: compare the three GAME OVER captures; Core F1 still uses the current
+default portrait after losing all lives.
+
+2026-11-16 collar-only portrait candidates: three mouthless variations keep
+the face black below the eyes and place the red clothing farther below the
+jaw: A deep V (`deep_collar`), B split lapels (`split_collar`), C laced tunic
+(`tunic_collar`). Cap, ears, eyes and body silhouette are preserved. All three
+rendered and visually checked in Mesen; 53/54/54 tiles fit existing CHR space,
+and all 17 unit tests pass. Candidate ROMs/screenshots and enlarged comparison
+are in `build/game-over-collars/`. Default build/play ROM and checkpoints stay
+at `b5b9c138bb05`, pending selection.
+Playtest: compare the three actual GAME OVER captures; Core F1 remains the
+current default portrait if losing all lives in the normal play build.
+
+2026-11-16 game-over expression candidates: two close alternatives to the
+approved portrait, changing only the red collar/neck mark into either a raised
+evil grin or a crooked smirk. Both leave the neck black and preserve the rest
+of the silhouette. Recipes are optional `grin` / `smirk` expressions in
+`tools/game_over_art.py`; candidate ROMs and actual game-over screenshots are
+in `build/game-over-candidates/`, including enlarged `comparison.png`.
+Both render correctly in Mesen and fit the existing CHR/map allocation;
+all 17 unit tests pass. Default build/play ROM and the 53-checkpoint pack
+remain `b5b9c138bb05` (current collar expression), pending producer choice.
+Playtest: Core F1 and final-life GAME OVER for the current version; use the
+candidate screenshots to choose A (grin) or B (smirk).
+
+2026-11-16 game-over portrait revision: front-facing black Link now replaces
+the enlarged side-view sprite. Reuses Ganon's original torso at 44% width,
+with authored human jaw, pointed ears, folded cap, red eye slits and V neckline.
+The 80x96 bust occupies 52 deduplicated CHR tiles (`$00-$33`, bank 17) and
+the same guarded nametable macro; no new RAM or padding. Rendered screen
+checked; all 17 unit tests, death_continue and overworld_side pass.
+All 53 checkpoints regenerated and reload-validated for ROM `b5b9c138bb05`;
+play/build ROMs match.
+Playtest: Core F1, lose all lives and inspect the front-facing portrait on
+GAME OVER, then press Start to continue.
+
+2026-11-16 game-over silhouette: replaced Ganon with solid black Link, using
+the native standing sprite enlarged 3x (48x96) below GAME OVER / LINK KEEPS LAVA.
+Build-time extraction only; no original pixels committed. Forty deduplicated
+CHR tiles and the existing nametable macro are replaced, with no new RAM or
+ROM padding. Visual screen check, all 17 unit tests, boot, overworld_side and
+death_continue pass (including game-over continue and restored B volley).
+All 53 checkpoints regenerated and reload-validated for ROM `95ada67d0b11`;
+play/build ROMs match.
+Playtest: Core F1, lose all lives, then check the black Link silhouette before
+pressing Start to continue.
+
+2026-11-16 half-broken blocks: reproduced native animation-slot exhaustion
+overwriting a pending erase, leaving visible stone over an empty collision tile.
+Brick breaking now reserves an animation record before clearing collision;
+when all five records are busy, the block stays hittable for a later shot.
+Crumbling floors honor the same allocation failure. Same-size guarded vanilla
+rewrites only; no added RAM or ROM padding. All 17 unit tests, combat (including
+five final erases and retry), extra_fire, stab_blocks, boot, meteor, hud_timing
+and perf_volley pass. All 53 checkpoints regenerated and reload-validated for
+ROM `6d7224cbf549`; play/build ROMs match.
+Latest volley: 16,658 avg / 22,300 peak cycles, 0/900 lag.
+Playtest: Movement F8 (Palace 2 breakable blocks), repeatedly breathe through
+the 2x3 wall; every brick should disappear fully, with no persistent fragments.
+
+2026-11-16 downstab torso: both neck chunks above the diving head now flip
+horizontally and vertically in place in either facing direction. The head retains
+its existing orientation.
+All 17 unit tests, tall_geometry, stomp and hud_timing pass. All 53 checkpoints
+regenerated and reload-validated for ROM `57fe119bb089`; play/build ROMs match.
+Playtest: Core F3,
+jump and hold Down while falling; turn both ways and check the horizontally and vertically flipped torso
+segments above the head.
+
 2026-11-16 title/elevator/ghost follow-up: title jaw graphics now follow the
 compiled head layout (fixes stale `$22` crouch tile in the open jaw). Barba folds
 into crouch/crouch-attack while riding an elevator, with matching breath origin

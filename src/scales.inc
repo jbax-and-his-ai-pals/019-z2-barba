@@ -63,6 +63,11 @@ ScalesTick:
     sta $69D8
     lda #SCALES_ROAR
     sta ROAR_TIMER
+.ifdef SAMPLED_ROAR
+    lda ROAR_REQUEST
+    ora #$40
+    sta ROAR_REQUEST
+.endif
     lda #$A0            ; decor flash (bit 7) for 32 frames, like the high spells
     sta $074B
 @hit:

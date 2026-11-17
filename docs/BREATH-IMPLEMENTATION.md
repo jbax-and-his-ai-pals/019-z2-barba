@@ -46,6 +46,16 @@ it also runs `$E1DD` for active downstab (`$80 == $09`, temporarily offset +5px
 to `$29 + $21` for the tile check and restored to `$29 + $1C` afterwards) and
 rising upstab (`$80 == $08`, `$29 - $08`).
 
+Block-animation exhaustion (2026-11-16): vanilla's five records at `$041A-$043C`
+used to overwrite slot 0 when full. Breath could abandon a block midway through
+its visual erase after its collision tile was already cleared, leaving an
+unhittable fragment. Guarded, same-size rewrites in fixed bank 7 at `$E23A` and
+`$E0FC` now reserve a record via `$E292` before changing collision. `$E29C`
+returns failure on exhaustion; both brick breaking and crumbling floors defer
+until a record is free. No ROM padding or RAM is allocated. `combat.lua` checks
+pool exhaustion, preservation of all five records, their final four-tile erase,
+a successful later breath retry, and both crumbling-floor allocation outcomes.
+
 ## Five-shot volley at every health level
 
 Every attack emits five forward/downward fireballs: two pixels horizontally and
@@ -74,7 +84,19 @@ Extra fireballs use OAM `$3C/$44/$48`. The raised head moved to `$04/$4C/$C4` (a
 avoiding the original enemy-projectile slots at `$28/$2C/$30`. During downstab
 (`DRAW_FRAME == $51`), unused native sword/shield slots `$20/$24` draw a second
 16x16 torso chunk (`$06/$08`) at `DRAW_TOP - $10` unless tucked or clipped by
-the HUD/screen edges. Native shots and
+the HUD/screen edges. Both torso chunks flip horizontally and vertically in place
+during downstab: their two tile columns reverse and OAM attribute bits 6/7 toggle,
+retaining palette. The turned head keeps its existing attributes.
+Gem victory (2026-11-17) completes the torso only during the sampled
+looking-up roar: `RoarTorsoHop` maps bank 6, `RoarGemTorso` lifts the three
+existing rows 8px, then fills sword/shield slots `$20/$24` with the existing
+`$06/$08` torso at the original feet height. Its top 8px overlap the identical
+half-segment already in the look-up art: two complete chunks, no third partial
+chunk, total height 56px. Facing controls column order and
+flip attributes. Geometry tuck/submersion, HUD and right-edge clipping suppress
+the extension; normal look-up attacks and other roars keep their existing art.
+The helper restores bank 0 before returning. No new CHR, OAM slots or RAM.
+`tall_geometry` checks both facing directions. Native shots and
 their original OAM remain intact. Native enemy and shield entry hooks execute
 through fixed-bank gateways and retain the original vulnerability routines.
 
@@ -136,7 +158,8 @@ native collision rules; it does not copy aimed enemy-projectile code.
   dispatch, movement/OAM and glove-gated blocks.
 - `left_fire.lua`: left-facing shots near edges, across a world page, and with
   both original slots already occupied.
-- `combat.lua`: glove-gated fireball brick breaking and restored player state.
+- `combat.lua`: glove-gated fireball brick breaking, restored player state,
+  full animation pool / final erase / retry, and crumbling-floor allocation.
 - `damage.lua`: real native Bot damage from ordinary and Fire-empowered shots
   in both directions.
 - `shield_enemies.lua`: Orange Ironknuckle (`$18`) high/low shield blocking

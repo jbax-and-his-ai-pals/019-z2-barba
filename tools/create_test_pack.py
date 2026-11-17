@@ -23,7 +23,13 @@ SCENES=[
 RECIPE_FILES=['tools/state_scenarios.lua','tests/newgame.lua','tests/state_pack.lua',
               'tools/create_test_pack.py','tools/checkpoint_sets.json','tests/checkpoint_features.lua']
 RECIPES=json.loads((ROOT/'tools/checkpoint_sets.json').read_text())
-SETS=['core',*RECIPES['sets']]
+EDGE_SCENES=[
+    ('game-over-danger','Last life, one hit from death',
+     'Palace 1 enemy nearby; one life and one health unit. Wait about four seconds for GAME OVER. Reload F1 to repeat.'),
+    ('game-over','Game Over portrait',
+     'Inspect the final black Link portrait immediately. Press Start to continue; reload F2 to inspect again.')
+]
+SETS=['core',*RECIPES['sets'],'edges']
 
 
 def checkpoint_writes(scene: dict) -> tuple[dict,dict]:
@@ -61,7 +67,7 @@ def lua_value(value) -> str:
 
 
 def scene_prefix(set_name: str) -> str:
-    if set_name=='core':return ''
+    if set_name in ('core','edges'):return ''
     scenes=[]
     for scene in RECIPES['sets'][set_name]:
         writes,expected=checkpoint_writes(scene)
@@ -70,14 +76,16 @@ def scene_prefix(set_name: str) -> str:
 
 
 
-def recipe_hash() -> str:
-    return hashlib.sha256(b''.join((ROOT/p).read_bytes() for p in RECIPE_FILES)).hexdigest()
+def recipe_hash(set_name: str='core') -> str:
+    files=RECIPE_FILES+(['tools/edge_scenarios.lua'] if set_name=='edges' else [])
+    return hashlib.sha256(b''.join((ROOT/p).read_bytes() for p in files)).hexdigest()
 
 
-def create(force: bool=False, set_name: str='core') -> dict:
+def create(force: bool=False, set_name: str='core', rom_path: Path | None=None) -> dict:
     if set_name not in SETS:raise ValueError(f'Unknown checkpoint set: {set_name}')
-    scenes=SCENES if set_name=='core' else [(s['id'],s['name'],s['instructions']) for s in RECIPES['sets'][set_name]]
-    rom=ROOT/'build/barba.nes'
+    scenes=SCENES if set_name=='core' else (EDGE_SCENES if set_name=='edges' else
+            [(s['id'],s['name'],s['instructions']) for s in RECIPES['sets'][set_name]])
+    rom=rom_path or ROOT/'build/barba.nes'
     if not rom.exists():raise ValueError('Build the alpha first: python tools/build.py')
     digest=hashlib.sha256(rom.read_bytes()).hexdigest()
     folder=ROOT/'build/test-pack'/digest[:12]/set_name
@@ -86,7 +94,7 @@ def create(force: bool=False, set_name: str='core') -> dict:
         manifest=json.loads(manifest_path.read_text())
         if (manifest.get('set')==set_name
                 and [s['id'] for s in manifest.get('states',[])]==[s[0] for s in scenes]
-                and manifest.get('rom_sha256')==digest and manifest.get('recipe_sha256')==recipe_hash() and manifest.get('validated')
+                and manifest.get('rom_sha256')==digest and manifest.get('recipe_sha256')==recipe_hash(set_name) and manifest.get('validated')
                 and (folder/'barba-test.nes').exists()
                 and hashlib.sha256((folder/'barba-test.nes').read_bytes()).hexdigest()==digest
                 and all((folder/(s['id']+'.png')).exists() and (folder/s['file']).exists() and hashlib.sha256((folder/s['file']).read_bytes()).hexdigest()==s['sha256']
@@ -101,7 +109,10 @@ def create(force: bool=False, set_name: str='core') -> dict:
     # The generated runner is local and ignored; the reusable scenario contains no game data.
     scenario=ROOT/'build/generate-test-states.lua'
     prefix='PACK_DIR='+json.dumps(folder.as_posix())+'\n'+scene_prefix(set_name)
-    scenario.write_text(prefix+(ROOT/'tools/state_scenarios.lua').read_text())
+    if set_name=='edges':
+        core=create(set_name='core',rom_path=rom_path)
+        prefix+='SOURCE_STATE='+json.dumps((Path(core['folder'])/'combat.mss').as_posix())+'\n'
+    scenario.write_text(prefix+(ROOT/('tools/edge_scenarios.lua' if set_name=='edges' else 'tools/state_scenarios.lua')).read_text())
     if run(scenario,pack_rom,60):raise ValueError('State generation failed; see build/*-error.txt')
     states=[]
     for slot,(key,title,instructions) in enumerate(scenes,1):
@@ -110,11 +121,17 @@ def create(force: bool=False, set_name: str='core') -> dict:
         if not data.startswith(b'MSS'):raise ValueError(f'Invalid Mesen state: {key}')
         states.append({'slot':slot,'id':key,'name':title,'instructions':instructions,
                        'file':path.name,'sha256':hashlib.sha256(data).hexdigest(),
-                       'loadout':None if set_name=='core' else RECIPES['profiles'][RECIPES['sets'][set_name][slot-1]['profile']]})
+                       'loadout':None if set_name in ('core','edges') else RECIPES['profiles'][RECIPES['sets'][set_name][slot-1]['profile']]})
     validation=ROOT/'build/validate-test-states.lua'
-    validation.write_text(prefix+(ROOT/'tests/state_pack.lua').read_text())
-    if run(validation,pack_rom,60):raise ValueError('State reload validation failed; see validation.txt in the pack folder')
-    manifest={'set':set_name,'rom_sha256':digest,'recipe_sha256':recipe_hash(),'emulator':'Mesen 2.1.1','folder':str(folder),
+    if set_name!='edges':
+        validation.write_text(prefix+(ROOT/'tests/state_pack.lua').read_text())
+        if run(validation,pack_rom,60):raise ValueError('State reload validation failed; see validation.txt in the pack folder')
+    else:
+        report=(folder/'validation.txt').read_text()
+        if 'FAIL' in report or not report.rstrip().endswith('RESULT PASS'):
+            raise ValueError('Edge state reload validation failed')
+        shutil.copyfile(folder/'game-over-danger.mss',ROOT/'play/Game Over Danger.mss')
+    manifest={'set':set_name,'rom_sha256':digest,'recipe_sha256':recipe_hash(set_name),'emulator':'Mesen 2.1.1','folder':str(folder),
               'rom':str(pack_rom),'states':states,'validated':True}
     manifest_path.write_text(json.dumps(manifest,indent=2)+'\n')
     (ROOT/'build/test-pack/current.json').write_text(json.dumps(manifest,indent=2)+'\n')
@@ -124,11 +141,12 @@ def create(force: bool=False, set_name: str='core') -> dict:
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--force',action='store_true')
+    parser.add_argument('--rom',type=Path,help='Optional separate experimental ROM.')
     parser.add_argument('--set',choices=SETS,help='Generate only this set (default: all sets).')
     args=parser.parse_args()
     try:
         for name in ([args.set] if args.set else SETS):
-            manifest=create(args.force,name)
+            manifest=create(args.force,name,args.rom)
             print(f"Created {len(manifest['states'])} local test states: {manifest['folder']}")
-        if not args.set:create(False,'core')  # All-set generation leaves Core selected.
+        if not args.set:create(False,'core',args.rom)  # All-set generation leaves Core selected.
     except (OSError,ValueError) as error:parser.exit(1,f'Test pack failed: {error}\n')

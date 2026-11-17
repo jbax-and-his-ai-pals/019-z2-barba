@@ -5,6 +5,10 @@
 .export EnemyFireGateway, ShieldFireGateway, LagNmiBank6
 
 ROAR_TIMER = $05F0 ; cleared by the original $0500..$05FF reset loop; no original references
+.ifdef SAMPLED_ROAR
+ROAR_REQUEST = $05EE ; bit 7 playing, bit 6 gem/spell, bit 5 injury tail, bit 3 gem pose, bit 2 hurt
+ROAR_COOLDOWN = $05EF ; start timer; drives injury pitch tail, attacks never roar
+.endif
 LAVA_CONTACT = $05EB ; 4-frame grace timer while supported by palace lava
 INFERNO_TIMER = $6470 ; multi-wave Inferno firestorm countdown
 OW_FIRE_TIMER = $6471 ; overworld flame breath sprite timer
@@ -280,6 +284,11 @@ BurnMapEndGuard:
 
 .segment "BANK0"
 BarbaInferno:
+.ifdef SAMPLED_ROAR
+    lda ROAR_REQUEST
+    ora #$40
+    sta ROAR_REQUEST
+.endif
     lda #$31
     sta INFERNO_TIMER
     lda #$30
@@ -330,6 +339,21 @@ BarbaUpdate:
     lda #$FA
     sta $057D
 @roar:
+.ifdef SAMPLED_ROAR
+    lda #$00
+    sta ROAR_TIMER
+    rts
+
+; Fixed-bank player injury hook uses FarCall0, preserving native recoil setup.
+BarbaHurtRoar:
+    lda ROAR_REQUEST
+    ora #$04
+    sta ROAR_REQUEST
+    lda #$01
+    sta $00
+    rts
+
+.else
     lda ROAR_TIMER
     beq @done
     dec ROAR_TIMER
@@ -349,6 +373,7 @@ RoarVolume:
     .byte $30,$32,$34,$35,$36,$38,$39,$3A,$3C,$3D,$3F,$3B
 RoarPitch:
     .byte $0F,$0F,$0E,$0F,$0D,$0F,$0E,$0C,$0F,$0D,$0B,$0E
+.endif
 
 .include "breath.inc"
 .include "extra_fire.inc"
@@ -361,6 +386,9 @@ RoarPitch:
 .include "scales.inc"
 .include "farcall.inc"
 .include "late_split.inc"
+.ifdef SAMPLED_ROAR
+.include "sampled_roar.inc"
+.endif
 
 .segment "LAVA"
 ; Side-view encounters ($0707=0) and palaces ($0707>=3) use this surface path.

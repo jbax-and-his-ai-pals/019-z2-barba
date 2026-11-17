@@ -54,6 +54,16 @@ emu.addEventCallback(function()
         check(has(11,8),'rising with Up held draws looking-up frame 8')
         check(has(12,5) and not has(12,8),'forward air attack keeps open-jaw frame 5')
         check(has(13,5) and not has(13,8),'ground attack keeps open-jaw frame 5')
+        if LABELS.RoarAudio then w(0x5EE,0x48)end
+    end
+    if frame==1440 and LABELS.RoarAudio then
+        check(r(0x5EE)==0x88 and r(DRAW_INDEX)==72,'gem voice holds raised head during real gameplay playback')
+        screenshot('gem-victory-roar')
+    end
+    if frame==1530 then
+        if LABELS.RoarAudio then
+            check(r(0x5EE)==0 and r(DRAW_INDEX)==27,'gem voice ends and returns to idle automatically')
+        end
         f:write('RESULT '..(errors==0 and 'PASS' or 'FAIL')..'\n');f:close();stopScenario(errors==0 and 0 or 1)
     end
 end,emu.eventType.endFrame)

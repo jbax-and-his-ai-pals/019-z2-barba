@@ -437,6 +437,10 @@ def compile_assets(root: Path, source_path: Path | None = None) -> tuple[bytes, 
         return result
 
     tall_mapping = [allocate(rows) for rows in frames]
+    # Downstab mirrors the two neck columns in place; BarbaDisplay toggles
+    # both flip attributes without changing the turned head or position.
+    down_index = TALL_POSES.index('down')
+    tall_mapping[down_index][1:3] = tall_mapping[down_index][1:3][::-1]
     mapping = b''.join(allocate(rows) for rows in fallback)
     # This file contains indexes only, never extracted CHR pixels. Keeping it
     # checked in lets ca65 validate the renderer without redistributing a ROM.

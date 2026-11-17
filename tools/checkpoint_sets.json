@@ -63,6 +63,9 @@
       {"id":"death-mountain","name":"Death Mountain entrance","profile":"saria","world":0,"region":1,"number":0,"room":0,"page":0,"mode":5,"frames":90,"entry":{"115":42,"116":0,"1801":1,"1802":0,"1846":0,"1897":1},"instructions":"Walk the native overworld; enter nearby caves or Palace 4."},
       {"id":"maze-island","name":"Maze Island near Palace 4","profile":"p4","world":0,"region":1,"number":0,"room":0,"page":0,"mode":5,"frames":90,"entry":{"115":58,"116":59,"1801":1,"1802":2,"1846":0,"1897":2},"instructions":"Walk the native overworld; enter nearby caves or Palace 4."}
     ],
+    "gem": [
+      {"id":"palace-gem","name":"Palace 6 gem placement","profile":"p6boss","world":4,"region":2,"number":6,"room":58,"page":3,"frames":120,"position":{"x":848,"y":144},"instructions":"Boss is behind you. Walk right to the crystal statue; listen for the victory fanfare then immediate roar and watch Barba look up. Reload F1 to repeat."}
+    ],
     "movement": [
       {"id":"p6-water-lava","name":"Palace 6 lava ledge","profile":"p6boss","world":4,"region":2,"number":6,"room":51,"page":0,"instructions":"Walk onto lava, jump back, check native body and folded head."},
       {"id":"p1-low-ceiling","name":"Palace 1 low tunnel","profile":"p1boss","world":3,"region":0,"number":1,"room":3,"page":1,"instructions":"Walk and crouch under the ceiling.","position":{"x":288,"y":176},"feature":"ceiling"},

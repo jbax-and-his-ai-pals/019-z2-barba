@@ -7,8 +7,8 @@ from pathlib import Path
 from create_test_pack import ROOT, SETS, create
 
 
-def prepare(set_name: str='core') -> dict:
-    manifest=create(set_name=set_name)
+def prepare(set_name: str='core', rom_path: Path | None=None) -> dict:
+    manifest=create(set_name=set_name,rom_path=rom_path) if rom_path else create(set_name=set_name)
     folder=Path(manifest['folder'])
     slots=folder/'slots'
     slots.mkdir(exist_ok=True)
@@ -17,7 +17,7 @@ def prepare(set_name: str='core') -> dict:
         (slots/f'barba-test_{slot}.mss').unlink(missing_ok=True)
     for scene in manifest['states']:
         shutil.copyfile(folder/scene['file'],slots/f"barba-test_{scene['slot']}.mss")
-    player=ROOT/'build/mesen-scenarios'/set_name/'Mesen.exe'
+    player=ROOT/'build/mesen-scenarios'/('roar/'+set_name if rom_path else set_name)/'Mesen.exe'
     player.parent.mkdir(parents=True,exist_ok=True)
     if not player.exists():shutil.copyfile(ROOT/'.tools/mesen/Mesen.exe',player)
     settings=player.parent/'settings.json'
@@ -59,4 +59,6 @@ def prepare(set_name: str='core') -> dict:
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--set',choices=SETS,default='core')
-    prepare(parser.parse_args().set)
+    parser.add_argument('--rom',type=Path,help='Optional separate experimental ROM/profile.')
+    args=parser.parse_args()
+    prepare(args.set,args.rom)

@@ -64,7 +64,7 @@ local function tick()
     end
     if frame<=castFrame then return end
     local t=frame-castFrame
-    if r(0x05F0)>0 then sawRoar=true end
+    if r(0x05F0)>0 or (LABELS.RoarAudio and (r(0x05EE)&0x80)~=0) then sawRoar=true end
     if (r(0x074B)&0x80)~=0 then sawDecor=true end
     if t==6 then screenshot('scales-cast') end
     if t==60 then
@@ -73,7 +73,7 @@ local function tick()
         check(emu.read(0x13,pal)==0x30,'PPU belly (colour 3) shows white ($3F13='..string.format('%02X',emu.read(0x13,pal))..')')
         check(emu.read(0x12,pal)==0x21,'PPU body (colour 2) shows sky blue ($3F12='..string.format('%02X',emu.read(0x12,pal))..')')
         check(emu.read(0x11,pal)==0x01,'PPU outline (colour 1) turns navy ($3F11='..string.format('%02X',emu.read(0x11,pal))..')')
-        check(sawRoar,'SCALES cast plays the dragon roar ($05F0)')
+        check(sawRoar,'SCALES cast plays the dragon roar')
         check(sawDecor,'SCALES cast flashes the scenery ($074B bit 7)')
         check(clangs==0,'no clang before any hit (clangs='..clangs..')')
         screenshot('scales-blue')

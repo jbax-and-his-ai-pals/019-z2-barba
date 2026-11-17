@@ -270,7 +270,6 @@ BarbaDisplay:
     lda $050C
     beq :+
     lsr
-    and #$03
 :
     ora $0752
     and #$03
@@ -284,6 +283,15 @@ BarbaDisplay:
     lda #$07
     bne @pose
 @native_pose:
+.ifdef SAMPLED_ROAR
+    lda ROAR_REQUEST
+    and #$88
+    cmp #$88
+    bne :+
+    lda #$08           ; gem victory: open jaw, head raised for the full roar
+    bne @pose
+:
+.endif
     lda $80
     ; Vanilla reuses crouch frame 6 on ascent. Select an independent full-body
     ; jump pose without changing its physics, shield state or technique gates.
@@ -423,6 +431,13 @@ BarbaDisplay:
     lda DRAW_FRAME
     cmp #$51
     bne @no_extra_torso
+    ; Flip both neck chunks horizontally and vertically in place. The down
+    ; layout and extra chunk reverse tile columns to match the horizontal flip.
+    lda DRAW_ATTR
+    eor #$C0
+    sta $0206
+    sta $024E
+    sta $02C6
     lda GEOMETRY
     and #$06
     bne @no_extra_torso
@@ -434,13 +449,13 @@ BarbaDisplay:
     cmp #$F0
     bcs @no_extra_torso
     sta $00
-    ldx #$06
-    ldy #$08
+    ldx #$08
+    ldy #$06
     lda DRAW_LEFT
     bit DRAW_ATTR
     bvc @extra_left
-    ldx #$08
-    ldy #$06
+    ldx #$06
+    ldy #$08
     bcc @extra_place
 @extra_left:
     clc
@@ -451,7 +466,7 @@ BarbaDisplay:
     stx $0221
     ldx $00
     stx $0220
-    ldx DRAW_ATTR
+    ldx $0206
     stx $0222
     clc
     adc #$08
@@ -462,9 +477,12 @@ BarbaDisplay:
     sta $0224
     stx $0226
 @no_extra_torso:
+.ifdef SAMPLED_ROAR
+    jsr RoarTorsoHop
+.endif
     lda $12
-    and #$01
-    beq @no_rot
+    lsr
+    bcc @no_rot
     lda $0707
     cmp #$01
     beq @no_rot
@@ -540,6 +558,15 @@ BarbaDisplay:
     TALL_SPRITE 6, $021C, 16
 @r_done:
     jmp @done_draw
+.ifdef SAMPLED_ROAR
+RoarTorsoHop:
+    lda #>(RoarGemTorso-1)
+    pha
+    lda #<(RoarGemTorso-1)
+    pha
+    lda #$06
+    jmp $FFCC
+.endif
 ; No horizontal melee. Downstab sits under the feet; upward thrust uses the
 ; native head top, never the visually raised 48px head. Both are centered.
 BarbaSetThrusts:

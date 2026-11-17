@@ -62,13 +62,13 @@ local function tick()
         castFrame=frame+1
     end
     if castFrame and frame>castFrame then
-        if r(0x05F0)>0 then sawRoar=true end
+        if r(0x05F0)>0 or (LABELS.RoarAudio and (r(0x05EE)&0x80)~=0) then sawRoar=true end
         if r(0x6470)>0 then sawTimer=true end
         if r(0x074B)>0 then sawFlash=true end
         inspectPool()
         if frame==castFrame+18 then screenshot('inferno-barrage') end
         if frame==castFrame+70 then
-            check(sawRoar,'INFERNO activates roar timer ($05F0)')
+            check(sawRoar,'INFERNO activates dragon roar')
             check(sawTimer,'INFERNO activates multi-wave firestorm timer ($6470)')
             check(sawFlash,'INFERNO triggers screen/decor flash ($074B)')
             check(sawRight and sawLeft,'INFERNO fires both right and left fireballs')

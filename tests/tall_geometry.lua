@@ -20,6 +20,7 @@ local function add(name,entry,setup,verify)
     tests[#tests+1]={name=name,entry=entry,setup=setup,verify=verify}
 end
 local function baseline()
+    w(0x2000,0) -- controlled CPU calls must not be interrupted by gameplay NMI
     for address=0x6000,0x633F do w(address,0x42)end
     for address=0x200,0x23F,4 do w(address,0xF8)end
     w(0x769,4);w(0x707,4);w(0x13,0);w(0x80,3);w(0x17,1)
@@ -27,6 +28,7 @@ local function baseline()
     w(0x72A,0);w(0x72C,0);w(0xC8,0);w(0x48D,0);w(0x50C,0)
     w(0x70E,0);w(0x752,0);w(0x479,0);w(0x5F6,0)
     w(0x754,0);w(0x400,0);w(0x12,0)
+    w(0x5EE,0)
     for address=0xB6,0xBB do w(address,0)end
 end
 local function geometry(name,setup,x,y,flags)
@@ -63,6 +65,17 @@ geometry('swamp water submerges grounded Barba',function()w(0x752,0x20)end,0x6C,
 geometry('airborne over swamp water stays full height',function()w(0x752,0x20);w(0x479,2)end,0x6C,0x84,1)
 
 local extraHead={0x204,0x24C,0x2C4}
+if LABELS.RoarAudio then
+    add('gem victory looking up','BarbaDisplay',function()w(0x5EE,0x88)end,function()
+        check(r(0x5FA)==72,'active gem roar draws looking-up frame 8 while grounded')
+    end)
+    add('pending gem keeps normal pose','BarbaDisplay',function()w(0x5EE,0x48)end,function()
+        check(r(0x5FA)==27,'pending gem request keeps native idle pose')
+    end)
+    add('spell roar keeps normal pose','BarbaDisplay',function()w(0x5EE,0x80)end,function()
+        check(r(0x5FA)==27,'spell roar does not force gem victory pose')
+    end)
+end
 local function allHidden(addresses)
     for _,address in ipairs(addresses)do if r(address)~=0xF8 then return false end end
     return true
@@ -132,16 +145,23 @@ add('downstab right draws second torso chunk above row 0','BarbaDisplay',functio
     w(0x80,9);w(0x479,2);w(0x9F,1)
 end,function()
     check(r(0x220)==0x70 and r(0x224)==0x70,'downstab right places extra torso at DRAW_TOP-16')
-    check(r(0x221)==0x08 and r(0x225)==0x06,'downstab right uses mirrored neck tiles 08,06')
+    check(r(0x221)==0x06 and r(0x225)==0x08 and r(0x205)==0x06 and r(0x24D)==0x08,
+        'downstab right reverses tile columns in both torso chunks')
     check(r(0x223)==0x4C and r(0x227)==0x54,'downstab right aligns X to columns 0 and 8')
     check(r(0x204)==0x80 and r(0x24C)==0x80,'downstab right keeps row 0 torso below it')
+    check(r(0x206)==0x80 and r(0x24E)==0x80 and r(0x222)==0x80 and r(0x226)==0x80,
+        'downstab right flips both torso chunks horizontally and vertically')
+    check(r(0x20A)==0x40 and r(0x216)==0x40,'downstab right keeps turned head attributes')
 end)
 add('downstab left draws second torso chunk above row 0','BarbaDisplay',function()
     w(0x80,9);w(0x479,2);w(0x9F,2)
 end,function()
     check(r(0x220)==0x70 and r(0x224)==0x70,'downstab left places extra torso at DRAW_TOP-16')
-    check(r(0x221)==0x06 and r(0x225)==0x08,'downstab left uses neck tiles 06,08')
+    check(r(0x221)==0x08 and r(0x225)==0x06 and r(0x24D)==0x08 and r(0x2C5)==0x06,
+        'downstab left reverses tile columns in both torso chunks')
     check(r(0x223)==0x54 and r(0x227)==0x5C,'downstab left aligns X to columns 8 and 16')
+    check(r(0x24E)==0xC0 and r(0x2C6)==0xC0 and r(0x222)==0xC0 and r(0x226)==0xC0,
+        'downstab left flips both torso chunks horizontally and vertically')
 end)
 add('downstab near HUD hides second torso chunk','BarbaDisplay',function()
     w(0x80,9);w(0x479,2);w(0x29,0x30)

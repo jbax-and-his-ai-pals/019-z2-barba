@@ -19,7 +19,11 @@ from assets import (ASH_TILES, CASTLE_FIRE_BANK, CASTLE_FIRE_TILE_SHA256,
                     compile_town_fire, validate_layout)
 from bps import apply, encode
 from boss_art import compile_lava_link
+from game_over_art import (GAME_OVER_CHR_BANK, GAME_OVER_MAP_START,
+                           compile_game_over_link)
 from nes import CHR_OFFSET, SOURCE_SHA256, encode_tile, load_source, prg_offset
+import roar_sample
+import game_over_audio
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -46,14 +50,16 @@ class Overlay:
         self.put(prg_offset(bank, address), data, expected, name)
 
 
-def assemble(output: Path) -> dict[str, int]:
+def assemble(output: Path, sampled_roar: bool = False) -> dict[str, int]:
     def find(name: str) -> str:
         local = ROOT / f'.tools/cc65/bin/{name}.exe'
         result = str(local) if local.exists() else shutil.which(name)
         if not result:
             raise ValueError(f'{name} is missing. Install cc65; see docs/BUILD.md.')
         return result
-    subprocess.run([find('ca65'), str(ROOT/'src/barba.asm'), '-I', str(ROOT/'src'), '-g', '-o', 'barba.o'], cwd=output, check=True)
+    defines = ['-D', 'SAMPLED_ROAR=1'] if sampled_roar else []
+    subprocess.run([find('ca65'), str(ROOT/'src/barba.asm'), '-I', str(ROOT/'src'), '-I', str(output.resolve()),
+                    *defines, '-g', '-o', 'barba.o'], cwd=output, check=True)
     subprocess.run([find('ld65'), '-C', str(ROOT/'src/barba.cfg'), 'barba.o',
                     '-Ln', 'barba.lbl', '-m', 'barba.map', '--dbgfile', 'barba.dbg'], cwd=output, check=True)
     labels = {}
@@ -64,15 +70,21 @@ def assemble(output: Path) -> dict[str, int]:
     return labels
 
 
-def build(source_path: Path, output: Path) -> dict:
+def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'roms/roar.wav') -> dict:
     source = load_source(source_path)
     if output.resolve() == source_path.parent.resolve():
         raise ValueError('Output must not be the source ROM directory')
     output.mkdir(parents=True, exist_ok=True)
+    roar_info = None
+    if title_roar_wav:
+        sample, roar_info = roar_sample.convert(title_roar_wav, output)
+        (output/'sample-roar-params.inc').write_text(
+            f'ROAR_RATE = {roar_info["rate_index"]}\nROAR_LENGTH = {(len(sample)-1)//16}\n'
+            f'HURT_LENGTH = {roar_info["hurt_length"]}\n')
     # Asset compilation emits the tile-index include consumed by ca65. Complete
     # it before assembling so the ROM and renderer always share one layout.
     mapping, graphics, ow, _ = compile_assets(ROOT, source_path)
-    labels = assemble(output)
+    labels = assemble(output, bool(title_roar_wav))
     overlay = Overlay(source)
     # FarCall0 identifies the ACTUAL mapped bank without touching the native
     # mapper path (and without mistaking the area-bank variable for a shadow).
@@ -106,6 +118,20 @@ def build(source_path: Path, output: Path) -> dict:
     hook(7, 0xE0A4, 'LavaSurface', 0x4C, 'a9 01 85')
     hook(7, 0xD4FE, 'BarbaPreEnemy', 0x20, '20 25 99')
     hook(7, 0xD535, 'BarbaBlocks', 0x20, '20 dd e1')
+    # Five native block-animation records can fill during breath/thrust chains.
+    # Vanilla reuses record 0 while its last 2x2 erase is still pending, leaving
+    # a drawn fragment over an already-empty collision tile. Allocate BEFORE
+    # changing collision; on exhaustion leave the block hittable for a retry.
+    # E292 returns Y=$02 and N clear on success ($0F is $60..$63); N set on
+    # failure (DEX reached $FF). Both callers must honor that failure.
+    overlay.prg(7, 0xE29C, bytes.fromhex('60 ea'), bytes.fromhex('a2 00'),
+                'Full block animation pool returns failure instead of overwriting slot 0')
+    overlay.prg(7, 0xE23A, bytes.fromhex('20 92 e2 30 f3 a9 42 91 0e a9 01 9d 1a 04'),
+                bytes.fromhex('a9 42 a4 02 91 0e 20 92 e2 a9 01 9d 1a 04'),
+                'Breath and thrust blocks reserve animation before clearing collision')
+    overlay.prg(7, 0xE0FC, bytes.fromhex('20 92 e2 30 2a a9 8f 91 0e a9 81 9d 1a 04'),
+                bytes.fromhex('a9 8f a4 02 91 0e 20 92 e2 a9 81 9d 1a 04'),
+                'Crumbling floors honor full block animation pool')
     hook(7, 0xD50D, 'BarbaUpdate', 0x20, '20 47 98')
     hook(7, 0xE48B, 'EnemyFireGateway', 0x4C, 'b5 b6 c9 01', 1)
     hook(7, 0xE617, 'ShieldFireGateway', 0x4C, 'a5 c8 0a')
@@ -359,22 +385,121 @@ def build(source_path: Path, output: Path) -> dict:
     # opening (~17 s) starts the short noise-channel roar (same envelope as Inferno's), which leaves both
     # pulse melodies and the triangle alone. The hook now enters TitleRoarUpdate ($A5AE), which runs the roar
     # envelope each frame and then jumps to the jaw animation at $A54F.
-    overlay.prg(5, 0xA8CF, bytes.fromhex('4c ae a5 ea'), bytes.fromhex('a2 6b a5 12'), 'Title Barba animate hook')
+    roar_update = 0xA5AE
+    sampled_title_code = None
+    if title_roar_wav:
+        sampled_title_code, roar_update, roar_jaw = roar_sample.title_code(sample, roar_info)
+        for filename, bank, address in [('sampled-roar', 6, 0x8C00), ('sample-gem', 4, 0xA7E5),
+                                         ('laugh-delay', 6, 0x8F70)]:
+            data = (output/f'barba-{filename}.bin').read_bytes()
+            overlay.prg(bank, address, data, b'\xff'*len(data), f'Sampled roar {filename} helpers')
+        overlay.prg(6, 0x9010, b'\x20' + labels['RoarAudio'].to_bytes(2, 'little'),
+                    bytes.fromhex('20 0b 92'), 'Sampled gameplay DMC coordinator')
+        for address, target, original in [(0x9031, 'RoarPulse1', '8e 00 40'), (0x9038, 'RoarPulse2', '8e 04 40')]:
+            overlay.prg(6, address, b'\x20' + labels[target].to_bytes(2, 'little'),
+                        bytes.fromhex(original), f'Gameplay music ducking {target}')
+        overlay.prg(4, 0x9B4D, b'\x20' + labels['RoarGemEnd'].to_bytes(2, 'little'),
+                    bytes.fromhex('8c 0c 07'), 'Victory roar immediately after palace gem fanfare')
+        overlay.prg(7, 0xE314, b'\x20' + labels['FarCall0'].to_bytes(2, 'little')
+                    + labels['BarbaHurtRoar'].to_bytes(2, 'little') + b'\xea',
+                    bytes.fromhex('a9 01 85 e9 85 00'), 'Barba short hurt roar; native recoil setup preserved')
+        # Native early pad polling precedes the HUD split: no bank bridge or
+        # repeated reads can fit its raster budget. During a roar, return raw
+        # buttons captured safely by the later audio hook (one frame latency).
+        # Otherwise replay the overwritten prologue and continue vanilla.
+        pad_capture = bytes.fromhex(
+            'ad ee 05 10 07 ad 15 40 29 10 d0 08 a2 01 8e 16 40 4c 6c d3 '
+            'ad d2 64 85 f5 ad d3 64 85 f6 60')
+        pad_offset = prg_offset(7, 0xF3C1)
+        overlay.prg(7, 0xF3C1, pad_capture, source[pad_offset:pad_offset+len(pad_capture)],
+                    'Sample experiment: early cached pad read in displaced laugh data')
+        overlay.prg(7, 0xD367, bytes.fromhex('4c c1 f3 ea ea'),
+                    bytes.fromhex('a2 01 8e 16 40'), 'DMC-safe controller cache hook before HUD split')
+        offset = prg_offset(7, roar_sample.SAMPLE_ADDRESS)
+        expected = source[offset:offset+roar_sample.SAMPLE_CAPACITY]
+        if hashlib.sha256(expected).hexdigest() != roar_sample.ORIGINAL_SHA256:
+            raise ValueError('Original laugh sample allocation differs')
+        overlay.prg(7, roar_sample.SAMPLE_ADDRESS, sample, expected[:len(sample)],
+                    'Famicom roar in reclaimed native laugh sample data')
+        laughs = game_over_audio.compact_laughs(source, len(sample))
+        for number, (address, data, original) in enumerate(laughs, 1):
+            shared = max(0, game_over_audio.SAMPLE_ADDRESS + len(sample) - address)
+            if shared and data[:shared] != sample[-shared:]:
+                raise ValueError('Compact laugh does not match the approved roar tail')
+            end = len(data)
+            if number < len(laughs) and address+end-1 == laughs[number][0]:
+                if data[-1:] != laughs[number][1][:1]:
+                    raise ValueError('Compact laughs disagree on their shared silent byte')
+                end -= 1  # The next guarded write owns the shared byte.
+            overlay.prg(7, address+shared, data[shared:end], original[shared:end],
+                        f'Compact octave-up Ganon laugh waveform {number}')
+        for number, entry in enumerate(game_over_audio.LAUGH_ENTRIES):
+            laugh_address, laugh, _ = laughs[game_over_audio.SHARED_LAUGH_INDICES[number]]
+            table_address = 0x917B + entry*2
+            original = source[prg_offset(6, table_address):prg_offset(6, table_address)+2]
+            overlay.prg(6, table_address,
+                        bytes([(laugh_address-0xC000)//64, (game_over_audio.SHARED_LAUGH_LENGTHS[number]-1)//16]), original,
+                        f'Game Over compact laugh pointer/length {entry}')
+        overlay.prg(6, 0x925A, b'\x20' + labels['RoarNativeRate'].to_bytes(2, 'little') + b'\xea\xea',
+                    bytes.fromhex('a9 0f 8d 10 40'), 'Game Over native descending contour; other sample rates preserved')
+        roar_info['game_over_shared_laugh'] = {
+            'waveforms': [{'address': a, 'bytes': len(d)} for a, d, _ in laughs],
+            'rates': list(game_over_audio.SHARED_LAUGH_RATES), 'spacing_frames': 23,
+            'initial_delay_frames': 36}
+        # Title-only music driver normally disables DMC every frame. Preserve
+        # it while the one-shot timer is live, without retriggering a completed
+        # sample. Leaving title mode clears the timer and disables DMC even if
+        # Start interrupts a roar. Use the end of bank-6 UNUSED_0 before $9000.
+        overlay.prg(6, 0x8005, bytes.fromhex('20 d0 8f ea ea'),
+                    bytes.fromhex('a9 0f 8d 15 40'), 'PROTOTYPE: title DMC enable hook')
+        # Ease the DAC from reset's zero to its sample midpoint before the first
+        # jaw opening. A direct $4011=$40 at the first roar produces a pop.
+        title_bias = bytes.fromhex(
+            'ad 36 07 c9 03 f0 09 a9 00 8d ee 05 8d ef 05 60 '
+            'ad fa 05 d0 10 ad ee 05 c9 40 b0 09 18 69 02 8d ee 05 8d 11 40 60')
+        overlay.prg(6, 0x8F40, title_bias, b'\xff'*len(title_bias),
+                    'Sampled title: gentle initial DAC bias instead of first-roar pop')
+        title_enable = bytes.fromhex('20 40 8f') + bytes.fromhex(
+            'ad 36 07 c9 03 f0 05 a9 00 8d f0 05 '
+            'ad f0 05 f0 09 ad 15 40 29 10 09 0f d0 02 a9 0f 8d 15 40 60')
+        overlay.prg(6, 0x8FD0, title_enable, b'\xff'*len(title_enable),
+                    'PROTOTYPE: preserve title DMC playback')
+        # The title pulse volume writers share X=control/volume. Halve only
+        # the volume nibble while roaring; preserve duty/envelope bits and all
+        # caller registers/flags. Normal envelopes continue running underneath.
+        duck_table = bytes((v & 0xf0) | ((v & 15)//2) for v in range(256))
+        overlay.prg(6, 0x8E00, duck_table, b'\xff'*256,
+                    'PROTOTYPE: title music half-volume table')
+        for original, helper, register in [(0x810F, 0x8F00, 0x4000), (0x8116, 0x8F14, 0x4004)]:
+            store = helper + 14
+            code = (bytes.fromhex('08 48 ad f0 05 f0 06 bd 00 8e 4c')
+                    + store.to_bytes(2, 'little') + b'\x8a\x8d'
+                    + register.to_bytes(2, 'little') + bytes.fromhex('68 28 60'))
+            overlay.prg(6, helper, code, b'\xff'*len(code),
+                        f'PROTOTYPE: title pulse {register:04X} duck helper')
+            overlay.prg(6, original, b'\x20' + helper.to_bytes(2, 'little'),
+                        b'\x8e' + register.to_bytes(2, 'little'),
+                        f'PROTOTYPE: title pulse {register:04X} volume hook')
+    overlay.prg(5, 0xA8CF, b'\x4c' + roar_update.to_bytes(2, 'little') + b'\xea',
+                bytes.fromhex('a2 6b a5 12'), 'Title Barba animate hook')
     # Keep the title's three jaw columns synchronized with the compiled player
     # art. A stale $22 right-column byte selected crouch art on the open frame.
     tall_layout = validate_layout(ROOT)
     title_heads = [tall_layout[pose*9:pose*9+3] for pose in (3, 4, 5)]
     title_jaws = bytes(head[col] for col in range(3) for head in title_heads)
-    overlay.prg(
-        5, 0xA54F,
-        bytes.fromhex(
+    title_animation = bytearray(bytes.fromhex(
             'ad 1c 02 c9 7f d0 38 a5 12 c9 40 90 1e c9 60 b0 1a '
             'c9 48 90 12 f0 06 c9 58 b0 0c 90 06 '
-            '20 9e a5 ea ea ea '   # jsr TitleRoarStart (was the fireball SFX)
+            '20 9e a5 ea ea ea '
             'a2 02 d0 06 a2 01 d0 02 a2 00 '
             'bd 95 a5 8d 1d 02 bd 98 a5 8d 21 02 bd 9b a5 8d 3d 02 '
             'a2 6b a5 12 4c d3 a8 '
-        ) + title_jaws,
+        ) + title_jaws)
+    if sampled_title_code is not None:
+        title_animation[7:11] = b'\x20' + roar_jaw.to_bytes(2, 'little') + b'\xea'
+    overlay.prg(
+        5, 0xA54F,
+        bytes(title_animation),
         b'\xff' * 79,
         'Title Barba mouth animation',
     )
@@ -392,7 +517,18 @@ def build(source_path: Path, output: Path) -> dict:
         '0f 0f 0e 0f 0d 0f 0e 0c 0f 0d 0b 0e'
     )
     assert len(title_roar) == 0xA5E8 - 0xA59E
+    if sampled_title_code is not None:
+        title_roar = sampled_title_code
     overlay.prg(5, 0xA59E, title_roar, b'\xff' * len(title_roar), 'Title Barba roar')
+    # Sampled audio packs its compact laugh above; legacy audio owns five samples.
+    if not title_roar_wav:
+        laughs = game_over_audio.compile_laughs(source)
+        for number, (entry, (address, raised, expected)) in enumerate(zip(game_over_audio.LAUGH_ENTRIES, laughs), 1):
+            overlay.prg(7, address, raised, expected, f'Game Over octave-up laugh {number}')
+            table_address = 0x917B + entry*2
+            original = source[prg_offset(6, table_address):prg_offset(6, table_address)+2]
+            overlay.prg(6, table_address, bytes([(address-0xC000)//64, (len(raised)-1)//16]),
+                        original, f'Game Over shortened laugh {number} pointer/length')
     # Game Over screen: replace "RETURN OF GANON" ($8010, 15 bytes) with "LINK KEEPS LAVA".
     overlay.prg(
         0, 0x8010,
@@ -400,6 +536,15 @@ def build(source_path: Path, output: Path) -> dict:
         bytes.fromhex('ebdeedeeebe7f4e8dff4e0dae7e8e7'),
         'Game Over Barba subtitle',
     )
+    game_over_tiles, game_over_map = compile_game_over_link(source)
+    map_offset = prg_offset(0, GAME_OVER_MAP_START)
+    overlay.prg(0, GAME_OVER_MAP_START, game_over_map,
+                source[map_offset:map_offset+len(game_over_map)],
+                'Game Over black Link nametable')
+    for tile, data in game_over_tiles.items():
+        offset = CHR_OFFSET + GAME_OVER_CHR_BANK*4096 + tile*16
+        overlay.put(offset, data, source[offset:offset+16],
+                    f'Game Over black Link tile {tile:02X}')
     story_lines = [
         'AFTER BARBA WOKE UP FROM A  ',
         'LONG NAP, HE FOUND LINK     ',
@@ -871,6 +1016,8 @@ def build(source_path: Path, output: Path) -> dict:
               'output_sha256': hashlib.sha256(target).hexdigest(),
               'size': len(target), 'changed_bytes': sum(a != b for a, b in zip(source, target)),
               'labels': labels, 'patches': sorted(overlay.ranges, key=lambda r: r['offset'])}
+    if roar_info:
+        report['title_roar_prototype'] = roar_info
     (output/'build-report.json').write_text(json.dumps(report, indent=2)+'\n')
     return report
 
@@ -879,9 +1026,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--rom', type=Path, default=ROOT/'roms/z2.nes')
     parser.add_argument('--out', type=Path, default=ROOT/'build')
+    parser.add_argument('--title-roar-wav', type=Path, default=ROOT/'roms/roar.wav',
+                        help='Local PCM roar WAV (default: roms/roar.wav)')
+    parser.add_argument('--native-audio', action='store_true',
+                        help='Build the legacy noise roar and five distinct Game Over laughs')
     args = parser.parse_args()
     try:
-        report = build(args.rom, args.out)
+        report = build(args.rom, args.out, None if args.native_audio else args.title_roar_wav)
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         parser.exit(1, f'Build failed: {error}\n')
     print(f"Built {args.out/'barba.nes'} ({report['changed_bytes']:,} changed bytes)")

@@ -12,6 +12,8 @@ python -m unittest discover -s tests           # ROM-free unit tests (fast)
 python tools/emulator_test.py tests/<name>.lua # one Mesen scenario, headless. Run scenarios one at a time.
 python tools/emulator_test.py tests/boot.lua --rom roms/z2.nes
 python tools/create_test_pack.py --force       # F1-F10 human checkpoints for the current build
+python tools/create_test_pack.py --set edges   # F1 last-life danger, F2 GAME OVER portrait
+python tools/create_test_pack.py --set gem     # F1 beside Palace 6 gem; walk right for victory roar/look-up
 python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-per-line report
 python tools/busy_rooms.py [--sets palaces,movement,world]  # lag + status-bar jitter over test-pack rooms (needs the pack)
 ```
@@ -66,13 +68,58 @@ python tools/busy_rooms.py [--sets palaces,movement,world]  # lag + status-bar j
 
 ## Free space and RAM in use (check before allocating)
 
-- ROM: bank 0 `$A89E-$A97D` (BANK0_OW; `BarbaSplitBurnForest` + `BurnAbort`; 1 free) + `$AA40-$BF6F` (BANK0; 11 free after elevator fold / removal of body-enemy OAM exchange, 2026-11-16) +
+- Default sampled roar (`roms/roar.wav`, override `--title-roar-wav`;
+  `--native-audio` restores legacy): reclaims native laugh data `$F400-$FD70` in bank 7
+  (2,417-byte maximum; hurt sample through `$F3C0` preserved), plus a 35-byte
+  title DMC enable helper in bank-6 vanilla pad `$8FD0-$8FF2` and hook `$8005`.
+  Title music ducking uses `$8E00-$8EFF` (256-byte volume table), `$8F00-$8F27`
+  (two 20-byte helpers), and hooks `$810F`/`$8116`; pulse volume halves while
+  roaring, normal envelopes continue. Sample DAC amplitude 34 (previously 28;
+  initially 20), increased for all sampled voice uses on 2026-11-17.
+  Gameplay coordinator/controller/pulse/rate/gem-torso helpers occupy bank 6 `$8C00-$8DF1`
+  (498 bytes); gem hook helper bank 4 `$A7E5-$A7F0` (12 bytes), called at
+  `$9B4D` after the fanfare, before refill/XP. Early cached-pad
+  helper uses displaced laugh bytes `$F3C1-$F3DF` (31 bytes), not new padding.
+  First-title-pop DAC ramp uses bank 6 `$8F40-$8F65` (38 bytes).
+  Initial Game Over laugh delay uses bank 6 `$8F70-$8FAE` (63 guarded pad bytes):
+  latches `$E9` in `$05EE` bit 0 and waits 36 frames (~0.60 s) using native
+  `$0501`; no new RAM. Pending latch clears outside Game Over.
+  Inter-laugh spacing remains 23 frames. Gameplay path and sample bytes unchanged.
+  Sampled RAM `$05EE` = request/active bits (7 active, 6 gem/spell pending,
+  5 injury pitch tail, 3 gem looking-up pose, 2 hurt, 0 delayed Game Over laugh),
+  `$05EF` = legacy start timer; WRAM `$64D2/$64D3` = stable raw pads
+  captured after the HUD split (one-frame input latency only during playback).
+  Default build bank0 has 2 free, bank3-sign 250 free (legacy native: 0/258).
+  Random attack roars removed (2026-11-17); native fireball SFX retained.
+  Latest normal sampled volley: 16,769 avg / 22,466 peak, 0/900 lag; HUD zero late splits.
+  Approved roar stays exactly 2,177 bytes `$F400-$FC80`; Game Over uses four
+  octave-up native waveforms: 65 bytes `$FC80-$FCC0`, then 49 bytes each at
+  `$FCC0`, `$FD00`, `$FD40` (last ends `$FD70`). Verified silent `$55` endpoints
+  share the roar's final byte and first/second waveform boundary; one guarded
+  writer per byte. Five starts use first/first/second/third/fourth, lengths
+  65/49/49/49/49 and rates 6/6/6/10/10. Opening pair shares pitch (~4% sharp
+  on laugh 2); later three retain their own native waveforms one octave up.
+  Single-pass, DC-centered encoding: 1 kHz forward/backward low-pass, RMS-slew
+  normalization, then 4x/4x/4x/2x target gains (decoded RMS +8-12 dB versus the
+  first four-waveform revision); native 23-frame spacing. No size/RAM changes.
+  `$925A-$925E` calls `RoarNativeRate`; all non-laugh
+  native effects retain rate 15. No new fixed padding/RAM (2026-11-17).
+  Legacy `--native-audio` leaves sampled bank-6 ranges unused and uses five
+  octave-up DPCM waveforms, lengths 225/161/193/129/129. First laugh pointer moves
+  `$F3C0` -> `$F400` to preserve hurt's final byte; native 23-frame spacing.
+  No new ROM space or RAM. See docs/BUILD.md.
+  Sampled Barba injury prefix extended 0.344 -> 0.527 seconds (2026-11-17),
+  using the same sample bytes/allocation; full roar remains 1.557 seconds.
+  Injury-only rate descent 9->8->7->6->5 at ticks 17/21/25/29 now stretches
+  playback to ~0.627 seconds; no new RAM or sample bytes.
+
+- ROM: bank 0 `$A89E-$A97D` (BANK0_OW; `BarbaSplitBurnForest` + `BurnAbort`; 1 free) + `$AA40-$BF6F` (BANK0; default sampled 2 free, legacy native 0 free) +
   reclaimed dead vanilla bank-0 code `$81C1-$81E4`, `$97F1-$9814`, `$9847-$9877` (METEOR; 0/1/0 free respectively; originals guarded) +
   bank 1 `$9EB9-$9FFF` (BANK1, vanilla pad after Geldarm draw code; `geldarm.inc`; 240 free) +
-  `$BFE0-$BFF9` (BANK0_TAIL, vanilla pad before vectors; `BurnMapEndGuard`, 1 free), bank 3 `$9D0A-$9FFF` (BANK3_SIGN, vanilla pad `bank3_UNUSED_9D0A`; `sign.inc` + `TownOpenerGate` + `ScalesTick` + `LateSplit`, 258 free; more vanilla pad untouched at `$8BB1-$90EF` and `$9134-$93FF`), bank 3 `$B803-$BF6F` (TOWN; 2 free), bank 6 `$BA00-$BF6F` (BANK6; `shouts.inc` + `combo.inc` + `ScalesHop`; 2 free), bank 5 `$BDE0-$BF5F` (BANK5; `dark_barba.inc` + `HiddenJarHit`; 33 free).
+  `$BFE0-$BFF9` (BANK0_TAIL, vanilla pad before vectors; `BurnMapEndGuard`, 1 free), bank 3 `$9D0A-$9FFF` (BANK3_SIGN, vanilla pad `bank3_UNUSED_9D0A`; `sign.inc` + `TownOpenerGate` + `ScalesTick` + `LateSplit`, default sampled 250 free, legacy native 258 free; more vanilla pad untouched at `$8BB1-$90EF` and `$9134-$93FF`), bank 3 `$B803-$BF6F` (TOWN; 2 free), bank 6 `$BA00-$BF6F` (BANK6; `shouts.inc` + `combo.inc` + `ScalesHop`; 2 free), bank 5 `$BDE0-$BF5F` (BANK5; `dark_barba.inc` + `HiddenJarHit`; 33 free).
   Bank 4 `$A765-$A8FF` is vanilla `$FF` pad patched by raw bytes in `build.py`: Lava Link helpers `$A765-$A7A8`,
   `HiddenJarHit` `$A7BF-$A7CF`, `CarockHit` `$A7D0-$A7E4` (shared with the P3/4/6 Wizzrobe tail `$AEB2`; boss death gated on `$22`);
-  `$A7B0-$A7BE` and `$A7E5-$A8FF` free.
+  `$A7B0-$A7BE` and `$A7F1-$A8FF` free; default sampled gem helper uses `$A7E5-$A7F0`.
   Fixed bank 7: LAVA `$D39A-$D3C9` (0 free), GATEWAY `$FEAA-$FECF` (0 free),
   TERRAIN `$FF4C-$FF6E` (1 free). `FarCall0` provides cold bank-0
   hooks at 5 fixed bytes/call (6 with standalone RTS), 369-482 bridge cycles plus target work;
@@ -80,12 +127,14 @@ python tools/busy_rooms.py [--sets palaces,movement,world]  # lag + status-bar j
   No new fixed-bank padding was claimed. Never allocate live JMP operands `$FF4B` or `$E02C`.
   Rewritten vanilla NMI/sprite code (guarded, 2026-11-16): prologue `$C091-$C0A7` (LateSplit trampoline at `$C09F`),
   tail `$C182-$C1B5` (tail now starts `$C19D`; RTI still `$C1B5`), fast offscreen mask `$F27D-$F2D1` (`$F2D2` spare).
+  Block animation allocation (2026-11-16): same-size guarded rewrites `$E0FC-$E109`, `$E23A-$E247`, `$E29C-$E29D` defer brick/floor breaks when all five records are busy; no new space or RAM.
 - RAM `$05EA`, `$05EB` (lava contact), `$05EC`/`$05ED` (SCALES cast latch / last injured timer), `$05F0-$05FF` (roar, breath, tall renderer, extra guard). Cleared by the native reset loop.
 - WRAM `$6400-$642F` extra projectile records; `$6440-$645F` scratch (`$6457` lazy-save flag,
   `$6458-$645F` geometry terrain cache, `$645C` EXTRA_LIVE); `$6460-$6469` shouts (`$6465` actor, `$6467` word, `$6468` timer, `$6469` cycle); `$646A` + `$6490-$64D0` town scorch ring (16-slot FIFO + head/page); `$646B` volley aim latch (0 forward / $40 upward); `$646C-$646F` + `$6488` town combo banner; `$6470-$6473` Inferno firestorm (`$6470` timer, `$6473` wave aim) and overworld flame (`$6471` timer, `$6472` dir); `$6474` METEOR dive state; `$64D1` `SIGN_PENDING` (sign board scorched, cleared with the ring). Actor byte `$04A0,x` = burned-sign line for sign readers `$21`/`$22` (native spawn clears it). Don't touch collision/room/save regions elsewhere in `$6000-$7FFF`.
-- OAM in use: tall head `$04/$4C/$C4`, extra fireballs `$3C/$44/$48`; enemy projectiles use `$28/$2C/$30`;
+- OAM in use: tall head `$04/$4C/$C4`, extra torso (downstab/gem roar) `$20/$24`, extra fireballs `$3C/$44/$48`; enemy projectiles use `$28/$2C/$30`;
+  gem roar lifts existing art 8px and overlaps its partial torso by 8px for two complete chunks (56px tall, feet anchored);
   town shout word `$DC-$F4` (7 glyphs, only while a word is live and no enemy projectile exists); overworld flame `$FC` (`$02FC-$02FF`).
-- CHR: player art in even sprite banks 0-24; overworld flame pairs `$60/$62` in dedicated overworld bank 30; ash `$7E/$80` **bank 6 only** (shared sprites elsewhere);
+- CHR: game-over front-facing black Link in bank 17 tiles `$00-$31` (narrowed source-Ganon torso + authored cap/ears/face, mouthless thin split collar, soft cap with right-ear notch, both stray neck marks filled black; bank-0 map `$801F-$80C8`, no new padding/RAM); player art in even sprite banks 0-24; overworld flame pairs `$60/$62` in dedicated overworld bank 30; ash `$7E/$80` **bank 6 only** (shared sprites elsewhere);
   shout glyphs in town BG bank 7 pairs `$32/$7E/$80,$84-$BE` (odd 8x16 bytes) plus `H` (`$7C`) and combo X/1-9/B in town sprite
   bank 6 pairs `$6C-$AE` (even bytes); town scorch art in bank 7 tiles `$AC/$A4` (flame top), `$C1/$C0` (char top),
   `$A7/$C2` (shared bottom); dialogue `?` `$34` and apostrophe `$35` (guarded post-build; text tiles must be `$00-$3F`/`$C0-$FC`). Bank 7 `$00-$27` are villager 8x16 sprites (a byte draws both tiles of its pair):
@@ -93,7 +142,7 @@ python tools/busy_rooms.py [--sets palaces,movement,world]  # lag + status-bar j
 
 ## Performance facts (from tests/perf_volley.lua)
 
-Latest (2026-11-16, elevator fold / no body-enemy OAM exchange): Palace 1 idle 13,617/13,681, volley 16,657/22,308, 0/900 lag.
+Latest (2026-11-16, block animation allocation fix): Palace 1 idle 13,618/13,682, volley 16,658/22,300, 0/900 lag.
 Busiest test-pack rooms (`tools/busy_rooms.py`): P2 floor 24.5k avg / 28.5k worst, P5 before boss 22.9k/27.4k,
 Old Kasuto 22.0k/29.0k, 0 lag. The native enemy pass (~9-12k) dominates; Barba's hooks are ~4-5k. Any overrun
 that ends inside the next vblank is repaired by `LateSplit` (no status-bar jitter); a longer one still is not.

@@ -1,5 +1,5 @@
 -- Title screen: the jaw no longer triggers the fireball SFX ($ED bit 6); every 4th
--- full jaw opening starts the noise roar (ROAR_TIMER $05F0), which then counts down.
+-- full jaw opening starts the roar (ROAR_TIMER $05F0), which then counts down.
 local frame, starts, sfx, maxTimer, lastTimer, noiseWrites = 0, 0, 0, 0, 0, 0
 local function rd(a) return emu.read(a, emu.memType.nesDebug) end
 local jaws, badHead = {}, false
@@ -30,7 +30,8 @@ local function endFrame()
     if frame == 1500 then
         local f = assert(io.open(OUTPUT_DIR..'/title-roar.txt', 'w'))
         local headOk=jaws[0] and jaws[0x1A] and jaws[0x1E] and not badHead
-        local ok = starts >= 1 and maxTimer <= 0x30 and sfx == 0 and headOk
+        local timerLimit=LABELS.RoarAudio and 97 or 0x30
+        local ok = starts >= 1 and maxTimer <= timerLimit and sfx == 0 and headOk
         f:write(string.format('roar starts=%d maxTimer=%d barbaSfxWrites=%d noiseWrites=%d jawCount=%d\n', starts, maxTimer, sfx, noiseWrites, rd(0x05FA)))
         f:write((starts >= 1 and 'PASS' or 'FAIL')..' roar started on title\n')
         f:write((sfx == 0 and 'PASS' or 'FAIL')..' no fireball SFX on title\n')

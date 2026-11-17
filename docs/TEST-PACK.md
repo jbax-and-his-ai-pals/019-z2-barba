@@ -1,5 +1,30 @@
 # Instant playtesting checkpoints
 
+For the palace victory roar, double-click **play/Test Barba - Gem Celebration.cmd**
+and press **F1**. Barba starts beside the Palace 6 crystal statue, past the boss,
+with the final gem still unplaced. Walk right: the native gem sequence plays its
+fanfare, immediately followed by the roar with Barba looking up. Press F1 again
+to repeat. This uses its own isolated `gem` profile and leaves Core F9 intact.
+`tests/gem_checkpoint.lua` reloads this checkpoint and verifies placement,
+fanfare, exactly one roar, raised head during playback and automatic pose release.
+Prepare without opening Mesen: `./tools/launch.ps1 -TestPack -CheckpointSet gem -PrepareOnly`.
+
+For game-over checks, double-click **play/Test Barba - Edge Scenarios.cmd**.
+It rebuilds the ROM as needed and installs a separate `edges` test profile:
+
+| Key | Checkpoint | What to test |
+| --- | --- | --- |
+| F1 | Last life, one hit from death | Palace 1 combat corridor, one life, one health unit and a nearby enemy. Leave the controls alone to reach GAME OVER in about four seconds. |
+| F2 | Game Over portrait | Inspect black Link immediately. Press Start to continue; reload F2 to inspect again. |
+
+The edge pack is regenerated for each ROM/recipe version. Generation reloads
+both states, verifies natural enemy death from F1, and checks that F2 continues
+to gameplay with three lives. Normal play saves and other checkpoint sets are
+isolated. Generated files are in `build/test-pack/<ROM hash>/edges/`;
+`play/Game Over Danger.mss` is also refreshed as a standalone copy of F1.
+To prepare without opening an emulator:
+`powershell -File tools/launch.ps1 -TestPack -CheckpointSet edges -PrepareOnly`.
+
 On Windows, double-click **play/Test Barba.cmd**, or run:
 
 ```powershell
