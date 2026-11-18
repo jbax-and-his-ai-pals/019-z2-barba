@@ -130,7 +130,6 @@ def create(force: bool=False, set_name: str='core', rom_path: Path | None=None) 
         report=(folder/'validation.txt').read_text()
         if 'FAIL' in report or not report.rstrip().endswith('RESULT PASS'):
             raise ValueError('Edge state reload validation failed')
-        shutil.copyfile(folder/'game-over-danger.mss',ROOT/'play/Game Over Danger.mss')
     manifest={'set':set_name,'rom_sha256':digest,'recipe_sha256':recipe_hash(set_name),'emulator':'Mesen 2.1.1','folder':str(folder),
               'rom':str(pack_rom),'states':states,'validated':True}
     manifest_path.write_text(json.dumps(manifest,indent=2)+'\n')

@@ -303,6 +303,8 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
     overlay.prg(2, 0x977C, bytes.fromhex('4c 85 9f ea ea ea ea'),
                 bytes.fromhex('20 11 ef b5 af 29 03'), 'Rock-tossing Lizalfos fireball hook')
     hook(3, 0xB5F8, 'TownDialog', 0x4C, '0a a8 ad 07 07', 2)
+    if waldo_portal:
+        hook(3, 0xB480, 'WaldoDialogCheck', 0x4C, 'a9 00 85 05 8d 8c 04', 4)
     hook(3, 0xB74D, 'TownLetterDelay', 0x20, 'a9 05 8d 66 05', 2)
     hook(3, 0xB65E, 'TownLineDelay', 0x20, '8c 66 05')
     emerged = labels['TownDoorEmerged']

@@ -13,6 +13,14 @@ This prototype switches between two local ROMs in an isolated Mesen profile.
 first level, and verifies the shortcut return, including with Up held. The
 report and Waldo screenshot are in `build/waldo-portal.txt` and `.png`.
 
+For a 10-slot F1–F10 save-state pack **inside Waldo inside Zelda II** on the
+single-ROM `play/barba-waldo.nes`, double-click **play/Test Barba - Waldo States.cmd**
+(or run `python tools/create_waldo_z2_pack.py --force`): F1–F8 cover Title Screen,
+Moon Ticket, Overworld Map, Train Station, The Castle, and the three Slots stages;
+**F9** (`moon-ending`, ~27 s before return) and **F10** (`moon-return`, ~1 s
+before return) let you test the automatic wavy transition back to Rauru in Zelda II
+(or press **Start + Select** from any slot).
+
 For the palace victory roar, double-click **play/Test Barba - Gem Celebration.cmd**
 and press **F1**. Barba starts beside the Palace 6 crystal statue, past the boss,
 with the final gem still unplaced. Walk right: the native gem sequence plays its
@@ -33,8 +41,7 @@ It rebuilds the ROM as needed and installs a separate `edges` test profile:
 The edge pack is regenerated for each ROM/recipe version. Generation reloads
 both states, verifies natural enemy death from F1, and checks that F2 continues
 to gameplay with three lives. Normal play saves and other checkpoint sets are
-isolated. Generated files are in `build/test-pack/<ROM hash>/edges/`;
-`play/Game Over Danger.mss` is also refreshed as a standalone copy of F1.
+isolated. Generated files are in `build/test-pack/<ROM hash>/edges/`.
 To prepare without opening an emulator:
 `powershell -File tools/launch.ps1 -TestPack -CheckpointSet edges -PrepareOnly`.
 

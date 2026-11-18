@@ -6,7 +6,8 @@ import math
 import zlib
 from pathlib import Path
 
-from boss_art import source_head, source_pair
+import roar_sample
+from boss_art import resize_x, source_head, source_pair
 from nes import CHR_OFFSET, HEADER_SIZE, decode_tile, encode_tile, load_source
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -43,7 +44,7 @@ def put_grid(buf: bytearray, bank_4k: int, base_tile: int, rows: list[str], cols
             put_chr_tile(buf, bank_4k, base_tile + tr * cols + tc, sub)
 
 
-def build() -> None:
+def build() -> Path:
     if not WALDO_PATH.is_file():
         raise SystemExit('Missing roms/waldo.nes')
     waldo = WALDO_PATH.read_bytes()
@@ -55,24 +56,80 @@ def build() -> None:
 
     out = bytearray(waldo)
 
-    # 1. Skill Select 16x16 cursor (Bank 2, tiles $C4-$C7).
+    # 1. Skill Select 16x16 cursor (Bank 2, tiles $C4-$C7 frame 0, $C8-$CB frame 1).
     # Skill Select Sprite Pal 0 = [20(bg), 0E(black), 16(red), 38(pale yellow)]
-    # barba.json["front"]: 0=trans, 1=red, 2=gold, 3=black/ivory
-    front = remap_rows(barba['front'], {'0': '0', '1': '2', '2': '3', '3': '1'})
-    put_grid(out, bank_4k=2, base_tile=0xC4, rows=front, cols=2, tile_rows=2)
+    # barba.json["wyrmling"] is 2x 8x16 frames using 0=trans, 1=black, 2=red, 3=pale yellow.
+    for frame_idx, base_tile in enumerate((0xC4, 0xC8)):
+        wyr_16 = ['0000' + r + '0000' for r in barba['wyrmling'][frame_idx]]
+        put_grid(out, bank_4k=2, base_tile=base_tile, rows=wyr_16, cols=2, tile_rows=2)
+
+    # Animate Skill Select cursor in Bank 3 ($ABB5 loop -> $BFDC SkillTick, $AC15 -> $BFEF SkillSetTile)
+    put(out, HEADER_SIZE + 0x06BC1, bytes.fromhex('20 dc bf'), expected=bytes.fromhex('ee f3 03'))
+    put(out, HEADER_SIZE + 0x06C15, bytes.fromhex('20 ef bf ea'), expected=bytes.fromhex('a9 84 85 22'))
+    skill_anim_code = bytes.fromhex(
+        'ee f3 03 ad f3 03 29 0f d0 08 68 68 ae 02 06 4c 01 ac 60 '  # $BFDC SkillTick
+        'ad f3 03 29 10 4a 4a 18 69 84 85 22 60'                      # $BFEF SkillSetTile
+    )
+    put(out, HEADER_SIZE + 0x07FDC, skill_anim_code, expected=bytes(len(skill_anim_code)))
 
     # 2. Overworld Map 16x32 walking Barba (Bank 2, 12 slots at $00, $08, ..., $58).
     # Patch Map Sprite Pal 0 & Pal 1 to [0E, 16(red), 27(gold), 38(ivory)]
     put(out, HEADER_SIZE + 0x1E801, bytes([0x16, 0x27, 0x38]), expected=bytes([0x16, 0x20, 0x38]))
     put(out, HEADER_SIZE + 0x1E805, bytes([0x16, 0x27, 0x38]), expected=bytes([0x16, 0x22, 0x20]))
 
-    # barba.json["body"] is 16x32 facing right; flip horizontally so CHR faces left (attr=$40 flips right).
-    body_left = [r[::-1] for r in barba['body']]
-    # Shift alternate walk frames by 1px vertically for a subtle slither/bob.
-    body_bob = body_left[1:] + ['0' * 16]
-    for slot in range(12):
-        pose = body_bob if (slot % 2 == 1) else body_left
-        put_grid(out, bank_4k=2, base_tile=slot * 8, rows=pose, cols=2, tile_rows=4)
+    # Build 16x48 LEFT-facing Barba from vanilla Z2 boss chunks (head + two undulating torso chunks).
+    head_16 = resize_x(source_head(z2, 'closed'), 16)
+    neck_raw = [''.join((source_pair(z2, 0xA0)[y], source_pair(z2, 0xA2)[y])) for y in range(16)]
+    neck_12 = resize_x(neck_raw, 12)
+
+    def make_map_barba(phase: int) -> list[str]:
+        canvas = [['0'] * 16 for _ in range(48)]
+        head_y = 1 if (phase % 2 == 1) else 0
+        for y in range(head_y + 14, 48):
+            sway = (0, -1, 0, 1)[((y - head_y) // 4 + phase) % 4]
+            row = neck_12[max(0, y - head_y - 16) % 16]
+            nx = 4 + sway
+            for ix, px in enumerate(row):
+                if px != '0' and 0 <= nx + ix < 16:
+                    canvas[y][nx + ix] = px
+        for iy, row in enumerate(head_16):
+            for ix, px in enumerate(row):
+                if px != '0' and 0 <= head_y + iy < 48:
+                    canvas[head_y + iy][ix] = px
+        return [''.join(r) for r in canvas]
+
+    pose_a = make_map_barba(0)
+    pose_b = make_map_barba(2)
+    put_grid(out, bank_4k=2, base_tile=0x00, rows=pose_a, cols=2, tile_rows=6)
+    put_grid(out, bank_4k=2, base_tile=0x0C, rows=pose_b, cols=2, tile_rows=6)
+    for tid in range(0x18, 0x60):
+        put_chr_tile(out, 2, tid, ['0' * 8] * 8)
+
+    # Extend Overworld Map sprite height from 4 to 6 tile rows (16x48, 12 sprites) in Bank 14.
+    put(out, HEADER_SIZE + 0x1CA6C, bytes([0x06]), expected=bytes([0x04]))
+    put(out, HEADER_SIZE + 0x1C49A, bytes([0xA2, 0x0C]), expected=bytes([0xA2, 0x08]))
+    put(out, HEADER_SIZE + 0x1C4AB, bytes([0xA2, 0x0C]), expected=bytes([0xA2, 0x08]))
+
+    # Replace the 24 overworld sprite descriptors ($8BA2..$8D51) with 4 shared 20-byte descriptors (2x6 tiles).
+    desc_addrs = (0x8BD2, 0x8BE6, 0x8BFA, 0x8C0E)
+    left_a_tiles = list(range(0x00, 0x0C))
+    left_b_tiles = list(range(0x0C, 0x18))
+    right_a_tiles = [t ^ 1 for t in left_a_tiles]
+    right_b_tiles = [t ^ 1 for t in left_b_tiles]
+    descs = bytes([
+        0x02, 0x06, 0xBF, 0x00, 0x00, 0x00, 0x00, 0x00, *left_a_tiles,
+        0x02, 0x06, 0xBF, 0x00, 0x00, 0x00, 0x00, 0x00, *left_b_tiles,
+        0x02, 0x06, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, *right_a_tiles,
+        0x02, 0x06, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, *right_b_tiles,
+    ])
+    ptrs = bytearray()
+    for i in range(24):
+        is_right = (8 <= i <= 15) or i in (18, 19, 22, 23)
+        is_b = (i % 2 == 1)
+        addr = desc_addrs[(2 if is_right else 0) + (1 if is_b else 0)]
+        ptrs += bytes([addr & 0xFF, addr >> 8])
+    put(out, HEADER_SIZE + 0x1CBA2, bytes(ptrs), expected=waldo[HEADER_SIZE + 0x1CBA2:HEADER_SIZE + 0x1CBD2])
+    put(out, HEADER_SIZE + 0x1CBD2, descs, expected=waldo[HEADER_SIZE + 0x1CBD2:HEADER_SIZE + 0x1CBD2 + len(descs)])
 
     # 3. Title Screen Stamp Portrait (Bank 13).
     # Patch Title BG Pal 3 color 3 ($26 peach -> $16 red) so Barba has white(0), blue(1), black(2), red(3).
@@ -97,30 +154,44 @@ def build() -> None:
                 for x in range(8):
                     grid[tr * 8 + y][tc * 8 + x] = d[y][x]
 
-    # Clear interior of rotated stamp box to 1 (blue) while preserving border (0/2) and postmark (x < 17)
-    for y in range(6, 44):
-        x_min = 17 + int((y - 6) * 0.22)
-        x_max = 35 + int((y - 6) * 0.22)
-        for x in range(x_min, min(46, x_max)):
-            if y >= 11 - int((x - 17) * 0.22) and y <= 43 - int((x - 17) * 0.22):
+    # Clear interior of rotated stamp box to 1 (blue) while preserving border (0/2) and postmark (x < 16)
+    def in_stamp_box(x: int, y: int) -> bool:
+        if y < 6 or y > 45:
+            return False
+        if x > 34 + int((y - 6) * 0.22):
+            return False
+        if y < 12 - int((x - 15) * 0.23) or y > 45 - int((x - 17) * 0.18):
+            return False
+        if x >= 16:
+            return True
+        # Clear Waldo's red hat / white face pixels inside the upper-left of the box without erasing the postmark
+        return x >= 11 and y <= 17 and grid[y][x] in (0, 3)
+
+    for y in range(48):
+        for x in range(48):
+            if in_stamp_box(x, y):
                 grid[y][x] = 1
 
-    # Blit Barba's open-jaw head (32x16) + 12px neck inside the stamp
+    # Blit Barba's open-jaw head (scaled 24x16) + 12px-wide neck clipped strictly inside the stamp
     head = source_head(z2, 'open')
     neck = [''.join((source_pair(z2, 0xA0)[y], source_pair(z2, 0xA2)[y])) for y in range(16)]
+    stamp_head = resize_x(head, 24)
+    stamp_neck = resize_x(neck, 12)
     # Map Z2 colors (1=red, 2=gold, 3=ivory) -> stamp colors (2=black, 3=red, 0=white)
     cmap = {'1': '2', '2': '3', '3': '0'}
-    ox, oy = 17, 18
-    for y in range(12):
-        for x in range(16):
-            p = neck[y][x]
-            if p != '0' and 0 <= oy + 14 + y < 48 and 0 <= ox + 12 + x < 48:
-                grid[oy + 14 + y][ox + 12 + x] = int(cmap[p])
+    ox, oy = 17, 15
     for y in range(16):
-        for x in range(32):
-            p = head[y][x]
-            if p != '0' and 0 <= oy + y < 48 and 0 <= ox + x < 48:
-                grid[oy + y][ox + x] = int(cmap[p])
+        for x in range(12):
+            p = stamp_neck[y][x]
+            yy, xx = oy + 14 + y, ox + 10 + x
+            if p != '0' and 0 <= yy < 48 and 0 <= xx < 48 and in_stamp_box(xx, yy):
+                grid[yy][xx] = int(cmap[p])
+    for y in range(16):
+        for x in range(24):
+            p = stamp_head[y][x]
+            yy, xx = oy + y, ox + x
+            if p != '0' and 0 <= yy < 48 and 0 <= xx < 48 and in_stamp_box(xx, yy):
+                grid[yy][xx] = int(cmap[p])
 
     for tr, row in enumerate(stamp_tiles):
         for tc, tid in enumerate(row):
@@ -132,9 +203,16 @@ def build() -> None:
     # 4. "One Ticket to the Moon" Peeking Head (Bank 15).
     # Palette on Ticket screen top: 0=white, 1=red, 2=black, 3=pale yellow.
     # Nametable rows 6..11, cols 12..19 (8x6 tiles = 64x48 px):
+    # Patch blank sky tiles at (r6, c18..19) and (r7, c19) to empty CHR tiles $F6..$F8
+    # so the right horn and back crest are not clipped, and clear Waldo's pom-pom ($1C/$1D).
+    put(out, HEADER_SIZE + 0x071B6, bytes([0xF6, 0xF7]), expected=bytes([0x00, 0x00]))
+    put(out, HEADER_SIZE + 0x071D7, bytes([0xF8]), expected=bytes([0x00]))
+    for tid in (0x1C, 0x1D):
+        put_chr_tile(out, 15, tid, ['0' * 8] * 8)
+
     ticket_tiles = [
-        [0x24, 0x25, 0x26, 0x27, 0x28, 0x29, None, None],
-        [0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, None],
+        [0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0xF6, 0xF7],
+        [0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0xF8],
         [0x3C, 0x3D, 0x3E, 0x3F, 0x40, 0x41, 0x42, 0x43],
         [0x4E, 0x4F, 0x50, 0x51, 0x52, 0x53, 0x54, 0x55],
         [0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69],
@@ -155,8 +233,9 @@ def build() -> None:
                     if tr == 5 and y >= 6:
                         tgrid[tr * 8 + y][tc * 8 + x] = d[y][x]
 
-    # Scale source_head(z2, 'open') 2x -> 64x32 at y=2, plus 2x neck below it (y=30..45)
+    # Scale source_head(z2, 'open') 2x -> 64x32 at y=2, plus 2x neck below it (y=28..45)
     tcmap = {'1': 1, '2': 3, '3': 0}
+    tbody = [[False] * 64 for _ in range(48)]
     for y in range(12):
         for x in range(16):
             p = neck[y][x]
@@ -167,23 +246,34 @@ def build() -> None:
                         yy, xx = 28 + y * 2 + sy, 24 + x * 2 + sx
                         if yy < 46 and xx < 64:
                             tgrid[yy][xx] = val
+                            tbody[yy][xx] = True
     for y in range(16):
         for x in range(32):
             p = head[y][x]
-            if p == '0':
-                n_nz = sum(
-                    1 for dy, dx in ((-1, 0), (1, 0), (0, -1), (0, 1))
-                    if 0 <= y + dy < 16 and 0 <= x + dx < 32 and head[y + dy][x + dx] != '0'
-                )
-                val = 2 if n_nz >= 3 else None
-            else:
+            if p != '0':
                 val = tcmap[p]
-            if val is not None:
                 for sy in range(2):
                     for sx in range(2):
                         yy, xx = 2 + y * 2 + sy, x * 2 + sx
                         if yy < 46:
                             tgrid[yy][xx] = val
+                            tbody[yy][xx] = True
+    # Taper 2x-scaled horn tips into curved points reaching yy=1 (outline at yy=0)
+    for yy, xx in ((1, 42), (1, 43), (1, 54), (1, 55), (2, 55)):
+        tbody[yy][xx] = True
+        tgrid[yy][xx] = 0
+    for yy, xx in ((2, 40), (2, 52)):
+        tbody[yy][xx] = False
+
+    # Add 1px black (2) outline around Barba so white highlights/teeth/horns stand out against the white sky
+    for yy in range(46):
+        for xx in range(64):
+            if not tbody[yy][xx]:
+                if any(
+                    0 <= yy + dy < 46 and 0 <= xx + dx < 64 and tbody[yy + dy][xx + dx]
+                    for dy, dx in ((-1, 0), (1, 0), (0, -1), (0, 1))
+                ):
+                    tgrid[yy][xx] = 2
 
     for tr, row in enumerate(ticket_tiles):
         for tc, tid in enumerate(row):
@@ -192,22 +282,62 @@ def build() -> None:
             sub = [''.join(str(tgrid[tr * 8 + y][tc * 8 + x]) for x in range(8)) for y in range(8)]
             put_chr_tile(out, 15, tid, sub)
 
-    # 5. Train Station hidden Waldo (Bank 19, tiles $95, $96 / $97, $98, 16x16).
+    # 5. Hidden Barba across all 5 search levels (PRG banks 4-8, 3 scanline bands each).
+    # Each level randomly picks one band (0..2) and one of n_waldo descriptors in that band's table
+    # ($A008/$A00A/$A00C). Patch every Waldo descriptor in every band to 2x2 Barba (16x16) using
+    # 4 tiles unused by that band's nametable and non-Waldo descriptors.
     small = remap_rows(barba['small'], {'0': '0', '1': '1', '2': '2', '3': '3'})
-    for tr, row_ids in enumerate(([0x95, 0x96], [0x97, 0x98])):
-        for tc, tid in enumerate(row_ids):
-            sub = [small[tr * 8 + y][tc * 8:(tc + 1) * 8] for y in range(8)]
-            put_chr_tile(out, 19, tid, sub)
+    level_bands = [
+        # (prg_bank, tile_list_cpu_addr, [(chr_4k_bank, (t0, t1, t2, t3)), ...])
+        (4, 0xBF80, [(17, (0xFC, 0xFD, 0xFE, 0xFF)), (18, (0xFC, 0xFD, 0xFE, 0xFF)), (19, (0xFC, 0xFD, 0xFE, 0xFF))]),
+        (5, 0xBFF0, [(20, (0xFC, 0xFD, 0xFE, 0xFF)), (21, (0xFC, 0xFD, 0xFE, 0xFF)), (22, (0xFC, 0xFD, 0xFE, 0xFF))]),
+        (6, 0xBF80, [(23, (0xFC, 0xFD, 0xFE, 0xFF)), (24, (0xFC, 0xFD, 0xFE, 0xFF)), (25, (0xFC, 0xFD, 0xFE, 0xFF))]),
+        (7, 0xBF80, [(26, (0xFC, 0xFD, 0xFE, 0xFF)), (27, (0xFC, 0xFD, 0xFE, 0xFF)), (28, (0x3E, 0x3F, 0x40, 0x41))]),
+        (8, 0xBF80, [(29, (0xFC, 0xFD, 0xFE, 0xFF)), (30, (0xFC, 0xFD, 0xFE, 0xFF)), (31, (0xFC, 0xFD, 0xFE, 0xFF))]),
+    ]
+    for prg_bank, base_cpu, bands in level_bands:
+        bank_off = HEADER_SIZE + prg_bank * 0x2000
+        written_lists: dict[tuple[int, int, int, int], int] = {}
+        next_cpu = base_cpu
+        for band_idx, (b4k, tiles) in enumerate(bands):
+            if tiles not in written_lists:
+                put(out, bank_off + (next_cpu - 0xA000), bytes(tiles), expected=bytes(4))
+                written_lists[tiles] = next_cpu
+                next_cpu += 4
+            list_cpu = written_lists[tiles]
+            desc_ptr = int.from_bytes(out[bank_off + 8 + band_idx * 2 : bank_off + 10 + band_idx * 2], 'little')
+            desc_off = bank_off + (desc_ptr - 0xA000)
+            n_waldo = out[desc_off]
+            for k in range(n_waldo):
+                entry_off = desc_off + 2 + k * 6
+                assert out[entry_off + 5] == 0x80, f'Bank {prg_bank} band {band_idx} desc[{k}] missing $80 flag'
+                put(out, entry_off, bytes([0x02, 0x02, list_cpu & 0xFF, list_cpu >> 8]))
+            for tr, row_ids in enumerate((tiles[:2], tiles[2:])):
+                for tc, tid in enumerate(row_ids):
+                    sub = [small[tr * 8 + y][tc * 8:(tc + 1) * 8] for y in range(8)]
+                    put_chr_tile(out, b4k, tid, sub)
 
     # 6. Title Screen "WALDO?" -> "BARBA?" (Bank 14, r16..r25, c6..c28).
+    # Patch the 5 blank/reused nametable cells overlapped by "BARBA" to empty CHR tiles $ED..$F1
+    # so the letters do not get white notches when $00/$1E are skipped on writeback.
+    nt14_patches = [
+        (1, 15, 0x00, 0xED),
+        (2, 12, 0x1E, 0xEE),
+        (3, 9,  0x00, 0xEF),
+        (4, 7,  0x00, 0xF0),
+        (5, 4,  0x00, 0xF1),
+    ]
+    for tr, tc, old_tid, new_tid in nt14_patches:
+        put(out, HEADER_SIZE + 0x0651B + tr * 32 + tc, bytes([new_tid]), expected=bytes([old_tid]))
+
     # Note: 0x00 (blank) and 0x1E (left postcard border) are skipped when writing back.
     title_b14_nt = [
         [0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x0A,0x0B,0x0C,0x0D,0x0E,0x0F,0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x18,0x19],
-        [0x1E,0x1F,0x20,0x21,0x22,0x23,0x24,0x25,0x26,0x27,0x28,0x29,0x2A,0x2B,0x00,0x00,0x2C,0x2D,0x2E,0x2F,0x30,0x31,0x32],
-        [0x36,0x37,0x38,0x39,0x3A,0x3B,0x3C,0x3D,0x3E,0x3F,0x40,0x41,0x1E,0x42,0x43,0x44,0x45,0x46,0x47,0x48,0x49,0x4A,0x4B],
-        [0x4F,0x50,0x51,0x52,0x53,0x54,0x55,0x56,0x00,0x00,0x57,0x58,0x59,0x5A,0x5B,0x5C,0x5D,0x5E,0x5F,0x60,0x61,0x62,0x63],
-        [0x67,0x00,0x68,0x69,0x6A,0x6B,0x00,0x00,0x6C,0x6D,0x6E,0x6F,0x70,0x71,0x72,0x73,0x74,0x75,0x76,0x77,0x00,0x78,0x79],
-        [0x7D,0x00,0x7E,0x7F,0x00,0x80,0x81,0x82,0x83,0x84,0x85,0x86,0x87,0x88,0x89,0x8A,0x8B,0x8C,0x8D,0x8E,0x8F,0x90,0x91],
+        [0x1E,0x1F,0x20,0x21,0x22,0x23,0x24,0x25,0x26,0x27,0x28,0x29,0x2A,0x2B,0x00,0xED,0x2C,0x2D,0x2E,0x2F,0x30,0x31,0x32],
+        [0x36,0x37,0x38,0x39,0x3A,0x3B,0x3C,0x3D,0x3E,0x3F,0x40,0x41,0xEE,0x42,0x43,0x44,0x45,0x46,0x47,0x48,0x49,0x4A,0x4B],
+        [0x4F,0x50,0x51,0x52,0x53,0x54,0x55,0x56,0x00,0xEF,0x57,0x58,0x59,0x5A,0x5B,0x5C,0x5D,0x5E,0x5F,0x60,0x61,0x62,0x63],
+        [0x67,0x00,0x68,0x69,0x6A,0x6B,0x00,0xF0,0x6C,0x6D,0x6E,0x6F,0x70,0x71,0x72,0x73,0x74,0x75,0x76,0x77,0x00,0x78,0x79],
+        [0x7D,0x00,0x7E,0x7F,0xF1,0x80,0x81,0x82,0x83,0x84,0x85,0x86,0x87,0x88,0x89,0x8A,0x8B,0x8C,0x8D,0x8E,0x8F,0x90,0x91],
         [0x94,0x00,0x00,0x95,0x96,0x97,0x98,0x99,0x9A,0x9B,0x9C,0x9D,0x9E,0x9F,0xA0,0xA1,0xA2,0xA3,0xA4,0xA5,0xA6,0xA7,0x00],
         [0xA8,0xA9,0x00,0xAA,0xAB,0xAC,0xAD,0xAE,0xAF,0xB0,0xB1,0xB2,0xB3,0xB4,0xB5,0xB6,0xB7,0xB8,0xB9,0x00,0x00,0x00,0x00],
         [0xBA,0xBB,0x00,0xBC,0xBD,0xBE,0xBF,0xC0,0xC1,0xC2,0xC3,0xC4,0xC5,0xC6,0xC7,0xC8,0xC9,0x00,0x00,0x00,0x00,0x00,0x00],
@@ -259,7 +389,36 @@ def build() -> None:
     # Postcard tilt: -20.5 deg; origin at top-left of first 'B'
     ang = math.radians(-20.5)
     ca, sa = math.cos(ang), math.sin(ang)
-    x0, y0 = 31.0, 47.0
+    x0, y0 = 32.0, 49.0
+
+    def in_bowl(lu: float, v: float, v0: float, v1: float, w: float, r_out: float) -> bool:
+        if lu < 0 or lu >= w or v < v0 or v >= v1:
+            return False
+        if lu > w - r_out:
+            if v < v0 + r_out and (lu - (w - r_out)) ** 2 + (v - (v0 + r_out)) ** 2 > r_out ** 2:
+                return False
+            if v > v1 - r_out and (lu - (w - r_out)) ** 2 + (v - (v1 - r_out)) ** 2 > r_out ** 2:
+                return False
+        # Hollow interior with 1.5px rounded right corners
+        h_r = w - 4.0
+        hv0, hv1 = v0 + 3.8, v1 - 3.8
+        if 4.0 <= lu < h_r and hv0 <= v < hv1:
+            ri = 1.5
+            if lu > h_r - ri:
+                if v < hv0 + ri and (lu - (h_r - ri)) ** 2 + (v - (hv0 + ri)) ** 2 > ri ** 2:
+                    return True
+                if v > hv1 - ri and (lu - (h_r - ri)) ** 2 + (v - (hv1 - ri)) ** 2 > ri ** 2:
+                    return True
+            return False
+        return True
+
+    def in_b(lu: float, v: float) -> bool:
+        """19x28 'B' with smooth circular-arc corners on both bowls."""
+        if lu < 0 or lu >= 19.0 or v < 0 or v >= 28.0:
+            return False
+        if lu < 4.0:
+            return True
+        return in_bowl(lu, v, 0.0, 15.2, 18.2, 3.5) or in_bowl(lu, v, 12.2, 28.0, 19.0, 3.5)
 
     def in_word(u: float, v: float) -> bool:
         if v < 0 or v >= 28.0 or u < 0:
@@ -271,6 +430,8 @@ def build() -> None:
         if lu >= 19.0:
             return False
         ch = 'BARBA'[idx]
+        if ch == 'B':
+            return in_b(lu, v)
         gx = min(4, int(lu / 3.8))
         gy = min(6, int(v / 4.0))
         return glyphs[ch][gy][gx] == '1'
@@ -282,7 +443,7 @@ def build() -> None:
     # Clear WALDO strip (inside red-palette region, strictly above the bottom postcard border and left of '?')
     for y in range(H14):
         for x in range(W14):
-            if x >= 161 or (x >= 158 and y < 14) or y >= 99.0 - 0.37 * x:
+            if x >= 161 or (x >= 160 and y < 14) or y >= 99.0 - 0.37 * x:
                 continue
             u, v = to_uv(x, y)
             if -12.0 <= u <= 148.0 and -4.0 <= v <= 48.0:
@@ -312,11 +473,149 @@ def build() -> None:
             sub = [''.join(str(g14[tr * 8 + y][tc * 8 + x]) for x in range(8)) for y in range(8)]
             put_chr_tile(out, 14, tid, sub)
 
+    # 8. Slot Machine Barba portrait (CHR Bank 3, tiles $00..$1F, 4x8 = 32x64 px).
+    # BG Pal 1 = [20(white), 0E(black), 38(pale yellow), 16(red)].
+    slot_w, slot_h = 32, 64
+    sgrid = [['0'] * slot_w for _ in range(slot_h)]
+    head_26 = resize_x(source_head(z2, 'open'), 26)
+    # Stretch head slightly vertically (16 -> 22 px) for better reel proportion
+    head_26_22 = [head_26[(y * 16) // 22] for y in range(22)]
+    scmap = {'1': '3', '2': '2', '3': '0'}
+    # Draw undulating neck + widening torso/shoulders in lower half (y=24..62)
+    neck_16 = resize_x(neck, 16)
+    for y in range(24, 63):
+        t = y - 24
+        sway = int(round(2.0 * math.sin(t * 0.22)))
+        half_w = 8 + (t * 5) // 38  # widens from 16px neck to 26px chest
+        row_src = neck_16[t % 16]
+        cx = 17 + sway
+        for ix in range(-half_w, half_w):
+            sx = ((ix + half_w) * 16) // (2 * half_w)
+            px = row_src[sx]
+            if px != '0' and 1 <= cx + ix < 31:
+                sgrid[y][cx + ix] = scmap[px]
+    # Draw head at x=2..27, y=7..28
+    hx0, hy0 = 2, 7
+    for iy, row in enumerate(head_26_22):
+        for ix, px in enumerate(row):
+            if px != '0' and 1 <= hx0 + ix < 31 and 1 <= hy0 + iy < 63:
+                sgrid[hy0 + iy][hx0 + ix] = scmap[px]
+    # Add 1px black outline around Barba (on white background)
+    body_mask = [[sgrid[y][x] != '0' for x in range(slot_w)] for y in range(slot_h)]
+    # Also outline ivory ('0' inside head) by checking Z2 source masks
+    for iy, row in enumerate(head_26_22):
+        for ix, px in enumerate(row):
+            if px != '0' and 1 <= hx0 + ix < 31 and 1 <= hy0 + iy < 63:
+                body_mask[hy0 + iy][hx0 + ix] = True
+    for y in range(1, slot_h - 1):
+        for x in range(1, slot_w - 1):
+            if not body_mask[y][x]:
+                if any(body_mask[y + dy][x + dx] for dy, dx in ((-1, 0), (1, 0), (0, -1), (0, 1))):
+                    sgrid[y][x] = '1'
+    # 1px black frame around the 32x64 reel cell
+    for x in range(slot_w):
+        sgrid[0][x] = '1'
+        sgrid[slot_h - 1][x] = '1'
+    for y in range(slot_h):
+        sgrid[y][0] = '1'
+        sgrid[y][slot_w - 1] = '1'
+    put_grid(out, bank_4k=3, base_tile=0x00, rows=[''.join(r) for r in sgrid], cols=4, tile_rows=8)
+
+    # 9. Moon Ending Barba sprite (CHR Bank 16, tiles $F0..$F7, 16x32 px, 8x16 sprite mode).
+    # Patch Bank 0 $A06E: bottom half OAM #58/#59 attr $01 -> $02 so all 4 sprites use Sprite Pal 2
+    # [0E(trans), 20(white), 16(red), 38(pale yellow)].
+    put(out, HEADER_SIZE + 0x0006E, bytes([0xA9, 0x02]), expected=bytes([0xA9, 0x01]))
+    # Build 16x32 RIGHT-facing Barba (mirror of Z2 left-facing art)
+    mcmap = {'0': '0', '1': '2', '2': '3', '3': '1'}
+    mgrid = [['0'] * 16 for _ in range(32)]
+    mhead = [r[::-1] for r in head_16]
+    mneck = [r[::-1] for r in neck_12]
+    for y in range(14, 32):
+        sway = (0, -1, 0, 1)[(y // 4) % 4]
+        row = mneck[(y - 14) % 16]
+        nx = 1 + sway
+        for ix, px in enumerate(row):
+            if px != '0' and 0 <= nx + ix < 16:
+                mgrid[y][nx + ix] = mcmap[px]
+    for iy, row in enumerate(mhead):
+        for ix, px in enumerate(row):
+            if px != '0' and 0 <= iy < 32 and 0 <= ix < 16:
+                mgrid[iy][ix] = mcmap[px]
+    # 8x16 sprite tiles in Bank 16 $F0..$F7:
+    # $F0/$F1 = top-left (x=0..7, y=0..15), $F2/$F3 = top-right (x=8..15, y=0..15)
+    # $F4/$F5 = bottom-left (x=0..7, y=16..31), $F6/$F7 = bottom-right (x=8..15, y=16..31)
+    mrows = [''.join(r) for r in mgrid]
+    for half_y, base_tid in ((0, 0xF0), (16, 0xF4)):
+        for col_x, tid_off in ((0, 0), (8, 2)):
+            for sub_y in (0, 8):
+                tile_rows = [mrows[half_y + sub_y + y][col_x:col_x + 8] for y in range(8)]
+                put_chr_tile(out, 16, base_tid + tid_off + (sub_y // 8), tile_rows)
+
+    # 7. Expand PRG from 128KB (8x16KB) to 256KB (16x16KB) and add Barba's sampled roar in Bank 16 ($C000).
+    # Waldo uses MMC3 PRG Mode 1 ($8000 bit 6=1: $8000=Bank 30, $A000=R7, $C000=R6, $E000=Bank 31)
+    # and never reads or switches R6 ($C000-$DFFF), making Bank 16 ideal for DPCM samples + hooks.
+    roar_wav = ROOT / 'roms/roar.wav'
+    if roar_wav.is_file():
+        OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        sample, roar_info = roar_sample.convert(roar_wav, OUT_PATH.parent)
+        assert len(sample) <= 0x0900, f'Sample too large for $C000-$C8FF: {len(sample)}'
+        roar_rate = roar_info['rate_index']
+        roar_len = (len(sample) - 1) // 16
+
+        hdr = bytearray(out[:HEADER_SIZE])
+        hdr[4] = 0x10  # 16 x 16KB PRG = 256KB
+        prg_128 = bytes(out[HEADER_SIZE:HEADER_SIZE + 0x20000])
+        chr_128 = bytes(out[HEADER_SIZE + 0x20000:])
+
+        prg_256 = bytearray(b'\xff' * 0x40000)
+        prg_256[0x00000:0x1C000] = prg_128[0x00000:0x1C000]  # Banks 0..13
+        prg_256[0x3C000:0x40000] = prg_128[0x1C000:0x20000]  # Banks 14..15 -> 30..31
+
+        # Bank 16 ($C000-$DFFF at 0x20000): DPCM sample + roar helpers
+        prg_256[0x20000:0x20000 + len(sample)] = sample
+        play_roar = bytes([
+            0xAD, 0xF6, 0x03, 0x0D, 0xF7, 0x03, 0x29, 0x0F, 0x8D, 0x15, 0x40,
+            0xA9, 0x40, 0x8D, 0x11, 0x40,
+            0xA9, roar_rate, 0x8D, 0x10, 0x40,
+            0xA9, 0x00, 0x8D, 0x12, 0x40,
+            0xA9, roar_len, 0x8D, 0x13, 0x40,
+            0xAD, 0xF7, 0x03, 0x09, 0x10, 0x8D, 0xF7, 0x03,
+            0x0D, 0xF6, 0x03, 0x8D, 0x15, 0x40, 0x60,
+        ])
+        nmi_dmc_check = bytes.fromhex(
+            'ad f7 03 29 10 f0 0f ad 15 40 29 10 d0 08 ad f7 03 29 ef 8d f7 03 ad f6 03 60'
+        )
+        found_barba_roar = bytes.fromhex(
+            'b0 0a 48 98 48 20 00 c9 68 a8 68 60 a0 6c a9 ea 60'
+        )
+        moon_ending_roar = bytes.fromhex('20 00 c9 4c 0b e2')
+        title_start_roar = bytes.fromhex('20 00 c9 4c ed e5')
+
+        prg_256[0x20900:0x20900 + len(play_roar)] = play_roar
+        prg_256[0x20930:0x20930 + len(nmi_dmc_check)] = nmi_dmc_check
+        prg_256[0x20950:0x20950 + len(found_barba_roar)] = found_barba_roar
+        prg_256[0x20964:0x20964 + len(moon_ending_roar)] = moon_ending_roar
+        prg_256[0x2096A:0x2096A + len(title_start_roar)] = title_start_roar
+
+        # Bank 31 ($E000-$FFFF at 0x3E000): RESET sets R6=16 (at $F65B, leaving $F603-$F653 free), plus NMI/level/ending hooks
+        put(prg_256, 0x3E03B, bytes.fromhex('20 5b f6 ea ea ea ea ea ea ea'),
+            expected=bytes.fromhex('a9 47 8d 00 80 a9 52 8d 01 80'))
+        put(prg_256, 0x3F65B, bytes.fromhex('a9 46 8d 00 80 a9 10 8d 01 80 a9 47 8d 00 80 a9 52 8d 01 80 60'),
+            expected=bytes(21))
+        put(prg_256, 0x3FA13, bytes.fromhex('20 30 c9'), expected=bytes.fromhex('ad f6 03'))
+        put(prg_256, 0x3EBC8, bytes.fromhex('20 50 c9 ea ea ea'), expected=bytes.fromhex('90 04 a0 6c a9 ea'))
+        put(prg_256, 0x3E1B4, bytes.fromhex('20 64 c9'), expected=bytes.fromhex('20 0b e2'))
+        # Bank 3 ($A03C): Title Screen Start roar
+        put(prg_256, 0x0603C, bytes.fromhex('20 6a c9'), expected=bytes.fromhex('20 ed e5'))
+
+        out = hdr + prg_256 + chr_128
+
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     OUT_PATH.write_bytes(out)
     PLAY_PATH.parent.mkdir(parents=True, exist_ok=True)
     PLAY_PATH.write_bytes(out)
     print(f'Wrote {OUT_PATH} and {PLAY_PATH} ({len(out)} bytes)')
+    return OUT_PATH
 
 
 if __name__ == '__main__':

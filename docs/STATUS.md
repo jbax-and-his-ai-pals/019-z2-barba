@@ -2,10 +2,15 @@
 
 **Experimental Waldo portal** on `codex/waldo-portal`. Single-ROM build
 `play/barba-waldo.nes` (`python tools/pack_waldo.py`, NES 2.0 Mapper 176 / FK23C,
-512 KB PRG / 512 KB CHR / 32 KB banked WRAM) packs Barba and Where's Waldo? into
+512 KB PRG / 512 KB CHR / 32 KB banked WRAM) packs Barba and the modded *Where's Barba?*
+(`tools/build_waldo.py`, including Barba sprites, `"BARBA?"` title, and sampled roars) into
 one ROM with no Mesen ROM-switching or savestates (`tests/waldo_in_rom.lua` passes
-Rauru doorstep → Waldo Train Station → exact Rauru return via `Start+Select` or
-360-frame US Moon ending). The two-ROM Mesen prototype (`tools/waldo_portal.py`)
+Rauru doorstep → villager-style `"SOMETHING'S / NOT / RIGHT..."` message box →
+30-frame wavy melt/wipe away → skip Waldo splash straight to
+30-frame reverse wipe-in Title Screen → Waldo Train Station → exact Rauru return
+via `Start+Select` or full Moon ending transition (`$A1B3`), with 30-frame wavy melt-out
+and 30-frame reverse wipe-in back to Rauru, popping up a villager-style
+`"WELL THAT / WAS WEIRD."` message box). The two-ROM Mesen prototype (`tools/waldo_portal.py`)
 remains available. [Playtest instructions](TEST-PACK.md#experimental-waldo-portal)
 
 Current playable alpha built from `roms/z2.nes` via `python tools/build.py` (SHA-256 `3a0a52742da576c6054acfb5dff2ae6f815ef91dac4f0bd58050f0b6b2dc280b`, Mapper 4 / MMC3, matching `play/barba.nes`).
@@ -21,7 +26,7 @@ For session-by-session history, see [docs/archive/CHANGELOG.md](archive/CHANGELO
 - **Darunia F6**: A stomp could kill the invisible bubble generator near the right exit of East Hyrule room `$06`. Its death animation jumped through an empty drawing pointer to `$0000`, where the CPU halted. Stomps now skip enemies with an empty drawing pointer. `tests/darunia_exit.lua` fails on `64cc80434b56` and passes on `c3bac750d883`, including re-entry, the left detour, a downstab, and a live return to East Hyrule. The world pack was regenerated for the fix.
 - **Emulator scenarios & test packs**: the prior MMC3 verification covered all 67 Mesen scenarios and all 10 test-pack sets (69 checkpoints). `tools/busy_rooms.py --sets core,busy` recorded 0 lag, 0 late splits, and 0 HUD shifts. The Darunia fix was checked with the world pack, `darunia_exit`, `stomp`, `encounter_hazard`, and `perf_upward`.
 - **Mapper & scanline IRQ (MMC3)**: iNES Mapper 4 (128 KB PRG / 256 KB CHR) with PRG mode 0 (`$C000-$FFFF` fixed), BG at `$0000` (R0/R1), and 8×16 sprites at `$1000` (R2–R5 via `$6500-$65FF` shadow OAM) so A12 clocks on every scanline. `src/scanline_irq.inc` provides the scanline-31 HUD split, releases OAM slot 0, clears the NMI-return I flag, and schedules the cinematic bars for the title roar, Dark Barba's entrance, and the ending.
-- **Encounter scenery**. Room load checks the populated map pages for clear sky. The leading sky rows scroll at half camera speed from either entrance, including rooms with just one clear row. A clear band without clouds gets a small cloud per map page. Low clouds outside that band are removed. Low ceilings and dense canopies can leave no continuous sky band. West Hyrule sprig tips bend by up to two pixels via VBlank swaps of R0 pattern `$4E`. The bend tapers into fixed roots, and the ground scroll stays steady across the whole plant. East Hyrule uses different art at that tile index. Water, swamp, and lava surface metatiles use the same four VBlank CHR phases for patterns `$98/$99` in bridges, caves, and open encounters. The palace lava effect uses the same animation.
+- **Encounter scenery**. Room load checks the populated map pages for clear sky. The leading sky rows scroll at half camera speed plus a slow idle wind drift (1/8 px/frame, 7.5 px/s, wrapping across the active sky nametables so clouds drift even while standing still) from either entrance, including rooms with just one clear row. A clear band without clouds gets a small cloud per map page. Low clouds outside that band are removed. Low ceilings and dense canopies can leave no continuous sky band. West Hyrule sprig tips bend by up to two pixels via VBlank swaps of R0 pattern `$4E`. The bend tapers into fixed roots, and the ground scroll stays steady across the whole plant. East Hyrule uses different art at that tile index. Water, swamp, and lava surface metatiles use the same four VBlank CHR phases for patterns `$98/$99` in bridges, caves, and open encounters. The palace lava effect uses the same animation.
 - **Grass encounter flicker**. A native blank sprite cell (`$F5`) could cause an extra MMC3 A12 clock between visible sprite fetches. This advanced the sky-to-ground split by up to four scanlines in the F10 checkpoint. The OAM copy now hides those cells. The `ow_clouds.lua` regression reproduced the early split on 20 of 20 frames before the fix and verified the programmed scanline on all 20 after it.
 - `tests/ow_clouds.lua` also checks both bridge approaches, East Hyrule's room-$00 bridge, the medicine cave, the swamp, and all five sprig phases with fixed roots. The Movement pack puts the bridge, cave, and grass encounter on F5, F6, and F10.
 

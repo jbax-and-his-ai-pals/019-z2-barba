@@ -23,6 +23,9 @@ OW_PARALLAX_LINE = $64EE ; 0 = off, else sky/ground split scanline (16k+31)
 LAVA_CHR_BANK = $64EF   ; last liquid R1 bank, for emulator checks
 OW_HAS_GRASS = $64F0    ; qualifying row using the West Hyrule sprig art
 OW_HAS_WATER  = $64F1
+CLOUD_DRIFT_SUB = $64FB ; fractional subpixel accumulator for idle cloud drift
+CLOUD_DRIFT_X   = $64FC ; cloud drift pixel offset (0..255)
+CLOUD_DRIFT_NT  = $64FD ; cloud drift nametable bit (0..1)
 
 .segment "BANK6"
 
@@ -200,10 +203,11 @@ IrqSetup6:
     iny
     jmp @check_dark_barba_letterbox
 
-; Encounter sky moves at half camera speed.
+; Encounter sky moves at half camera speed plus a slow idle wind drift.
 @encounter_setup:
     lda OW_PARALLAX_LINE
     beq @encounter_ground
+    jsr @advance_cloud_drift
     jsr @compute_half_camx
     sta IRQ_X,y
     lda IRQ_TMP2
@@ -279,15 +283,35 @@ IrqSetup6:
     stx IRQ_TMP0
     rts
 
-; Compute camX/2 into IRQ_TMP1 (low) and IRQ_TMP2 (nt bit 0). Returns A = IRQ_TMP1.
+; Advance slow idle cloud drift (1/8 px per frame = 7.5 px/s).
+@advance_cloud_drift:
+    lda CLOUD_DRIFT_SUB
+    clc
+    adc #32
+    sta CLOUD_DRIFT_SUB
+    bcc @drift_done
+    inc CLOUD_DRIFT_X
+    bne @drift_done
+    lda $D1
+    beq @drift_done
+    lda CLOUD_DRIFT_NT
+    eor #$01
+    sta CLOUD_DRIFT_NT
+@drift_done:
+    rts
+
+; Compute (camX/2 + CLOUD_DRIFT) into IRQ_TMP1 (low) and IRQ_TMP2 (nt bit 0). Returns A = IRQ_TMP1.
 @compute_half_camx:
     lda $072A
     lsr
+    sta IRQ_TMP2
     lda $FD
     ror
+    clc
+    adc CLOUD_DRIFT_X
     sta IRQ_TMP1
-    lda $072A
-    lsr
+    lda IRQ_TMP2
+    adc CLOUD_DRIFT_NT
     and #$01
     sta IRQ_TMP2
     lda IRQ_TMP1
@@ -318,6 +342,9 @@ SetupEncounterScenery6:
     sta OW_PARALLAX_LINE
     sta OW_HAS_GRASS
     sta OW_HAS_WATER
+    sta CLOUD_DRIFT_SUB
+    sta CLOUD_DRIFT_X
+    sta CLOUD_DRIFT_NT
     lda $0707
     bne @exit
     lda $0561

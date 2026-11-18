@@ -9,6 +9,7 @@ local frame,index,age,fails=0,0,0,0
 local base,done
 local lines,banks,patterns,hudPatterns
 local tips,roots,grassMismatch,splitMismatch,splitSamples
+local skyStart,skyEnd,groundStart,groundEnd
 local grassWind={0,1,2,1,0,-1,-2,-1}
 local stillTip={0,0,0x08,0x08,0x10,0x10,0x10,0x10,0,0,0x18,0x18,0x30,0x30,0x30,0x30}
 local cases={
@@ -100,6 +101,7 @@ emu.addMemoryCallback(function()
     enter(scene)
     lines={};banks={};patterns={};hudPatterns={}
     tips={};roots={};grassMismatch=0;splitMismatch=0;splitSamples=0
+    skyStart=nil;skyEnd=nil;groundStart=nil;groundEnd=nil
     age=1
 end,emu.callbackType.exec,0xC07B)
 
@@ -133,6 +135,12 @@ emu.addEventCallback(function()
     local sky,grass=r(0x64EE),r(0x64F0)
     local countIrq=r(0x64D7)
     if active then
+        if scene.sky then
+            local s=(r(0x64E0)&1)*256+r(0x64DC)
+            local g=(r(0x64E1)&1)*256+r(0x64DD)
+            if not skyStart then skyStart=s;groundStart=g end
+            skyEnd=s;groundEnd=g
+        end
         if scene.grass then
             -- NMI chooses the CHR phase before the game increments $12.
             local shift=grassWind[((r(0x12)-1)>>3&7)+1]
@@ -150,6 +158,12 @@ emu.addEventCallback(function()
             scene.name..' loaded into live gameplay')
         checkMap(scene)
         check(lines[0]==31 and (sky==0 or lines[1]==sky),scene.name..' HUD and sky IRQs fire on their programmed lines')
+        if scene.sky then
+            local skyDelta=(skyEnd-skyStart)%512
+            check(skyDelta>=8 and skyDelta<=11 and groundStart==groundEnd,
+                string.format('%s clouds drift slowly while idle (sky %d->%d, delta=%d, ground %d->%d)',
+                    scene.name,skyStart,skyEnd,skyDelta,groundStart,groundEnd))
+        end
         if scene.grass then
             check(grass==1 and count(tips)==5 and count(roots)==1 and grassMismatch==0
                 and count(lines)==2,scene.name..' sprig tips sway through five CHR phases with fixed roots and HUD/sky-only IRQs')
