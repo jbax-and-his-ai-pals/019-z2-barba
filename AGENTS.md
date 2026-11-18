@@ -29,9 +29,9 @@ python tools/busy_rooms.py [--sets busy]        # lag + status-bar jitter over t
   extra_fire, left_fire, damage, hud_timing, breath_height, town, town_safety, shouts,
   shout_follow, doors, dialogue_speed, perf_volley, perf_lava, link_boss, dark_link,
   shield_enemies, title_roar, overworld_side, farcall, town_fire, town_combo,
-  castle_zelda_burn, sign_burn, upstab, perf_upward, look_up, ending, scales, horsehead, helmethead, rebonack, carock,
+  castle_zelda_burn, sign_burn, upstab, perf_upward, look_up, ending, scales, horsehead, helmethead, rebonack, carock, carock_reflect,
   gooma, opener_far, lava_link_kill, stomp, geldarm, encounter_hazard, heal_door, spell_door, stab_blocks,
-  swamp_submerge, town_nontown_burn, inferno, overworld_fire, forest_burn_limit, meteor, perf_meteor, death_continue, levelup_pane, wizzrobe, plus `state_pack` via create_test_pack.
+  swamp_submerge, town_nontown_burn, inferno, overworld_fire, forest_burn_limit, meteor, perf_meteor, death_continue, levelup_pane, wizzrobe, rock_lizalfos, plus `state_pack` via create_test_pack.
   (`newgame.lua` and `checkpoint_features.lua` are shared helpers, not scenarios. Check each `build/<name>.txt`
   for FAIL lines and a fresh mtime, not just the exit code; some reports use hyphens, e.g. `perf-volley.txt`.)
   (`boss_fight.lua` is the shared fireball-only boss driver, not a scenario.)
@@ -102,9 +102,9 @@ python tools/busy_rooms.py [--sets busy]        # lag + status-bar jitter over t
   5 injury pitch tail, 4 victory draining or complete, 3 raised-head pose, 2 hurt, 1 item roar, 0 delayed Game Over laugh),
   `$05EF` = legacy start timer; WRAM `$64D2/$64D3` = stable raw pads
   captured after the HUD split (one-frame input latency only during playback).
-  Default build bank0 has 2 free, bank3-sign 146 free (legacy native: 0/154).
+  Default build bank0 has 4 free, bank3-sign 146 free (legacy native: 16/154).
   Random attack roars removed (2026-11-17); native fireball SFX retained.
-  Latest normal sampled volley: 16,788 avg / 22,490 peak, 0/900 lag.
+  Latest normal sampled volley: 15,929 avg / 21,631 peak, 0/900 lag.
   Approved roar stays exactly 2,177 bytes `$F400-$FC80`; Game Over uses four
   octave-up native waveforms: 65 bytes `$FC80-$FCC0`, then 49 bytes each at
   `$FCC0`, `$FD00`, `$FD40` (last ends `$FD70`). Verified silent `$55` endpoints
@@ -126,14 +126,16 @@ python tools/busy_rooms.py [--sets busy]        # lag + status-bar jitter over t
   Injury-only rate descent 9->8->7->6->5 at ticks 17/21/25/29 now stretches
   playback to ~0.627 seconds; no new RAM or sample bytes.
 
-- ROM: bank 0 `$A89E-$A97D` (BANK0_OW; `BarbaSplitBurnForest` + `BurnAbort`; 1 free) + `$AA40-$BF6F` (BANK0; default sampled 2 free, legacy native 0 free) +
+- ROM: bank 0 `$A89E-$A97D` (BANK0_OW; `BarbaSplitBurnForest` + `BurnAbort`; 1 free) + `$AA40-$BF6F` (BANK0; default sampled 4 free, legacy native 16 free) +
   reclaimed dead vanilla bank-0 code `$81C1-$81E4`, `$97F1-$9814`, `$9847-$9877` (METEOR; 0/1/0 free respectively; originals guarded) +
   bank 1 `$9EB9-$9FFF` (BANK1, vanilla pad after Geldarm draw code; `geldarm.inc`; 240 free) +
+  bank 2 `$9F85-$9FA0` (28 guarded pad bytes for the Valley of Death rock-tossing Lizalfos breath check, hooked at `$977C`; no new RAM) +
   `$BFE0-$BFF9` (BANK0_TAIL, vanilla pad before vectors; `BurnMapEndGuard`, 1 free), bank 3 `$9D0A-$9FFF` (BANK3_SIGN, vanilla pad `bank3_UNUSED_9D0A`; `sign.inc` + `TownOpenerGate` + `ScalesTick` + `LateSplit` + `BarbaDeathDisplay`, default sampled 146 free, legacy native 154 free; more vanilla pad untouched at `$8BB1-$90EF` and `$9134-$93FF`), bank 3 `$B803-$BF6F` (TOWN; 2 free), bank 6 `$BA00-$BF6F` (BANK6; `shouts.inc` + `combo.inc` + `ScalesHop`; 2 free), bank 5 `$BDE0-$BF5F` (BANK5; `dark_barba.inc` + `HiddenJarHit`; 37 free).
   Default sampled bank 5 also holds `DarkBarbaVictory` (5 free; legacy native 37 free).
   Bank 4 `$A765-$A8FF` is vanilla `$FF` pad patched by raw bytes in `build.py`: Lava Link helpers `$A765-$A7A8`,
   `HiddenJarHit` `$A7BF-$A7CF`, `CarockHit` `$A7D0-$A7E4` (shared with the P3/4/6 Wizzrobe tail `$AEB2`; boss death gated on `$22`);
-  `$A7B0-$A7BE` and `$A804-$A8FF` free; default sampled gem helper uses `$A7E5-$A803`.
+  `CarockReflectDamage` `$A804-$A80E` (Carock only, 24 damage; HP 48 at `$A943`, HUD scale at `$AE82`);
+  `$A7B0-$A7BE` and `$A80F-$A8FF` free; default sampled gem helper uses `$A7E5-$A803`.
   Fixed bank 7: LAVA `$D39A-$D3C9` (0 free), GATEWAY `$FEAA-$FECF` (0 free),
   TERRAIN `$FF4C-$FF6E` (1 free). `FarCall0` provides cold bank-0
   hooks at 5 fixed bytes/call (6 with standalone RTS), 369-482 bridge cycles plus target work;
@@ -142,6 +144,10 @@ python tools/busy_rooms.py [--sets busy]        # lag + status-bar jitter over t
   Rewritten vanilla NMI/sprite code (guarded, 2026-11-16): prologue `$C091-$C0A7` (LateSplit trampoline at `$C09F`),
   tail `$C182-$C1B5` (tail now starts `$C19D`; RTI still `$C1B5`), fast offscreen mask `$F27D-$F2D1` (`$F2D2` spare).
   Block animation allocation (2026-11-16): same-size guarded rewrites `$E0FC-$E109`, `$E23A-$E247`, `$E29C-$E29D` defer brick/floor breaks when all five records are busy; no new space or RAM.
+  Enemy projectile update (2026-11-17): guarded rewrite `$E3B9-$E3C8`
+  compresses the slot/frame contact parity gate and fits an empty-slot
+  helper at `$E3C1`. `$D5D1` calls it before the offscreen mask. Active
+  projectiles retain the native path. No new padding or RAM.
 - RAM `$05EA`, `$05EB` (lava contact), `$05EC`/`$05ED` (SCALES cast latch / last injured timer), `$05F0-$05FF` (roar, breath, tall renderer, extra guard). Cleared by the native reset loop.
 - Ending fireball uses bank 5 `$8CEB-$8D4D` (existing cutscene patch, 2 bytes free), `$05F8` (state), `$05FA` (X), and OAM `$0240-$0247`. CHR bank 14 pairs `$E0/$E2` (tail) and `$E4/$E6` (head) reuse the displaced ending Link art. Both sprites are hidden on impact.
 - WRAM `$6400-$642F` extra projectile records; `$6440-$645F` scratch (`$6457` lazy-save flag,
@@ -158,7 +164,24 @@ python tools/busy_rooms.py [--sets busy]        # lag + status-bar jitter over t
 
 ## Performance facts (from tests/perf_volley.lua)
 
-Latest (2026-11-16, block animation allocation fix): Palace 1 idle 13,618/13,682, volley 16,658/22,300, 0/900 lag.
+Checkpoint placement fix on `9c0add7a0040`: Busy Areas F4–F7 now start on
+walkable ground near center. A 620-frame replay per Busy Areas slot had
+zero lag or HUD shifts. P2 peaked at 28,517 NMI cycles through RTI and P3
+at 24,963 with the new starts. Earlier replays below used the old starts.
+
+Carock playtest build `9c0add7a0040` (2026-11-17): Palace 1 idle
+12,950 avg / 13,014 peak, volley 15,929 avg / 21,631 peak, 0/900 lag.
+
+Latest (2026-11-17, enemy projectile optimization): Palace 1 idle
+12,950/13,014, volley 15,929/21,631, 0/900 lag. In the prior renderer build,
+idle was 13,640/13,704 and volley was 16,684/22,376. That renderer change
+matched full OAM on all 1,200 sampled idle and volley frames.
+
+November 17 regression pass, build `9c0add7a0040`: 2,400 replay frames
+per Busy Areas checkpoint, 23,338 measured side-view frames, zero lag or
+HUD shifts. P2 peaks at 29,682 work cycles / 29,705 through RTI. Long Rauru
+map loads are reported under `otherNmiMax`. Maximum sprite overlap is 14
+on a scanline in Old Kasuto and the Palace 5 two-Mago room.
 Busiest test-pack rooms (`tools/busy_rooms.py`): P2 floor 24.5k avg / 28.5k worst, P5 before boss 22.9k/27.4k,
 Old Kasuto 22.0k/29.0k, 0 lag. The native enemy pass (~9-12k) dominates; Barba's hooks are ~4-5k. Any overrun
 that ends inside the next vblank is repaired by `LateSplit` (no status-bar jitter); a longer one still is not.
@@ -166,7 +189,26 @@ that ends inside the next vblank is repaired by `LateSplit` (no status-bar jitte
 The Busy Areas set (2026-11-17) adds ten native rooms, including Palace 5 rooms
 62/48/44. In its 620-frame-per-state probe, Old Kasuto peaked at 29,167 cycles,
 Palace 2 floor at 29,119, and the Gooma approach at 27,640 with 13 sprites on one
-scanline. Zero gameplay lag or shifted HUD frames across the set.
+scanline. Skipping the inactive celebration bank switch lowers those peaks to
+29,057, 29,004 and 27,525 respectively. Zero gameplay lag or shifted HUD frames
+across the set in both runs.
+
+On build `59ee6701557a`, the 29,004-cycle P2 crowded-floor frame spent 13,776
+cycles in the enemy pass, including 534 on offscreen masks for empty enemy
+projectile slots. Across five palace checkpoints those empty-slot calls cost
+510–600 cycles per frame on average. See the profile in `docs/TEST-PACK.md`.
+
+Extended 850-frame projectile probe on the same build: P1 Horsehead approach
+peaked at 25,635 cycles with two fireballs and four Guma hammers, zero lag.
+P2 crowded floor reached 30,157 cycles before LateSplit, with one lag frame
+and zero HUD shifts. P5 Gooma approach exceeded eight sprites on a scanline
+on 147/505 frames with projectiles from both sides.
+
+Optimized build `0d55b1c120af` clears that lag in the 850-frame run, with
+zero lag and HUD shifts across all ten Busy Areas checkpoints. P2 pre-recovery
+peak 29,682 (previously 30,157). Peak NMI with RTI 29,705. Horsehead approach
+saves 397 cycles/update on average and the Gooma approach 564, with matched
+OAM and contact-check counts in comparable updates.
 
 The game logic runs in NMI. Over about 29.7k cycles the next frame lags. Vanilla peaks near 26.6k
 with 6 enemies. Palace 1 `perf_volley.lua` probe (with direct `BarbaExtraBlocks` and `BarbaLoadOk`

@@ -99,7 +99,7 @@ probe with three Palace 5 Mago rooms for the red-duplicate playtest.
 | F3 | Palace 5 room 44, first Mago room | Watch the Mago appear, fire and vanish while Barba jumps. |
 | F4 | Palace 5 before Gooma | Turn and fire with the Ironknuckles on screen. |
 | F5 | Palace 2 crowded floor corridor | Jump and fire volleys through the crowd while watching the HUD. |
-| F6 | Palace 3 Ironknuckles and breakable blocks | Move right and breathe into the blocks as the Ironknuckles approach. |
+| F6 | Palace 3 Ironknuckles and breakable blocks | Start on the lower lane. Move right and breathe into the blocks. |
 | F7 | Palace 6 Wizzrobe hall | Fight the Wizzrobe with other enemies and shots on screen. |
 | F8 | Palace 1 before Horsehead | Fire through the enemy groups in the approach corridor. |
 | F9 | Old Kasuto monster street | Turn and breathe through the Moas. Let one hit Barba in midair. |
@@ -109,6 +109,145 @@ Each load restores the room and loadout. Palace 5 has both thrust techniques.
 On F1–F3, watch for dragon art away from Barba during the normal hurt flash.
 To regenerate the set, run `python tools/create_test_pack.py --set busy --force`.
 To repeat the automated stress run, use `python tools/busy_rooms.py --sets busy --frames 620`.
+
+### Busy palace performance profile
+
+The 2026-11-17 sampled build (`59ee6701557a`) had zero lag and zero HUD shifts
+across all ten Busy Areas checkpoints. The stress probe walks, turns, jumps
+and fires with health and magic replenished. A second Mesen run timed CPU
+sections from entry to return on the same inputs. The enemy pass includes
+enemy AI, drawing, collisions, and enemy projectile updates.
+
+| Checkpoint | Average / peak NMI cycles | Enemy pass at peak | Frames above eight sprites on a scanline |
+| --- | ---: | ---: | ---: |
+| F5 Palace 2 crowded floor | 24,599 / 29,004 | 13,776 | 15 / 600 |
+| F6 Palace 3 Ironknuckles and blocks | 22,447 / 27,762 | 10,655 | 4 / 600 |
+| F4 Palace 5 before Gooma | 22,908 / 27,525 | 12,242 | 104 / 600 |
+| F1 Palace 5 two Magos | 16,998 / 21,369 | 8,880 | 40 / 555 |
+| F7 Palace 6 Wizzrobe hall | 17,050 / 21,641 | 6,227 | 28 / 600 |
+
+- Check the empty enemy projectile slots first. The native loop calls the
+  offscreen mask at `$D574` before testing the projectile type at `$D579`.
+  Across the five palace checkpoints, calls for empty slots took 510–600
+  cycles per frame on average, including 534 cycles on the worst P2 frame.
+  Those timings include the call and return. A gate would recover some of
+  that cost after its own overhead. Before moving the check, trace later
+  readers of the shared `$CA`/`$CE` results and scratch `$00`, including
+  projectile spawn and despawn in the same frame.
+- Skipping the SCALES bank round trip when both `$070F` and `$05EC` are clear
+  is a smaller candidate. Unshielded calls through `ScalesHop` took about
+  112 cycles before guard overhead. Keep the cast, hit response and first
+  frame of palette restoration after Shield clears.
+- Native column drawing also contributed to the worst frames. The scrolling
+  tail from `$D545` took about 2,290 cycles on each peak frame in P2, P3 and
+  the Gooma approach. Profile its PPU packet builder if the smaller gates
+  leave too little headroom. Preserve the scroll and column upload schedule.
+
+For a manual comparison, use F5 and jump and fire through the crowded floor
+while watching the HUD. Use F4 to watch for sprite flicker as Ironknuckles
+and projectiles overlap. CPU savings buy frame time. Sprite flicker needs a
+separate look at which sprites share those scanlines.
+
+### Overlapping player and enemy projectiles
+
+An 850-frame run on the same build gave each checkpoint 20 warm-up frames.
+The Horsehead approach (F8) contains the hammer-throwing Gumas. The Gooma
+approach (F4) supplies another projectile-heavy fixture.
+
+| Checkpoint | Peak with live projectiles from both sides | Crowded scanlines on mixed-projectile frames | Lag |
+| --- | --- | ---: | ---: |
+| F8 Horsehead approach | 25,635 cycles, two fireballs and four hammers. Enemy projectile updates took 3,516 cycles. | 32 / 775 frames | 0 |
+| F5 P2 crowded floor | 30,157 cycles before HUD recovery, one fireball and two enemy shots | 25 / 719 frames | 1 |
+| F4 Gooma approach | 27,884 cycles, two fireballs and three enemy shots | 147 / 505 frames | 0 |
+
+LateSplit kept P2's HUD steady. The full NMI lasted 35,886 cycles because
+recovery waited for the next sprite-0 split. The combat probes stayed within
+the two-fireball cap and never used backed projectile slots. That makes extra-slot
+collision work a lower priority for these specific rooms.
+
+Build `0d55b1c120af` checks the slot type before entering the offscreen-mask
+routine. Live shots and disappearing blades still run their usual updates.
+The shorter player-contact gate retains the original slot/frame parity.
+It also provides the bytes for the empty-slot check within the existing
+fixed-bank code. The A/B used the same checkpoints and controller replay.
+
+| Checkpoint | Peak work before recovery, old → new | Average cycles saved per comparable update |
+| --- | ---: | ---: |
+| F8 Horsehead approach | 25,612 → 25,355 | 397 |
+| F5 P2 crowded floor | 30,157 → 29,682 | 564 |
+| F4 Gooma approach | 27,861 → 27,532 | 564 |
+
+All ten Busy Areas rooms showed zero lag and HUD shifts in the 850-frame
+probe. The contact-gate call counts and all 256 sprite-table bytes matched
+on comparable updates before the old build's lag. The expected scratch
+differences were `$00`, `$CA` and `$CE`, which now retain the result from the last
+actual mask call. The probe reports `workMax` before the recovery check and
+`nmiMax` through RTI.
+
+Use F8 with jumping and volleys to check hammer arcs, hit timing and
+visibility. Use F5 for the crowded corridor and F4 to observe which
+sprites drop out when threats overlap.
+
+### November 17 regression pass
+
+Build `9c0add7a0040` covers the sampled voices, item and gem ceremonies,
+Game Over, ending, palette fixes, recent boss and enemy changes, and the
+renderer and projectile optimizations. All 69 checkpoints across ten sets
+were regenerated and reload-validated for this ROM.
+
+Rendered checks covered file select, the BREATH pane, all six burned-sign
+messages on each sign-reader type, both technique lessons, town shouts,
+combo tiers 1, 2, 4 and 5, the Game Over portrait, Zelda's dialogue, all
+20 credit entries and the replay prompt. Punctuation, digits and message
+borders rendered as expected. The top-tier `GODLIKE!` banner alternated
+between its flame pair and the last two characters on their shared
+scanlines, as implemented by its existing OAM priority rotation.
+
+In the 2,400-frame replay, Rauru's autoplay walked onto the overworld and
+triggered the 520,387-cycle map load twice. The same loads occurred at the
+same points in `0d55b1c120af` and `59ee6701557a`. The report now includes
+those updates in `otherNmiMax`. Its `workMax` and `nmiMax` require steady
+side-view play at both ends of the measured update.
+
+The updated probe recorded zero lag or HUD shifts across 23,338 side-view
+frames. Palace 2's crowded floor was closest to the limit at 29,705 cycles
+through RTI. Rauru peaked at 25,461 in steady side view. The sprite limit
+was exceeded on 1,564 of 2,138 Rauru frames, 1,023 of 2,247 Old Kasuto
+frames and 253 of 2,380 Gooma approach frames. The maximum was 14 sprites
+on a scanline in Old Kasuto and the two-Mago room.
+
+For a manual spot check, use Busy Areas F4 to jump and fire through the
+Gooma approach while watching projectiles and the HUD. Use Towns and World
+F4 or F6 to read the Mido or Darunia lesson. Use Key Items F1 or Gem
+Celebration F1 to see the raised-head pose and hear the fanfare-to-roar
+handoff. Emulator checks verified sample timing and control recovery.
+
+### Horizontal placement audit
+
+The initial audit reloaded all 69 checkpoints for `9c0add7a0040`, all 77
+slots in the installed test profiles, and the standalone Game Over Danger
+state. On the 256-pixel screen, 23 of the 68 checkpoints with Barba visible put
+his sprite midpoint within 16 pixels of x=128. Another 42 start left of
+that band and three start to its right. The Game Over portrait has no
+playable Barba. The first frame after reload confirms the same grouping.
+
+In the original Busy Areas F6, holding Right moved Barba 94 pixels in
+world coordinates while the camera kept him at the left edge. In F5, Right
+moved him only one pixel before the wall. Both passed the earlier reload
+check, which accepted any change in world X.
+
+Busy Areas F4–F7, Palaces F10, and Tricky Movement F2, F4 and F8 now
+place Barba on walkable ground near center. Reload validation checks the
+initial screen position and requires net rightward progress while Barba
+stays in the center of the view. For a manual check, load Busy Areas F6,
+hold Right and breathe into the blocks. In Tricky Movement F8, turn left
+to shoot the block wall. The drop-shaft checkpoint still begins beside
+the gap so the native drop into the lower room can be tested directly.
+
+All 69 regenerated checkpoints passed reload validation. A 620-frame
+replay per Busy Areas slot logged zero lag or shifted HUD frames. The new
+Palace 2 floor start peaked at 28,517 NMI cycles through RTI and the new
+Palace 3 block start peaked at 24,963.
 
 ## Playthrough checkpoint sets
 
@@ -165,7 +304,7 @@ Crystals are $078D-$0792, in palace order; $0794 is 6 minus placed. Keys $0793=0
 | p3 | 4/4/4 | 5/5 | 4 | Candle, Glove, Hammer | D | 2 | T, R, B, M |
 | p3boss | 5/4/4 | 5/5 | 4 | Candle, Glove, Raft, Hammer | D | 2 | T, R, B, M |
 | p4 | 5/5/5 | 6/6 | 6 | Candle, Glove, Raft, Hammer | D+U | 3 | T, R, B, M, W, C |
-| p4boss | 5/5/5 | 6/6 | 6 | Candle, Glove, Raft, Boots, Hammer | D+U | 3 | T, R, B, M, W, C |
+| p4boss | 7/5/5 | 6/6 | 6 | Candle, Glove, Raft, Boots, Hammer | D+U | 3 | T, R, B, M, W, C |
 | p5 | 6/5/6 | 6/6 | 6 | Candle, Glove, Raft, Boots, Hammer | D+U | 4 | T, R, B, M, W, C |
 | p5boss | 6/6/6 | 6/6 | 6 | Candle, Glove, Raft, Boots, Flute, Hammer | D+U | 4 | T, R, B, M, W, C |
 | p6 | 7/6/7 | 8/7 | 7 | Candle, Glove, Raft, Boots, Flute, Hammer, Magic Key | D+U | 5 | T, R, B, M, W, C, 7 |
@@ -204,6 +343,7 @@ Crystals are $078D-$0792, in palace order; $0794 is 6 minus placed. Keys $0793=0
 | F5 | Before Thunderbird (world 5, room $35, entry 0) | gp; keys 0 | Check movement, head clearance, combat and HUD. |
 | F6 | Before Dark Link (world 5, room $36, entry 0) | gp; keys 0 | Defeat Dark Link and watch the ending. As the curtain drops, look for the bright fireball with a flickering tail traveling down and right into Zelda, then disappearing as she turns to ash. |
 | F7 | Palace 6 boss and crystal approach (world 4, room $3A, entry 0) | p6boss; keys 0 | Walk right to Lava Link; win normally and approach the crystal statue. |
+| F8 | Valley of Death rock throwers (East Hyrule, world 0, room $02) | gp; keys 0 | Walk left toward the wall Lizalfos. Face it, jump and press Up+B while it leans out to throw. |
 
 ### bosses
 
@@ -215,7 +355,7 @@ itself (no door to walk through) with that boss's pre-boss loadout. Reload the k
 | F1 | Horsehead (Palace 1) | world 3, room $0D, page 0 | p1boss |
 | F2 | Helmethead (Palace 2) | world 3, room $22, page 0 | p2boss |
 | F3 | Rebonack (Palace 3) | world 4, room $0E, page 0 | p3boss |
-| F4 | Carock (Palace 4) | world 4, room $1C, page 0 | p4boss |
+| F4 | Carock (Palace 4) | world 4, room $1C, page 0 | p4boss, Attack 7 with Reflect learned |
 | F5 | Gooma (Palace 5) | world 3, room $29, page 0 | p5boss |
 | F6 | Lava Link (Palace 6) | world 4, room $3A, page 0 | p6boss |
 | F7 | Thunderbird (Great Palace) | world 5, room $35, page 0 | gp |
@@ -245,13 +385,13 @@ returns: the fight is already live. F9/F10 are unused.
 | Key | Where | Loadout | Look for |
 | --- | --- | --- | --- |
 | F1 | Palace 6 lava ledge (world 4, room $33, entry 0) | p6boss; keys 0 | Walk onto lava, jump back, check native body and folded head. |
-| F2 | Palace 1 low tunnel (world 3, room $03, entry 1, x=288, y=176) | p1boss; keys 0 | Walk and crouch under the ceiling. |
+| F2 | Palace 1 low tunnel (world 3, room $03, entry 0, x=112, y=176) | p1boss; keys 0 | Walk and crouch under the ceiling. |
 | F3 | Palace 1 elevator shaft (world 3, room $01, entry 0, x=112, y=160) | p1; keys 0 | Start on the native elevator. Hold Down to descend; Up to return. |
 | F4 | Palace 2 floor corridor (world 3, room $14, entry 1) | p2boss; keys 0 | Inspect floor and jump clearance. |
 | F5 | West Hyrule water bridge (world 0, room $01, native right-hand entry) | saria; keys 0 | Cross the bridge, test jumps, crouch clearance, and water surface wading. |
 | F6 | Medicine cave collapsing bridge (world 0, room $0E, native left-hand entry) | p3; keys 0 | Cross the collapsing bridge above lava and test lava surface recovery. |
 | F7 | Palace 6 drop-shaft edge (world 4, room $28, entry 1, x=300, y=176) | p6boss; keys 0 | Stand safely at the gap; jump across or fall to the lower room. This is not a lethal bottomless pit. |
-| F8 | Palace 2 breakable blocks (world 3, room $1A, entry 1) | p2boss; keys 0 | Shoot through the 2x3 breakable block wall with the Glove. |
+| F8 | Palace 2 breakable blocks (world 3, room $1A, entry 1) | p2boss; keys 0 | Turn left and shoot through the 2x3 breakable block wall with the Glove. |
 | F9 | West Hyrule Myu cave (world 0, room $10, entry 0) | ruto; keys 0 | Watch the Myu to the right through both crawl frames, then crouch nearby. |
 
 ### Evidence, omissions and limits
@@ -278,8 +418,7 @@ native collision returns $40 below Y 208), but falling does not kill. Surveyed
 palace gaps were floor transitions or shafts; lava/water are different hazards.
 No death flag, collision tile, or game code was changed to fabricate a lethal pit.
 A qualifying native lethal-pit location is still needed for that acceptance item.
-Sets remain 7 Endgame / 7 Movement; optional slots are not padded with unverified
-boss-start, crystal/ending, long-ride or lookalike-room fixtures.
+Endgame has eight checkpoints and Movement has nine.
 
 ### Numeric feature and palette checks
 

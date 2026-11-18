@@ -1,4 +1,4 @@
--- Shared fireball-only boss fight driver (used by carock.lua and rebonack.lua).
+-- Shared palace boss fight driver. Use reflect=true to fight with reflected bolts.
 -- Warps to a palace boss room with Downward/Upward Thrust removed, then walks in,
 -- keeps ~28px from the boss, hops and breathes. Other enemies (not doors, keys or
 -- the boss phases) are cleared so the fight stays deterministic. After the boss
@@ -17,25 +17,25 @@ function runBossFight(cfg)
         if not ok then errors=errors+1 end
     end
     local frame=0
-    local fight={damage={},seen={},hits=0,fireHits=0,stabSeen=false}
+    local fight={damage={},seen={},hits=0,fireHits=0,reflectHits=0,stabSeen=false}
     local target,defeatedAt,keyAt=nil,nil,nil
     local fcAtDefeat=nil
     local lastHp={}
-    -- Count boss HP losses and which ones came from the projectile check ($E48B):
-    -- the native damage store at $E735 runs with $E4AA/$E4AB (JSR $E694) on the stack.
-    emu.addMemoryCallback(function(addr,value)
-        local slot=addr-0xC2
-        local old=r(addr)
-        if frame>1100 and r(0xB6+slot)==1 and cfg.bosses[r(0xA1+slot)] and value<old and old<0xF0 then
+    -- Observe the native HP store directly so lethal hits count even when HP underflows.
+    emu.addMemoryCallback(function()
+        local state=emu.getState()
+        local slot=state['cpu.x']
+        if frame>1100 and slot<6 and r(0xB6+slot)==1 and cfg.bosses[r(0xA1+slot)] then
             fight.hits=fight.hits+1
-            local sp=emu.getState()['cpu.sp']
+            local sp=state['cpu.sp']
             for i=1,10 do
                 local lo,hi=r(0x100+((sp+i)%256)),r(0x100+((sp+i+1)%256))
                 if hi==0xE4 and lo==0xAA then fight.fireHits=fight.fireHits+1;break end
+                if hi==0xAD and lo==0x6D then fight.reflectHits=fight.reflectHits+1;break end
             end
             if r(0x80)==0x09 then fight.stabSeen=true end
         end
-    end,emu.callbackType.write,0xC2,0xC7)
+    end,emu.callbackType.exec,0xE735)
 
     emu.addEventCallback(function()
         local b=newGameInput(frame)
@@ -50,8 +50,9 @@ function runBossFight(cfg)
                 elseif bx>px+28 then b.right=(frame%6<4)
                 elseif bx<px and r(0x9F)~=2 and frame%40==0 then b.left=true
                 elseif bx>px and r(0x9F)~=1 and frame%40==0 then b.right=true end
-                b.a=(frame%90<25)
-                b.b=(frame%10<3)
+                b.a=not cfg.reflect and (frame%90<25)
+                b.b=not cfg.reflect and (frame%10<3)
+                b.down=cfg.reflect and r(0x728)~=0 and not (b.left or b.right)
             elseif defeatedAt then
                 local key=nil
                 for s=0,5 do if r(0xB6+s)>0 and r(0xA1+s)==0x01 then key=s end end
@@ -104,6 +105,7 @@ function runBossFight(cfg)
                 end
             end
             target=best
+            if target and cfg.reflect and not defeatedAt then w(0x710,1) end
             local finalAlive=false
             for s=0,5 do if r(0xB6+s)==1 and r(0xA1+s)==cfg.final then finalAlive=true end end
             if fight.seen[cfg.final] and not finalAlive and not defeatedAt then
@@ -122,12 +124,16 @@ function runBossFight(cfg)
             report:write(string.format('end px=%d py=%d 728=%d keys=%d objs=%s',r(0x3B)*256+r(0x4D),r(0x29),r(0x728),r(0x793),objs)..string.char(10))
             screenshot(cfg.name..'_end')
             for id in pairs(fight.seen) do ids[#ids+1]=string.format('%02X:%d',id,fight.damage[id] or 0) end
-            report:write(string.format('frame=%d defeated=%s keyUnfreeze=%s page=%d hits=%d fireHits=%d bosses=%s',
-                frame,tostring(defeatedAt),tostring(keyAt),r(0x3B),fight.hits,fight.fireHits,table.concat(ids,' '))..string.char(10))
+            report:write(string.format('frame=%d defeated=%s keyUnfreeze=%s page=%d hits=%d fireHits=%d reflectHits=%d bosses=%s',
+                frame,tostring(defeatedAt),tostring(keyAt),r(0x3B),fight.hits,fight.fireHits,fight.reflectHits,table.concat(ids,' '))..string.char(10))
             cfg.checks(check,fight)
             check(r(0x796)==0 and not fight.stabSeen,'no Downward Thrust available or used')
-            check(fight.hits>0 and fight.fireHits==fight.hits,'every boss HP loss came through the projectile check')
-            check(defeatedAt~=nil,'boss defeated with fireballs only')
+            if cfg.reflect then
+                check(fight.hits>0 and fight.reflectHits==fight.hits,'every boss hit came from a reflected bolt')
+            else
+                check(fight.hits>0 and fight.fireHits==fight.hits,'every boss hit came from a fireball')
+            end
+            check(defeatedAt~=nil,'boss defeated')
             check(fight.running==true,'game keeps running after the kill (no NMI hang)')
             check(keyAt~=nil,'boss key collected; scroll lock released ($0728 = 0)')
             check(r(0x3B)>=cfg.exitPage,'walked through the locked door past the boss')

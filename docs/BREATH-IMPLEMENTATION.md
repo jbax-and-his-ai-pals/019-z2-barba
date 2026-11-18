@@ -5,6 +5,13 @@ OAM slots hold the lower rows; three spare slots hold the head. The native
 renderer retains item poses, invisibility and flying form. Extracted pixels
 stay in local ignored outputs.
 
+The sampled-audio renderer checks for a held item or active raised-head roar
+in bank 0 before calling the bank-6 celebration renderer. The ordinary draw
+also computes the palette and facing in one pass and keeps the pose index
+in X for the tile reads. In the Palace 1 probe, the display call averaged
+1,178 → 1,075 cycles during volleys. All 256 OAM bytes matched on every one
+of the 1,200 measured idle and volley frames.
+
 The body repeats the boss's narrow segmented neck without an added belly coil.
 Vanilla reuses crouch frame 6 during ascent; the renderer selects a separate
 full-body jump pose while airborne, leaving native animation and physics state
@@ -75,6 +82,13 @@ Menus, transitions, death and Wyrmling cancel queued shots. Health is never an
 eligibility test. Breath is always fire class (`$05CA = 0`), so Fire-only enemies
 take hits without a spell; flame class strictly dominates the native beam (`$D2`)
 in bank 7 `$E6CB`. The old Fire slot is METEOR (see below).
+
+In the Valley of Death, exposed rock-tossing Lizalfos (East Hyrule enemy
+`$1D`, rooms `$02–$05`) take breath damage through the shared collision
+check at `$E48B`. Bank 2's `$977C` hook uses 28 guarded pad bytes at
+`$9F85–$9FA0` and checks the throw cycle (AI phase 3). A hit uses the
+native hurtbox, HP and death sequence. `tests/rock_lizalfos.lua` drives a
+jump and upward volley in room `$02` and verifies the kill and continued play.
 
 State: `$05F1` deadline, `$05F7` spacing, `$05F8` latch, `$05FC/$05FD` projectile
 lifetimes and `$05FE` pending-shot count. These locations have no original
@@ -191,6 +205,12 @@ native collision rules; it does not copy aimed enemy-projectile code.
 - `hud_timing.lua`: 900 Palace 1 frames with a stable line-31 split.
 - `meteor.lua`: dive, fall cap, two flat fire-class floor waves at `$29+$12`,
   a floor Bot hit, and no dive without the spell.
+
+Carock (Palace 4) has 48 HP and an eight-pip bar worth six HP per pip. An Attack 7
+fireball deals 18 HP during his solid visible window (`$AF = $E0–$EF`). Face him
+and crouch with Reflect active to return his low bolts for 24 HP each. The fight
+takes three fireballs, two returned bolts, or two fireballs and one returned bolt
+at Attack 7.
 
 Remaining: shield/boss balance, projectile walls, vertical-technique redesign,
 crowded-room sprite review and complete human playtesting.

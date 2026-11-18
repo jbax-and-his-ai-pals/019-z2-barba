@@ -10,6 +10,7 @@ local pending=false
 local failures=0
 local initialX=0
 local initialY=0
+local walkStartX=0
 local downY=0
 local elevatorDown=false
 local elevatorUp=false
@@ -50,6 +51,15 @@ emu.addEventCallback(function()
     if PACK_SCENES and not PACK_SCENES[index] then return end
     age=age+1
     if PACK_SCENES and age>10 and age<42 and (PACK_SCENES[index].mode==5 and r(0x73)*256+r(0x74) or r(0x3B)*256+r(0x4D))~=initialX then moved=true end
+    if PACK_SCENES and PACK_SCENES[index].walk_in_view then
+        if age==10 then walkStartX=r(0x3B)*256+r(0x4D) end
+        if age==22 then
+            local x=r(0x3B)*256+r(0x4D)
+            local screenX=r(0xCC)
+            check(x-walkStartX>=5 and screenX>=88 and screenX<=136,
+                ids[index]..string.format(' walks right in view: world x %d -> %d, screen anchor x %d',walkStartX,x,screenX))
+        end
+    end
     if PACK_SCENES and PACK_SCENES[index].feature=='elevator' then
         if age==23 or age==38 then
             check(r(0x754)~=0 and r(0x5FA)==54 and r(0x204)==0xF8 and r(0x24C)==0xF8 and r(0x2C4)==0xF8,
@@ -84,6 +94,11 @@ emu.addEventCallback(function()
     if age==3 then
         if PACK_SCENES then
             local spec=PACK_SCENES[index]
+            if spec.walk_in_view then
+                local screenX=r(0xCC)
+                check(screenX>=88 and screenX<=136 and r(0x29)==spec.position.y and r(0x479)==0,
+                    ids[index]..string.format(' starts grounded near center: screen anchor x %d, y %d',screenX,r(0x29)))
+            end
             if spec.feature then
                 local ok,detail=checkpointFeature(spec)
                 check(ok,ids[index]..' '..detail)

@@ -136,6 +136,18 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
                 bytes.fromhex('a9 8f a4 02 91 0e 20 92 e2 a9 81 9d 1a 04'),
                 'Crumbling floors honor full block animation pool')
     hook(7, 0xD50D, 'BarbaUpdate', 0x20, '20 47 98')
+    # The native player-contact gate sets carry when slot parity matches frame
+    # parity. An XOR tests the same condition without saving flags on the stack.
+    # Its callee at $E469 sets up its own registers and carry. The space after
+    # the gate holds a tail call that skips $D56D for empty projectile slots.
+    # Active slots, including negative disappearing blades, still run $D56D.
+    overlay.prg(7, 0xE3B9, bytes.fromhex(
+        '8a 45 12 4a 90 f9 b0 08'    # TXA / EOR $12 / LSR / BCC $E3B8 / BCS $E3C9
+        ' b5 87 f0 03 4c 6d d5 60'  # LDA $87,X / BEQ RTS / JMP $D56D / RTS
+        ), bytes.fromhex('a5 12 4a 8a 29 01 d0 06 08 68 49 01 48 28 b0 ef'),
+        'Enemy projectile contact parity and empty-slot check')
+    overlay.prg(7, 0xD5D1, bytes.fromhex('20 c1 e3'), bytes.fromhex('20 6d d5'),
+                'Check projectile type before calculating the offscreen mask')
     hook(7, 0xE48B, 'EnemyFireGateway', 0x4C, 'b5 b6 c9 01', 1)
     hook(7, 0xE617, 'ShieldFireGateway', 0x4C, 'a5 c8 0a')
     hook(5, 0x9A7F, 'DarkBarbaDraw', 0x20, '20 02 ec')
@@ -190,6 +202,16 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
         'Fast offscreen-column mask ($F27D)')
     overlay.prg(7, 0xE6E2, bytes.fromhex('4c f3 e6 ea'), bytes.fromhex('29 20 f0 0d'),
                 'Allow fireballs against sword-only enemies')
+    # East Hyrule rock-tossing Lizalfos ($1D) skip the normal shot check.
+    # Run it during the exposed throw cycle (AI phase 3), then resume
+    # display and the AI dispatch only if the enemy is still alive.
+    overlay.prg(2, 0x9F85, bytes.fromhex(
+        'b5 af 29 03 c9 03 d0 09'  # LDA $AF,X / AND #3 / CMP #3 / BNE draw
+        '20 8b e4 b5 b6 c9 01 d0 0a'  # JSR $E48B / LDA $B6,X / CMP #1 / BNE done
+        '20 11 ef b5 af 29 03 4c 83 97 60'  # draw: displaced code, JMP $9783; done: RTS
+    ), b'\xff' * 28, 'Rock-tossing Lizalfos fireball check')
+    overlay.prg(2, 0x977C, bytes.fromhex('4c 85 9f ea ea ea ea'),
+                bytes.fromhex('20 11 ef b5 af 29 03'), 'Rock-tossing Lizalfos fireball hook')
     hook(3, 0xB5F8, 'TownDialog', 0x4C, '0a a8 ad 07 07', 2)
     hook(3, 0xB74D, 'TownLetterDelay', 0x20, 'a9 05 8d 66 05', 2)
     hook(3, 0xB65E, 'TownLineDelay', 0x20, '8c 66 05')
@@ -760,7 +782,7 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
     # JSR $DE63 runs the native projectile check ($E48B, Barba's fireball gateway), the sword check, then
     # the same $E4D9. A kill there leaves the generic death state ($B6 = 2), which would draw Carock into
     # OAM 0 (the HUD sprite-0 split) and hang the NMI; so on a kill call $B1F6, the native boss-death
-    # bookkeeping that $B1E9 runs after a Reflect kill. Teleport/fade phases stay untouchable; Reflect path unchanged.
+    # bookkeeping used for boss kills. Fireballs still need the visible window.
     # $AEB2 is shared with the Palace 3/4/6 Wizzrobe ($1D, routine $AE4F), so the $B1F6 call is gated on
     # $A1 = $22. Ungated (2026-11-14..16), a Wizzrobe kill ran $B1F6: it revived the Wizzrobe ($B6 = 1, HP
     # wrapped) and wrote $FF to $6E1D+$1D, so every later Wizzrobe death in that palace dropped a boss key.
@@ -773,6 +795,13 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
         'CarockHit helper',
     )
     overlay.prg(4, 0xAEB4, bytes.fromhex('20 d0 a7'), bytes.fromhex('20 d9 e4'), 'Carock fireball hit check')
+    # 48 HP takes three fireballs at Attack 7 (18 each). Six HP per pip fills the eight-pip bar.
+    overlay.prg(4, 0xA943, b'\x30', b'\x10', 'Carock HP (16 -> 48)')
+    overlay.prg(4, 0xAE82, b'\x06', b'\x02', 'Carock HUD HP per pip (2 -> 6)')
+    # Reflected bolts use Attack 8 damage (24) against Carock, with native damage for other targets.
+    overlay.prg(4, 0xA804, bytes.fromhex('b5 a1 c9 22 d0 02 a0 08 4c 26 e7'), b'\xff' * 11,
+                'Carock Reflect damage helper')  # LDA $A1,X / CMP #$22 / BNE native / LDY #8 / JMP $E726
+    overlay.prg(4, 0xAD6B, bytes.fromhex('20 04 a8'), bytes.fromhex('20 26 e7'), 'Carock reflected bolt damage')
     # Hidden Red Jars ($05): allow breath as well as melee to reveal them.
     hook(5, 0xA525, 'HiddenJarHit', 0x20, '20 77 e6')
     overlay.prg(

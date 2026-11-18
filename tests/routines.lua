@@ -10,6 +10,7 @@ local tests={}
 local noiseVolume=nil
 local noiseWrites=0
 local ready=false
+local sampledRoar=LABELS.RoarAudio~=nil
 local function r(address) return emu.read(address,mem) end
 local function w(address,value) emu.write(address,value,mem) end
 local function check(ok,message)
@@ -32,8 +33,8 @@ for _,pose in ipairs({5,7,8,9})do
         if pose==9 then
             -- Native $F27D derives screen X=$48 from the world coordinate.
             check(r(0x480)==0xAC and r(0x47E)==0x53,'downstab preserves the existing foot hitbox')
-            check(r(0x220)==0x70 and r(0x224)==0x70 and r(0x221)==0x08 and r(0x225)==0x06,
-                'downstab draws a second torso chunk at the top')
+            check(r(0x220)==0x70 and r(0x224)==0x70 and r(0x221)==0x06 and r(0x225)==0x08,
+                'right-facing downstab draws the reversed second torso chunk at the top')
         else
             check(r(0x480)==0xF8,'pose '..pose..' disables native sword/thrust collision')
             check(r(0x220)==0xF8 and r(0x224)==0xF8,'pose '..pose..' hides both attached-flame sprites')
@@ -58,16 +59,28 @@ end
 
 add('Inferno starts roar and retains original spell handler','inferno',function()
     w(0x76F,0x80);w(0x769,0)
+    if sampledRoar then w(0x5EE,0) end
     for address=0xB6,0xBB do w(address,0) end
 end,function()
-    check(r(0x5F0)==48 and r(0x76F)==0,'roar starts; Thunder state is consumed')
+    check(r(0x76F)==0,'Inferno consumes the native Thunder state')
+    if sampledRoar then
+        check(r(0x5EE)==0x40,'Inferno queues a full sampled roar for the audio driver')
+    else
+        check(r(0x5F0)==48,'Inferno starts the synthesized roar timer')
+    end
+    noiseWrites=0
+    noiseVolume=nil
 end)
-for i=1,48 do
+local roarUpdates=sampledRoar and 1 or 48
+for i=1,roarUpdates do
     add('roar update '..i,'update',function()
         w(0x769,0);w(0x400,0);w(0x777,1);w(0x784,1);w(0x774,0)
         w(0x8D,0);w(0x8E,0)
     end,function()
-        if i==48 then
+        if sampledRoar then
+            check(r(0x5EE)==0x40 and r(0x5F0)==0,'gameplay update leaves the sampled request for the audio driver')
+            check(noiseWrites==0 and noiseVolume==nil,'sampled build leaves the noise channel alone')
+        elseif i==roarUpdates then
             check(r(0x5F0)==0 and noiseVolume==0x30,'roar finishes with zero-volume override')
             check(noiseWrites>=48,'noise channel receives the synthesized roar envelope')
         end

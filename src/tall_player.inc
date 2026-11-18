@@ -260,20 +260,15 @@ BarbaDisplay:
     sta $0220
     sta $0224
     jsr BarbaGeometry
-    ldx #$00
-    lda $9F
-    cmp #$01
-    bne :+
-    ldx #$40
-:
-    stx DRAW_ATTR
     lda $050C
-    beq :+
     lsr
-:
     ora $0752
     and #$03
-    ora DRAW_ATTR
+    ldx $9F
+    dex
+    bne :+
+    ora #$40
+:
     sta DRAW_ATTR
     lda $0754
     beq @native_pose
@@ -358,7 +353,8 @@ BarbaDisplay:
 @skip:
 .endmacro
 
-    sta DRAW_FRAME
+    tax
+    stx DRAW_FRAME
     lda #$F8
     sta $0208
     sta $020C
@@ -366,8 +362,6 @@ BarbaDisplay:
     sta $0214
     sta $0218
     sta $021C
-    ldx DRAW_FRAME
-    ldy DRAW_ATTR
     bit DRAW_ATTR
     bvc :+
     jmp @draw_right
@@ -478,7 +472,16 @@ BarbaDisplay:
     stx $0226
 @no_extra_torso:
 .ifdef SAMPLED_ROAR
+    ; Skip the mapper round trip unless there's an item or raised-head roar.
+    lda ITEM_HOLD
+    bne @celebration
+    lda ROAR_REQUEST
+    and #$88
+    cmp #$88
+    bne @no_celebration
+@celebration:
     jsr RoarTorsoHop
+@no_celebration:
 .endif
     lda $12
     lsr

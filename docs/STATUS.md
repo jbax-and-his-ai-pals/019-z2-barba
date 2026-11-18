@@ -2,6 +2,62 @@
 
 Current playable alpha. Built locally from `roms/z2.nes` via `python tools/build.py`.
 
+2026-11-17 checkpoint placement fix on `9c0add7a0040`. Eight states across
+Busy Areas, Palaces, and Tricky Movement now spawn on walkable ground near
+center. The original F6 camera held Barba at the left edge as he walked.
+Reload checks now verify both framing and rightward movement in these states.
+[Horizontal placement audit](TEST-PACK.md#horizontal-placement-audit).
+
+2026-11-17 regression pass on `9c0add7a0040`. All 23 ROM-free tests, 67
+standalone Mesen scenarios and 69 checkpoint reloads passed. The routine
+harness now checks the sampled Inferno request or legacy noise envelope as
+appropriate and expects the current right-facing downstab tile order. It
+passes on both audio builds. Rendered checks included all burned-sign
+messages, technique lessons, BREATH, the ending and all 20 credit entries.
+The Busy Areas probe now reports room-load NMI costs separately from
+side-view gameplay. The longer run recorded zero gameplay lag or HUD shifts
+over 23,338 measured side-view frames. Hardware sprite-limit flicker remains
+visible in crowded scenes and in the top-tier combo banner.
+[Test results and playtest keys](TEST-PACK.md#november-17-regression-pass).
+
+2026-11-17 enemy projectile updates. Empty slots skip the offscreen mask.
+Live shots use a shorter contact parity check. The P2 crowded-floor
+stress peak fell from 30,157 to 29,682 cycles before HUD recovery and the
+one lag frame disappeared. All ten Busy Areas rooms had zero lag and HUD
+shifts. The Horsehead and Gooma approaches saved 397 and 564 cycles per
+comparable update on average, with identical sprite output. Playtest with
+`play/Test Barba - Busy Areas.cmd`, F8 for Guma hammers and F5 for the
+crowded floor. [A/B replay details](TEST-PACK.md#overlapping-player-and-enemy-projectiles).
+All 68 checkpoints were regenerated and reload-validated. The Busy Areas
+probe reproduced the A/B timing with the new pack. All 23 unit tests and
+the combat, damage, shield enemies, Wizzrobe, HUD timing, volley, METEOR
+and town safety scenarios passed.
+
+2026-11-17 busy palace performance profile. On build `59ee6701557a`, all
+ten Busy Areas checkpoints had zero lag and HUD shifts. Palace 2 peaked at
+29,004 cycles, with 13,776 in the enemy pass. Offscreen mask calls for empty
+enemy projectile slots took 534 cycles on that frame. Palace 5 before Gooma
+exceeded eight sprites on a scanline on 104 of 600 frames. See
+[`TEST-PACK.md`](TEST-PACK.md#busy-palace-performance-profile) for the
+profile and optimization candidates.
+
+2026-11-17 projectile stress. In the 850-frame probe, Horsehead's approach
+peaked at 25,635 cycles with two fireballs and four Guma hammers. The longer
+Palace 2 run had one lag frame at 30,157 cycles before LateSplit, with zero
+HUD shifts. Mixed-projectile frames exceeded the sprite limit 147 times
+before Gooma. See [projectile stress results](TEST-PACK.md#overlapping-player-and-enemy-projectiles).
+
+2026-11-17 Barba renderer. Ordinary frames skip the inactive celebration bank
+switch and reuse the computed tile index. In Palace 1, volley frames now
+average 16,684 CPU cycles (previously 16,788), peak at 22,376 (previously
+22,490), and have 0/900 lag frames. The full sprite table matched on all
+1,200 measured idle and volley frames. Each Busy Areas room saved 109–120 peak
+cycles with zero lag and HUD shifts. Candle, gem and tall geometry passed,
+including tall geometry in the legacy audio build. All 68 checkpoints were
+regenerated and reload-validated. Open `play/Test Barba.cmd`, press F2, and
+walk, turn, crouch and fire in both directions to check the neck animation
+and clipping around the corridor.
+
 2026-11-17 technique lessons. Mido teaches the wyrm dive and Darunia teaches
 Barba to ram headfirst. Both lessons include the jump and direction inputs.
 Open `play/Test Barba - Towns and World.cmd` and use F4 for Mido or F6 for
@@ -409,6 +465,7 @@ frame. Both live in rewritten vanilla fixed-bank code, with no padding claimed
   - Geldarm (West Hyrule sand worm, `$20`) hurtbox (`$E90E`, type 5) widened to `12x64` px (`$FE, $0C, $00, $40`) so standing, crouching, and extra-slot fireballs hit its body as well as its head. HP 8 -> 4 (bank 1 `$9441`; attack 1-2 = 2 hits, 3+ = 1 hit). A lethal hit from any source — including jump stomp in `BarbaStomp` (`src/stomp.inc`) — no longer explodes it at full height: `src/geldarm.inc` (bank-1 pad `$9EB9`, hooks `$9BB5`/`$9C3D`) keeps it alive at HP 0, flashing and immune, sinking into the sand 2 px/frame (~1/2 s), then runs the native death `$E880` at the sand line (`tests/geldarm.lua`).
   - Hidden Red Jars (`enemy $05`, Bank 4 Type A `$B83E`, Bank 4 Type B `$AF61`, Great Palace Bank 5 `$A521`) are hooked via `HiddenJarHit` (`$A7BF` in bank 4, `HiddenJarHit` in bank 5) so ordinary breath (native and extra slots) as well as melee reveals them.
   - Upward breath (airborne `Up+B` column) and rising head-butt (`Up` while ascending), both gated on Upward Thrust; rising head-butt breaks glove-gated overhead bricks via `BarbaBlocks` (`tests/stab_blocks.lua`).
+  - Airborne `Up+B` can kill the exposed rock-tossing Lizalfos on the Valley of Death walls. Verified in the native room with `tests/rock_lizalfos.lua`. Producer checkpoint is Endgame F8.
   - Downstab (`Down` while airborne with Downward Thrust) with 64px visual double-torso pose, 18x12 centered foot hitbox (`BarbaSetThrusts`), and glove-gated floor brick breaking via `BarbaBlocks` (`tests/stab_blocks.lua`).
   - Easy-enemy jump stomp (`$C2` 1..16, full-body foot reach `$29 + $22 - $2A,x < $1E`, excluding shielded palace
     enemies `$18..$1A`, `$1F`, `$23`, verified by `tests/stomp.lua`) and touch item pickup (`src/stomp.inc`). No stomps during a boss fight's
@@ -439,6 +496,9 @@ frame. Both live in rewritten vanilla fixed-bank code, with no padding claimed
     Carock was immune in vanilla (bank 4 `$B1E9` skips the hit check for `$22`; Reflect only); `CarockHit`
     (bank 4 `$A7D0`) adds the projectile/sword check in his visible window and runs the native boss death on a
     kill (a raw kill drew him into OAM 0 and hung the sprite-0 wait). Dark Link: `tests/dark_link.lua`.
+    **Carock balance (2026-11-17):** 48 HP, six HP per HUD pip, three Attack 7 fireball hits or two reflected bolts.
+    `carock.lua` and `carock_reflect.lua` cover both routes through the boss key and locked door. Bosses F4
+    and Palaces F8 load Attack 7 with Reflect learned.
     **Wizzrobe fix (2026-11-16):** that visible-window tail (`$AEB2`) is shared with the Palace 3/4/6 Wizzrobe
     (`$1D`, routine `$AE4F`). Until the fix, a Wizzrobe killed by breath also ran the boss death `$B1F6`: it
     came back to life (`$B6 = 1`, HP wrapped; seen in the emulator) and `$6E1D+$1D` became `$FF`, the boss flag

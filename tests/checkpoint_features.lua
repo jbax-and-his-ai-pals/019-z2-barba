@@ -30,6 +30,13 @@ function checkpointFeature(spec)
         local floor=tile(x+4,y)
         return (floor==0x4B or floor==0x4C) and empty and r(0x479)==0,
             detail..string.format(' support=$%02X next-column-x=%d tiles=%s grounded=%d',floor,edge,table.concat(values,','),r(0x479))
+    elseif spec.feature=='rock-lizalfos' then
+        for slot=0,5 do
+            if r(0x769)==2 and r(0xA1+slot)==0x1D and r(0xB6+slot)==1 then
+                return true,detail..string.format(' rock-tossing Lizalfos in slot %d',slot)
+            end
+        end
+        return false,detail..' missing rock-tossing Lizalfos'
     elseif spec.feature=='magos' then
         local count=0
         for slot=0,5 do

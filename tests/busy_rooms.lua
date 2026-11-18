@@ -2,7 +2,9 @@
 -- which prepends BUSY_PACK, BUSY_STATES and BUSY_FRAMES). Autopilot: walk,
 -- turn, breathe every 6 frames, jump, look up. Per checkpoint it reports:
 --   lag        frames with no NMI game update
---   nmiMax     worst NMI work in cycles (budget ~29,780)
+--   workMax    worst side-view NMI work before the recovery check (budget ~29,780)
+--   nmiMax     worst full side-view NMI, including any LateSplit wait
+--   otherNmiMax  worst full NMI outside steady side-view play, including room loads
 --   hudBad     side-view frames that START with a non-zero status-bar scroll
 --              (the lag-frame jitter LateSplit fixes; an overrun longer than
 --              vblank is the known uncatchable case)
@@ -18,21 +20,31 @@ local NL=string.char(10)
 local idx,age,frame,pending=0,0,0,false
 local cur,load
 local nmiStart,nmis=nil,0
+local nmiSideView=false
 local totalBad=0
 local function cycles()return emu.getState()['cpu.cycleCount']end
 local function gateOn()return r(0x736)==0x0B and r(0x74C)<2 and r(0x726)==0 end
 emu.addMemoryCallback(function()
     if pending then pending=false;load();return end
-    nmiStart=cycles();nmis=nmis+1
+    nmiStart=cycles();nmis=nmis+1;nmiSideView=gateOn()
 end,emu.callbackType.exec,0xC07B)
+emu.addMemoryCallback(function()
+    if nmiStart and nmiSideView and cur and age>20 and gateOn() then
+        cur.workMax=math.max(cur.workMax,cycles()-nmiStart)
+    end
+end,emu.callbackType.exec,0xC19D)
 emu.addMemoryCallback(function()
     if not(nmiStart and cur and age>20)then nmiStart=nil;return end
     local n=cycles()-nmiStart;nmiStart=nil
-    cur.nmiMax=math.max(cur.nmiMax,n)
+    if nmiSideView and gateOn() then
+        cur.nmiMax=math.max(cur.nmiMax,n)
+    else
+        cur.otherNmiMax=math.max(cur.otherNmiMax,n)
+    end
 end,emu.callbackType.exec,0xC1B5)
 if LABELS and LABELS.LateSplit then
     emu.addMemoryCallback(function()
-        if cur and age>20 and r(0x8506)==0x2E then cur.late=cur.late+1 end
+        if cur and age>20 and nmiSideView and gateOn() and r(0x8506)==0x2E then cur.late=cur.late+1 end
     end,emu.callbackType.exec,LABELS.LateSplit)
 end
 emu.addEventCallback(function()
@@ -52,8 +64,8 @@ local function scanlines()
 end
 load=function()
     if cur then
-        report:write(string.format('%-26s frames=%d lag=%d nmiMax=%d late=%d hudBad=%d maxLine=%d framesOver8=%d'..NL,
-            cur.name,cur.frames,cur.lag,cur.nmiMax,cur.late,cur.hudBad,cur.maxLine,cur.over8))
+        report:write(string.format('%-26s frames=%d lag=%d workMax=%d nmiMax=%d otherNmiMax=%d late=%d hudBad=%d maxLine=%d framesOver8=%d'..NL,
+            cur.name,cur.frames,cur.lag,cur.workMax,cur.nmiMax,cur.otherNmiMax,cur.late,cur.hudBad,cur.maxLine,cur.over8))
         report:flush();totalBad=totalBad+cur.hudBad
     end
     idx=idx+1
@@ -63,7 +75,7 @@ load=function()
     end
     local f=assert(io.open(BUSY_PACK..'/'..BUSY_STATES[idx]..'.mss','rb'))
     assert(emu.loadSavestate(f:read('*a')),BUSY_STATES[idx]..' loads');f:close()
-    cur={name=BUSY_STATES[idx],frames=0,lag=0,nmiMax=0,late=0,hudBad=0,maxLine=0,over8=0}
+    cur={name=BUSY_STATES[idx],frames=0,lag=0,workMax=0,nmiMax=0,otherNmiMax=0,late=0,hudBad=0,maxLine=0,over8=0}
     age=0;nmis=0;nmiStart=nil
 end
 emu.addEventCallback(function()
