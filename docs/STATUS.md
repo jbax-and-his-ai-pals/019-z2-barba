@@ -1,5 +1,10 @@
 # Barba Edition status
 
+**Experimental Waldo portal** on `codex/waldo-portal`. The Mesen smoke test uses
+the native Rauru door, reaches Waldo's train station, and verifies the shortcut
+return to the same coordinates, scroll, health, and magic. Automatic return
+watches the US Moon-ending state. [Playtest instructions](TEST-PACK.md#experimental-waldo-portal)
+
 Current playable alpha. Built locally from `roms/z2.nes` via `python tools/build.py`.
 
 2026-11-17 checkpoint placement fix on `9c0add7a0040`. Eight states across

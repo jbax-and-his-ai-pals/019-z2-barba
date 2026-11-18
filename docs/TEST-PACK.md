@@ -1,5 +1,18 @@
 # Instant playtesting checkpoints
 
+## Experimental Waldo portal
+
+On `codex/waldo-portal`, build Barba with `python tools/build.py`, then open
+**play/Test Barba - Waldo Portal.cmd**. With the US dump at `roms/waldo.nes`,
+the launcher puts Barba on the Rauru doorstep. Press **Up** to enter. Play
+*Where's Waldo?* through the Moon landing or press **Start + Select** (Enter
+and Space) for a quick return. Barba resumes at the same position and scroll.
+
+This prototype switches between two local ROMs in an isolated Mesen profile.
+`python tools/waldo_portal.py --smoke` exercises the native door, starts Waldo's
+first level, and verifies the shortcut return, including with Up held. The
+report and Waldo screenshot are in `build/waldo-portal.txt` and `.png`.
+
 For the palace victory roar, double-click **play/Test Barba - Gem Celebration.cmd**
 and press **F1**. Barba starts beside the Palace 6 crystal statue, past the boss,
 with the final gem still unplaced. Walk right: the native gem sequence plays its
