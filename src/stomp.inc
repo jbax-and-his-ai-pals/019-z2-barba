@@ -115,6 +115,14 @@ BarbaStomp:
     bcs @next
     cmp #$21
     bcs @next
+    ; Invisible bubble and rock generators have no drawing routine. Native
+    ; death calls this pointer, so keep these slots active and spawning.
+    lda $A1,x
+    asl
+    tay
+    lda $6E65,y
+    ora $6E66,y
+    beq @next
     stx $10
     lda #$10
     sta $ED
@@ -139,7 +147,8 @@ BarbaStomp:
     rts
 @next:
     dex
-    bpl @loop
+    bmi @done
+    jmp @loop
 @done:
     rts
 

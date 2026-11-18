@@ -4,6 +4,9 @@
 .export DarkBarbaDraw, DarkBarbaTriforcePose, HiddenJarHit
 
 DarkBarbaDraw:
+    ldx #$08
+    lda $13
+    bne @loop
     lda #$02
     sta $0753
     jsr $EC02
@@ -13,12 +16,24 @@ DarkBarbaDraw:
     sta $0274
     lda $C9
     and #$F0
-    bne @done
+    beq :+
+    rts
+:
     lda $0252
     and #$FC           ; drop the native hurt flash's palette bits
     ora #$02           ; keep the shadow black, preserving priority and facing
     sta $02
     lda $81
+    ldy $2A
+    cpy #$A0
+    bcs @pose_ok
+    cmp #$06
+    beq @air_sub2
+    cmp #$07
+    bne @pose_ok
+@air_sub2:
+    sbc #$02           ; carry is set from cmp #$06 or cmp #$07: $06/$07 -> $04/$05
+@pose_ok:
     cmp #$0D
     bcc :+
     lda #$03
@@ -30,21 +45,21 @@ DarkBarbaDraw:
     sta $03             ; $03 = base index into DarkBarbaTiles
     ldx #$08
 @loop:
-    lda $02
-    and #$40
-    bne @right
-    lda @order_l,x
-    bpl @got_order
-@right:
+    ldy @oam_off,x
+    txa
+    bit $02
+    bvc @got_order
     lda @order_r,x
 @got_order:
     clc
     adc $03
-    tay
-    lda DarkBarbaTiles,y
+    stx $05
+    tax
+    lda DarkBarbaTiles,x
+    ldx $05
     cmp #$F5
     beq @skip
-    sta $05
+    sta $0201,y
     lda $2A
     clc
     adc @row_y,x
@@ -52,30 +67,21 @@ DarkBarbaDraw:
     bcc @skip
     cmp #$F0
     bcs @skip
-    sta $06
+    sta $0200,y
     lda $CD
     clc
     adc @col_x,x
     bcs @skip
-    sta $07
-    ldy @oam_off,x
-    lda $06
-    sta $0200,y
-    lda $05
-    sta $0201,y
+    sta $0203,y
     lda $02
     sta $0202,y
-    lda $07
-    sta $0203,y
-    jmp @next
+    bcc @next
 @skip:
-    ldy @oam_off,x
     lda #$F8
     sta $0200,y
 @next:
     dex
     bpl @loop
-@done:
     rts
 
 @oam_off:
@@ -84,8 +90,6 @@ DarkBarbaDraw:
     .byte $00, $08, $10, $00, $08, $10, $00, $08, $10
 @row_y:
     .byte $F0, $F0, $F0, $00, $00, $00, $10, $10, $10
-@order_l:
-    .byte $00, $01, $02, $03, $04, $05, $06, $07, $08
 @order_r:
     .byte $02, $01, $00, $05, $04, $03, $08, $07, $06
 

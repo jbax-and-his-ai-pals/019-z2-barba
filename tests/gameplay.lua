@@ -52,9 +52,10 @@ local function tick()
         sawWorld=true; captures[frame+3]='barba-overworld'
     end
     if frame%100==0 then
+        local st=emu.getState()
         report:write(string.format('frame %d mode %d world %d room %d y %d bank %s\n',
             frame,read(0x736),read(0x707),read(0x561),read(0x29),
-            tostring(emu.getState()['mapper.prgReg'])))
+            tostring(st['mapper.prgReg'] or (st['mapper.registers6'] and st['mapper.registers6']//2))))
     end
     if frame==2100 then
         check(seenStand and seenCrouch and seenJump,'standing, crouched and jumping states exercised')

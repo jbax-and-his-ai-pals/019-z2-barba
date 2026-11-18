@@ -112,6 +112,10 @@ the base. Keyword `ear_join` selects `notch` (1), `lower_ear` (2), `blend`
 
 ## Emulator checks
 
+The Play and Test launchers apply Space for Select and 4× windowed scale when
+preparing their portable Mesen profiles. Window dimensions account for Windows
+display scaling at the saved window location.
+
 ### Sampled roar audio
 
 `python tools/build.py` uses local uncompressed PCM `roms/roar.wav` by default;
@@ -206,13 +210,11 @@ volume hooks `$810F`/`$8116` call register/flag-preserving 20-byte helpers at
 bank-6 UNUSED_0. Triangle, music pitches and tempos are untouched. The title
 sample regression checks both ducked and restored volumes against native X.
 
-Playtest: `play/Play Barba.cmd` opens the normal playable ROM. The older
-Sampled Roar shortcuts now also use the normal ROM. Stay on the title: first roar
+Playtest: `play/Play Barba.cmd` opens the normal playable ROM. Stay on the title: first roar
 about 1.3 seconds after reset, then every 4.3 seconds. Listen for the original
 wobble/rasp, intelligibility against music, volume and clicks; press Start
-during a roar to check its cutoff. `build/roar-prototype/title-listening.wav`
-is a 10-second actual Mesen audio capture; the standalone DPCM preview is a
-decoded sample without the NES mixer/filters. Fidelity approval is a human
+during a roar to check its cutoff. Standalone DPCM previews are
+decoded samples without the NES mixer/filters. Fidelity approval is a human
 listening task. The normal gameplay pack is generated and installed using
 `python tools/prepare_test_player.py`; use `play/Test Barba.cmd`.
 F2 tests quiet attacks/hurt, F6 Lava
@@ -288,9 +290,13 @@ Gameplay additions (`src/sampled_roar.inc`, default `SAMPLED_ROAR` assembly):
   checked as well as the active flag, so a pause/mute cannot trap the controls.
   The initial always-bridged reader delayed the HUD split and was removed.
 
-The default build drops the old bank-0 noise envelope to make room for
-cast and hurt requests (2 bank-0 bytes remain; bank3-sign has 250 free). No new
-fixed-bank FF padding is claimed. Original Link hurt bytes remain untouched.
+The default build drops the old bank-0 noise envelope and moves auxiliary code
+(`ScalesTick`, `DarkLinkFireCheck`, town/castle scorch) into expanded bank 6
+`$AC09-$BF6F` (873 bank-0 bytes remain free; `bank6` has 2,680 free;
+`bank3-sign` has 255 free). In bank 7, `$D5DA-$D5F8` is a same-size guarded
+rewrite skipping `$F27D` on empty enemy slots (`$B6,X == 0`) with 3 spare bytes
+at `$D5F6-$D5F8`; no new fixed-bank FF padding is claimed. Original Link hurt
+bytes remain untouched.
 `roar_gameplay.lua` covers quiet attacks across all RNG buckets, native crystal/XP updates,
 fanfare-end victory, short hurt priority, original Lava Link sample and melody
 duck/restore. `roar_controls.lua` covers real-controller pause/resume mid-roar.
@@ -365,9 +371,11 @@ the 5-byte call costs **474 - 15*b cycles**, with actual entry PRG bank b=0..7:
 worst case under this link layout, plus target work. Recheck branch/table page
 costs after relinking. This ABI is for cold hooks, not per-enemy/projectile/terrain.
 
-Current fixed padding free: **16 bytes**, formerly 11 (LAVA 5, GATEWAY 8,
-TERRAIN 3). Bank0: 1169 free; bank3: 283. Only the original three proven spans
-are used. Rollback: revert this branch commit and rebuild; no source ROM changes.
+Current fixed padding free: **1 byte** (LAVA 0, GATEWAY 0, TERRAIN 1), plus
+3 spare bytes at `$D5F6-$D5F8` inside the rewritten enemy-slot dispatcher.
+Current segment free space (default sampled build): `BANK0` 873 B, `BANK6`
+2,680 B, `BANK3_SIGN` 255 B, `TOWN` 28 B, `BANK1` 240 B, `BANK5` 5 B.
+Rollback: revert this branch commit and rebuild; no source ROM changes.
 
 The emulator runner copies executable dependencies to build/mesen and writes
 settings there, never into the shared .tools junction. Run scenarios sequentially.

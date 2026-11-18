@@ -18,6 +18,9 @@ local pendingDrop=false
 local dropProbe=false
 local dropBelowScreen=false
 local dropLives=0
+local sawFallMode=false
+local fallFullFrames=0
+local fallPoseValid=true
 local moved=false
 local file=assert(io.open(PACK_DIR..'/validation.txt','w'))
 local ids=PACK_IDS or {'castle','combat','spells','lava-ledge','lava-surface','barba','raft','town','boss-door','great-palace'}
@@ -36,6 +39,7 @@ local function nextState()
     check(emu.loadSavestate(state),ids[index]..' native .mss loads')
     age=0
     initialY=r(0x29);elevatorDown=false;elevatorUp=false;dropProbe=false;dropBelowScreen=false
+    sawFallMode=false;fallFullFrames=0;fallPoseValid=true
     initialX=PACK_SCENES and PACK_SCENES[index].mode==5 and r(0x73)*256+r(0x74) or r(0x3B)*256+r(0x4D);moved=false
 end
 emu.addEventCallback(function()
@@ -162,7 +166,39 @@ emu.addEventCallback(function()
     end
     if dropProbe then
         if r(0x29)>=224 and r(0x561)==PACK_SCENES[index].room then dropBelowScreen=true end
+        if r(0x0736)==0x0F and r(0x0208)<0xF0 then
+            sawFallMode=true
+            if r(0x80)~=9 or r(0x81)~=9 then fallPoseValid=false end
+            local by,sy=r(0x0208),r(0x0230)
+            if by>=0x20 and by<0xD8 and sy>=0x20 and sy<0xD8 then
+                fallFullFrames=fallFullFrames+1
+                local right=r(0x9F)==1
+                local function fallOk(base,py,px,pal)
+                    local h0=right and {0x56,0x4C,0x4A} or {0x4A,0x4C,0x56}
+                    local h1=right and {0x5C,0x5A,0x58} or {0x58,0x5A,0x5C}
+                    local tt=right and {0x06,0x08} or {0x08,0x06}
+                    local hattr=(right and 0x40 or 0)+pal
+                    local tattr=(right and 0x80 or 0xC0)+pal
+                    for i=0,2 do
+                        if r(base+i*4)~=py or r(base+i*4+1)~=h0[i+1] or r(base+i*4+2)~=hattr then return false end
+                        if r(base+12+i*4)~=py+16 or r(base+12+i*4+1)~=h1[i+1] or r(base+12+i*4+2)~=hattr then return false end
+                    end
+                    for row=0,1 do
+                        local ty=py-(row+1)*16
+                        local rowBase=base+24+row*8
+                        for c=0,1 do
+                            if r(rowBase+c*4)~=ty or r(rowBase+c*4+1)~=tt[c+1]
+                                or r(rowBase+c*4+2)~=tattr or r(rowBase+c*4+3)~=px+8+c*8 then return false end
+                        end
+                    end
+                    return true
+                end
+                if not fallOk(0x0208,by,0x78,0) or not fallOk(0x0230,sy,0x80,1) then fallPoseValid=false end
+            end
+        end
         if age==350 then
+            check(sawFallMode and fallFullFrames>0 and fallPoseValid,
+                ids[index]..string.format(' fall-in-hole renders 64px torpedo pose for Barba and shadow (%d full frames)',fallFullFrames))
             check(dropBelowScreen and r(0x561)==45 and r(0x700)==dropLives and r(0xB5)==1,
                 ids[index]..string.format(' native drop reaches room $%02X, lives %d -> %d (NOT lethal)',r(0x561),dropLives,r(0x700)))
             pending=true
@@ -175,6 +211,7 @@ emu.addMemoryCallback(function()
         local stateFile=assert(io.open(PACK_DIR..'/'..ids[index]..'.mss','rb'))
         assert(emu.loadSavestate(stateFile:read('*a')));stateFile:close()
         dropProbe=true;dropLives=r(0x700)
+        sawFallMode=false;fallFullFrames=0;fallPoseValid=true
     end
     if pending then pending=false;nextState()end
 end,emu.callbackType.exec,0xC07B)

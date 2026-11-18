@@ -14,6 +14,7 @@ local lastPtr,stable=0,0
 local pending,base,wantLoad=false,nil,false
 local startPtr,captured=nil,false
 local slot=nil
+local talkFrame,splitMatches,scrolledReads,missingSplits=false,false,0,0
 local cases={{room=0x00,kind=0x22,talk=0x98,name='Rauru entrance ($22)'},
     {room=0x09,kind=0x21,talk=0x80,name='room $09 ($21)'}}
 local ci=1
@@ -31,6 +32,20 @@ local function findSign()
     for x=0,5 do if r(0xB6+x)==1 and r(0xA1+x)==cases[ci].kind then return x end end
 end
 local function talking()return r(0x74C)~=0 end
+-- Sample dialogue state at VBlank, before the engine can open/close the box.
+-- Check the actual scanline scroll write, with a nonzero camera X so disabling
+-- the split cannot accidentally pass on a room aligned to the nametable edge.
+emu.addMemoryCallback(function()
+    talkFrame=phase==3 and talking() and r(0x726)==0 and r(0xFD)~=0
+    splitMatches=false
+end,emu.callbackType.exec,0xC07B)
+emu.addMemoryCallback(function(_,value)
+    if not talkFrame then return end
+    local state=emu.getState()
+    if state['ppu.scanline']==31 and value==r(0xFD) then
+        splitMatches=(r(0x64E0)==(r(0x746)&1))
+    end
+end,emu.callbackType.write,0x2005)
 -- phase 1: walk to the sign, read it (intact)
 -- phase 2: back off, breathe at the board until the mark is set
 -- phase 3: read it twice more (rotation)
@@ -100,6 +115,10 @@ emu.addEventCallback(function()
         return
     end
     if done then return end
+    if talkFrame then
+        scrolledReads=scrolledReads+1
+        if not splitMatches then missingSplits=missingSplits+1 end
+    end
     age=age+1
     for x=0,5 do if r(0xA1+x)<0x21 then w(0xB6+x,0) end end -- no villagers
     if phase==1 then
@@ -144,6 +163,10 @@ emu.addEventCallback(function()
                 check(ok[3] and signText(ok[3]) and ok[3]~=ok[2],cases[ci].name..': '..'third read shows another line (mark survives dialogue)')
                 local expect=(startMark-1+3)%6+1
                 check(r(0x4A0+slot)==expect,'rotation advanced three lines from '..startMark..' to '..expect..' ('..r(0x4A0+slot)..')')
+                check(scrolledReads>0 and missingSplits==0,string.format(
+                    '%s: dialogue keeps the camera scroll at the HUD split (%d/%d frames)',
+                    cases[ci].name,scrolledReads-missingSplits,scrolledReads))
+                scrolledReads,missingSplits=0,0
                 f:write("frame "..frame.." -> phase 4\n");phase=4;age=0
             end
         end

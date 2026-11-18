@@ -54,8 +54,9 @@ BarbaProjectiles:
     sta BREATH_BURST_STATE
 @start:
     lda $0400
+    ora $13
     beq :+
-    jsr BarbaFireSpell
+    jsr BarbaFireSpellAllowed
 :
     lda BREATH_BURST_STATE
     cmp #$01
@@ -84,6 +85,9 @@ BarbaProjectiles:
     beq @no_volley
     jsr BarbaAdvanceVolley
 @no_volley:
+    lda $8D
+    ora $8E
+    beq @extra
     lda $0777
     cmp #$04
     bcs @native
@@ -91,30 +95,6 @@ BarbaProjectiles:
     jsr $9888
 @native:
     jsr $9878
-    lda VOLLEY_SLOT
-    ora VOLLEY_SLOT+1
-    beq @extra
-    txa
-    pha
-    ldx #$01
-@draw:
-    lda VOLLEY_SLOT,x
-    beq @next
-    lda $8D,x
-    beq @next
-    bmi @next
-    ldy $9D,x
-    lda #$84
-    sta $0201,y
-    lda $0202,y
-    and #$C0
-    ora #$01
-    sta $0202,y
-@next:
-    dex
-    bpl @draw
-    pla
-    tax
 @extra:
     jsr BarbaExtraUpdate
     lda VOLLEY_SLOT
@@ -279,9 +259,13 @@ BarbaStepSlotY:
 ; Subsequent shots continue after the animation ends, without locking input.
 BarbaFireSpell:
     jsr BarbaBurstAllowed
-    bcc @done
+    bcs BarbaFireSpellAllowed
+    rts
+BarbaFireSpellAllowed:
     lda BREATH_BURST_STATE
     bne @done
+    lda $13
+    bne @wyrm
     lda $0400
     sec
     sbc #$01
@@ -290,11 +274,25 @@ BarbaFireSpell:
     lda $050A
     cmp #$05
     bne @done
+    beq @fire
+@wyrm:
+    lda $F5
+    and #$40
+    beq @done
+    lda $5F
+    beq :+
+    cmp #$03
+    bcs :+
+    sta $9F
+:
+@fire:
     ; Consume this attack's gate even if its mouth or pool is unavailable.
     lda #$02
     sta BREATH_BURST_STATE
     lda #$00
     sta BREATH_UP
+    lda $13
+    bne @aimed
     lda $0479
     beq @aimed
     lda $0796
@@ -342,9 +340,30 @@ BarbaBurstAllowed:
     lda $074C
     ora $0524
     ora $0726
-    ora $13
     ora $DE
     bne @no
+    lda $13
+    beq @ok
+    lda $0707
+    cmp #$05
+    bne @no
+    lda $B6
+    cmp #$01
+    bne @no
+    lda $A1
+    cmp #$23
+    bne @no
+    lda $63
+    cmp #$03
+    bne @no
+    lda $0505
+    bne @no
+    lda $5F
+    beq @ok
+    cmp #$03
+    bcs @ok
+    sta $9F
+@ok:
     sec
     rts
 @no:
@@ -425,6 +444,8 @@ BarbaPlaceNewFlameCached:
     lda BREATH_UP
     bne @up_life
     lda #VOLLEY_LIFE
+    ldy $13
+    bne :+
     ldy $17
     bne :+
     ldy $0479

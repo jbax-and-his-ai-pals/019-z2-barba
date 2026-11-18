@@ -11,7 +11,7 @@ ROOT=Path(__file__).resolve().parents[1]
 SCENES=[
     ('castle','Starting castle','Walk, turn, duck, jump and attack with the normal starting stats.'),
     ('combat','Palace 1 combat corridor','Fight normal enemies with the five-shot diagonal volley at damaged health.'),
-    ('spells','All spells and techniques','Safe castle with all eight spells, up/down thrust, full meters and level 4 attack. Inferno is selected; Shift casts it. Reload F3 to refill.'),
+    ('spells','All spells and techniques','Safe castle with all eight spells, up/down thrust, full meters and level 4 attack. Press Space to cast Inferno. Reload F3 to refill.'),
     ('lava-ledge','Palace 6 lava ledge','Walk right off the ledge and into the lava; stop, jump and return.'),
     ('lava-surface','Standing on palace lava','Already on lava. Test moving, jumping and standing still.'),
     ('barba','Palace 6 boss encounter','Test the playable dragon against Lava Link in Palace 6.'),

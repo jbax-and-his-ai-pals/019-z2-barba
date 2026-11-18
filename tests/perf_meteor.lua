@@ -30,7 +30,7 @@ emu.addMemoryCallback(function()
 end,emu.callbackType.exec,0xC1B5)
 local L=LABELS or {}
 emu.addMemoryCallback(function()
-    local st=emu.getState();if st['mapper.prgReg']~=0 then return end
+    local st=emu.getState();if (st['mapper.prgReg'] or ((st['mapper.registers6'] or -1)//2))~=0 then return end
     local x=st['cpu.x'];if x<=1 and (r(0x5FC+x)&0xC0)==0xC0 then waves=waves+1 end
 end,emu.callbackType.exec,L.BarbaVolleyPlaced)
 -- Final RTS of each routine is the byte before the next exported label.

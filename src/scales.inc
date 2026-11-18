@@ -5,10 +5,7 @@
 ; ScalesTick turns the outline navy and the orange body sky blue.
 ; (Producer picks, 2026-11-16: navy/sky/white over gold, blue-on-orange, red outline, all-blue.)
 ;
-; Bank 0 has no room, so the cast/hit effects run once per frame from bank 3's
-; pad: BarbaShouts6 (bank 6, runs from BarbaUpdate every frame) calls
-; ScalesHop, which maps bank 3 and RTSes into ScalesTick; ScalesTick maps bank 6
-; back and RTSes to BarbaShouts6. Both bank swaps go through fixed $FFCC.
+; Runs once per frame from BarbaShouts6 in bank 6:
 ;   - cast (first frame $070F is nonzero): dragon roar + 32-frame decor flash.
 ;   - blocked hit ($050C injured timer rises while shielded): native shield
 ;     clang ($EC bit 1) + 8-frame sprite palette flash (only if no flash is live).
@@ -23,15 +20,6 @@ SCALES_BODY_ON = $21
 SCALES_BODY_OFF = $27 ; Barba's normal orange (build.py flash-restore table $AA00)
 
 .segment "BANK6"
-ScalesHop:
-    lda #>(ScalesTick-1)
-    pha
-    lda #<(ScalesTick-1)
-    pha
-    lda #$03
-    jmp $FFCC
-
-.segment "BANK3_SIGN"
 ScalesTick:
     lda $070F
     bne @on
@@ -84,5 +72,5 @@ ScalesTick:
     lda #$08            ; short Barba palette flash
     sta $074B
 @back:
-    lda #$06
-    jmp $FFCC
+    rts
+.segment "BANK0"

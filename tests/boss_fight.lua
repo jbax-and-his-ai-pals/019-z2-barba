@@ -17,10 +17,24 @@ function runBossFight(cfg)
         if not ok then errors=errors+1 end
     end
     local frame=0
-    local fight={damage={},seen={},hits=0,fireHits=0,reflectHits=0,stabSeen=false}
+    local fight={damage={},seen={},hits=0,fireHits=0,reflectHits=0,stabSeen=false,
+        sawBossShadow=false,bossShadowTall=true}
     local target,defeatedAt,keyAt=nil,nil,nil
     local fcAtDefeat=nil
     local lastHp={}
+    emu.addMemoryCallback(function()
+        if frame>1100 and (r(0xC9)&0xF0)==0 and r(0x0754)==0 then
+            local py=r(0x29)
+            local p=r(0x80)
+            if py>=0x30 and py<0xE0 and (p~=6 and p~=7 or r(0x0479)~=0) then
+                fight.sawBossShadow=true
+                if r(0x0270)~=(py-0x10) or r(0x0254)~=py or r(0x0260)~=(py+0x10)
+                    or (r(0x0256)&3)~=2 or (r(0x0272)&3)~=2 then
+                    fight.bossShadowTall=false
+                end
+            end
+        end
+    end,emu.callbackType.exec,0xDD1E)
     -- Observe the native HP store directly so lethal hits count even when HP underflows.
     emu.addMemoryCallback(function()
         local state=emu.getState()
@@ -135,6 +149,8 @@ function runBossFight(cfg)
             end
             check(defeatedAt~=nil,'boss defeated')
             check(fight.running==true,'game keeps running after the kill (no NMI hang)')
+            check(fight.sawBossShadow and fight.bossShadowTall,
+                'boss-defeat shadow renders 48px tall with two torso chunks and black palette 2')
             check(keyAt~=nil,'boss key collected; scroll lock released ($0728 = 0)')
             check(r(0x3B)>=cfg.exitPage,'walked through the locked door past the boss')
             report:write('RESULT '..(errors==0 and 'PASS' or 'FAIL')..string.char(10))

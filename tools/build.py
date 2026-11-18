@@ -50,7 +50,7 @@ class Overlay:
         self.put(prg_offset(bank, address), data, expected, name)
 
 
-def assemble(output: Path, sampled_roar: bool = False) -> dict[str, int]:
+def assemble(output: Path, sampled_roar: bool = False, waldo_portal: bool = False) -> dict[str, int]:
     def find(name: str) -> str:
         local = ROOT / f'.tools/cc65/bin/{name}.exe'
         result = str(local) if local.exists() else shutil.which(name)
@@ -58,6 +58,8 @@ def assemble(output: Path, sampled_roar: bool = False) -> dict[str, int]:
             raise ValueError(f'{name} is missing. Install cc65; see docs/BUILD.md.')
         return result
     defines = ['-D', 'SAMPLED_ROAR=1'] if sampled_roar else []
+    if waldo_portal:
+        defines += ['-D', 'WALDO_PORTAL=1']
     subprocess.run([find('ca65'), str(ROOT/'src/barba.asm'), '-I', str(ROOT/'src'), '-I', str(output.resolve()),
                     *defines, '-g', '-o', 'barba.o'], cwd=output, check=True)
     subprocess.run([find('ld65'), '-C', str(ROOT/'src/barba.cfg'), 'barba.o',
@@ -70,7 +72,8 @@ def assemble(output: Path, sampled_roar: bool = False) -> dict[str, int]:
     return labels
 
 
-def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'roms/roar.wav') -> dict:
+def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'roms/roar.wav',
+          waldo_portal: bool = False) -> dict:
     source = load_source(source_path)
     if output.resolve() == source_path.parent.resolve():
         raise ValueError('Output must not be the source ROM directory')
@@ -84,7 +87,7 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
     # Asset compilation emits the tile-index include consumed by ca65. Complete
     # it before assembling so the ROM and renderer always share one layout.
     mapping, graphics, ow, _ = compile_assets(ROOT, source_path)
-    labels = assemble(output, bool(title_roar_wav))
+    labels = assemble(output, bool(title_roar_wav), waldo_portal)
     overlay = Overlay(source)
     # FarCall0 identifies the ACTUAL mapped bank without touching the native
     # mapper path (and without mistaking the area-bank variable for a shadow).
@@ -93,7 +96,7 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
         offset = prg_offset(bank, 0x8506 if bank < 7 else 0xC506)
         if source[offset] != expected:
             raise ValueError(f'FarCall0 bank fingerprint changed: {bank}')
-    for filename, bank, address in [('code', 0, 0xAA40), ('bank0-ow', 0, 0xA89E), ('bank0-tail', 0, 0xBFE0),('lava', 7, 0xD39A), ('terrain', 7, 0xFF4C), ('town', 3, 0xB803), ('gateway', 7, 0xFEAA), ('bank6', 6, 0xBA00), ('bank5', 5, 0xBDE0), ('bank1', 1, 0x9EB9), ('bank3-sign', 3, 0x9D0A)]:
+    for filename, bank, address in [('code', 0, 0xAA40), ('bank0-ow', 0, 0xA89E), ('bank0-tail', 0, 0xBFE0),('lava', 7, 0xD39A), ('terrain', 7, 0xFF4C), ('town', 3, 0xB803), ('gateway', 7, 0xFEAA), ('bank6', 6, 0xAC09), ('bank5', 5, 0xBDE0), ('bank1', 1, 0x9EB9), ('bank3-sign', 3, 0x9D0A)]:
         data = (output/f'barba-{filename}.bin').read_bytes()
         overlay.prg(bank, address, data, b'\xFF'*len(data), f'New {filename} routines')
     # Dead vanilla bank-0 code reused for METEOR. Guard the full original ranges:
@@ -118,6 +121,9 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
     death_draw = labels['BarbaDeathDisplay'].to_bytes(2, 'little')
     overlay.prg(7, 0xC9EE, bytes.fromhex('a9 03 20 cc ff 20') + death_draw + b'\xea\xea',
                 bytes.fromhex('20 c5 ff a9 0a 85 80 20 f0 eb'), 'Fatal-hit transition renderer')
+    overlay.prg(0, 0x8FC9, b'\xa9\x09', b'\xa9\x0a', 'Fall-in-hole downstab pose ($09)')
+    hook(0, 0x8FE3, 'BarbaFallDraw', 0x20, '20 02 ec')
+    hook(0, 0x8FEE, 'BarbaFallDraw', 0x20, '20 02 ec')
     hook(7, 0xE0A4, 'LavaSurface', 0x4C, 'a9 01 85')
     hook(7, 0xD4FE, 'BarbaPreEnemy', 0x20, '20 25 99')
     hook(7, 0xD535, 'BarbaBlocks', 0x20, '20 dd e1')
@@ -148,41 +154,125 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
         'Enemy projectile contact parity and empty-slot check')
     overlay.prg(7, 0xD5D1, bytes.fromhex('20 c1 e3'), bytes.fromhex('20 6d d5'),
                 'Check projectile type before calculating the offscreen mask')
+    # Empty enemy slots ($B6,X == 0) never read the offscreen-column mask ($C9/$CD);
+    # branch directly to $D603 before $F27D, and direct-jump active/dying/score
+    # states ($B6,X == 1,2,3) after $F27D (which preserves X). Frees $D5F6-$D5F8.
+    overlay.prg(7, 0xD5DA, bytes.fromhex(
+        'b5 b6 f0 25'              # LDA $B6,X / BEQ $D603
+        ' a0 01 e8 20 7d f2 ca'    # LDY #$01 / INX / JSR $F27D / DEX
+        ' b5 b6 c9 02 90 05 f0 06' # LDA $B6,X / CMP #$02 / BCC $D5F0 / BEQ $D5F3
+        ' 4c 6c dd'                # JMP $DD6C ($B6,X == 3)
+        ' 4c ca d6'                # JMP $D6CA ($B6,X == 1)
+        ' 4c ae dc'                # JMP $DCAE ($B6,X == 2)
+        ' ea ea ea'                # 3 spare bytes ($D5F6-$D5F8)
+    ), bytes.fromhex(
+        'a0 01 e8 20 7d f2 a6 10 b5 b6 0a a8 b9 f1 d5 85 0e b9 f2 d5 4c d6 d6'
+        ' 03 d6 ca d6 ae dc 6c dd'
+    ), 'Skip offscreen mask for empty enemy slots and direct-dispatch active enemies')
     hook(7, 0xE48B, 'EnemyFireGateway', 0x4C, 'b5 b6 c9 01', 1)
     hook(7, 0xE617, 'ShieldFireGateway', 0x4C, 'a5 c8 0a')
     hook(5, 0x9A7F, 'DarkBarbaDraw', 0x20, '20 02 ec')
+    overlay.prg(5, 0x9887, b'\xa9\x03', b'\xa9\x06', 'Dark Barba full-height pre-fight landing pose')
+    overlay.prg(5, 0x99D0, b'\xa9\x0c', b'\xa9\x06', 'Dark Barba full-height ascending jump pose')
+    overlay.prg(7, 0xDD18, b'\x20' + labels['FarCall0'].to_bytes(2, 'little')
+                + labels['BarbaBossShadow'].to_bytes(2, 'little') + b'\xea',
+                bytes.fromhex('8e 53 07 20 02 ec'), 'Boss-defeat 48px Barba shadow')
     hook(5, 0x9BB1, 'DarkBarbaTriforcePose', 0x4C, 'a9 0b 85 80 e6 af 4c 11 ef', 6)
     if title_roar_wav:
         hook(5, 0x9BAC, 'DarkBarbaVictory', 0x4C, 'ac 12 05')
-    lag_dest = labels['LagNmiBank6']
+    lag_dest = 0xFFEA
     overlay.prg(7, 0xC065, bytes.fromhex('ad 06 85 48') + bytes([0x4C, lag_dest & 255, lag_dest >> 8]),
                 bytes.fromhex('a9 06 20 cc ff 20 00'), 'Lag-frame NMI bank preservation')
-    # Overrun status-bar fix (src/late_split.inc). No new fixed-bank space: the
-    # NMI prologue's dead LDA $0727/BEQ +0/LDY #0 and a shorter equivalent of the
-    # NMI's random-number update pay for it. Prologue: same $FE result and Y,
-    # with a 7-byte hole behind an always-taken BNE (A has $18 set) that holds
-    # the bank-3 trampoline.
-    late = labels['LateSplit']
-    overlay.prg(7, 0xC091, bytes.fromhex('a5 fe ac 26 07 d0 0e 09 18 0d 68 07 d0 09 20 cc ff 4c')
-                + bytes([late & 255, late >> 8]) + bytes.fromhex('ea 29 e0'),
+    # MMC3 (Mapper 4) port: preserve $C000-$FFFF fixed (PRG mode 0), map $8000/$A000
+    # in 8KB pairs, map CHR in 1KB/2KB units (BG at $0000 via R0/R1, Sprites at $1000
+    # via R2-R5 so MMC3 A12 clocks on every scanline), and keep $8000 bank-select
+    # NMI-safe via $64D5 shadow + LagNmiBank6 save/restore.
+    overlay.put(5, b'\x20', b'\x10', 'Expand CHR-ROM to 256 KB (32 x 8KB banks)')
+    overlay.put(6, b'\x42', b'\x12', 'iNES mapper 4 (MMC3)')
+    lag_in_bank6 = labels['LagNmiInBank6']
+    overlay.prg(7, 0xFF81, bytes.fromhex(
+        'a9 80 8d 01 a0 8d 00 e0 a9 0f 20 9d ff 20 b1 ff a9 07 20 cc ff 4c 00 c0'
+        '68 aa 68 40'
+        '8d 00 a0 a9 00 60'
+        'ca 30 0a e0 01 d0 02 09 07 e9 01 10 09 60'
+        '29 fe 0a 0a 09 03 a2 05 8e d5 64 8e 00 80 8d 01 80 4c a3 ff'
+    ), bytes.fromhex(
+        '8e 00 80 8e 00 a0 8e 00 c0 8e 00 e0 a9 0f 20 9d ff 20 b1 ff a9 07 20 cc ff 4c 00 c0'
+        '8d 00 80 4a 8d 00 80 4a 8d 00 80 4a 8d 00 80 4a 8d 00 80 60'
+        '8d 00 a0 4a 8d 00 a0 4a 8d 00 a0 4a 8d 00 a0 4a 8d 00 a0 60'
+    ), 'MMC3 reset, IRQ exit, mirroring (ConfigureMMC1), and swapped CHR (SwapCHR)')
+    overlay.prg(7, 0xFFCC, bytes.fromhex(
+        '0a 48 a9 06 8d d5 64 8d 00 80 68 8d 01 80 09 01 48 a9 07 8d d5 64 8d 00 80 68 8d 01 80 60'
+        '68 a8 ad d5 64 48 98 48 a9 06 20 cc ff 4c') + lag_in_bank6.to_bytes(2, 'little'),
+        bytes.fromhex(
+        '8d 00 e0 4a 8d 00 e0 4a 8d 00 e0 4a 8d 00 e0 4a 8d 00 e0 60'
+        '4c 45 47 45 4e 44 20 4f 46 20 5a 45 4c 44 41 32'
+        '98 f2 dd db 33 04 01 0f 01 00'
+    ), 'MMC3 PRG swap (SwapPRG) and LagNmiBank6 trampoline')
+    overlay.prg(7, 0xFFFE, bytes.fromhex('ae d4'), bytes.fromhex('f0 ff'), 'MMC3 scanline IRQ vector ($D4AE)')
+    # Retarget the 5 live bank-0/bank-5 calls to the bank-local $BF9D/$BFB1 MMC1
+    # copies so they invoke the fixed-bank MMC3 routines at $FF9D/$FFB1 instead.
+    for bank, addr, label in (
+        (0, 0x814D, 'Bank 0 init ConfigureMMC1 -> $FF9D'),
+        (0, 0x8152, 'Bank 0 init SwapCHR -> $FFB1'),
+        (0, 0xA86D, 'Bank 0 OW SwapCHR -> $FFB1'),
+        (5, 0xA716, 'Bank 5 title ConfigureMMC1 -> $FF9D'),
+        (5, 0xA72A, 'Bank 5 title SwapCHR -> $FFB1'),
+    ):
+        overlay.prg(bank, addr, b'\xff', b'\xbf', label)
+    # BG at $0000 (bit 4 = 0), 8x16 sprites at $1000 via $6500 shadow OAM; free OAM slot 0.
+    overlay.prg(5, 0xA6D2, b'\xa0', b'\xb0', 'Reset PPU_CTRL BG=$0000')
+    overlay.prg(7, 0xC0BE, b'\x65', b'\x02', 'NMI OAM DMA from $6500 shadow')
+    overlay.prg(5, 0xA63D, b'\x65', b'\x02', 'Title NMI OAM DMA from $6500 shadow')
+    overlay.prg(7, 0xD251, b'\x00', b'\x04', 'Free OAM slot 0 (clear all 64 sprites)')
+    title_hook5 = labels['TitleEndHook5']
+    overlay.prg(5, 0xA693, b'\x20' + title_hook5.to_bytes(2, 'little'),
+                bytes.fromhex('ad 02 20'), 'Title NMI end -> OAM shadow + IRQ setup')
+    # NMI prologue: clean without LateSplit trampoline.
+    overlay.prg(7, 0xC091, bytes.fromhex('a0 00 a5 fe 29 e0 ac 26 07 d0 07 a5 fe 09 18 0d 68 07 ea ea ea ea ea'),
                 bytes.fromhex('ad 27 07 f0 00 a0 00 a5 fe 29 e0 ac 26 07 d0 07 a5 fe 09 18 0d 68 07'),
-                'NMI prologue compaction + LateSplit trampoline')
-    # The three early-outs that branch to the NMI tail, which moves $C1A8 -> $C19D
-    # (a byte scan of $C07B-$C1A7 finds exactly these; build check below re-verifies).
+                'NMI prologue compaction (no LateSplit)')
+    # Replace $0725 macro clear + sound call ($C108-$C131) with Bank 6 NmiVblankSetup6,
+    # freeing $C111-$C131 (33 bytes) for IrqHandler2.
+    swap_b6 = labels['SwapToBank6']
+    nmi_setup6 = labels['NmiVblankSetup6']
+    copy_oam6 = labels['CopyOamShadow6']
+    overlay.prg(7, 0xC108,
+                b'\x20' + swap_b6.to_bytes(2, 'little')
+                + b'\x20' + nmi_setup6.to_bytes(2, 'little')
+                + bytes.fromhex('4c 32 c1')
+                + bytes.fromhex('8d 05 20 bd e4 64 8d 01 20 e8 ec d7 64 b0 0f 8e d6 64 bd d8 64 8d 00 c0 8d 01 c0 8d 01 e0 4c 99 ff'),
+                bytes.fromhex(
+                    'ae 25 07 f0 0f c8 e0 01 f0 07 c8 a9 00 e0 02 d0 13 ce 25 07 be 5d c0 a9 00 9d 01 03 a9 ff 9d 02 03 ad 25 07 8d 25 07 20 c1 c1'),
+                'NMI VBlank Bank 6 setup + CLI + IrqHandler2 ($C112)')
+    # The three early-outs that branch to the NMI tail, which moves $C1A8 -> $C19D.
     overlay.prg(7, 0xC156, bytes([0x46]), bytes([0x51]), 'NMI tail branch (dialogue)')
     overlay.prg(7, 0xC163, bytes([0x39]), bytes([0x44]), 'NMI tail branch (talking)')
     overlay.prg(7, 0xC168, bytes([0x34]), bytes([0x3F]), 'NMI tail branch (routine)')
-    # RNG: carry = bit 1 of ($051A xor $051B), as before, without the $00 temp
-    # (watched: nothing reads $00 before its next write). Tail: on a vblank
-    # overrun push the $8506 fingerprint and enter LateSplit with A=3; LateSplit
-    # returns to $C1AB. RTI stays at $C1B5 (tests hook it).
+    # RNG compaction + OAM shadow copy tail ($C19D). RTI stays at $C1B5.
     overlay.prg(7, 0xC182, bytes.fromhex(
-        'e6 12 a2 00 a0 09 ad 1a 05 4d 1b 05 4a 4a 7e 1a 05 e8 88 d0 f9 20 50 d2 20 ca c2'
-        '2c 02 20 10 09 ad 06 85 48 a9 03 4c 9f c0'
-        'a5 ff 09 80 85 ff 8d 00 20 68 40'),
+        'e6 12 a2 00 a0 09 ad 1a 05 4d 1b 05 4a 4a 7e 1a 05 e8 88 d0 f9 20 50 d2 20 ca c2')
+        + b'\x20' + swap_b6.to_bytes(2, 'little')
+        + b'\x20' + copy_oam6.to_bytes(2, 'little')
+        + bytes.fromhex('20 c5 ff ea ea ea ea ea a5 ff 09 80 85 ff 8d 00 20 68 40'),
         bytes.fromhex('ee 12 00 a2 00 a0 09 ad 1a 05 29 02 85 00 ad 1b 05 29 02 45 00 18 f0 01 38 7e 1a 05'
                       'e8 88 d0 f9 20 50 d2 20 ca c2 ad 02 20 a5 ff 09 80 85 ff 8d 00 20 68 40'),
-        'NMI RNG compaction + overrun tail')
+        'NMI RNG compaction + OAM shadow copy tail')
+    # Replace Sprite-0 busy-wait ($D4AB-$D4CD) with IrqHandler ($D4AE-$D4CD).
+    overlay.prg(7, 0xD47A, bytes.fromhex('f0 52'), bytes.fromhex('f0 2f'), 'Retarget $D47A BEQ to $D4CE')
+    overlay.prg(7, 0xD485, bytes.fromhex('f0 47'), bytes.fromhex('f0 24'), 'Retarget $D485 BEQ to $D4CE')
+    overlay.prg(7, 0xD4AB, bytes.fromhex(
+        '4c ce d4'
+        '48 8a 48 8d 00 e0 ae d6 64 a5 ff 29 fc 1d e0 64 85 ff 8d 00 20 2c 02 20 bd dc 64 4c 11 c1 ea ea'),
+        bytes.fromhex(
+            'ad 4c 07 c9 02 b0 1c 2c 02 20 50 fb a5 ff 0d 46 07 85 ff a6 fd a0 10 88 d0 fd 8d 00 20 8e 05 20 8c 05 20'),
+        'Replace Sprite-0 wait with MMC3 IrqHandler ($D4AE)')
+    # Eliminate the remaining side-view Sprite-0 busy-waits in banks 0 and 3 (menus/towns/castle);
+    # the scanline-31 IRQ already performs the HUD split cleanly.
+    overlay.prg(0, 0x9D54, bytes.fromhex('4c 75 9d'), bytes.fromhex('a0 50 88'), 'Skip Level-Up/Pause Sprite-0 wait ($9D54)')
+    overlay.prg(0, 0x9DB0, bytes.fromhex('4c cc 9d'), bytes.fromhex('2c 02 20'), 'Skip Pause Sprite-0 wait ($9DB0)')
+    overlay.prg(0, 0xA7B1, bytes.fromhex('4c cd a7'), bytes.fromhex('2c 02 20'), 'Skip Castle Sprite-0 wait ($A7B1)')
+    overlay.prg(3, 0xB08F, bytes.fromhex('4c ab b0'), bytes.fromhex('2c 02 20'), 'Skip Town Sprite-0 wait ($B08F)')
     # Offscreen-column mask ($F27D, called for every drawn object): the native
     # 4-pass loop costs ~300 cycles/call (a third of the enemy pass in busy rooms).
     # Same $C8,y/$CC,y/A/Y/flags from one 16-bit subtraction (~60 cycles): with
@@ -1008,7 +1098,47 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
     overlay.prg(5, 0x9176, b'\x14', b'\x12', 'Ending credits entry count (20)')
     overlay.prg(5, 0x9197, b'\x12', b'\x10', 'Ending credits clear STAFF header index')
 
-    target = bytes(overlay.target)
+    # Append 128 KB extra CHR-ROM (1 KB banks 128..255) containing 3 horizontally rippled
+    # R1 ($0800-$0FFF) variants for each of the 13 side-view CHR pairs (0..24). Only lava
+    # surface tiles $98/$99 are shifted per-scanline so bricks/walls stay stationary.
+    ext_chr = bytearray(131072)
+    def _ror8(val: int, n: int) -> int:
+        n &= 7
+        return ((val >> n) | (val << (8 - n))) & 0xFF
+    for pair_idx in range(13):
+        base_off = CHR_OFFSET + (pair_idx * 2 + 1) * 4096 + 2048
+        base_r1 = overlay.target[base_off:base_off + 2048]
+        for v in (1, 2, 3):
+            variant = bytearray(base_r1)
+            for t_idx in (0x18, 0x19):
+                t_off = t_idx * 16
+                for row in range(8):
+                    phase = (v + (row >> 1) + (2 if t_idx == 0x19 else 0)) & 3
+                    shift = (0, 1, 2, 1)[phase]
+                    variant[t_off + row] = _ror8(variant[t_off + row], shift)
+                    variant[t_off + 8 + row] = _ror8(variant[t_off + 8 + row], shift)
+            ext_off = (pair_idx * 3 + (v - 1)) * 2048
+            ext_chr[ext_off:ext_off + 2048] = variant
+
+    # R0 banks 206..213 are the four nonzero wind phases used by
+    # UpdateGrassChr6. West Hyrule's sprig tip ($4E) fits within one tile.
+    # Taper the bend toward the bottom two rows so it meets the fixed base.
+    west_r0_off = CHR_OFFSET + 3 * 4096
+    west_r0 = overlay.target[west_r0_off:west_r0_off + 2048]
+    for phase, shift in enumerate((1, 2, -1, -2)):
+        variant = bytearray(west_r0)
+        middle_shift = 1 if shift > 0 else -1
+        for plane in (0, 8):
+            for row, bend in enumerate((shift, shift, middle_shift, middle_shift), start=2):
+                offset = 0x4E * 16 + plane + row
+                pixels = variant[offset]
+                shifted = pixels >> bend if bend > 0 else pixels << -bend
+                if shifted.bit_count() != pixels.bit_count() or shifted > 0xFF:
+                    raise ValueError('Sprig wind phase clips the tip tile')
+                variant[offset] = shifted
+        ext_off = (206 - 128) * 1024 + phase * 2048
+        ext_chr[ext_off:ext_off + 2048] = variant
+    target = bytes(overlay.target) + bytes(ext_chr)
     for bank, expected in enumerate(fingerprints):
         offset = prg_offset(bank, 0x8506 if bank < 7 else 0xC506)
         if target[offset] != expected:
@@ -1033,7 +1163,8 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
     anchor = prg_offset(7, 0xFF49)
     if source[anchor:anchor+3] != bytes.fromhex('4c c5 ff') or target[anchor:anchor+3] != source[anchor:anchor+3]:
         raise ValueError('Terrain allocation overlaps the native room-loader return')
-    if target[:16] != source[:16] or len(target) != len(source):
+    if (target[:5] != source[:5] or target[5] != 0x20 or target[6] != 0x42 or target[7:16] != source[7:16]
+            or len(target) != len(source) + 131072):
         raise ValueError('Mapper/header/size invariant failed')
     # 8x16 byte T draws tiles T&$FE and T|1: town villager pairs must stay vanilla.
     for bank, pairs in TOWN_SPRITE_PAIRS.items():

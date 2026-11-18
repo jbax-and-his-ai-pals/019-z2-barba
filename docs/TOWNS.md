@@ -248,14 +248,18 @@ time, producer 2026-11-16) and each later read moves to the next (producer-picke
   `TownOriginalDialog` jumps to `SignDialog`; `$04A0,x` 1..6 picks the
   line and advances (6 wraps to 1), shown through `TownSetNpcDialog`. Text and
   code live in vanilla bank-3 pad `bank3_UNUSED_9D0A` (`BANK3_SIGN`, `$9D0A-$9FFF`).
+- **Scroll:** The MMC3 HUD split restores the room's horizontal scroll on
+  scanline 31 while town dialogue is open. This replaces the old sprite-0
+  scroll write and keeps the sign, background, and dialogue box aligned.
 - **Limits:** the post (`$E4`) alone does not count. A scorched board that
   scrolls far enough to be redrawn looks intact but keeps its burned text until
   the room reloads. The census loader returned the same data for `$0707 = 2`, so
   East Hyrule rooms are assumed to follow the same one-reader rule but were not
   separately verified.
 - **Test:** `tests/sign_burn.lua`, two cases (Rauru entrance `$22`, room `$09`
-  `$21`): native text before, mark on burn (start line 1-6), three reads rotate from it, native
-  text after a room reload.
+  `$21`): native text before, mark on burn (start line 1-6), three reads rotate
+  from it, the PPU receives the room scroll throughout scrolled dialogue, and
+  native text returns after a room reload.
 
 ### North Palace sleeping princess scorch & Barba shout
 

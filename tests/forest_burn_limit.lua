@@ -46,13 +46,14 @@ local function input()
             if rel>=10 and rel<30 then b.right=true
             elseif rel>=35 and rel<40 then b.left=true end
         elseif phase=='find_forest' then
+            w(0x86,0); w(0x87,0); w(0x88,0); w(0x89,0)
             if r(0x0563)==6 and r(0x7D)==0 then
                 fakeRow(0x7FE8)
                 actionFrame=frame
                 b.b=true
                 phase='burn_allowed'
             else
-                if (frame%80)<50 then b.right=true else b.up=true end
+                b.right=true
             end
         elseif phase=='step' then
             if frame>=actionFrame and frame<actionFrame+20 then b.right=true end
@@ -73,9 +74,9 @@ local function tick()
     frame=frame+1
     if frame>1250 and worldAt==nil and r(0x0736)==5 then worldAt=frame end
     if phase=='burn_allowed' and frame==actionFrame+20 then
-        check(r(0x7C8B)==0x06 and r(0x7C8C)==0x04 and r(0x7C8D)==0x16,
-            string.format('below limit: forest split into burnt tile (7C8B=%02X %02X %02X)',
-                r(0x7C8B),r(0x7C8C),r(0x7C8D)))
+        check(r(0x7CEB)==0x06 and r(0x7CEC)==0x04 and r(0x7CED)==0x46,
+            string.format('below limit: forest split into burnt tile (7CEB=%02X %02X %02X)',
+                r(0x7CEB),r(0x7CEC),r(0x7CED)))
         local p=r(0x6094)+256*r(0x6095)
         check(p==0x7FEA,string.format('below limit: row $4A pointer shifted +2 to $%04X',p))
         phase='step'

@@ -29,12 +29,12 @@ local function input()
     emu.setInput(b,0)
 end
 
--- Count shield clangs ($EC bit 1) requested from the bank-3 pad (ScalesTick);
+-- Count shield clangs ($EC bit 1) requested from ScalesTick (bank 6);
 -- the native cast sequence writes its own $EC=$02 from $9927.
 emu.addMemoryCallback(function(addr,value)
     if castFrame and frame>castFrame and (value&0x02)~=0 and (r(0xEC)&0x02)==0 and not done then
         local pc=emu.getState()['cpu.pc'] or 0
-        if pc<0x9D0A or pc>=0xA000 then return end
+        if not LABELS.ScalesTick or pc<LABELS.ScalesTick or pc>=LABELS.ScalesTick+0x60 then return end
         clangs=clangs+1
     end
 end,emu.callbackType.write,0x00EC)

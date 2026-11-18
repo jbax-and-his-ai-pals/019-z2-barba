@@ -22,12 +22,38 @@ SHOUT_OAM = $DC
 SHOUT_WORD_TIME = $64
 
 BarbaShouts:
+    lda $070F
+    ora $05EC           ; SCALES_SEEN
+    bne @go6
+    lda SHOUT_READY
+    beq @go6
+    lda $0707
+    cmp SHOUT_WORLD
+    bne @go6
+    cmp #$00
+    bne @not_castle
+    lda $0706
+    ora $0561
+    beq @go6
+    rts
+@not_castle:
+    cmp #$03
+    bcc @go6
+    cmp #$05
+    bne @skip6
+    lda $A1
+    cmp #$23
+    bne @skip6
+@go6:
     lda #>(BarbaShouts6-1)
     pha
     lda #<(BarbaShouts6-1)
     pha
     jmp SwapToBank6
+@skip6:
+    rts
 
+.segment "BANK6"
 ; Trigger Barba's "OOPS..." shout in North Palace when Zelda is scorched.
 CastleZeldaShout:
     lda SHOUT_READY
@@ -41,13 +67,13 @@ CastleZeldaShout:
 @done:
     rts
 
-.segment "BANK6"
 BarbaShouts6:
     txa
     pha
     tya
     pha
-    jsr ScalesHop       ; SCALES cast/hit feedback (bank 3, src/scales.inc)
+    jsr ScalesTick      ; SCALES cast/hit feedback (bank 6, src/scales.inc)
+    jsr DarkLinkFireCheck
     lda SHOUT_READY
     cmp #$01
     beq @scene

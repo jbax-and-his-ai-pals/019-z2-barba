@@ -5,6 +5,7 @@ import json
 import shutil
 from pathlib import Path
 from create_test_pack import ROOT, SETS, create
+from prepare_player import apply_play_defaults
 
 
 def prepare(set_name: str='core', rom_path: Path | None=None) -> dict:
@@ -23,15 +24,7 @@ def prepare(set_name: str='core', rom_path: Path | None=None) -> dict:
     settings=player.parent/'settings.json'
     # Never read or rewrite the live normal-play profile. Mesen may be saving it.
     config=json.loads(settings.read_text(encoding='utf-8-sig')) if settings.exists() else {}
-    nes=config.setdefault('Nes',{})
-    nes['AutoConfigureInput']=False
-    port=nes.setdefault('Port1',{})
-    port['Type']='NesController'
-    if not port.get('Mapping1',{}).get('A'):
-        port['Mapping1']={'A':67,'B':69,'Start':6,'Select':116,
-                          'Up':24,'Down':26,'Left':23,'Right':25}
-        port['Mapping2']={'A':0x100E,'B':0x100D,'Start':0x1005,'Select':0x1006,
-                          'Up':0x1001,'Down':0x1002,'Left':0x1003,'Right':0x1004}
+    apply_play_defaults(config)
     preferences=config.setdefault('Preferences',{})
     preferences.update({'SingleInstance':False,'AutoLoadPatches':False,
                         'OverrideSaveDataFolder':True,'SaveDataFolder':str(folder/'play-saves'),

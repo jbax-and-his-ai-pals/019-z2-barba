@@ -21,7 +21,7 @@ if ($TestPack) {
 }
 if ($PrepareOnly) { Write-Output 'Prepared without opening or changing a running emulator.'; return }
 Start-Process -FilePath $taskMesen -ArgumentList ('"' + $taskRom + '"') -WorkingDirectory (Split-Path -Parent $taskMesen) -WindowStyle Normal
-Write-Output 'Opened Barba Edition in Mesen. Arrows: move; X: jump; Z: flame; Enter: Start; Left Shift: Select.'
+Write-Output 'Opened Barba Edition in Mesen at 4x. Arrows move, X jumps, Z fires, Enter is Start, and Space is Select.'
 if ($TestPack) {
     Write-Output "Checkpoint set: $CheckpointSet"
     foreach ($state in $taskPack.states) { Write-Output ("F{0}: {1} - {2}" -f $state.slot,$state.name,$state.instructions) }

@@ -1,7 +1,7 @@
 # Barba Edition: agent quick start
 
 Zelda II (NES, MMC1) ROM hack: the Palace 6 dragon **Barba is the player**. Read
-this file first. Then read only the one doc for your task (table below). Don't
+this file first, then read only the one doc for your task (table at bottom). Don't
 read whole docs or the disassembly up front; grep them.
 
 ## Commands (repo root; PowerShell or Git Bash)
@@ -16,6 +16,7 @@ python tools/create_test_pack.py --set edges   # F1 last-life danger, F2 GAME OV
 python tools/create_test_pack.py --set gem     # F1 beside Palace 6 gem; walk right for victory roar/look-up
 python tools/create_test_pack.py --set items   # F1 beside Palace 1 Candle; walk left and hold a direction through the celebration
 python tools/create_test_pack.py --set busy    # F1-F3 Palace 5 Magos; F4-F10 busy palace and town rooms
+python tools/create_test_pack.py --set movement # F5 bridge water/clouds, F6 cave liquid, F10 grass scenery
 python tools/emulator_test.py tests/perf_volley.lua   # battle lag/CPU/sprites-per-line report
 python tools/busy_rooms.py [--sets busy]        # lag + status-bar jitter over test-pack rooms (needs the pack)
 ```
@@ -25,26 +26,25 @@ python tools/busy_rooms.py [--sets busy]        # lag + status-bar jitter over t
 - The producer plays via `play/Play Barba.cmd` and uses checkpoints via `play/Test Barba.cmd`.
   Hand them a playable build (`play/barba.nes` + `build/barba.nes`) plus a regenerated test pack.
 - Far-call regression: `python tools/emulator_test.py tests/farcall.lua` (all 8 banks, flags/registers, nesting, boundaries).
-- Full suite: boot, gameplay, combat, palace, routines, tall_geometry, projectile_only, burst,
-  extra_fire, left_fire, damage, hud_timing, breath_height, town, town_safety, shouts,
-  shout_follow, doors, dialogue_speed, perf_volley, perf_lava, link_boss, dark_link,
-  shield_enemies, title_roar, overworld_side, farcall, town_fire, town_combo,
-  castle_zelda_burn, sign_burn, upstab, perf_upward, look_up, ending, scales, horsehead, helmethead, rebonack, carock, carock_reflect,
-  gooma, opener_far, lava_link_kill, stomp, geldarm, encounter_hazard, heal_door, spell_door, stab_blocks,
-  swamp_submerge, town_nontown_burn, inferno, overworld_fire, forest_burn_limit, meteor, perf_meteor, death_continue, levelup_pane, wizzrobe, rock_lizalfos, plus `state_pack` via create_test_pack.
-  (`newgame.lua` and `checkpoint_features.lua` are shared helpers, not scenarios. Check each `build/<name>.txt`
+- Darunia F6 encounter exit regression: run `tests/darunia_exit.lua` with the generated world pack's ROM. See `docs/TEST-PACK.md`.
+- Full suite: `boot`, `gameplay`, `combat`, `palace`, `routines`, `tall_geometry`, `projectile_only`, `burst`,
+  `extra_fire`, `left_fire`, `damage`, `hud_timing`, `breath_height`, `town`, `town_safety`, `shouts`,
+  `shout_follow`, `doors`, `dialogue_speed`, `perf_volley`, `perf_lava`, `link_boss`, `dark_link`, `dark_wyrmling`,
+  `shield_enemies`, `title_roar`, `overworld_side`, `scanline_irq`, `ow_clouds`, `farcall`, `town_fire`, `town_combo`,
+  `castle_zelda_burn`, `sign_burn`, `upstab`, `perf_upward`, `look_up`, `ending`, `scales`, `horsehead`, `helmethead`, `rebonack`, `carock`, `carock_reflect`,
+  `gooma`, `opener_far`, `lava_link_kill`, `stomp`, `geldarm`, `encounter_hazard`, `heal_door`, `spell_door`, `stab_blocks`,
+  `swamp_submerge`, `town_nontown_burn`, `inferno`, `overworld_fire`, `forest_burn_limit`, `meteor`, `perf_meteor`, `death_continue`, `levelup_pane`, `wizzrobe`, `rock_lizalfos`, `roar_gameplay`, `roar_controls`, `title_sample`, `game_over_audio`, `item_roar`, plus `state_pack` via `create_test_pack`.
+  (`newgame.lua`, `checkpoint_features.lua`, `boss_fight.lua` are shared helpers, not scenarios. Check each `build/<name>.txt`
   for FAIL lines and a fresh mtime, not just the exit code; some reports use hyphens, e.g. `perf-volley.txt`.)
-  (`boss_fight.lua` is the shared fireball-only boss driver, not a scenario.)
 
 ## Hard rules
 
-- `roms/z2.nes` (exact SHA-256 in docs/BUILD.md) is never modified. ROMs, `build/`, `.tools/`
+- `roms/z2.nes` (exact SHA-256 in `docs/BUILD.md`) is never modified. ROMs, `build/`, `.tools/`,
   and saves are never committed. Never commit original game pixels or code. Art is
   extracted at build time (recipes only, e.g. `tools/boss_art.py`).
 - Every ROM write in `tools/build.py` goes through `overlay.prg/put` with the **expected
   original bytes**. Overlapping writes are rejected. Keep it that way.
-- Edit `tools/build.py` with the Edit tool. A failed Python `write_text` once truncated it.
-  `git checkout` restores it.
+- Edit `tools/build.py` with the Edit tool (a failed Python `write_text` once truncated it; `git checkout` restores it).
 - Lua strings: never emit a literal newline inside `'...'`. Use `\n` or `string.char(10)`.
   A Lua syntax error makes Mesen exit -1 with **no** error file.
 
@@ -60,10 +60,12 @@ python tools/busy_rooms.py [--sets busy]        # lag + status-bar jitter over t
 | `src/tall_player.inc`, `tall_layout.inc` | 24x48 boss-derived player renderer and head geometry |
 | `src/death_display.inc` | fatal-hit silhouette with two full torso chunks |
 | `src/dark_barba.inc` | bank 5 24x48 Dark Barba renderer and Triforce-hold pose |
+| `src/sampled_roar.inc` | sampled roar audio coordinator, item/gem/Dark Barba roar hooks (default; `--native-audio` disables) |
 | `src/town*.inc`, `shouts.inc`, `ash_layout.inc` | fleeing/burning villagers, panic dialogue and shouts |
 | `src/sign.inc` | bank 3 pad: burned-sign mark and rotating burned-sign text |
-| `src/late_split.inc` | bank 3 pad: `LateSplit`, redoes the status-bar/playfield split when NMI work overruns into the next vblank |
-| `src/scales.inc` | SCALES (Shield): bank-6 hop to bank-3 `ScalesTick`; navy outline + sky-blue body, cast roar/decor flash, shielded-hit clang/flash |
+| `src/late_split.inc` | unused (superseded by MMC3 scanline IRQ HUD split) |
+| `src/scanline_irq.inc` | MMC3 scanline IRQ engine: HUD split (line 31), encounter sky parallax, VBlank sprig sway on R0 and water/swamp/lava on R1 (`UpdateSceneryChr6`), letterbox, `$6500` OAM shadow |
+| `src/scales.inc` | SCALES (Shield): bank-6 `ScalesTick` (from `BarbaShouts6`); navy outline + sky-blue body, cast roar/decor flash, shielded-hit clang/flash |
 | `tools/build.py` | assemble + guarded patch list (all hooks are listed here) |
 | `tools/assets.py`, `assets/*.json` | sprite compilation; `tools/boss_art.py` extracts boss tiles |
 | `tools/state_scenarios.lua` | builds the F-key checkpoints (scene list must match `create_test_pack.py` and `tests/state_pack.lua`) |
@@ -71,180 +73,63 @@ python tools/busy_rooms.py [--sets busy]        # lag + status-bar jitter over t
 
 ## Free space and RAM in use (check before allocating)
 
-- Default sampled roar (`roms/roar.wav`, override `--title-roar-wav`;
-  `--native-audio` restores legacy): reclaims native laugh data `$F400-$FD70` in bank 7
-  (2,417-byte maximum; hurt sample through `$F3C0` preserved), plus a 35-byte
-  title DMC enable helper in bank-6 vanilla pad `$8FD0-$8FF2` and hook `$8005`.
-  Title music ducking uses `$8E00-$8EFF` (256-byte volume table), `$8F00-$8F27`
-  (two 20-byte helpers), and hooks `$810F`/`$8116`; pulse volume halves while
-  roaring, normal envelopes continue. Sample DAC amplitude 34 (previously 28;
-  initially 20), increased for all sampled voice uses on 2026-11-17.
-  Gameplay coordinator/controller/pulse/rate helpers occupy bank 6 `$8C00-$8DA8`
-  (425 bytes); the gem helper occupies bank 4 `$A7E5-$A803` (31 bytes). `$9B47`
-  queues the roar at fanfare end and holds the ceremony until the roar drains.
-  Native refill and its shared XP sound start afterward. Dark Barba's
-  bank-5 `$9BAC` hook and `$BF3B-$BF5A` helper reuse the victory roar and
-  wait for it to drain before Zelda's awakening. Early cached-pad
-  helper uses displaced laugh bytes `$F3C1-$F3DF` (31 bytes), not new padding.
-  First-title-pop DAC ramp uses bank 6 `$8F40-$8F65` (38 bytes).
-  Initial Game Over laugh delay uses bank 6 `$8F70-$8FB3` (68 guarded pad bytes):
-  latches `$E9` in `$05EE` bit 0 and waits 36 frames (~0.60 s) using native
-  `$0501`; no new RAM. Pending latch clears outside Game Over.
-  Inter-laugh spacing remains 23 frames. Gameplay path and sample bytes unchanged.
-  Item pickup uses fixed hook `$E547` via FarCall0 and bank-0 helpers
-  `$BF70-$BF96` (39 guarded bytes in the unused reset entry). Preserve mapper
-  code at `$BF9D-$BFDF`, including the live overworld call at `$BFB1`.
-  Qualifying items lock the standing pose and player input via `$9341/$9D96/$8DC3`.
-  Bank-6 pickup logic, `$9B73/$9B24` hooks and shared celebration renderer occupy
-  `$8A00-$8B3E` (319 guarded pad bytes). WRAM `$64D4` holds 1 during the
-  pickup fanfare and `$80` through the roar and its buffered tail.
-  Sampled RAM `$05EE` = request/active bits (7 active, 6 full voice pending,
-  5 injury pitch tail, 4 victory draining or complete, 3 raised-head pose, 2 hurt, 1 item roar, 0 delayed Game Over laugh),
-  `$05EF` = legacy start timer; WRAM `$64D2/$64D3` = stable raw pads
-  captured after the HUD split (one-frame input latency only during playback).
-  Default build bank0 has 4 free, bank3-sign 146 free (legacy native: 16/154).
-  Random attack roars removed (2026-11-17); native fireball SFX retained.
-  Latest normal sampled volley: 15,929 avg / 21,631 peak, 0/900 lag.
-  Approved roar stays exactly 2,177 bytes `$F400-$FC80`; Game Over uses four
-  octave-up native waveforms: 65 bytes `$FC80-$FCC0`, then 49 bytes each at
-  `$FCC0`, `$FD00`, `$FD40` (last ends `$FD70`). Verified silent `$55` endpoints
-  share the roar's final byte and first/second waveform boundary; one guarded
-  writer per byte. Five starts use first/first/second/third/fourth, lengths
-  65/49/49/49/49 and rates 6/6/6/10/10. Opening pair shares pitch (~4% sharp
-  on laugh 2); later three retain their own native waveforms one octave up.
-  Single-pass, DC-centered encoding: 1 kHz forward/backward low-pass, RMS-slew
-  normalization, then 4x/4x/4x/2x target gains (decoded RMS +8-12 dB versus the
-  first four-waveform revision); native 23-frame spacing. No size/RAM changes.
-  `$925A-$925E` calls `RoarNativeRate`; all non-laugh
-  native effects retain rate 15. No new fixed padding/RAM (2026-11-17).
-  Legacy `--native-audio` leaves sampled bank-6 ranges unused and uses five
-  octave-up DPCM waveforms, lengths 225/161/193/129/129. First laugh pointer moves
-  `$F3C0` -> `$F400` to preserve hurt's final byte; native 23-frame spacing.
-  No new ROM space or RAM. See docs/BUILD.md.
-  Sampled Barba injury prefix extended 0.344 -> 0.527 seconds (2026-11-17),
-  using the same sample bytes/allocation; full roar remains 1.557 seconds.
-  Injury-only rate descent 9->8->7->6->5 at ticks 17/21/25/29 now stretches
-  playback to ~0.627 seconds; no new RAM or sample bytes.
+### ROM banks & free space (default sampled build; `--native-audio` in parens)
 
-- ROM: bank 0 `$A89E-$A97D` (BANK0_OW; `BarbaSplitBurnForest` + `BurnAbort`; 1 free) + `$AA40-$BF6F` (BANK0; default sampled 4 free, legacy native 16 free) +
-  reclaimed dead vanilla bank-0 code `$81C1-$81E4`, `$97F1-$9814`, `$9847-$9877` (METEOR; 0/1/0 free respectively; originals guarded) +
-  bank 1 `$9EB9-$9FFF` (BANK1, vanilla pad after Geldarm draw code; `geldarm.inc`; 240 free) +
-  bank 2 `$9F85-$9FA0` (28 guarded pad bytes for the Valley of Death rock-tossing Lizalfos breath check, hooked at `$977C`; no new RAM) +
-  `$BFE0-$BFF9` (BANK0_TAIL, vanilla pad before vectors; `BurnMapEndGuard`, 1 free), bank 3 `$9D0A-$9FFF` (BANK3_SIGN, vanilla pad `bank3_UNUSED_9D0A`; `sign.inc` + `TownOpenerGate` + `ScalesTick` + `LateSplit` + `BarbaDeathDisplay`, default sampled 146 free, legacy native 154 free; more vanilla pad untouched at `$8BB1-$90EF` and `$9134-$93FF`), bank 3 `$B803-$BF6F` (TOWN; 2 free), bank 6 `$BA00-$BF6F` (BANK6; `shouts.inc` + `combo.inc` + `ScalesHop`; 2 free), bank 5 `$BDE0-$BF5F` (BANK5; `dark_barba.inc` + `HiddenJarHit`; 37 free).
-  Default sampled bank 5 also holds `DarkBarbaVictory` (5 free; legacy native 37 free).
-  Bank 4 `$A765-$A8FF` is vanilla `$FF` pad patched by raw bytes in `build.py`: Lava Link helpers `$A765-$A7A8`,
-  `HiddenJarHit` `$A7BF-$A7CF`, `CarockHit` `$A7D0-$A7E4` (shared with the P3/4/6 Wizzrobe tail `$AEB2`; boss death gated on `$22`);
-  `CarockReflectDamage` `$A804-$A80E` (Carock only, 24 damage; HP 48 at `$A943`, HUD scale at `$AE82`);
-  `$A7B0-$A7BE` and `$A80F-$A8FF` free; default sampled gem helper uses `$A7E5-$A803`.
-  Fixed bank 7: LAVA `$D39A-$D3C9` (0 free), GATEWAY `$FEAA-$FECF` (0 free),
-  TERRAIN `$FF4C-$FF6E` (1 free). `FarCall0` provides cold bank-0
-  hooks at 5 fixed bytes/call (6 with standalone RTS), 369-482 bridge cycles plus target work;
-  see `docs/BUILD.md` for ABI/recipe and `docs/FIXED-BANK-AUDIT.md` for ownership/padding evidence.
-  No new fixed-bank padding was claimed. Never allocate live JMP operands `$FF4B` or `$E02C`.
-  Rewritten vanilla NMI/sprite code (guarded, 2026-11-16): prologue `$C091-$C0A7` (LateSplit trampoline at `$C09F`),
-  tail `$C182-$C1B5` (tail now starts `$C19D`; RTI still `$C1B5`), fast offscreen mask `$F27D-$F2D1` (`$F2D2` spare).
-  Block animation allocation (2026-11-16): same-size guarded rewrites `$E0FC-$E109`, `$E23A-$E247`, `$E29C-$E29D` defer brick/floor breaks when all five records are busy; no new space or RAM.
-  Enemy projectile update (2026-11-17): guarded rewrite `$E3B9-$E3C8`
-  compresses the slot/frame contact parity gate and fits an empty-slot
-  helper at `$E3C1`. `$D5D1` calls it before the offscreen mask. Active
-  projectiles retain the native path. No new padding or RAM.
-- RAM `$05EA`, `$05EB` (lava contact), `$05EC`/`$05ED` (SCALES cast latch / last injured timer), `$05F0-$05FF` (roar, breath, tall renderer, extra guard). Cleared by the native reset loop.
-- Ending fireball uses bank 5 `$8CEB-$8D4D` (existing cutscene patch, 2 bytes free), `$05F8` (state), `$05FA` (X), and OAM `$0240-$0247`. CHR bank 14 pairs `$E0/$E2` (tail) and `$E4/$E6` (head) reuse the displaced ending Link art. Both sprites are hidden on impact.
-- WRAM `$6400-$642F` extra projectile records; `$6440-$645F` scratch (`$6457` lazy-save flag,
-  `$6458-$645F` geometry terrain cache, `$645C` EXTRA_LIVE); `$6460-$6469` shouts (`$6465` actor, `$6467` word, `$6468` timer, `$6469` cycle); `$646A` + `$6490-$64D0` town scorch ring (16-slot FIFO + head/page); `$646B` volley aim latch (0 forward / $40 upward); `$646C-$646F` + `$6488` town combo banner; `$6470-$6473` Inferno firestorm (`$6470` timer, `$6473` wave aim) and overworld flame (`$6471` timer, `$6472` dir); `$6474` METEOR dive state; `$64D1` `SIGN_PENDING` (sign board scorched, cleared with the ring). Actor byte `$04A0,x` = burned-sign line for sign readers `$21`/`$22` (native spawn clears it). Don't touch collision/room/save regions elsewhere in `$6000-$7FFF`.
-- OAM in use: tall head `$04/$4C/$C4`, extra torso (downstab, celebrations and fatal-hit transition) `$20/$24`, extra fireballs `$3C/$44/$48`; enemy projectiles use `$28/$2C/$30`;
-  item celebrations use `$34/$40` for the raised item and `$20/$24` for the raised-head torso only;
-  victory roar lifts existing art 8px and overlaps its partial torso by 8px for two complete chunks (56px tall, feet anchored);
-  town shout word `$DC-$F4` (7 glyphs, only while a word is live and no enemy projectile exists); overworld flame `$FC` (`$02FC-$02FF`).
-- CHR: game-over front-facing black Link in bank 17 tiles `$00-$31` (narrowed source-Ganon torso + authored cap/ears/face, mouthless thin split collar, soft cap with right-ear notch, both stray neck marks filled black; bank-0 map `$801F-$80C8`, no new padding/RAM); player art in even sprite banks 0-24 reserves `$24` for Myu and uses the former spare `$5C`; overworld flame pairs `$60/$62` in dedicated overworld bank 30; ash `$7E/$80` **bank 6 only** (shared sprites elsewhere);
-  shout glyphs in town BG bank 7 pairs `$32/$7E/$80,$84-$BE` (odd 8x16 bytes) plus `H` (`$7C`) and combo X/1-9/B in town sprite
-  bank 6 pairs `$6C-$AE` (even bytes); town scorch art in bank 7 tiles `$AC/$A4` (flame top), `$C1/$C0` (char top),
-  `$A7/$C2` (shared bottom); dialogue `?` `$34` and apostrophe `$35` (guarded post-build; text tiles must be `$00-$3F`/`$C0-$FC`). Bank 7 `$00-$27` are villager 8x16 sprites (a byte draws both tiles of its pair):
-  never allocate there; `TOWN_SPRITE_PAIRS` in `tools/assets.py` guards them. Bank 7 has no free pair left.
+| Bank | Region | Contents / Notes | Free |
+| --- | --- | --- | --- |
+| 0 | `$A89E-$A97D` (`BANK0_OW`) | `BarbaSplitBurnForest` + `BurnAbort` | 1 |
+| 0 | `$AA40-$BF6F` (`BANK0`) | Core Barba code; `$BF70-$BF96` item pickup helpers; preserve mapper `$BF9D-$BFDF` (`$BFB1` live OW call) | 420 |
+| 0 | `$BFE0-$BFF9` (`BANK0_TAIL`) | `BurnMapEndGuard` (before vectors) | 1 |
+| 0 | `$81C1-$81E4`, `$97F1-$9814`, `$9847-$9877` | Reclaimed dead vanilla code (METEOR) | 0 / 1 / 0 |
+| 1 | `$9EB9-$9FFF` (`BANK1`) | `geldarm.inc` (after Geldarm draw code) | 240 |
+| 2 | `$9F85-$9FA0` | Valley of Death Lizalfos breath check (hook `$977C`) | 0 |
+| 3 | `$9D0A-$9FFF` (`BANK3_SIGN`) | `sign.inc`, `TownOpenerGate`, `LateSplit`, `BarbaDeathDisplay` (untouched vanilla pad at `$8BB1-$90EF`, `$9134-$93FF`) | 255 |
+| 3 | `$B803-$BF6F` (`TOWN`) | Town villagers, dialogue, combo | 28 |
+| 4 | `$A765-$A8FF` (raw pad) | Lava Link `$A765-$A7A8`, `HiddenJarHit` `$A7BF-$A7CF`, `CarockHit` `$A7D0-$A7E4` (boss death gated on `$22`), gem helper `$A7E5-$A803`, `CarockReflectDamage` `$A804-$A80E` (24 dmg; HP 48 at `$A943`, HUD scale at `$AE82`) | `$A7B0-$A7BE`, `$A80F-$A8FF` |
+| 5 | `$BDE0-$BF5F` (`BANK5`) | `dark_barba.inc`, `HiddenJarHit`, `DarkBarbaVictory` (`$BF3B-$BF5A`, hook `$9BAC`) | 9 (41) |
+| 5 | `$8CEB-$8D4D` | Ending fireball cutscene patch | 2 |
+| 6 | `$AC09-$BF6F` (`BANK6`) | `shouts.inc`, `combo.inc`, `scales.inc`, `scanline_irq.inc`, `DarkLinkFireCheck`, town/castle scorch, `LagNmiInBank6` | 861 (874) |
+| 6 | `$8A00-$8FFF` (vanilla pad) | Sampled audio: `$8A00-$8B3E` pickup/celebration (`$9B73/$9B24`), `$8C00-$8DA8` coordinator/ducking/rate, `$8E00-$8EFF` title duck table, `$8F00-$8F27` title duck helpers (`$810F/$8116`), `$8F40-$8F65` title DAC ramp, `$8F70-$8FB3` Game Over laugh delay, `$8FD0-$8FF2` title DMC enable (`$8005`) | â€” |
+| 7 | `$D39A-$D3C9` (`LAVA`), `$FEAA-$FECF` (`GATEWAY`), `$FF4C-$FF6E` (`TERRAIN`) | Fixed bank allocations (`FarCall0`: 5 B/call, 6 B w/ RTS; see `docs/BUILD.md`). Never allocate live JMP operands `$FF4B` or `$E02C` | 0 / 0 / 1 |
+| 7 | `$F400-$FD70` | Sampled roar (`$F400-$FC80`, 2,177 B) + 4 octave-up Game Over laughs (`$FC80-$FD70`, shared `$55` endpoints); `$F3C1-$F3DF` early cached-pad helper; hurt `$F300-$F3C0` preserved | 0 |
 
-## Performance facts (from tests/perf_volley.lua)
+- **Fixed-bank guarded vanilla rewrites** (no new padding claimed): NMI prologue `$C091-$C0A7` (`LateSplit` trampoline `$C09F`), NMI tail `$C182-$C1B5` (tail starts `$C19D`, RTI `$C1B5`), fast offscreen mask `$F27D-$F2D1` (`$F2D2` spare), block anim `$E0FC-$E109`/`$E23A-$E247`/`$E29C-$E29D`, enemy projectile update `$E3B9-$E3C8` (empty-slot helper `$E3C1`), empty enemy slot skip & direct dispatch `$D5DA-$D5F8` (`$D5F6-$D5F8` 3 B spare).
 
-Checkpoint placement fix on `9c0add7a0040`: Busy Areas F4–F7 now start on
-walkable ground near center. A 620-frame replay per Busy Areas slot had
-zero lag or HUD shifts. P2 peaked at 28,517 NMI cycles through RTI and P3
-at 24,963 with the new starts. Earlier replays below used the old starts.
+### RAM, WRAM, OAM & CHR
 
-Carock playtest build `9c0add7a0040` (2026-11-17): Palace 1 idle
-12,950 avg / 13,014 peak, volley 15,929 avg / 21,631 peak, 0/900 lag.
+- **RAM**: `$05EA`, `$05EB` (lava contact), `$05EC`/`$05ED` (SCALES cast latch / last injured timer), `$05EE` (sampled roar bits: 7 active, 6 full pending, 5 injury pitch tail, 4 victory draining/done, 3 raised-head pose, 2 hurt, 1 item roar, 0 Game Over laugh delay), `$05EF` (legacy start timer), `$05F0-$05FF` (roar, breath, tall renderer, extra guard; `$05F8`/`$05FA` ending fireball state/X). Cleared by native reset.
+- **WRAM** (don't touch collision/room/save regions elsewhere in `$6000-$7FFF`):
+  - `$6400-$642F`: extra projectile records
+  - `$6440-$645F`: scratch (`$6457` lazy-save, `$6458-$645F` geometry terrain cache, `$645C` `EXTRA_LIVE`)
+  - `$6460-$6469`: shouts (`$6465` actor, `$6467` word, `$6468` timer, `$6469` cycle)
+  - `$646A`, `$6490-$64D0`: town scorch ring (16-slot FIFO + head/page); `$64D1` `SIGN_PENDING`; `$04A0,x` burned-sign line (`$21`/`$22`)
+  - `$646B` volley aim latch (`0` forward / `$40` up); `$646C-$646F` + `$6488` town combo banner
+  - `$6470-$6473`: Inferno timer/wave aim (`$6470`/`$6473`), overworld flame timer/dir (`$6471`/`$6472`); `$6474` METEOR dive state
+  - `$64D2/$64D3`: late raw pads cache (sampled audio); `$64D4`: item pickup hold (`1` fanfare, `$80` roar/tail); `$64D5`: MMC3 `$8000` bank-select shadow (saved/restored by `LagNmiBank6` / `LagNmiReturn`)
+  - `$64D6-$64F1`: scanline IRQ and scenery state (`IRQ_STAGE`, `IRQ_COUNT`, `IRQ_LINES`, `IRQ_X`, `IRQ_CTRL`, `IRQ_MASK`, `ROOM_HAS_LAVA`, cache/temps, `OW_PARALLAX_LINE` `$64EE`, active liquid `R1` `$64EF`, `OW_HAS_GRASS` `$64F0`, `OW_HAS_WATER` `$64F1`)
+  - `$6500-$65FF`: OAM DMA shadow page (8x16 sprite tiles rebased to the swapped pattern tables, with native blank `$F5` cells hidden to avoid extra MMC3 A12 clocks)
+- **OAM**: tall head `$04/$4C/$C4`; extra torso `$20/$24`; item celebration `$34/$40` (item) + `$20/$24` (torso); extra fireballs `$3C/$44/$48`; enemy projectiles `$28/$2C/$30`; fall-in-hole (`Game Mode $0F`, `BarbaFallDraw`) `$08..$2C` Barba + `$30..$54` shadow; ending fireball `$40-$47`; shout word `$DC-$F4` (7 glyphs); overworld flame `$FC` (`$74/$84/$94`).
+- **CHR**: Game Over black Link in bank 17 `$00-$31` (map `$801F-$80C8`); even sprite banks 0-24 reserve `$24` for Myu and use `$5C`; overworld flame `$60/$62` (bank 30); ending fireball `$E0/$E2`, `$E4/$E6` (bank 14); ash `$7E/$80` (bank 6 only); shout glyphs bank 7 `$32/$7E/$80,$84-$BE` + `H` (`$7C`) and combo glyphs bank 6 `$6C-$AE`; town scorch bank 7 `$AC/$A4`, `$C1/$C0`, `$A7/$C2`; dialogue `?` `$34`, apostrophe `$35`. **Bank 7 `$00-$27` are villager 8x16 sprites â€” never allocate there** (`TOWN_SPRITE_PAIRS` in `tools/assets.py` guards them; bank 7 has no free pair left).
 
-Latest (2026-11-17, enemy projectile optimization): Palace 1 idle
-12,950/13,014, volley 15,929/21,631, 0/900 lag. In the prior renderer build,
-idle was 13,640/13,704 and volley was 16,684/22,376. That renderer change
-matched full OAM on all 1,200 sampled idle and volley frames.
+## Current performance baseline (`c8fcedb109c5`, MMC3 Checkpoint A)
 
-November 17 regression pass, build `9c0add7a0040`: 2,400 replay frames
-per Busy Areas checkpoint, 23,338 measured side-view frames, zero lag or
-HUD shifts. P2 peaks at 29,682 work cycles / 29,705 through RTI. Long Rauru
-map loads are reported under `otherNmiMax`. Maximum sprite overlap is 14
-on a scanline in Old Kasuto and the Palace 5 two-Mago room.
-Busiest test-pack rooms (`tools/busy_rooms.py`): P2 floor 24.5k avg / 28.5k worst, P5 before boss 22.9k/27.4k,
-Old Kasuto 22.0k/29.0k, 0 lag. The native enemy pass (~9-12k) dominates; Barba's hooks are ~4-5k. Any overrun
-that ends inside the next vblank is repaired by `LateSplit` (no status-bar jitter); a longer one still is not.
-
-The Busy Areas set (2026-11-17) adds ten native rooms, including Palace 5 rooms
-62/48/44. In its 620-frame-per-state probe, Old Kasuto peaked at 29,167 cycles,
-Palace 2 floor at 29,119, and the Gooma approach at 27,640 with 13 sprites on one
-scanline. Skipping the inactive celebration bank switch lowers those peaks to
-29,057, 29,004 and 27,525 respectively. Zero gameplay lag or shifted HUD frames
-across the set in both runs.
-
-On build `59ee6701557a`, the 29,004-cycle P2 crowded-floor frame spent 13,776
-cycles in the enemy pass, including 534 on offscreen masks for empty enemy
-projectile slots. Across five palace checkpoints those empty-slot calls cost
-510–600 cycles per frame on average. See the profile in `docs/TEST-PACK.md`.
-
-Extended 850-frame projectile probe on the same build: P1 Horsehead approach
-peaked at 25,635 cycles with two fireballs and four Guma hammers, zero lag.
-P2 crowded floor reached 30,157 cycles before LateSplit, with one lag frame
-and zero HUD shifts. P5 Gooma approach exceeded eight sprites on a scanline
-on 147/505 frames with projectiles from both sides.
-
-Optimized build `0d55b1c120af` clears that lag in the 850-frame run, with
-zero lag and HUD shifts across all ten Busy Areas checkpoints. P2 pre-recovery
-peak 29,682 (previously 30,157). Peak NMI with RTI 29,705. Horsehead approach
-saves 397 cycles/update on average and the Gooma approach 564, with matched
-OAM and contact-check counts in comparable updates.
-
-The game logic runs in NMI. Over about 29.7k cycles the next frame lags. Vanilla peaks near 26.6k
-with 6 enemies. Palace 1 `perf_volley.lua` probe (with direct `BarbaExtraBlocks` and `BarbaLoadOk`
-2-shot cap for `>= 2` enemies): idle avg/peak 15,980/16,204 cycles, volley 19,491/25,652 (2026-11-16,
-fire-class breath, incl. per-frame `ScalesTick`), lag 0/300 idle and **0/900 volley**, `nearBudget(>27000)=0`. `perf_meteor.lua`
-(same room, slam + volley every 90 frames): 17,353/19,142, 0/900 lag, 10 slams / 2 waves (`MeteorEmit`
-uses `BarbaLoadOk`, throttling waves when an active volley already holds 2 shots in a busy room). Palace 3 room `$0D` (2 Ironknuckles
-+ breakable blocks) drops from 28,095 avg / 30,049+ peak (4 lag frames) to 25,338 avg / 28,155
-peak (0 lag frames). `BarbaDisplay` bypasses
-`$EBF0` on normal frames (using `$F27D` + unrolled 9-sprite
-draw) and `BarbaGeometry` caches `TerrainBatch` in `$6458-$645F`, cutting display cost from ~4.0k
-to ~1.2k cycles/frame. `BarbaLoadOk` uses `LOAD_LIMIT = 7` and caps queued shots at 2 live shots
-when 2+ enemies are active.
-
-Audit resolution (2026-11-15): six-Bot METEOR + volley stress now runs at **0/900 lag**
-(`maxLiveShots = 1`, peak `28,983` cycles), down from `160/900` lag, with `BarbaLoadOk` gating
-`BarbaFireSpell` and `MeteorEmit`. All 9 audit findings in `docs/AUDIT-2026-11-15.md` (Thunderbird
-Inferno softlock, METEOR load governor, Dark Barba tile table + shadow palette, hidden red jars,
-checkpoint room/palette fixes, test failure propagation, town scorch page aliasing, refused forest
-burn PPU cancel, and Geldarm stomp sink) are resolved and verified.
+Game logic runs in NMI; >~29.7k cycles lags the next frame (`LateSplit` repairs overruns ending inside vblank). `BarbaLoadOk` uses `LOAD_LIMIT = 7` and caps queued shots at 2 live shots when `>= 2` enemies are active (1 on 6-Bot METEOR stress). All benchmarks below run at **0 lag, 0 late splits, 0 HUD shifts**:
+- `perf_volley.lua` (Palace 1): idle `12,063 avg / 12,126 peak`; volley `15,169 avg / 21,048 peak` (`0/900` lag, `nearBudget(>27000)=0`).
+- `perf_meteor.lua` (Palace 1): `13,262 avg / 15,117 peak` (`0/900` lag, 10 slams / 2 waves; MMC1 baseline, re-verified pass on MMC3).
+- `perf_upward.lua` (6 active Bots): idle `22,866 avg / 23,113 peak`; upward `24,149 avg / 24,834 peak` (MMC1 baseline). Build `3a0a52742da5`: idle `23,811 avg / 24,560 peak`; upward `25,142 avg / 26,486 peak`, with `0/900` lag and no frames above 27,000 cycles.
+- `perf_lava.lua`: floor `15,800 avg / 16,573 peak`; lava `15,311 avg / 17,309 peak` (`0` lag; MMC1 baseline, re-verified pass on MMC3).
+- `busy_rooms.py` (`--sets core,busy`, 480 frames/state): `old-kasuto` `28,492` work / `28,515` NMI max, `p2-crowded-floor` `28,213 / 28,236`, `p5-gooma-approach` `27,349 / 27,372`, `p3-ironknuckle-blocks` `24,391 / 24,414`.
 
 ## Status and docs (read only what you need)
 
 | Topic | Doc |
 | --- | --- |
-| What's verified / open | docs/STATUS.md |
-| Breath, volley, tall sprite internals | docs/BREATH-IMPLEMENTATION.md |
-| Towns, villagers, shouts | docs/TOWNS.md |
-| Build/tooling, ROM research | docs/BUILD.md, docs/RESEARCH.md, docs/FIXED-BANK-AUDIT.md |
-| Checkpoints | docs/TEST-PACK.md (F1-F9; F9 = before Palace 6 boss, max stats) |
-| Archived plans & early design | docs/archive/ |
+| What's verified / open | `docs/STATUS.md` |
+| Breath, volley, tall sprite internals | `docs/BREATH-IMPLEMENTATION.md` |
+| Towns, villagers, shouts | `docs/TOWNS.md` |
+| Build/tooling, sampled audio, cold hooks | `docs/BUILD.md`, `docs/RESEARCH.md`, `docs/FIXED-BANK-AUDIT.md` |
+| Checkpoints | `docs/TEST-PACK.md` (F1-F9; F9 = before Palace 6 boss, max stats) |
+| Archived plans, changelog, resolved audit | `docs/archive/`, `docs/AUDIT-2026-11-15.md` |
 
-When you finish a task: update the one relevant doc plus STATUS.md, and keep this file's
+When you finish a task: update the one relevant doc plus `docs/STATUS.md`, and keep this file's
 memory map and perf facts current. Then hand the producer a short playtest: what changed, which F-key, what to look for.
-
-Historical upstab branch performance: standard volley peak 30,158 (+39 versus 262501a), unchanged 1/900 lag;
-lava peak 21,699 (+22), 0/300 lag. Current fresh-audit six-active-Bot `perf_upward`: 25,984 peak, 0/900 lag,
-25 upward emissions. `BarbaSetThrusts` restores rising technique-gated
-head-butt after block checks; `VOLLEY_SLOT` bit 6 up, bit 7 crouch, low 6 bits lifetime.

@@ -2,7 +2,7 @@
 .setcpu "6502"
 .export BarbaOverworld, BarbaOverworldA, BarbaDisplay, BarbaUpdate, BarbaInferno, ThunderHit
 .export LavaSurface
-.export EnemyFireGateway, ShieldFireGateway, LagNmiBank6
+.export EnemyFireGateway, ShieldFireGateway, LagNmiInBank6
 
 ROAR_TIMER = $05F0 ; cleared by the original $0500..$05FF reset loop; no original references
 .ifdef SAMPLED_ROAR
@@ -70,7 +70,7 @@ BarbaOverworld:
 OverworldBase:
     .byte 0, 0, 8, 0, 16, 0, 0, 0, 24
 OwFlameX:
-    .byte $80, $90, $70, $80, $80, $80, $80, $80, $80
+    .byte $84, $94, $74, $84, $84, $84, $84, $84, $84
 OwFlameY:
     .byte $6D, $6D, $6D, $6D, $7D, $6D, $6D, $6D, $5D
 
@@ -326,7 +326,6 @@ ThunderHit:
 ; override; the game's audio driver resumes control on the following frame.
 BarbaUpdate:
     jsr BarbaProjectiles
-    jsr DarkLinkFireCheck
     jsr BarbaShouts
     lda LAVA_CONTACT
     beq @roar
@@ -386,7 +385,7 @@ RoarPitch:
 .include "sign.inc"
 .include "scales.inc"
 .include "farcall.inc"
-.include "late_split.inc"
+.include "scanline_irq.inc"
 .include "death_display.inc"
 .include "ending_fire.inc"
 .ifdef SAMPLED_ROAR
@@ -437,11 +436,11 @@ ShieldFireGateway:
     jsr $FFC5
     jsr BarbaShieldFire
     jmp $FFC9
-; Lag-frame NMI ($C065) pushed $8506 before entering here.
-LagNmiBank6:
-    lda #$06
-    jsr $FFCC
-    jmp LagNmiInBank6
+LagNmiReturn:
+    pla
+    sta $64D5
+    sta $8000
+    rts
 
 .segment "TERRAIN"
 ; All four corner tiles are collected before swapping. The area's native
@@ -475,7 +474,8 @@ NativeReturn0:
 
 .segment "BANK6"
 ; Lag-frame NMI: run audio driver in bank 6, then restore the actual
-; interrupted bank (bank 0 if $8506 fingerprint == $F0, else area bank $0769).
+; interrupted bank (bank 0 if $8506 fingerprint == $F0, else area bank $0769)
+; and the interrupted MMC3 bank-select register ($64D5 -> $8000).
 LagNmiInBank6:
     jsr $9000
     pla
@@ -486,12 +486,23 @@ LagNmiInBank6:
 @bank0:
     lda #$00
     tax
+    pla
+    tay
     lda #>($C070-1)
     pha
     lda #<($C070-1)
+    pha
+    tya
+    pha
+    lda #>(LagNmiReturn-1)
+    pha
+    lda #<(LagNmiReturn-1)
     pha
     txa
     jmp $FFCC
 
 .include "dark_barba.inc"
 .include "geldarm.inc"
+.ifdef WALDO_PORTAL
+.include "waldo_portal.inc"
+.endif

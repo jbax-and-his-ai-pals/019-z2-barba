@@ -18,9 +18,13 @@ BarbaExtraEnsure:
     lda EXTRA_READY
     cmp #$01
     beq @done
+    txa
+    pha
     jsr BarbaExtraReset
     lda #$01
     sta EXTRA_READY
+    pla
+    tax
 @done:
     rts
 BarbaExtraReset:
@@ -36,33 +40,17 @@ BarbaExtraReset:
     sbc #$10
     tax
     bpl :-
-    jmp BarbaScorchClear ; WRAM survives power-off: drop any stale scorch entries
+    lda #$00
+    ldx #$21            ; SIGN_PENDING ($64D1) - SCORCH_TIME ($64B0)
+@clear_scorch:
+    sta $64B0,x
+    dex
+    bpl @clear_scorch
+    rts
 
 ; Save slot 0 and its OAM window. The fourth sprite bytes are copied too:
 ; native disintegration and normal update both use $0238..$023B.
 ExtraSaveZero:
-    lda $008D
-    sta EXTRA_SAVE+$00
-    lda $0036
-    sta EXTRA_SAVE+$01
-    lda $005A
-    sta EXTRA_SAVE+$02
-    lda $0048
-    sta EXTRA_SAVE+$03
-    lda $007D
-    sta EXTRA_SAVE+$04
-    lda $006D
-    sta EXTRA_SAVE+$05
-    lda $0026
-    sta EXTRA_SAVE+$06
-    lda $05CA
-    sta EXTRA_SAVE+$07
-    lda $03E3
-    sta EXTRA_SAVE+$08
-    lda $05FC
-    sta EXTRA_SAVE+$09
-    lda $009D
-    sta EXTRA_SAVE+$0a
     lda $0238
     sta EXTRA_SAVE+$0b
     lda $0239
@@ -71,30 +59,11 @@ ExtraSaveZero:
     sta EXTRA_SAVE+$0d
     lda $023B
     sta EXTRA_SAVE+$0e
-    rts
+    lda $009D
+    sta EXTRA_SAVE+$0a
+    ldy #$40
+    bne ExtraStoreTen
 ExtraRestoreZero:
-    lda EXTRA_SAVE+$00
-    sta $008D
-    lda EXTRA_SAVE+$01
-    sta $0036
-    lda EXTRA_SAVE+$02
-    sta $005A
-    lda EXTRA_SAVE+$03
-    sta $0048
-    lda EXTRA_SAVE+$04
-    sta $007D
-    lda EXTRA_SAVE+$05
-    sta $006D
-    lda EXTRA_SAVE+$06
-    sta $0026
-    lda EXTRA_SAVE+$07
-    sta $05CA
-    lda EXTRA_SAVE+$08
-    sta $03E3
-    lda EXTRA_SAVE+$09
-    sta $05FC
-    lda EXTRA_SAVE+$0a
-    sta $009D
     lda EXTRA_SAVE+$0b
     sta $0238
     lda EXTRA_SAVE+$0c
@@ -103,9 +72,11 @@ ExtraRestoreZero:
     sta $023A
     lda EXTRA_SAVE+$0e
     sta $023B
-    rts
+    ldy #$40
+    bne ExtraLoadAtY
 ExtraLoadRecord:
     ldy EXTRA_INDEX
+ExtraLoadAtY:
     lda EXTRA_BASE+$00,y
     sta $008D
     lda EXTRA_BASE+$01,y
@@ -130,7 +101,17 @@ ExtraLoadRecord:
     sta $009D
     rts
 ExtraStoreRecord:
+    ; Preserve the extra's own OAM address, never native window $38.
+    lda EXTRA_INDEX
+    lsr
+    lsr
+    lsr
+    lsr
+    tay
+    lda ExtraOam,y
     ldy EXTRA_INDEX
+    sta EXTRA_BASE+$0A,y
+ExtraStoreTen:
     lda $008D
     sta EXTRA_BASE+$00,y
     lda $0036
@@ -151,16 +132,6 @@ ExtraStoreRecord:
     sta EXTRA_BASE+$08,y
     lda $05FC
     sta EXTRA_BASE+$09,y
-    ; Preserve the extra's own OAM address, never native window $38.
-    lda EXTRA_INDEX
-    lsr
-    lsr
-    lsr
-    lsr
-    tay
-    lda ExtraOam,y
-    ldy EXTRA_INDEX
-    sta EXTRA_BASE+$0A,y
     rts
 
 ; Carry set only after a valid third/fourth/fifth slot was actually placed.
@@ -197,6 +168,20 @@ BarbaExtraAllocate:
     rts
 
 BarbaExtraUpdate:
+    jsr BarbaExtraEnsure
+    ; Idle fast path: with no backed record alive, only hide the extra OAM
+    ; slots. Skips the slot-0 save/restore copies and stack frame on most frames.
+    lda EXTRA_BASE
+    ora EXTRA_BASE+$10
+    ora EXTRA_BASE+$20
+    bne @busy
+    sta EXTRA_LIVE
+    lda #$F8
+    sta $023C
+    sta $0244
+    sta $0248
+    rts
+@busy:
     txa
     pha
     lda $10
@@ -205,24 +190,6 @@ BarbaExtraUpdate:
     pha
     lda $CF
     pha
-    jsr BarbaExtraEnsure
-    ; Idle fast path: with no backed record alive, only hide the extra OAM
-    ; slots. Skips the slot-0 save/restore copies on most frames.
-    lda EXTRA_BASE
-    ora EXTRA_BASE+$10
-    ora EXTRA_BASE+$20
-    bne @busy
-    lda #$F8
-    ldy ExtraOam
-    sta $0200,y
-    ldy ExtraOam+1
-    sta $0200,y
-    ldy ExtraOam+2
-    sta $0200,y
-    lda #$00
-    sta EXTRA_LIVE
-    jmp @idle
-@busy:
     lda #$00
     sta EXTRA_KIND+$03
     sta EXTRA_INDEX
@@ -677,28 +644,80 @@ ExtraOam:
 ; collision handler (bank 5 $9A8D) and skips $E48B. Check native and extra
 ; fireball slots against Dark Link's body and apply the exact 1-HP sword-hit
 ; response ($0509/$050D knockback, $E9 SFX, $C2 == 0 death).
+.segment "BANK6"
 DarkLinkFireCheck:
     lda $0707
     cmp #$05
-    bne @done
+    bne @done_early
     lda $0736
     cmp #$0B
-    bne @done
+    bne @done_early
     lda $B6
     cmp #$01
-    bne @done
+    bne @done_early
     lda $A1
     cmp #$23
-    bne @done
+    bne @done_early
     lda $63
+    beq @phase0
+    cmp #$02
+    beq @phase2
+    cmp #$04
+    beq @phase4
     cmp #$03
-    bne @done
+    bne @done_early
+    lda $13
+    beq @check_fire
+    jsr DarkWyrmlingTick
+@check_fire:
     lda $C2
-    beq @done
+    beq @done_early
     lda $0505
     ora $050D
     ora $0509
-    bne @done
+    bne @done_early
+    jmp @scan
+@phase0:
+    lda $13
+    beq @done_early
+    lda $072A
+    beq @done_early
+    lda $A7
+    ora #$04
+    sta $A7
+@done_early:
+    rts
+@phase2:
+    lda $13
+    beq @done_early
+    jmp DarkWyrmlingDraw
+@phase4:
+    lda $13
+    beq @done_early
+    lda #$00
+    sta $13
+    lda $076F
+    and #$F7
+    sta $076F
+    lda #$01
+    sta $17
+    lda $29
+    cmp #$A0
+    bcs @phase4_floor
+    sta $0479           ; nonzero -> airborne until gravity reaches $A0
+    lda $057D
+    bpl @done_early
+    lda #$00
+    sta $057D
+    rts
+@phase4_floor:
+    lda #$A0
+    sta $29
+    lda #$00
+    sta $0479
+    sta $057D
+    rts
+@scan:
     ldy #$01
 @native:
     lda $8D,y
@@ -749,6 +768,13 @@ DarkLinkFireCheck:
     ldy #$18
 @dead:
     sty $050D
+    ldx #$05
+    lda #$00
+@clr_eproj:
+    sta $87,x
+    dex
+    bpl @clr_eproj
+    ldx #$00
     clc
     jsr $DC91
     lda DarkLinkKnockback,y
@@ -764,25 +790,47 @@ DarkLinkHitBox:
     lda $00
     sec
     sbc $4E
-    pha
+    sta $03
     lda $01
     sbc $3C
     tax
-    pla
+    lda $13
+    bne @wyrm_x
+    lda $03
     clc
     adc #$04
-    bcc :+
+    bcc @hi_ok
     inx
-:   cpx #$00
+    bcs @hi_ok
+@wyrm_x:
+    lda $03
+    clc
+    adc #$FC            ; center hitbox on Dark Wyrmling sprite ($CD+$0C)
+    bcs @hi_ok
+    dex
+@hi_ok:
+    cpx #$00
     bne @miss
     cmp #$11
     bcs @miss
     lda $02
     sec
     sbc $2A
+    sta $03
+    lda $13
+    bne @wyrm_y
+    lda $03
     clc
     adc #$0A
     cmp #$24
+    bcs @miss
+    sec
+    rts
+@wyrm_y:
+    lda $03
+    clc
+    adc #$04
+    cmp #$1E
     bcs @miss
     sec
     rts
@@ -791,3 +839,206 @@ DarkLinkHitBox:
     rts
 DarkLinkKnockback:
     .byte $F6,$0A
+
+DarkWyrmlingTick:
+    lda #$00
+    sta $0401
+    sta $0506
+    lda $C2
+    beq @draw_only
+    lda $050D
+    beq @not_hurt
+    lda $2A
+    cmp #$98
+    bcc @draw_only
+    lda #$98
+    sta $2A
+    lda #$00
+    sta $057E
+@draw_only:
+    jmp DarkWyrmlingDraw
+@not_hurt:
+    lda $0505
+    beq @active
+    lda #$00
+    sta $71
+    sta $057E
+    sta $03E7
+    jmp DarkWyrmlingDraw
+@active:
+    lda #$01
+    sta $62
+    lda #$00
+    sta $03E7
+    lda $2A
+    cmp #$94
+    bcc @alt_ok
+    lda #$94
+    sta $2A
+@alt_ok:
+    ; Centralized aerial target: midpoint of Player Y and $6E clamped to [$48..$8C],
+    ; plus a +/- 8 px triangle-wave swoop so Dark Wyrmling never ceiling-camps.
+    lda $29
+    clc
+    adc #$6E
+    ror
+    cmp #$48
+    bcs :+
+    lda #$48
+:   cmp #$8C
+    bcc :+
+    lda #$8C
+:   sta $00
+    lda $12
+    and #$3F
+    cmp #$20
+    bcc :+
+    eor #$3F
+:   lsr
+    sec
+    sbc #$08
+    clc
+    adc $00
+    sec
+    sbc $2A
+    bpl @below
+    cmp #$FE            ; diff < -2 -> fly up
+    bcc @fly_up
+    lda #$00
+    beq @set_vy
+@fly_up:
+    lda #$FF
+    bne @set_vy
+@below:
+    cmp #$03            ; diff >= 3 -> fly down
+    bcs @fly_down
+    lda #$00
+    beq @set_vy
+@fly_down:
+    lda #$01
+@set_vy:
+    sta $057E
+    lda $2A
+    cmp #$38
+    bcs :+
+    lda #$01
+    sta $057E
+:   ldx #$00
+    clc
+    jsr $DC91           ; $60 = 1 (Link right) / 2 (Link left), $0F = lo(LinkX - BossX)
+    lda $CD
+    cmp #$34
+    bcc @swoop_right
+    cmp #$BC
+    bcs @swoop_left
+    lda $0F
+    ldy $60
+    cpy #$01
+    beq @abs_ok
+    eor #$FF
+    clc
+    adc #$01
+@abs_ok:
+    cmp #$24
+    bcc @retreat
+    cmp #$4C
+    bcs @approach
+    lda $CD             ; inside dueling range: drift toward arena center ($78)
+    cmp #$78
+    bcc @drift_right
+    lda #$F8
+    bne @set_vx
+@drift_right:
+    lda #$08
+    bne @set_vx
+@retreat:
+    cpy #$01
+    beq @move_left
+    bne @move_right
+@approach:
+    cpy #$01
+    beq @move_right
+@move_left:
+    lda #$EE
+    .byte $2C
+@move_right:
+    lda #$12
+    .byte $2C
+@swoop_left:
+    lda #$EA
+    .byte $2C
+@swoop_right:
+    lda #$16
+@set_vx:
+    sta $71
+    lda $12
+    and #$1F
+    bne DarkWyrmlingDraw
+    lda $CD
+    cmp #$14
+    bcc DarkWyrmlingDraw
+    cmp #$E4
+    bcs DarkWyrmlingDraw
+    lda #$00
+    sta $10
+    jsr $DBCE
+    bcs DarkWyrmlingDraw
+    lda #$03
+    sta $87,y
+    lda $30,y
+    clc
+    adc #$08
+    sta $30,y
+    lda $ED
+    ora #$40
+    sta $ED
+DarkWyrmlingDraw:
+    lda #$F8
+    sta $0254
+    sta $0258
+    sta $025C
+    sta $0260
+    sta $0264
+    sta $0268
+    sta $026C
+    sta $0270
+    sta $0274
+    lda $C9
+    and #$F0
+    bne @w_hide
+    lda $CD
+    clc
+    adc #$0C
+    bcs @w_hide
+    sta $0253
+    lda $12
+    and #$38
+    lsr
+    lsr
+    lsr
+    eor #$04
+    tay
+    lda $2A
+    clc
+    adc #$08
+    adc $EBB0,y
+    cmp #$20
+    bcc @w_hide
+    cmp #$F0
+    bcs @w_hide
+    sta $0250
+    lda $12
+    and #$04
+    lsr
+    eor #$02
+    ora #$68
+    sta $0251
+    lda #$02
+    sta $0252
+    rts
+@w_hide:
+    lda #$F8
+    sta $0250
+@w_done:
+    rts
+.segment "BANK0"

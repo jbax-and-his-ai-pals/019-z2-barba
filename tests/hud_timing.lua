@@ -44,16 +44,16 @@ emu.addMemoryCallback(function()
     p.maxNmi=math.max(p.maxNmi,s['cpu.cycleCount']-nmiStart.cycle)
     nmiStart=nil
 end,emu.callbackType.exec,0xC1B5)
--- Native split: sprite-0 polling D4B2, delay D4C0-D4C4, writes D4C5/8/CB.
+-- MMC3 scanline IRQ HUD split: STA $2000 at $D4C0 when IRQ_STAGE ($64D6) == 0.
 emu.addMemoryCallback(function()
-    if not active()then return end
-    local s=stamp('split',0xD4C5)
+    if not active() or r(0x64D6)~=0 then return end
+    local s=stamp('split',0xD4C0)
     local p=stats[phase()];local line=s['ppu.scanline']
     p.splits=p.splits+1;p.minSplit=math.min(p.minSplit,line)
     p.maxSplit=math.max(p.maxSplit,line);p.maxDot=math.max(p.maxDot,s['ppu.cycle'])
-    -- NTSC sprite-zero split must stay on line 31, including attack frames.
+    -- Scanline IRQ HUD split must stay on line 31, including attack frames.
     if line~=31 then p.lateSplits=p.lateSplits+1 end
-end,emu.callbackType.exec,0xD4C5)
+end,emu.callbackType.exec,0xD4C0)
 emu.addMemoryCallback(function(address,value)
     if not active()then return end
     local s=stamp('ppu-write',address,value)

@@ -59,7 +59,7 @@ local function advance()
     w(0x48B,0);w(0x524,0);w(0x12,c.phase or 0x35);w(0x05,c.service or 0)
     local entry=c.dialog and LABELS.TownDialog or LABELS.TownEligible
     w(0x769,3)
-    local program={0x20,0xC9,0xFF,0x20,entry%256,math.floor(entry/256),0x4C,6,6}
+    local program={0x20,0xC9,0xFF,0xA9,0x00,0x20,entry%256,math.floor(entry/256),0x4C,8,6}
     for i,v in ipairs(program)do w(0x5FF+i,v)end
     emu.setState({['cpu.pc']=0x600,['cpu.sp']=0xFD,['cpu.x']=0,['cpu.a']=0,['cpu.ps']=0x24})
 end
@@ -87,7 +87,7 @@ emu.addMemoryCallback(function()
         failures=failures+1;f:write('FAIL gate case '..current..'\n')
     end
     advance()
-end,emu.callbackType.exec,0x606)
+end,emu.callbackType.exec,0x608)
 emu.addEventCallback(function()frame=frame+1;if frame==120 then ready=true end end,emu.eventType.endFrame)
 emu.addMemoryCallback(function()
     if ready then ready=false;running=true;w(0x2000,r(0xFF)&0x7F);advance()end

@@ -38,7 +38,7 @@ local function geometry(name,setup,x,y,flags)
             string.format('mouth %02X,%02X expected %02X,%02X',r(0x5F2),r(0x5F3),x,y))end
         local state=emu.getState()
         check(state['cpu.x']==7 and state['cpu.y']==9,'geometry preserves caller X and Y')
-        check(state['mapper.prgReg']==0,'terrain probe restores player PRG bank')
+        check((state['mapper.prgReg'] or ((state['mapper.registers6'] or -1)//2))==0,'terrain probe restores player PRG bank')
     end)
 end
 geometry('standing right in open space',function()end,0x6C,0x84,1)
@@ -198,6 +198,65 @@ end,function()
     check(r(0x208)==0xA0 and r(0x20C)==0xA0,'swamp shifts torso row down 16px')
     check(allHidden({0x214,0x218,0x21C}),'swamp hides bottom row')
 end)
+
+local function fallSetup(isShadow,facing,y)
+    for address=0x200,0x2FF,4 do w(address,0xF8)end
+    w(0xB5,1);w(0x80,9);w(0x81,9)
+    if isShadow then
+        w(0x11,1);w(0x91,0x30);w(0xCD,0x80);w(0x2A,y);w(0xA0,facing);w(0xC9,0);w(0x0753,1);w(0x050D,0)
+    else
+        w(0x11,0);w(0x90,0x08);w(0xCC,0x78);w(0x29,y);w(0x9F,facing);w(0xC8,0);w(0x0752,0);w(0x050C,0)
+    end
+end
+for _,actor in ipairs({
+    {name='Barba',shadow=false,base=0x208,x=0x78,pal=0},
+    {name='Shadow',shadow=true,base=0x230,x=0x80,pal=1},
+})do
+    for _,facing in ipairs({1,2})do
+        local dir=facing==1 and 'right' or 'left'
+        add('fall-in-hole '..actor.name..' '..dir..' draws 64px torpedo','BarbaFallDraw',function()
+            fallSetup(actor.shadow,facing,0x60)
+        end,function()
+            local b=actor.base
+            local h0=facing==1 and {0x56,0x4C,0x4A} or {0x4A,0x4C,0x56}
+            local h1=facing==1 and {0x5C,0x5A,0x58} or {0x58,0x5A,0x5C}
+            local tt=facing==1 and {0x06,0x08} or {0x08,0x06}
+            local hattr=(facing==1 and 0x40 or 0)+actor.pal
+            local tattr=(facing==1 and 0x80 or 0xC0)+actor.pal
+            local headOk=true
+            for i=0,2 do
+                local hx=actor.x+(facing==1 and 8 or 0)+i*8
+                headOk=headOk and r(b+i*4)==0x60 and r(b+i*4+1)==h0[i+1] and r(b+i*4+2)==hattr and r(b+i*4+3)==hx
+                headOk=headOk and r(b+12+i*4)==0x70 and r(b+12+i*4+1)==h1[i+1] and r(b+12+i*4+2)==hattr and r(b+12+i*4+3)==hx
+            end
+            check(headOk,actor.name..' '..dir..' downward head rows at Y and Y+16')
+            local torsoOk=true
+            for row=0,1 do
+                local ty=0x60-(row+1)*16
+                local rb=b+24+row*8
+                for c=0,1 do
+                    torsoOk=torsoOk and r(rb+c*4)==ty and r(rb+c*4+1)==tt[c+1]
+                        and r(rb+c*4+2)==tattr and r(rb+c*4+3)==actor.x+8+c*8
+                end
+            end
+            check(torsoOk,actor.name..' '..dir..' draws two inverted torso chunks at Y-16 and Y-32')
+        end)
+    end
+    add('fall-in-hole '..actor.name..' clips both chunks below Y=16','BarbaFallDraw',function()
+        fallSetup(actor.shadow,1,0x08)
+    end,function()
+        local b=actor.base
+        check(r(b)==0x08 and allHidden({b+24,b+28,b+32,b+36}),
+            actor.name..' hides both torso chunks when Y < 16')
+    end)
+    add('fall-in-hole '..actor.name..' clips only upper chunk below Y=32','BarbaFallDraw',function()
+        fallSetup(actor.shadow,2,0x14)
+    end,function()
+        local b=actor.base
+        check(r(b+24)==0x04 and r(b+28)==0x04 and allHidden({b+32,b+36}),
+            actor.name..' draws lower torso at Y-16 and hides upper chunk when 16 <= Y < 32')
+    end)
+end
 
 local function nextTest()
     current=current+1

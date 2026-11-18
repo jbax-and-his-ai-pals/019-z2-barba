@@ -15,8 +15,14 @@ of the 1,200 measured idle and volley frames.
 The body repeats the boss's narrow segmented neck without an added belly coil.
 Vanilla reuses crouch frame 6 during ascent; the renderer selects a separate
 full-body jump pose while airborne, leaving native animation and physics state
-intact. Airborne low attacks also retain the whole body. Only grounded crouch
-uses a compact 24px pose with eight pixels of segmented neck beneath the head.
+intact. Airborne low attacks also retain the whole body. Only grounded crouch and elevator contact use a compact 24px pose with eight
+pixels of segmented neck beneath the head. Boss-defeat shadows (`$DD18` ->
+`BarbaBossShadow` in `src/tall_player.inc` via `FarCall0`) also draw all 9
+`BarbaTallTiles` sprites into `$026C..$0274` + `$0250..$0264` with black palette 2
+so the shadow beside Barba has two torso chunks. Similarly, Dark Barba
+(`src/dark_barba.inc`, bank 5 `$9887`/`$99D0`) stands at 48px during the
+pre-fight landing pause and keeps full two-torso height on ascending jumps and
+airborne slashes.
 
 The player tile allocator reserves sprite pair `$24` for the Myu. The native
 draw mirrors that pair for one crawl frame and `$B0` for the other. Barba's
@@ -126,6 +132,18 @@ and fills that row's former space with the full `$06/$08` torso in OAM
 row and two full torso rows. The new row inherits native facing, palette
 and per-column clipping. The helper restores bank 0 for the native palette
 flash. `death_continue` checks the three rows in both directions.
+
+Drop-shaft falling (`Game Mode $0F`, bank 0 `$8FB7`) patches `$8FC9` to pose
+`$09` and replaces both `$EC02` display calls (`$8FE3` for Barba's black shadow
+and `$8FEE` for Barba) with `BarbaFallDraw` (`src/tall_player.inc`, `BANK0`).
+After `$EC02` draws the two-row downward head, `BarbaFallDraw` draws two
+inverted (`$C0`-flipped) `$06/$08` torso chunks at `head_Y - $10` and
+`head_Y - $20` in OAM `$0218..$0227,y` (`$0208..$022F` for Barba,
+`$0230..$0257` for his shadow), preserving palette/priority and clipping cleanly
+against the top of the screen (`head_Y < $10` / `< $20`) so both Barba and his
+shadow torpedo downward as full 64px silhouettes. `tall_geometry` checks both
+actors, facings and top-edge clips; `state_pack` verifies the live 64px
+torpedo pose for both Barba and his shadow during the Palace 6 drop-shaft fall.
 
 2026-11-16 sprite follow-up: odd-frame priority rotation now swaps only Barba's
 outer head sprites. The lower body stays in `$0214-$021F`; the renderer no longer

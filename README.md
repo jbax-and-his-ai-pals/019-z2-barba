@@ -47,9 +47,9 @@ source-specific patch; the build validates a complete patch round trip.
 The generated ROM is an alpha for testing, not a completed-game release.
 
 On Windows, double-click **play/Play Barba.cmd**, or run `./tools/launch.ps1`.
-It rebuilds the alpha and opens it in Mesen automatically. Keyboard controls:
-arrows move, **X** jumps, **Z** attacks, **Enter** is Start, and **Left Shift** is
-Select. The launcher uses a separate play profile and persistent saves in
+It rebuilds the alpha and opens it in Mesen at 4× windowed scale. The arrows move,
+**X** jumps, **Z** attacks, **Enter** is Start, and **Space** is Select.
+The launcher uses a separate play profile and persistent saves in
 `build/play-saves/`; automated test settings and temporary saves stay separate.
 
 For instant testing checkpoints, double-click **play/Test Barba.cmd**. **F1-F9** jump

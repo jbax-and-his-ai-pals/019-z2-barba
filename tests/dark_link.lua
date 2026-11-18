@@ -21,6 +21,10 @@ local maxDelta=0
 local sawHurtTimer=false
 local sawDeath=false
 local sawTallDarkBarba=false
+local sawTallPause=false
+local pauseAlwaysTall=true
+local sawAirborne=false
+local airborneAlwaysTall=true
 local sawShadowPalette=false
 local sawBlackHurtShadow=false
 local shadowAlwaysBlack=true
@@ -96,7 +100,21 @@ emu.addEventCallback(function()
         if r(0xB6)==1 and r(0xA1)==0x23 then
             sawTrigger=true
             local phase=r(0x63)
-            if phase==3 and r(0x0505)==0 then
+            if phase==3 and r(0x0505)>0 then
+                if r(0x0505)<0x70 and (r(0xC9)&0xF0)==0 then
+                    sawTallPause=true
+                    if r(0x81)~=3 or r(0x0270)~=(r(0x2A)-0x10)
+                        or r(0x0254)~=r(0x2A) or r(0x0260)~=(r(0x2A)+0x10) then
+                        pauseAlwaysTall=false
+                    end
+                end
+            elseif phase==3 and r(0x0505)==0 then
+                if r(0x2A)<0xA0 and r(0x2A)>=0x30 and (r(0xC9)&0xF0)==0 then
+                    sawAirborne=true
+                    if r(0x0270)~=(r(0x2A)-0x10) or r(0x0254)~=r(0x2A) or r(0x0260)~=(r(0x2A)+0x10) then
+                        airborneAlwaysTall=false
+                    end
+                end
                 if not sawActive then
                     sawActive=true
                     startHp=r(0xC2)
@@ -178,6 +196,8 @@ emu.addEventCallback(function()
         check(sawDeath,'Dark Link reached 0 HP with death state ($050D == 0xFF)')
         check(stompSurvived,'Descending onto 4-HP Dark Barba does not stomp-kill him')
         check(sawTallDarkBarba,'Dark Barba renders 24x48 tall top row ($026C at Y - 16)')
+        check(sawTallPause and pauseAlwaysTall,'Dark Barba stands at full 48px height during pre-fight landing pause')
+        check(not sawAirborne or airborneAlwaysTall,'Dark Barba keeps full 48px two-torso height while airborne')
         check(sawShadowPalette,'Dark Barba uses shadow palette 2 ($0753 == 2, OAM attr & 3 == 2)')
         check(shadowAlwaysBlack and sawBlackHurtShadow,
             'Every visible Dark Barba sprite uses black, including native hurt-flash frames')

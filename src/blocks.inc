@@ -137,6 +137,28 @@ SIGN_PENDING = $64D1       ; nonzero: a fireball scorched a sign board ($E3) thi
                            ; bank-3 SignUpdate copies it to the sign actor and clears it.
                            ; Cleared with the ring (BarbaScorchClear covers $64B0-$64D1).
 BarbaTownBurn:
+    lda #>(BarbaTownBurn6-1)
+    pha
+    lda #<(BarbaTownBurn6-1)
+    pha
+    jmp SwapToBank6
+
+BarbaScorchTick:
+    lda #>(BarbaScorchTick6-1)
+    pha
+    lda #<(BarbaScorchTick6-1)
+    pha
+    jmp SwapToBank6
+
+.segment "BANK6"
+BarbaTownBurn6:
+    jsr BarbaTownBurnBody
+    jmp $FFC5
+BarbaScorchTick6:
+    jsr BarbaScorchTickBody
+    jmp $FFC5
+
+BarbaTownBurnBody:
     lda $0480
     clc
     adc #$03
@@ -381,7 +403,7 @@ ScorchOnScreen:
 ; Once per update in outdoor towns or North Palace: count down active flames
 ; and turn expired ones into char (if still on screen). A room change drops
 ; every entry (their addresses are stale).
-BarbaScorchTick:
+BarbaScorchTickBody:
     lda $0561
     cmp SCORCH_ROOM
     beq ScorchRun
@@ -457,3 +479,4 @@ ScorchTiles:
     .byte $56,$57,$58,$59   ; North Palace flame (CHR bank 3)
     .byte $5A,$5B,$5C,$5D   ; North Palace char (CHR bank 3)
     .byte $A4,$C2,$AC,$A7   ; town flame B (CHR bank 7, mirrored columns)
+.segment "BANK0"

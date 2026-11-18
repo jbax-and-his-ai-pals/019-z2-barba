@@ -13,6 +13,9 @@ local worldAt=nil
 local phase='find_palace'
 local actionFrame=nil
 local sawFlameOam,sawFlameTile,sawPalaceSfx=false,false,false
+local sawPalaceFlameCentered,badPalaceFlameX=false,false
+local sawRightFlameCentered,badRightFlameX=false,false
+local leftActionFrame=nil
 
 local function check(ok,msg)
     report:write((ok and 'PASS ' or 'FAIL ')..msg..'\n')
@@ -31,19 +34,22 @@ local function input()
             elseif rel>=35 and rel<40 then b.left=true
             elseif rel==45 then actionFrame=frame; b.b=true end
         elseif phase=='find_forest' then
+            w(0x86,0); w(0x87,0); w(0x88,0); w(0x89,0)
             -- Walk right/up from North Palace until aligned ($7D==0) and facing Forest ($06)
             if r(0x0563)==6 and r(0x7D)==0 then
                 actionFrame=frame
                 b.b=true
                 phase='burning_forest'
             else
-                if (frame%80)<50 then b.right=true else b.up=true end
+                b.right=true
             end
         elseif phase=='burning_forest' then
             if actionFrame and frame==actionFrame+1 then b.b=true end
         elseif phase=='step_onto_burnt' then
             -- Step onto the burnt tile (still facing same direction) to check the next tile in the strip
             if actionFrame and frame>=actionFrame and frame<actionFrame+20 then b.right=true end
+        elseif phase=='check_left_flame' then
+            if leftActionFrame and frame==leftActionFrame then b.b=true end
         end
     end
     emu.setInput(b,0)
@@ -57,24 +63,32 @@ local function tick()
             if r(0x6471)>0 then
                 local y=r(0x02FC)
                 local t=r(0x02FD)
-                if y<0xF0 then sawFlameOam=true end
+                if y<0xF0 then
+                    sawFlameOam=true
+                    if r(0x02FF)==0x94 then sawPalaceFlameCentered=true else badPalaceFlameX=true end
+                end
                 if t==0x60 or t==0x62 then sawFlameTile=true end
             end
             if r(0xEC)==4 or (r(0xED)&0x40)~=0 then sawPalaceSfx=true end
             if frame==actionFrame+20 then
                 check(sawFlameOam,'overworld B draws flame sprite in OAM $02FC')
                 check(sawFlameTile,'overworld flame uses custom CHR tiles $60/$62')
+                check(sawPalaceFlameCentered and not badPalaceFlameX,'right-facing overworld flame X is centered at $94')
                 check(sawPalaceSfx,'breathing fire on Palace triggers reaction SFX')
                 phase='find_forest'
                 actionFrame=nil
             end
         elseif phase=='burning_forest' and actionFrame then
+            if r(0x6471)>0 and r(0x02FC)<0xF0 then
+                if r(0x02FF)==0x94 then sawRightFlameCentered=true else badRightFlameX=true end
+            end
             if frame==actionFrame+6 then screenshot('ow-tree-burn') end
             if frame==actionFrame+20 then
+                check(sawRightFlameCentered and not badRightFlameX,'overworld forest burn flame X is centered on tile ($94)')
                 check(r(0x078B)==0,'Barba has no Hammer ($078B==0)')
-                check(r(0x7C8B)==0x06 and r(0x7C8C)==0x04 and r(0x7C8D)==0x16,
-                    string.format('RLE split into single burnt tile (7C8B=%02X %02X %02X)',
-                        r(0x7C8B),r(0x7C8C),r(0x7C8D)))
+                check(r(0x7CEB)==0x06 and r(0x7CEC)==0x04 and r(0x7CED)==0x46,
+                    string.format('RLE split into single burnt tile (7CEB=%02X %02X %02X)',
+                        r(0x7CEB),r(0x7CEC),r(0x7CED)))
                 phase='step_onto_burnt'
                 actionFrame=frame+1
             end
@@ -82,6 +96,17 @@ local function tick()
             if frame==actionFrame+25 then
                 local nextTerrain=r(0x0563)
                 check(nextTerrain==6,'neighboring tree in horizontal strip remains Forest ($06), got '..nextTerrain)
+                phase='check_left_flame'
+                leftActionFrame=nil
+            end
+        elseif phase=='check_left_flame' then
+            if leftActionFrame==nil and r(0x0736)==5 and r(0x7D)==0 then
+                w(0x0562,2)
+                leftActionFrame=frame
+            elseif leftActionFrame and frame==leftActionFrame+2 then
+                local ok=r(0x6471)>0 and r(0x02FC)<0xF0 and r(0x02FF)==0x74
+                check(ok,string.format('left-facing overworld flame X is centered at $74 (timer=%d y=%02X x=%02X)',
+                    r(0x6471),r(0x02FC),r(0x02FF)))
                 report:write('RESULT '..(errors==0 and 'PASS' or 'FAIL')..'\n')
                 report:close()
                 stopScenario(errors==0 and 0 or 1)

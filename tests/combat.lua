@@ -78,7 +78,8 @@ local function verify(c)
         name..': player pose, origin X and vertical velocity restored')
     check(r(0x70)==0x13,name..': projectile contact does not recoil player')
     check(r(0x480)==0xF8,name..': melee origin remains disabled')
-    check(emu.getState()['mapper.prgReg']==0,name..': player bank restored')
+    local st=emu.getState();local prg=st['mapper.prgReg'] or ((st['mapper.registers6'] or -1)//2)
+    check(prg==0,name..': player bank restored')
 end
 local function nextCase()
     current=current+1
