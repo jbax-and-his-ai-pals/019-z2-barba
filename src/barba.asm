@@ -1,12 +1,12 @@
 ; Original Barba Edition routines. CPU addresses refer to the guarded source ROM.
 .setcpu "6502"
 .export BarbaOverworld, BarbaOverworldA, BarbaDisplay, BarbaUpdate, BarbaInferno, ThunderHit
-.export LavaSurface
+.export LavaSurface, LavaLinkPlayerUpdate
 .export EnemyFireGateway, ShieldFireGateway, LagNmiInBank6
 
 ROAR_TIMER = $05F0 ; cleared by the original $0500..$05FF reset loop; no original references
 .ifdef SAMPLED_ROAR
-ROAR_REQUEST = $05EE ; bit 7 playing, bit 6 full pending, bit 5 injury tail, bit 4 victory draining/done, bit 3 raised head, bit 2 hurt, bit 1 item roar
+ROAR_REQUEST = $05EE ; 7 playing, 6 full pending, 5 injury tail, 4 victory drain/done, 3 raised head, 2 hurt, 1 item, 0 shaft playback or Game Over delay
 ITEM_HOLD = $64D4 ; 1 holding through pickup fanfare, $80 holding through roar
 ROAR_COOLDOWN = $05EF ; start timer; drives injury pitch tail, attacks never roar
 .endif
@@ -15,6 +15,8 @@ INFERNO_TIMER = $6470 ; multi-wave Inferno firestorm countdown
 OW_FIRE_TIMER = $6471 ; overworld flame breath sprite timer
 OW_FIRE_DIR = $6472 ; overworld flame facing direction ($0562)
 INFERNO_AIM = $6473 ; nonzero during Inferno wave emission (dir | volley flags)
+LAIR_CONTROL_LOCK = 2 ; $0728 during the entrance, then 1 until the boss key
+LAIR_SHAKE_X = $64FA   ; signed display scroll offset during the Lava Link entrance roar
 
 .segment "BANK0"
 
@@ -296,6 +298,30 @@ BarbaInferno:
     sta ROAR_TIMER
     jmp $91E6 ; original Thunder effect, including Thunderbird interaction
 
+; $D4F3: suspend player physics while the entrance runs. The rest of
+; the frame still updates Lava Link, the roar, camera shake and rendering.
+LavaLinkPlayerUpdate:
+    lda $0728
+    cmp #LAIR_CONTROL_LOCK
+    bne @native
+    jsr LavaLinkRoom
+    bne @native
+    lda #0
+    sta $14             ; no player delta for the side-view scroll update
+    rts
+@native:
+    jmp $903A
+
+; Other bosses also use nonzero values in the native scroll lock.
+LavaLinkRoom:
+    lda $056B
+    cmp #6
+    bne @done
+    lda $0561
+    cmp #$3A
+@done:
+    rts
+
 ; Hooked at $922A (JSR $E726 inside Thunder_Spell $91E6).
 ; Thunderbird ($22, the only enemy where $9228 sets Y = 1) needs its bank-5
 ; boss-death state ($6E3F = $FF, $B6,x = 1, $0504,x = $FF, $040E,x = $7F from $A3E1)
@@ -338,6 +364,7 @@ BarbaUpdate:
     bcc @roar
     lda #$FA
     sta $057D
+    lsr LAVA_CONTACT
 @roar:
 .ifdef SAMPLED_ROAR
     lda #$00
@@ -377,17 +404,22 @@ RoarPitch:
 
 .include "breath.inc"
 .include "extra_fire.inc"
+.include "shield_rebound.inc"
 .include "tall_player.inc"
 .include "stomp.inc"
 .include "blocks.inc"
 .include "shouts.inc"
 .include "town.inc"
 .include "sign.inc"
+.include "sage_basement.inc"
 .include "scales.inc"
 .include "farcall.inc"
 .include "scanline_irq.inc"
 .include "death_display.inc"
 .include "ending_fire.inc"
+.include "palace_roar.inc"
+.include "boss_meter.inc"
+.include "ow_sparkle.inc"
 .ifdef SAMPLED_ROAR
 .include "sampled_roar.inc"
 .endif
@@ -404,15 +436,13 @@ LavaSurface:
 @water:
     rts
 
-; Execute the original shield handler with its first three bytes restored.
-; SafeNativeShieldFire (bank 0) pushes NativeReturn0-1 so LE654's PLA/PLA
-; stack escape returns through NativeReturn0 instead of mapping-less bank 0.
-NativeShieldFire:
-    jsr $FFC9
-    lda $C8
-    asl
-    jsr $E61A
-    jmp NativeReturn0
+; Only called in palace bank-4 rooms. Carry selects impact vs flight.
+ShieldReboundBank4:
+    php
+    lda #$04
+    jsr $FFCC
+    plp
+    jmp ShieldRebound4
 
 SwapToBank6:
     lda #$06
@@ -472,20 +502,21 @@ NativeReturn0:
     plp
     rts
 
-.segment "BANK6"
-; Lag-frame NMI: run audio driver in bank 6, then restore the actual
-; interrupted bank (bank 0 if $8506 fingerprint == $F0, else area bank $0769)
+.segment "PALACE_SHAKE"
+; Lag-frame NMI: run audio in bank 6, then restore the interrupted PRG bank
+; (bank 0 or 1 by $8506 fingerprint, otherwise the area bank in $0769)
 ; and the interrupted MMC3 bank-select register ($64D5 -> $8000).
 LagNmiInBank6:
     jsr $9000
     pla
+    ldx #$00
     cmp #$F0
-    beq @bank0
-    lda $0769
-    .byte $2C
-@bank0:
-    lda #$00
-    tax
+    beq @bank
+    inx
+    cmp #$7D
+    beq @bank
+    ldx $0769
+@bank:
     pla
     tay
     lda #>($C070-1)
@@ -506,3 +537,5 @@ LagNmiInBank6:
 .ifdef WALDO_PORTAL
 .include "waldo_portal.inc"
 .endif
+
+.include "encounter_trail.inc"

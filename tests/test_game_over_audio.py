@@ -70,6 +70,35 @@ class GameOverAudioTests(unittest.TestCase):
             self.assertLessEqual(len(encoded), size)
             self.assertLessEqual(abs(decode(encoded)[-1]-64), 2)
 
+    def test_soften_keeps_the_note_and_reduces_upper_harmonics(self):
+        source, level = bytearray(241), 64
+        sample_rate = 1789773/54
+        for bit in range(len(source)*8):
+            phase = 2*math.pi*195*bit/sample_rate
+            target = 64+8*math.sin(phase)+4*math.sin(2*phase)+3*math.sin(4*phase)
+            up = target >= level
+            if up:
+                source[bit//8] |= 1 << (bit%8)
+            level += 2 if up else -2
+
+        original = decode(octave_up(source))
+        softened = decode(octave_up(source, soften=True))
+
+        def power(pcm, hz):
+            weighted = [
+                (v-64)*(.5-.5*math.cos(2*math.pi*i/(len(pcm)-1)))
+                for i, v in enumerate(pcm)
+            ]
+            phase = 2*math.pi*hz/sample_rate
+            return abs(sum(v*complex(math.cos(phase*i), math.sin(phase*i))
+                           for i, v in enumerate(weighted)))**2
+
+        self.assertGreater(power(softened, 390), power(original, 390)*.8)
+        self.assertLess(power(softened, 780), power(original, 780)*.7)
+        self.assertLess(power(softened, 1560), power(original, 1560)*.25)
+        self.assertEqual(len(softened), len(original))
+        self.assertEqual(softened[-1], 64)
+
     def test_lower_rate_keeps_pitch_and_duration(self):
         # A gentle 200-Hz tone is re-encoded, not slowed down. This catches
         # confusing lower sample data rate with lower playback pitch.

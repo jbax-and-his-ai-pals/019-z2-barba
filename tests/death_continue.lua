@@ -21,6 +21,7 @@ local function isBarba(pc)
     if LABELS.RoarAudio and pc>=LABELS.RoarAudio and pc<0x8E00 then return true end
     if LABELS.RoarItemFanfareStart and pc>=LABELS.RoarItemFanfareStart
         and pc<LABELS.RoarItemFanfareEnd then return true end
+    if LABELS.BarbaWaldoPortal6 and pc>=LABELS.BarbaWaldoPortal6 and pc<0x8C00 then return true end
     if LABELS.RoarLaughDelay and pc>=LABELS.RoarLaughDelay and pc<0x8FB4 then return true end
     for _,rg in ipairs(barbaRanges) do if pc>=rg[1] and pc<=rg[2] then return true end end
     return false

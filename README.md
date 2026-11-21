@@ -1,73 +1,85 @@
 # Zelda II — Barba Edition
 
-A work-in-progress NES ROM hack that makes Barba the playable protagonist in
-*Zelda II: The Adventure of Link*.
+Play as Barba, the dragon from Palace 6, in *Zelda II: The Adventure of Link*.
+Hyrule's map, palace order, item gates, and much of the original soundtrack
+remain familiar. Fire breath, dragon techniques, and new village reactions
+change how you play.
 
-The design uses a compact serpentine dragon, preserves the original progression,
-and targets an ordinary MMC1 cartridge with NES-native audio.
+## Current development build
 
-## Development alpha
+- **Dragon movement and combat.** The 24×48 Barba crouches, folds his head
+  under low ceilings, stomps weak enemies, and fires five-shot diagonal volleys.
+  In the air, Up+B breathes upward and Up triggers the rising head-butt
+  after learning Upward Thrust. Down triggers the downstab after learning
+  Downward Thrust. Fireballs break glove-gated blocks and reveal hidden red jars.
+  The Fairy spell becomes the flying Wyrmling form.
+- **Exploration.** Barba can wade and jump in palace and encounter liquids.
+  Town hazards remain lethal, including the quicksand under Saria's bridges.
+  On the overworld, breath can burn individual forest tiles and reveal Hidden
+  Kasuto. Clouds drift, grass sways, and water and lava ripple.
+- **Town reactions.** Villagers may flee, hide, or turn to ash. Fire can scorch
+  buildings, ground, and signs. Floating panic shouts and a rampage counter
+  track the commotion. Hold Up near a wanderer for direct dialogue.
+- **Spells and bosses.** SCALES shields Barba. With METEOR active, Down+B
+  dives from midair and sends out floor shockwaves. INFERNO sends out four
+  waves of fire. All six palace
+  bosses can be beaten with breath. Link takes Barba's place in Palace 6,
+  and Dark Barba waits in the Great Palace.
+- **Presentation.** The development build adds a sampled roar, raised-head
+  item and victory celebrations, a revised Game Over screen and laugh
+  sequence, a reworked title, and a custom ending.
 
-The local build currently includes:
+Some dialogue contains strong profanity.
 
-- Thin, boss-derived 24x48 side-view Barba with full-body jumps, a compact crouched neck, jaw animation and ceiling folding,
-  an 8x16 flying wyrmling,
-  and a dedicated 16x16 overworld avatar with directional animation.
-- Evenly spaced five-shot downward-diagonal volleys at every health level, with
-  glove-gated brick breaking, upward breath / rising head-butt (Upward Thrust),
-  downstab (Downward Thrust), and weak-enemy stomp. Fire empowers projectile damage
-  against Fire-only enemies.
-- Outdoor villagers flee at a catchable speed, vanish at existing doors, or burn into temporary ash piles
-  when hit, with floating panic shouts, scorchable town props, and a rampage combo banner.
-  Indoor and story-critical NPCs are protected. Hold Up near a wanderer for faster direct dialogue.
-- Palace lava surface support with partly submerged lava pose and normal movement/jumping. Water outside
-  palaces retains its original death behavior.
-- Custom title screen (`BARBA I`), 1-Up dolls, dragon spell names with Inferno roar,
-  Palace 6 "Lava Link" boss, Dark Barba encounter, and custom ending sequence.
+## Patching and compatibility
 
-The tall head is visual: terrain and enemy contact retain the native collision
-body. Crouching fits the original low lane; stone ceilings fold the head down.
+Apply the BPS for your version to a clean, headered USA PRG0 Zelda II ROM
+(Mapper 1 / MMC1). The source SHA-256 is
+`ad8c0fbcf092bf84b48e69fd3964eea4ed91bfe62abc352943d537979782680c`.
 
-**Playable alpha.** Full-game playthrough and second-emulator cross-checking remain.
-See [status and verification](docs/STATUS.md) for details.
+The **v1.05 tag** identifies the earlier MMC1 release. The **current development
+build** produces a different format: NES 2.0 Mapper 176 (FK23C), with a
+playable *Where's Barba?* crossover hidden in Rauru. Use Mesen 2.1.1 for the
+combined build. See [current verification and open issues](docs/STATUS.md).
 
-## Development
+## Build and playtest
 
-The source ROM belongs at `roms/z2.nes`. It is never modified in place.
-ROMs, extracted game assets, emulator saves, and downloaded tools are excluded
-from this repository. Build outputs and patches are generated locally.
+Place the source ROMs in `roms/z2.nes` and `roms/waldo.nes`, and the local
+roar sample in `roms/roar.wav`. The source files are read locally. The
+[build guide](docs/BUILD.md) lists input checksums, audio options, and outputs.
 
 ```powershell
 .\tools\bootstrap.ps1 -WithEmulator
 python tools/build.py
 ```
 
-Open `play/barba.nes` (also written to `build/barba.nes`) in a standard NES emulator. `play/barba.bps` is the
-source-specific patch; the build validates a complete patch round trip.
-The generated ROM is an alpha for testing, not a completed-game release.
+The build writes `barba.nes` and `barba.bps` to both `build/` and `play/`.
+On Windows, **play/Play Barba.cmd** rebuilds and opens the ROM in Mesen.
+Arrows move, **X** jumps, **Z** attacks, **Enter** starts or pauses, and
+**Space** selects or casts. Normal play saves use `build/play-saves/`.
+Run `./tools/launch.ps1 -NoRebuild` to open an existing playable artifact.
 
-On Windows, double-click **play/Play Barba.cmd**, or run `./tools/launch.ps1`.
-It rebuilds the alpha and opens it in Mesen at 4× windowed scale. The arrows move,
-**X** jumps, **Z** attacks, **Enter** is Start, and **Space** is Select.
-The launcher uses a separate play profile and persistent saves in
-`build/play-saves/`; automated test settings and temporary saves stay separate.
+**play/Test Barba.cmd** gives you Core checkpoints on **F1–F10**, from the
+starting castle through the Great Palace approach. The other launchers
+cover bosses, towns, scenery, item and gem celebrations, and Game Over.
+Each set has an isolated Mesen profile. See the [checkpoint guide](docs/TEST-PACK.md)
+for the key map and the crossover shortcuts.
 
-For instant testing checkpoints, double-click **play/Test Barba.cmd**. **F1-F9** jump
-to the castle, combat, all-spells sandbox, lava ledge, lava surface, Barba boss,
-sea crossing, and a Rauru town street. See [the test pack guide](docs/TEST-PACK.md). Test progress uses
-a separate Mesen profile and never overwrites your normal play save.
+## Project notes and credits
 
-See [status](docs/STATUS.md), [build instructions](docs/BUILD.md),
-[town reactions](docs/TOWNS.md), [research notes](docs/RESEARCH.md), and
-[archived design docs](docs/archive/).
+See [combat and geometry](docs/BREATH-IMPLEMENTATION.md),
+[town behavior](docs/TOWNS.md), [research notes](docs/RESEARCH.md), and the
+[archived changelog](docs/archive/CHANGELOG.md).
 
-This is an unofficial fan project. Zelda II and its original characters,
+AI assisted with the 6502 assembly, Python build and asset tools, emulator
+tests, and new visual assets under human direction and playtesting. Most
+character and scenery art is built from tiles extracted from the local
+Zelda II ROM. The repository tracks the build recipes and authored assets.
+
+Research and tooling credits include Trax's Zelda II disassembly, the
+[FiendsOfTheElements buildable fork](https://github.com/FiendsOfTheElements/z2disassembly),
+[NESdev](https://www.nesdev.org/wiki/Nesdev_Wiki), [cc65](https://cc65.github.io/),
+and [Mesen](https://github.com/SourMesen/Mesen2).
+
+This is an unofficial fan project. The original games and their characters,
 graphics, music, and game data belong to their respective owners.
-
-## Credits
-
-Research references include Trax's Zelda II disassembly and the
-[FiendsOfTheElements buildable version](https://github.com/FiendsOfTheElements/z2disassembly),
-the [NESdev documentation](https://www.nesdev.org/wiki/Nesdev_Wiki),
-[cc65](https://cc65.github.io/), and [Mesen](https://github.com/SourMesen/Mesen2).
-Original game code and graphics are obtained only from the user's local ROM.

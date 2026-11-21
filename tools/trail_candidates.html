@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trail Candidates</title>
+<style>
+  :root { --bg:#16181d; --panel:#20232a; --ink:#e8e6e0; --dim:#9a9890; --accent:#ffa839; --line:#33363e; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.4 system-ui, sans-serif; padding:16px; }
+  h1 { font-size:18px; margin:0 0 4px; }
+  h2 { font-size:15px; margin:20px 0 8px; color:var(--accent); }
+  p.note { color:var(--dim); margin:0 0 12px; max-width:70ch; }
+  .stage { display:flex; gap:20px; flex-wrap:wrap; align-items:flex-start; }
+  .controls { display:grid; grid-template-columns:auto 1fr; gap:6px 10px; align-items:center; background:var(--panel); padding:12px; border-radius:8px; }
+  select, button { background:#2b2f37; color:var(--ink); border:1px solid var(--line); border-radius:4px; padding:4px 6px; font:inherit; }
+  canvas { image-rendering:pixelated; background:#5c94fc; border-radius:4px; }
+  .grid { display:flex; flex-wrap:wrap; gap:12px; }
+  .card { background:var(--panel); border:2px solid transparent; border-radius:8px; padding:8px; cursor:pointer; text-align:center; }
+  .card.sel { border-color:var(--accent); }
+  .card span { display:block; font-size:12px; color:var(--dim); margin-top:4px; }
+  .card canvas { background:#2a2d34; }
+</style>
+</head>
+<body>
+<h1>Encounter trail candidates</h1>
+<p class="note">Local-only sheet (contains ROM-extracted pixels; do not share). Head and upper torso are untouched.
+Click a card to swap that part into the live preview. Torso and tip each follow Barba on a delayed Y, like the game.</p>
+
+<div class="stage">
+  <canvas id="live" width="64" height="56"></canvas>
+  <div class="controls">
+    <label>Corner</label><select id="selCorner"></select>
+    <label>Torso</label><select id="selTorso"></select>
+    <label>Tip</label><select id="selTip"></select>
+    <label>Pose</label><select id="selPose"></select>
+    <label>Facing</label><select id="selFace"><option value="L">left (game default)</option><option value="R">right</option></select>
+    <label>Segments</label><select id="selSeg"><option value="1">1 torso segment</option><option value="2">2 torso segments</option></select>
+    <label>Motion</label><select id="selMotion"><option value="walk">walk sway</option><option value="hop">hop</option><option value="still">still</option></select>
+    <label>Preset</label><button id="btnCurrent">Show the build's trail</button>
+  </div>
+  <canvas id="spread" width="200" height="56"></canvas>
+</div>
+
+<h2>Corners (16×16, bottom row center + back)</h2><div class="grid" id="gCorners"></div>
+<h2>Rotated torso (16×16)</h2><div class="grid" id="gTorsos"></div>
+<h2>Tips (8×16, one sprite)</h2><div class="grid" id="gTips"></div>
+
+<script>
+const DATA = /*DATA*/null;
+if (!DATA) {
+  document.body.innerHTML = '<h1>Template only</h1><p class="note">This file has no sprite data. Run ' +
+    '<code>python tools/trail_candidates.py</code>, then open <code>build/trail-candidates.html</code>.</p>';
+  throw new Error('template opened directly');
+}
+// Native NES palette for Barba: 1 dark, 2 red, 3 orange (matches build preview colours)
+const COLORS = ['', '#14161c', '#c22b19', '#ffa839'];
+const S = 6;
+const state = { corner: null, torso: null, tip: null, pose: 'walk0', face: 'L', seg: 1, motion: 'walk', current: false };
+
+function blit(ctx, rows, ox, oy, flip, totalW) {
+  if (!rows) return;
+  for (let y = 0; y < rows.length; y++) for (let x = 0; x < rows[y].length; x++) {
+    const v = +rows[y][x]; if (!v) continue;
+    const px = flip ? totalW - 1 - (ox + x) : ox + x;
+    ctx.fillStyle = COLORS[v]; ctx.fillRect(px, oy + y, 1, 1);
+  }
+}
+
+function compose(ctx, W, oxBase, oyBase, pose, dyTorso, dyTip, flip, dySeg2) {
+  if (dySeg2 === undefined) dySeg2 = Math.round((dyTorso + dyTip) / 2);
+  const body = DATA.poses[pose];
+  blit(ctx, body, oxBase, oyBase, flip, W);
+  if (state.current) {
+    blit(ctx, DATA.corners['In build'], oxBase + 8, oyBase + 32, flip, W);
+    // the build's trail: torso pair on one delayed Y, 16px tip further delayed
+    const tr = DATA.current_trail;
+    blit(ctx, tr.map(r => r.slice(0, 16)), oxBase + 24, oyBase + 32 + dyTorso, flip, W);
+    blit(ctx, tr.map(r => r.slice(16, 32)), oxBase + 40, oyBase + 32 + dyTip, flip, W);
+    return;
+  }
+  // Trail sprites sit later in OAM than the body, so the corner wins overlaps.
+  const seg = state.seg || 1;
+  blit(ctx, DATA.tips[state.tip], oxBase + 24 + 16 * seg, oyBase + 32 + dyTip, flip, W);
+  if (seg === 2) blit(ctx, DATA.torsos[state.torso], oxBase + 40, oyBase + 32 + dySeg2, flip, W);
+  blit(ctx, DATA.torsos[state.torso], oxBase + 24, oyBase + 32 + dyTorso, flip, W);
+  blit(ctx, DATA.corners[state.corner], oxBase + 8, oyBase + 32, flip, W);
+}
+
+// Simulated motion: body Y history, torso reads 3 frames back, tip 6.
+const hist = []; let frame = 0;
+function bodyState(f) {
+  if (state.motion === 'still') return { pose: state.pose, y: 0, sway: 0 };
+  if (state.motion === 'walk') {
+    const seq = ['walk0', 'walk1', 'walk0', 'walk2'];
+    const p = seq[Math.floor(f / 6) % 4];
+    return { pose: p, y: 0, sway: p === 'walk1' ? -2 : p === 'walk2' ? 2 : 0 };
+  }
+  const t = (f % 48) / 48; const y = -Math.round(Math.sin(t * Math.PI) * 14);
+  return { pose: 'jump', y, sway: 0 };
+}
+
+function drawLive() {
+  const c = document.getElementById('live'); const ctx = c.getContext('2d');
+  const W = 96; c.width = W; c.height = 72; c.style.width = W * S + 'px'; c.style.height = 72 * S + 'px';
+  ctx.clearRect(0, 0, W, 72);
+  const b = bodyState(frame);
+  hist.push(b.y + b.sway); if (hist.length > 7) hist.shift();
+  const at = k => hist[Math.max(0, hist.length - 1 - k)];
+  const flip = state.face === 'R';
+  compose(ctx, W, 4, 18 + b.y, b.pose, at(state.seg === 2 ? 2 : 3) - b.y, at(6) - b.y, flip, at(4) - b.y);
+  frame++;
+}
+
+function drawSpread() {
+  // Static: rest, both sway extremes, and a split-seam stress (-2 torso, +2 tip).
+  const c = document.getElementById('spread'); const ctx = c.getContext('2d');
+  const cases = [[0, 0], [-2, -2], [2, 2], [-2, 2], [2, -2]];
+  const W = cases.length * 92; c.width = W; c.height = 56; c.style.width = W * 2 + 'px'; c.style.height = 56 * 2 + 'px';
+  ctx.clearRect(0, 0, W, 56);
+  cases.forEach(([a, b], i) => {
+    const tmp = document.createElement('canvas'); tmp.width = 92; tmp.height = 56;
+    compose(tmp.getContext('2d'), 92, 4, 4, state.pose === 'walk0' ? 'idle' : state.pose, a, b, state.face === 'R');
+    ctx.drawImage(tmp, i * 92, 0);
+  });
+}
+
+function card(container, kind, name, rows) {
+  const d = document.createElement('div'); d.className = 'card';
+  const cv = document.createElement('canvas'); const w = rows[0].length;
+  cv.width = w; cv.height = 16; cv.style.width = w * 6 + 'px'; cv.style.height = 16 * 6 + 'px';
+  blit(cv.getContext('2d'), rows, 0, 0, false, w);
+  d.appendChild(cv); const s = document.createElement('span'); s.textContent = name; d.appendChild(s);
+  d.onclick = () => { state[kind] = name; state.current = false; sync(); };
+  d.dataset.kind = kind; d.dataset.name = name; container.appendChild(d);
+}
+
+function fill(sel, obj, kind) {
+  for (const k of Object.keys(obj)) { const o = document.createElement('option'); o.value = k; o.textContent = k; sel.appendChild(o); }
+  sel.onchange = () => { state[kind] = sel.value; state.current = false; sync(); };
+}
+
+function sync() {
+  document.getElementById('selCorner').value = state.corner;
+  document.getElementById('selTorso').value = state.torso;
+  document.getElementById('selTip').value = state.tip;
+  document.querySelectorAll('.card').forEach(el => el.classList.toggle('sel', !state.current && state[el.dataset.kind] === el.dataset.name));
+  try { localStorage.setItem('trailPick', JSON.stringify(state)); } catch (e) {}
+  drawSpread();
+}
+
+fill(document.getElementById('selCorner'), DATA.corners, 'corner');
+fill(document.getElementById('selTorso'), DATA.torsos, 'torso');
+fill(document.getElementById('selTip'), DATA.tips, 'tip');
+fill(document.getElementById('selPose'), DATA.poses, 'pose');
+for (const [k, v] of Object.entries(DATA.corners)) card(document.getElementById('gCorners'), 'corner', k, v);
+for (const [k, v] of Object.entries(DATA.torsos)) card(document.getElementById('gTorsos'), 'torso', k, v);
+for (const [k, v] of Object.entries(DATA.tips)) card(document.getElementById('gTips'), 'tip', k, v);
+state.corner = 'Elbow round'; state.torso = 'Turned, closed seam'; state.tip = 'Flick up 16';
+state.pose = 'walk0';
+// Restore a saved pick only where it still names an existing candidate.
+try {
+  const s = JSON.parse(localStorage.getItem('trailPick') || 'null') || {};
+  const pools = { corner: DATA.corners, torso: DATA.torsos, tip: DATA.tips, pose: DATA.poses };
+  for (const [k, pool] of Object.entries(pools)) if (s[k] in pool) state[k] = s[k];
+  if (s.face === 'L' || s.face === 'R') state.face = s.face;
+  if (s.seg === 1 || s.seg === 2) state.seg = s.seg;
+} catch (e) {}
+document.getElementById('selFace').value = state.face;
+document.getElementById('selSeg').value = String(state.seg);
+document.getElementById('selPose').value = state.pose;
+document.getElementById('selPose').onchange = e => { state.pose = e.target.value; sync(); };
+document.getElementById('selFace').onchange = e => { state.face = e.target.value; sync(); };
+document.getElementById('selSeg').onchange = e => { state.seg = +e.target.value; sync(); };
+document.getElementById('selMotion').onchange = e => { state.motion = e.target.value; hist.length = 0; };
+document.getElementById('btnCurrent').onclick = () => { state.current = true; sync(); };
+sync();
+setInterval(drawLive, 1000 / 30);
+</script>
+</body>
+</html>

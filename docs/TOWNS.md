@@ -1,4 +1,8 @@
-# Reactive town prototype
+# Town reactions and dialogue
+
+Use Core F8 for Rauru, Towns and World F2 for Ruto's crowd and Error, and
+Towns and World F3 for Saria's bridge hazards. The [checkpoint guide](TEST-PACK.md)
+also covers the Rauru crossover and the Key Items F2 mirror handoff.
 
 All live outdoor wandering villagers (`$10..$12`, `$19..$20`) can flee, shout, burn and retreat.
 Eligibility (`TownEligible`) requires slot value 1, town world 1 or 2, and an outdoor street
@@ -23,6 +27,10 @@ action rechecks eligibility in `src/town.inc`.
   The Darunia knight teaches upstab with “JUMP. HOLD / UP TO RAM / HEADFIRST.”
   Both first-time lessons use their original bank-3 message slots (`$A99E` and
   `$ADBF`) and the native unlock and dialogue timing.
+- The Saria mirror lady's post-mirror line (`$A656`) is patched in place to
+  “OH MY GOD! / MY MIRROR! / FOLLOW ME.”
+- Saria Town's bridge rooms (`$0707=1`, `$056B=2`, `$0561=$06/$07`) have shimmering quicksand. `TownQuicksandChr6` cycles R1 through `146, 148, 150, 152` in room `$06` and `128, 130, 132, 254` in room `$07`. In room `$06` it sets all four attribute bytes at `$27F8-$27FB` to `$05`, giving the full pit the same beige `$37` sand and `$0F` shadows. Other town rooms restore base R1. Touching the quicksand is lethal to Barba (`LavaSurfaceBody` in `src/farcall.inc`). Load Towns and World F3 and walk right until both halves of the quicksand are visible. `tests/saria_quicksand.lua` checks color across the full width after scrolling.
+- The bridge guard in Saria's house (room `$1E`) says "QUICKSAND! / LOCALS / ONLY." before Bagu's note. The note still selects the crossing dialogue and sets the bridge flag. Two tan sand tiles extend west of Saria's north entrance, with blue water between the two sides of town. Open **Test Barba - Saria Quicksand.cmd**. **F1** starts on the map just above the sandbar. Walk down to enter town. **F2** starts beside the guard. Press Up to talk.
 - Wanderers panic within 72 pixels, or 96 during an attack, on the same floor.
   `TownPickEscapeDir` picks the direction away from Barba toward the nearest
   doorway (`$8B` / `$91`) or room edge (`$69C4` / `$69C7+1`). They flee at
@@ -38,9 +46,15 @@ action rechecks eligibility in `src/town.inc`.
   house/quest flags. Native door entry (`$98AB`) is also hooked to
   `TownDoorCoords` / `TownDoorEmerged` so calm/non-panicked villagers entering a door derive the
   exact column and page from `$DC/$DD` instead of `$4E,x + L9780,y` (which
-  drew a duplicate door one column left of the real doorway), and house-openers emerging from inside (`L97F5`, `$AF = $81`) recover their doorway from `($4E,x - L9740,y)` and `$3C,x` before `LEA32` probes an adjacent column. PPU writes are skipped if the doorway has scrolled
-  offscreen and deferred if the `$0302` PPU buffer is busy. Without a door
-  they run offscreen. House-opening villagers (`$13..$18`) that spawn hidden
+  drew a duplicate door one column left of the real doorway), and house-openers emerging from inside (`L97F5`, `$AF = $81`) recover their doorway from `($4E,x - L9740,y)` and `$3C,x` before `LEA32` probes an adjacent column. Villager panic
+  animations defer PPU writes when the buffer is busy.
+  The shared renderer at `$9950` checks the full world coordinate and the
+  upper door metatile (`$8B`) before queuing any door redraw. The hardware
+  reuses a nametable every two world pages, so a late close at Rauru `$0220`
+  could draw over the grass at `$0020`. `tests/rauru_rogue_door.lua` forces
+  that close and a close aimed directly at the grass, then checks that the
+  visible real doorway still redraws. Villagers without a door run offscreen.
+  House-opening villagers (`$13..$18`) that spawn hidden
   inside a closed door (`$AF = $80`, `Y = $A8`) stay hidden (`TownHideOAM`)
   rather than mistaking native `$80` for `TownFlee`. They emerge only when
   Barba is really within 96 px of them (`TownOpenerGate`, 16-bit distance):
@@ -87,9 +101,11 @@ PPU text packet, input lock or pause. The global cooldown is 120 updates
 
 ### Shout word above the villager
 
-The shouting villager carries a short word drawn as 8x16 sprites
-2 px above its head. Eight phrases rotate: "SHIT!", "RUN!", "FUCK!", "OH NO",
-"OMG!", "WTF!", "OH GOD", "HELP!". Type and `$6469` cycle select the phrase.
+The shouting villager carries a phrase drawn as 8x16 sprites above its head.
+Phrases with "OH" and "SAVE ME!" use two independently centered rows, with
+sprite Y values 16 px apart. "BARBA!" uses a tile that fits "BA" into a single
+sprite. This keeps every phrase at five sprites per scanline or fewer. Type
+and the `$6469` cycle select the phrase.
 `TownRequestShout` records the actor slot (`$6465`), word
 (`$6467`) and a 100-update timer (`$6468`). `BarbaShouts` runs at `$D50D`,
 after the native actor loop, and each frame recomputes the word's position
@@ -106,19 +122,17 @@ villager: doorway or offscreen despawn (`$B6`), burning or ash
 (`$AF`), or an incompatible actor state. It is also cancelled on timer
 expiry, on room or world change, and on any dialogue, menu or transition
 (`$074C`, `$DE`, `$0726`, mode not `$0B`). Talking skips the native OAM
-clear, so the cancel path hides the five entries itself. A burn-triggered
+clear, so the cancel path hides the glyph entries itself. A burn-triggered
 request therefore leaves no visible word. Up-to-talk is unchanged.
 
-- **OAM:** five entries, `$E0..$F0`. Natively these are the enemy-projectile
-  windows `$E0/$E8/$F0` from the `$D59B` rotation. A census loaded all 63
-  town rooms (`$00..$3E`, with walking and fire). No visible entry appeared in
-  `$E0..$F4` on any frame without a word. Both town worlds load rooms from the
-  same area-pointer table (`$C4BD` offset 0), so this covers them. That
-  equivalence was read from the source, not loaded in a world-2 run. They are
-  written only while a word is
-  live in town play. The word also yields any frame an enemy projectile
-  (`$87..$8C`) exists. On a scene change the word is dropped without writing
-  OAM, because the new scene may own `$E0`.
+- **OAM** uses up to seven entries at offsets `$00,$28,$2C,$30,$34,$40,$DC`
+  in `$0200-$02FF`. The word yields its shared slots while any enemy projectile
+  (`$87..$8C`) exists. A scene change clears the word state and leaves sprite
+  setup to the incoming scene. While a villager shout is active,
+  `ShoutOamPriority6` in `src/scanline_irq.inc` keeps Barba's sprites in
+  `$6500..$6528` and moves the glyphs to `$652C..$6544` for DMA. Barba
+  covers the letters he crosses. The five-sprite text budget and Barba's
+  three columns fit within the NES limit of eight sprites per scanline.
 - **Tiles:** odd 8x16 tile bytes select the `$1000` table. In towns that table
   is 4K CHR bank 7, the town background bank, which native sprite 0 already
   uses for `$C5`. Even bytes select `$0000`, town sprite bank 6. An 8x16 byte
@@ -131,9 +145,9 @@ request therefore leaves no visible word. Up-to-talk is unchanged.
   Bank-6 glyph pairs (even bytes; vanilla XP score digits and Link art, safe because
   only towns map sprite bank 6 and towns have no XP drops; overworld encounters
   map CHR = PRG bank x2, i.e. 2 or 4, at `$CD78`): `$6C` (X), `$78..$7A`, `$7C` (H),
-  `$9C..$A6`, `$AA` (digits 1-9), `$AE` (B). Bank 7 has no free pair left. These
+  `$9C..$A6`, `$AA` (digits 1-9), `$AE` (BA). Bank 7 has no free pair left. These
   are replaced in their bank only. Letters are recolored at build time from the
-  user's own ROM font (`$DA` + letter). `!` is authored in
+  user's own ROM font (`$DA` + letter). `!` and `BA` are authored in
   `assets/shout_glyphs.json`. The build checks a hash of each original pair
   before writing it (`SHOUT_PAIR_SHA256` in `tools/assets.py`).
   `tests/shout_follow.lua` also checks that the dialogue box and the pause
@@ -143,10 +157,6 @@ request therefore leaves no visible word. Up-to-talk is unchanged.
 - **Palette:** town sprite palette 2 (`$0F` black, `$16` red, `$36` pale),
   the same one the ash pile uses. The letters use `$36` with a 1-px black
   outline, which reads over sky and white brick.
-- **Scanlines:** standing on the same floor, Barba's three head sprites share
-  the word's 16 rows, which makes 8 sprites. A fireball crossing that band
-  drops letters first, because `$E0+` has the lowest priority. This is
-  cosmetic.
 - **Subtitle:** retired. `tests/shouts.lua` checks that the former top-HUD
   subtitle span stays unchanged while the floating word appears.
 
@@ -154,8 +164,9 @@ request therefore leaves no visible word. Up-to-talk is unchanged.
 the fleeing villager to within 2 px in the same frame through scrolling, and
 expires. It also checks that the word hides offscreen, at a real doorway (and
 that the doorway's PPU tiles open and close), on ignition, on a scene change,
-through an Up conversation and in the pause menu. Finally, it checks per-glyph
-clipping at both screen edges.
+through an Up conversation and in the pause menu. It also checks per-glyph
+clipping at both screen edges, then simulates the PPU's eight-sprite
+evaluation on every line of a seven-glyph shout throughout a jump.
 
 `src/shouts.inc` uses `$05EA` as a reset guard and `$6460..$6469` for
 scene identity, cooldown, request, actor, Up latch, word, timer and cycle,
@@ -163,9 +174,13 @@ outside the backed projectile records. Shouts do not append to native PPU queues
 
 Ash uses generated-actor states `$A0..$BF`, two authored sprite pairs at
 `$7E/$80`, and the town's charcoal/ember NPC palette. It draws only at the
-original actor's feet. Ash cannot talk, flee, be damaged again, or alter a
-background tile. It expires after roughly two seconds; room reset still clears
-actors normally. The art recipe is `assets/ash.json`.
+original actor's feet. Most ash cannot talk, flee, be damaged again, or alter a
+background tile, and expires after roughly two seconds; room reset still clears
+actors normally. Error of Ruto (`$0707=1`, `$056B=1`, `$A1,x=$0E`) is the
+exception: `ErrorAshCheck` (`src/sign.inc`) keeps his ash pile persistent until
+the room reloads and lets `Up` or `B` open `"I AM / ASH PILE."` (`ErrorAshText`)
+through `TownSetNpcDialog` while keeping the ash sprites visible. The art recipe
+is `assets/ash.json`.
 
 The prototype borrows each generated actor's `$AF` state. The native generator
 clears it on spawn. Conversations already in progress finish normally.
@@ -290,17 +305,19 @@ time, producer 2026-11-16) and each later read moves to the next (producer-picke
   spacing, fire palette 1, and tier-up jitter; tiers 4–5 use 10 px spacing, palette 1/2
   strobe, continuous `±1`/`±2 px` shake, and two flanking `$84` flame sprites on `GODLIKE!`.
   New tiers trigger `$ED |= $10` SFX and an 8-frame drop-in slam (`COMBO_SLAM` `$6488`).
-- **OAM & lifecycle:** Uses 16 town-free OAM slots (`$DC..$F4, $FC, $28..$34, $D8, $64, $AC, $94`) on disjoint
-  rows (`+$10` for `KILL!` on tiers 1–4; `+$20` for the centered `X<pts>` combo counter on tiers 1–4, or `+$10`
-  directly under `GODLIKE!`, so 8x16 scanlines never overlap; on
-  `GODLIKE!`, the two flanking `$84` flames sit at `+$03` to align vertically with the
-  glyphs and alternate OAM priority with `E!` on odd frames under the 8-sprite limit),
-  suppressing villager `ShoutWord` while active,
-  blinking during the final 45 frames, and hiding on pause/dialogue/scene change.
+- **OAM & lifecycle.** The banner uses `$DC..$F4, $FC, $34, $64, $AC, $94`.
+  The counter uses dedicated early offsets `$00/$28/$2C/$30` so it survives
+  crowded scanlines. The `KILL!` row sits at `+$10` and the counter at
+  `+$20` for tiers 1–4. On `GODLIKE!` the counter sits at `+$10` and the
+  two flanking `$84` flames at `+$03` alternate OAM priority with `E!`.
+  The combo suppresses villager `ShoutWord` while active, blinks during
+  the final 45 frames, and hides on pause, dialogue, or scene change.
   The `X` and `1`–`9` counter glyphs are even bytes in town sprite bank 6 (see Tiles above); `0` reuses
   the letter `O` glyph (1 px taller than a native `0`) because no pair was left for it. Producer accepted this (2026-11-15).
-- **Test:** `tests/town_combo.lua` verifies `<12` inactivity, tiers 1/2/4/5, 2–3 digit `X<pts>` counters, strobe/flames, pause hiding,
-  decay warning blink, and expiry cleanup.
+- **Test.** `tests/town_combo.lua` verifies tier thresholds, counter digits,
+  strobe and flames, pause hiding, decay blink, and expiry. It simulates
+  sprite evaluation on crowded scanlines for `MULTI KILL!`, `ULTRA KILL!`,
+  and a three-digit `GODLIKE!` counter.
 
 ## Validation and limits
 
@@ -327,3 +344,22 @@ the replacement rendering/lifecycle in detail; the subtitle-only
 `tests/shout_queue.lua` is retired. `tests/dialogue_speed.lua` checks fast
 letters/line breaks for generated and scripted outdoor villagers, native
 protected-NPC delays, and unchanged caller indexes/carry/accumulator behavior.
+
+## Rauru sage basement sequence (`src/sage_basement.inc`)
+
+- In Rauru's sage basement (`$0707 = 1`, `$056B = 0`, `$0561 = $24`), once Barba
+  learns Shield (`$077B != 0`) and the spell-learn flash/menu closes, walking
+  past halfway toward the left exit (`page == 0` or `page == 1` with `X <= $40`;
+  was `$58` before 2026-11-18) triggers a `"WAIT."` message box (`SAGE_STATE`
+  `$6475` `2 -> 3`).
+- Walking back to the sage (`+-40 px` on page 1, grounded) auto-starts the 5-box
+  sequence with no button press, in the same visit or a later one (test walks
+  straight back without leaving; it starts at about `X = 153`). The
+  sequence is (`"UM..."` -> `"DO YOU / THINK A / SAGE..."` -> `"AND A / DRAGON..."`
+  -> `"UM..."` -> `"NEVER / MIND..."`), after which `SAGE_STATE = 8` prevents it
+  from ever triggering again.
+- If the player leaves the basement without triggering the 5-box sequence,
+  `SAGE_STATE` stays `3` so returning to the sage later still triggers it.
+  Setting `$048C = 1` in `SageDialogCheck` keeps the custom boxes from
+  re-triggering the Wise Man's spell-learn fanfare/menu. Verified by
+  `tests/sage_basement.lua`.

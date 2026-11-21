@@ -74,8 +74,8 @@ emu.addMemoryCallback(function()
             expected=c.text or (r(base)+256*r(base+1))
         end
         if r(0x569)+256*r(0x56A)~=expected or r(0x524)~=1
-            or (c.fear and (r(0x566)~=2 or r(0x489)~=0 or r(0x48A)~=0))
-            or (c.text and r(0x566)~=0x2A) then
+            or (c.fear and (r(0x566)~=0x0A or r(0x489)~=0 or r(0x48A)~=0))
+            or (c.text and r(0x566)~=0x0A) then
             failures=failures+1;f:write(string.format('FAIL dialogue case %d frame=%d kind=$%02X pointer=$%04X expected=$%04X ready=%d\n',current,frame,c.kind,r(0x569)+256*r(0x56A),expected,r(0x524)))
         end
         advance();return

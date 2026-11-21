@@ -29,7 +29,7 @@ emu.addEventCallback(function()
         b={start=false,select=false,a=false,b=false,up=false,down=false,left=false,right=false}
         if r(0x74C)~=0 and not enteredHouse then
             -- Dismiss any dialogue with B (Zelda II uses B to close/skip dialogue)
-            if (frame%16)<3 then b.b=true end
+            if r(0x524)<=9 and (frame%16)<3 then b.b=true end
         elseif frame>=1150 and r(0x736)==11 and r(0x726)==0 then
             if not openerSlot then
                 -- Walk right down Rauru street until the $18 magic-house opener spawns

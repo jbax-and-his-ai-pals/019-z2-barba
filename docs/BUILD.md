@@ -14,42 +14,114 @@ PATH are supported; neither WSL nor a system-wide installation is required.
 
 On Linux, install the `cc65` package with your distribution's package manager.
 
-Place your source ROM at `roms/z2.nes`. The build requires SHA-256:
+Place the clean, headered USA PRG0 Zelda II ROM (Mapper 1 / MMC1) at
+`roms/z2.nes`. The build requires SHA-256:
 
 ```text
 ad8c0fbcf092bf84b48e69fd3964eea4ed91bfe62abc352943d537979782680c
 ```
 
-The build will reject other dumps rather than guessing where to patch them.
-The original is opened read-only. Never copy a modified ROM over it.
-The default sampled voice also requires local PCM `roms/roar.wav` (reference
+The build verifies the dump and opens it read-only. The combined build also
+requires a clean USA *Where's Waldo?* ROM at `roms/waldo.nes` (headerless CRC32
+`C3463A3D`). The default sampled voice requires local PCM `roms/roar.wav` (reference
 SHA-256 `9e5edb33f09969fe4603c8f4bbdb5311cb7396b4803ac5485f9ad8e65f11394f`).
-Recordings and generated DPCM stay ignored. Use `--native-audio` for a build
-without this local recording.
+Recordings and generated DPCM stay ignored. Use `--native-audio` to give
+Zelda II its legacy noise roar. The crossover can still use the supplied WAV
+independently when present. Both ROMs are required with either audio option.
+Give an alternate build its own output directory, for example
+`python tools/build.py --native-audio --out build/native-audio`.
 
 ```powershell
 python tools/build.py
 python -m unittest discover -s tests -v
 ```
 
-Main integration verification (2026-11-17): the default build, all 23 unit
-tests, and fresh title_sample, game_over_audio, roar_gameplay, roar_controls,
-death_continue, tall_geometry, combat, and look_up emulator scenarios pass.
+See [status](STATUS.md#verification-snapshot) for the latest source build,
+artifact checks, and emulator results.
 
 Outputs:
 
-- `build/barba.nes`: playable development ROM; original mapper, header and size.
-- `build/barba.bps`: BPS1 patch with source, target, and patch checksums.
-- `build/build-report.json`: source/output hashes, symbols and all changed ranges.
+- `build/barba.nes`: combined development ROM, NES 2.0 Mapper 176 (FK23C),
+  512 KiB PRG, 512 KiB CHR, and 32 KiB battery-backed WRAM. Zelda II runs with
+  MMC3-style banking and scanline IRQs inside this image.
+- `build/barba.bps`: BPS1 patch with source, target, and patch checksums. Its
+  single patch input is the clean, headered Zelda II ROM.
+- `build/build-report.json`: build number, source/output hashes, symbols and all changed ranges.
 - `build/barba-sprites.png`: generated preview of the original pixel artwork.
 - Assembly binaries, linker map, and debug symbols for development.
 
-Relocated original overworld graphics use BPS source-copy references. Their
-bytes are read from the user's original ROM when applying the patch, rather
-than embedded as newly authored patch literals. No ROM is uploaded by the build.
+The default output directory also mirrors the ROM and BPS to `play/`.
+Relocated overworld graphics use BPS source-copy references to the clean
+Zelda II ROM. The combined BPS also contains literal data for the additional
+game because `roms/waldo.nes` is a build input and BPS reads from a single
+source ROM. Treat the combined BPS as a local development artifact pending
+a decision on public patch packaging. No ROM is uploaded by the build.
 
 Research graphics can be rendered with `python tools/inspect_chr.py`.
 They stay in `build/` and must not be committed.
+
+## Build numbers and history
+
+Numbering started at **60** on 2026-11-20. The baseline of **59** is a
+historical lower bound. At the time, 49 surviving `build/**/build-report.json`
+files with an output SHA-256 represented 46 distinct ROMs. Build hashes
+explicitly cited in `AGENTS.md` and `docs/` added 13 after deduplicating by the
+12-character hash prefix. Earlier identical rebuilds and overwritten builds
+are generally unrecoverable. Historical release tags have no assigned build
+numbers.
+
+Every successful Barba ROM build gets the next number, including identical
+rebuilds, alternate `--out` builds, and tools that call `build.build()`.
+Checkpoint generation and emulator runs count only when they invoke the ROM
+builder. The number appears in the CLI output and build report. The ROM and
+BPS bytes are reproducible independently of the number.
+
+The repository-root `.build-history.sqlite3` is local to this checkout and
+survives cleaning `build/`. Back it up to carry the sequence to another
+checkout. Export the raw rows with `python tools/build_history.py`, which
+writes CSV to standard output. Each row records the build number, UTC
+completion time, output directory, ROM and BPS hashes, build options, Git
+commit and dirty status when available, and an optional release version.
+Use `python tools/build.py --release VERSION` when building a release
+candidate, or note the existing build number in the release notes when
+shipping an already-built artifact. The option only labels the local row.
+
+## ROM presentation
+
+The title screen animates two of Barba's three 8×16 head sprites.
+`tools/assets.py` compiles the three jaw poses from the player art into the
+six former sword pairs. Three head sprites and five cliff sprites fit on
+lines 128–143. The former outer-bevel entries (`$A7E5`, `$A805`) help draw
+the horizontal torso and tail below the split on lines 160–175. The far
+tip uses the unused entry at shadow OAM `$68` ahead of the stars.
+The water-colored pixels in
+the original forest tiles `$6D–$70` now show the animated lava texture.
+The forest palette shares two lava colors with the open lake. The right-edge
+sprite-zero target uses opaque black tile `$67` in the cliff palette so the
+title and story scroll keep their native split. Cold-boot with Play Barba to
+see the cliff and shoreline, then press Start to enter file select.
+
+Every source of the story's column 31 now writes that black border: tile
+`$67`, including the two blank story rows (`$AAC7`, `$AAE4`), and attribute
+`$44`, including the story attribute table (`$AD6B/$AD73/$AD7B`). Vanilla
+`$FD` or `$CC` would combine palette 3 (forest green, lava orange) or the
+light-green index 1 of palette 1.
+
+Title scroll split (title `$A742`, story `$AB78`, same 40 bytes in place).
+The native code waits for the sprite-0 hit on line 128, then writes
+`$27/$28` to `$2006` mid-line on scanline 143 and reads `$2007` twice so the
+dot-256 increment reaches fine Y 5. That write wanders across dots 184–227:
+about 19 dots of BIT/BVC poll jitter, plus up to two 4-cycle DMC fetches
+(roar rate 9, one fetch per 1,280 cycles) in the 1,708-cycle wait. Vanilla
+hid the moving seam under the outer-bevel sprite at x 208. The patch
+preloads `t` with `$2006 = $27`, `$2005 = ($27 & 3) << 6 | 5` and
+`$2005 = 0`, then makes the final `$2006` write in HBlank (Mesen dots
+265–308). v updates three dots after the write, so the safe range is
+254–317: after the dot-256 Y increment and before the dot-321 tile fetch.
+`$28` is always 0 and `$27` cycles `$2A/$20/$22/$28` (`$ADC5`). The X write
+also sets fine X immediately, which is harmless because the title's fine X
+is always 0. `STA $00FF` (absolute) and the 77-loop trim center the
+window. Validate with `tests/title_split.lua`.
 
 Legacy `--native-audio` Game-over audio (2026-11-17): `tools/game_over_audio.py` decodes the native
 DPCM laughs, averages each pair of PCM levels and re-encodes at the unchanged
@@ -58,10 +130,8 @@ sequencer selects entries 2, 4, 5, 6, 7 at bank-6 `$917B`; actual starts remain
 23 frames apart. Only samples and five pointer/length pairs change. First
 laugh moves from `$F3C0` to `$F400` to preserve the shared hurt endpoint;
 lengths are 225/161/193/129/129 bytes, inside existing laugh storage. No new
-code, padding or RAM. Samples/table entries are hash/byte guarded; only the
-recipe is tracked. The default sampled build uses the compact laugh layout
-described below instead. Verify `tests/game_over_audio.lua` after generating Edge Scenarios;
-use F1 natural death to hear all five laughs.
+code, padding or RAM. Samples and table entries are hash/byte guarded. Git
+tracks the conversion recipe.
 
 Game-over artwork uses `tools/game_over_art.py`: read the original Ganon
 portrait macro at build time, narrow its torso to 44% width, and replace its
@@ -74,8 +144,8 @@ deduplicated tiles replace Ganon in CHR bank
 17 `$00-$31`; the guarded bank-0 `$801F-$80C8` nametable macro centers Link
 below the existing text. Font, overworld terrain, palette, timing and continue
 behavior stay native. No new RAM or ROM padding is used;
-only the extraction recipe is committed. To inspect, lose the final life from
-Core F1 and wait on GAME OVER before pressing Start.
+only the extraction recipe is committed. To inspect, load Edge Scenarios F2.
+To hear the full sequence, load Edge Scenarios F1 and lose the last life.
 
 Portrait expression candidates: `compile_game_over_link(source, expression)`
 accepts `collar` (the original filled V), `grin` (a broad curved smile raised onto
@@ -116,6 +186,13 @@ The Play and Test launchers apply Space for Select and 4× windowed scale when
 preparing their portable Mesen profiles. Window dimensions account for Windows
 display scaling at the saved window location.
 
+The combined ROM has been tested with Mesen 2.1.1. Run individual scenarios
+with `python tools/emulator_test.py tests/<scenario>.lua`, one at a time. The
+runner defaults to `build/barba.nes` and reads symbols from the adjacent
+`build-report.json`. For an alternate build, pass `--rom` with its ROM path
+and keep its report alongside it. Use `./tools/launch.ps1 -NoRebuild` to
+open the existing default artifact in Mesen.
+
 ### Sampled roar audio
 
 `python tools/build.py` uses local uncompressed PCM `roms/roar.wav` by default;
@@ -126,49 +203,36 @@ changing duration, and emits `roar-reference.wav`, `roar-dpcm-preview.wav` and
 `roar.dmc` beside the ROM. Only the conversion recipe is tracked;
 keep recordings under ignored `roms/` and generated assets under `build/`.
 
-The normal build reclaims native laugh sample data at fixed-bank `$F400-$FD70`
-(2,417 bytes maximum, SHA-256 guarded); the hurt sample including its final
-byte at `$F3C0` remains unchanged. The approved roar occupies `$F400-$FC80`
-(2,177 bytes), unchanged. Four octave-up native waveforms now occupy 65 bytes
-`$FC80-$FCC0`, 49 bytes `$FCC0-$FCF0`, 49 bytes `$FD00-$FD30`, and 49 bytes
-`$FD40-$FD70`. Silent `$55` endpoints are shared with the roar's final byte
-and between the first two waveforms; each byte still has exactly one guarded
-overlay writer, and the builder verifies both shared bytes before writing.
-The similar opening pair shares the first waveform at rate 6 with lengths
-65/49 bytes; the final three use their own native samples, doubled in pitch,
-at rates 6/10/10. Original fundamentals are about 270/260/235/205/195 Hz.
-The shared opening pair approximates these as 540/540 Hz (the second is about
-4% sharp); later voices preserve their individual native pitch and timbre.
-Conversion decodes the original once, averages at twice playback speed, removes
-DC, and reduces excursion according to RMS slew before DPCM encoding. This
-avoids the previous double quantization and reduces low-rate slew distortion.
-Volume follow-up (2026-11-17): the production targets now receive 4x gain for
-the first three stored waveforms and 2x for the already stronger final waveform.
-A forward/backward 1 kHz low-pass before gain frees DAC steps for audible body.
-Actual decoded RMS rises about 8-12 dB over the first four-waveform revision;
-hardware slew limits prevent a literal 4x increase everywhere. This trades
-some treble detail for much stronger output. Sizes, pitches, and timing stay
-unchanged. There is still a fidelity/volume compromise from the sample budget.
-Native 23-frame spacing is unchanged. `$925A-$925E` calls `RoarNativeRate`;
-all other native effects retain rate 15, including Lava Link hurt. No new RAM or
-fixed-bank padding is used. Oversized replacement roars fail the packing check.
+The roar occupies `$F400-$FC80` (2,177 bytes) in the normal fixed PRG pages
+30/31. The combined Mapper 176 build stores the five distinct Game Over laughs
+in the alternate fixed-bank mirror, pages 14/15. `tools/game_over_audio.py`
+averages pairs of decoded DAC levels and re-encodes at DMC rate 15, raising
+each laugh by one octave. The two closing laughs use a bidirectional 750 Hz
+low-pass filter with gain compensation to soften their strongest overtones.
+The native 23-frame start-to-start spacing remains in use.
+
+`RoarNativeRate` at the `$925A` hook selects mapper mode 2 before DMA.
+`RoarNativeEnable` at the `$9296` hook starts each laugh once, and
+`RoarRestoreBank` restores mode 1 after the last fetch of each clip.
+`$64F9` tracks the temporary mapping and pending enable.
+Both modes expose identical executable code, switched PRG banks, and native
+hurt data. The build patches the alternate sample data against the guarded
+original allocation before packing it. Standalone Mapper 4 sampled builds
+still use the compact four-waveform layout, with a shared opening sample.
 
 Game Over onset follow-up (2026-11-17): the initial laugh now waits 36 frames
 (about 0.60 seconds), giving the introductory sound time before the laugh.
-`RoarLaughDelay` uses 63 guarded bytes of bank-6 vanilla pad `$8F70-$8FAE`.
+`RoarLaughDelay` uses guarded bank-6 padding in the `LAUGH_DELAY` segment.
 It latches the native `$E9` request in existing `$05EE` bit 0 while the `$0501`
 Game Over timer counts from `$F0` to `$CC`; other audio channels continue.
-Leaving Game Over clears the pending latch. It then enters the
-native DMC driver, preserving all four 23-frame gaps. No new RAM, fixed-bank
-space, sample changes, or gameplay-path work. `tests/game_over_audio.lua`
-checks the extra 36-frame onset delay (37 frames from the request, including
-the native one-frame audio handoff) separately from the spacing between laughs.
+Leaving Game Over clears the pending latch. `tests/game_over_audio.lua` checks
+the 36-frame onset delay plus the native one-frame audio handoff, all five
+DMC starts, their spacing, every byte fetched, and bank restoration.
 
-`python tools/game_over_audio.py` writes local A/B WAVs into `build/`:
-`original-game-over-laughs.wav`, `game-over-octave-reference.wav` (ideal twice-speed
-original), and `game-over-laugh-preview.wav` (actual packed data). These are raw
-decoded DAC previews before NES mixing. Use Edge Scenarios F1 for the in-game
-comparison and all five starts; F2 begins after the laugh has already started.
+`python tools/game_over_audio.py` writes `game-over-laugh-preview.wav` and
+the original and octave-up references into `build/`. These WAVs contain the
+decoded DAC audio before NES mixing. Use Edge Scenarios F1 and let the enemy
+take the last life to hear the laugh in-game.
 
 The existing title code allocation `$A59E-$A5E7` starts a one-shot at each full
 jaw opening (first around frame 78, then every 256 frames). The title uses the
@@ -248,11 +312,14 @@ Gameplay additions (`src/sampled_roar.inc`, default `SAMPLED_ROAR` assembly):
   finishes. Bank-4 `$9B47` queues `$48` and keeps the statue in the fanfare stage.
   Playback changes the request to `$88` and holds looking-up frame 8. When DMC
   reports no bytes remaining, `$98` holds the pose and ceremony for one more
-  audio tick so the buffered bits can finish. The statue consumes `$10` and
-  resumes at `$9B4C` to start the native refill. Meter refill and XP share the
+  audio tick so the buffered bits can finish. The statue consumes `$10` once
+  the floor tiles have been restored and resumes at `$9B4C` to start the
+  native refill. Meter refill and XP share the
   same `$EF=$10` sound, so delaying refill also moves the first tally sound
   after the roar. The native XP stage then releases control, removes the
-  crystal and updates its save flag. The helper uses `$A7E5-$A803` (31 bytes).
+  crystal and updates its save flag. The ceremony now shares bank-4
+  `PALACE_ROAR` at `$8EC3` with Lava Link's entrance. The native-audio build
+  uses the noise roar and the same tile choreography.
 - After Dark Barba's defeat, bank 5 `$9BAC` holds the Triforce scene until
   the victory fanfare ends (`$07FB` and `$EB` both zero). Barba stands during
   the fanfare, then uses the same raised-head roar as the gem ceremony.
@@ -260,6 +327,17 @@ Gameplay additions (`src/sampled_roar.inc`, default `SAMPLED_ROAR` assembly):
   `$9BBA` to start Zelda's awakening. This replaces the silent remainder
   of the native Triforce hold. The helper uses `$BF3F-$BF5E` (32 bytes)
   and the existing voice state.
+- The palace drop shaft plays the 1.557-second roar at its original rate
+  when the native fall setup at `$C705` requests the falling sound.
+  The sampled driver detects the request in mode `$0F` and calls the native
+  music reset at `$90B5`. It plays the roar once with the falling pose and
+  tracks playback through the lower room load, where the palace theme starts
+  through the native room-entry path. Bank 6
+  `$93E5-$9407` reuses the old sweep code for this dispatch. The native-audio
+  build retains the sweep.
+  `tests/fall_roar.lua` uses Tricky Movement F7 and verifies that every byte
+  of the sample plays in order, the fall is free of music, and the palace
+  theme starts in the lower room.
 - Breath attacks use only their native fireball SFX; random attack roars were
   removed on 2026-11-17. SCALES and INFERNO casts still queue full voices.
 - Player injury hook `$E314-$E319` uses the existing FarCall0 bridge to a
@@ -274,14 +352,15 @@ Gameplay additions (`src/sampled_roar.inc`, default `SAMPLED_ROAR` assembly):
   21% higher target amplitude); sample allocation, rate and full duration match.
   Pending gem victory survives it. Native `$E9=1` (Lava Link hurt) retains the
   original 193-byte `$F300` sample at rate 15, including its last byte `$F3C0`.
-- Bank-6 pad `$8C00-$8DA8` (425 bytes) contains the audio coordinator, stable
-  controller capture, gameplay pulse ducking and native laugh rate helper.
+- Bank-6 pad `$8C00-$8DAF` contains the audio coordinator, stable controller
+  capture, gameplay pulse ducking and native laugh bank selection.
   A 14-byte bank-0 call/hop maps the torso helper, which restores bank 0.
   Hook `$9010` owns only DMC
   scheduling; `$9031/$9038` halve pulse volumes while the roar is active and
   restore normal values afterward. Pitches, envelopes and tempo keep advancing.
 - `$05EE` is request/active bits (7 active, 6 full voice pending, 5 injury pitch tail,
-  4 victory draining or complete, 3 raised-head pose, 2 hurt, 1 item roar, 0 pending Game Over laugh), `$05EF`
+  4 victory draining or complete, 3 raised-head pose, 2 hurt, 1 item roar,
+  0 shaft playback while bit 7 is set or pending Game Over laugh), `$05EF`
   retains the legacy start timer, both cleared by native reset. `$64D2/$64D3` cache both raw pads.
   Repeated reads happen in the late audio tick, after the HUD split. Early
   polling hook `$D367-$D36B` uses a 31-byte helper at displaced laugh data
@@ -351,7 +430,7 @@ Use the reusable bridge in `src/farcall.inc`:
    live JMP operands, not padding.
 4. Preserve the identity byte at CPU $8506 in every bank. Build guards check
    source and output identities. $0769 is the saved AREA bank, not a current-bank
-   shadow; FFC9 is not a general restoration API. The native mapper is unchanged.
+   shadow. Use the Barba bank-switch entry points in the active Zelda II mapper mode.
 5. Run build, unit tests, farcall.lua, affected gameplay scenarios and perf_volley
    sequentially. Never convert EnemyFireGateway fast path or TerrainBatch to this
    slower generic ABI.

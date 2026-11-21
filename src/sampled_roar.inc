@@ -1,18 +1,50 @@
 ; Default sampled audio. All sample/code writes are guarded in build.py.
 .include "sample-roar-params.inc"
-.export RoarAudio, RoarGemEnd, BarbaHurtRoar
+.export RoarAudio, BarbaHurtRoar
 .export RoarPulse1, RoarPulse2
 .export RoarNativeRate
 .export RoarGemTorso
 .export RoarItemFanfareStart, RoarItemFanfareEnd
 .export ItemHoldPickup, ItemHoldPose, ItemHoldSpell
-.segment "SAMPLED_ROAR"
-RoarAudio:
+FALL_ROAR_ACTIVE = $81 ; active voice + bit 0 (reused outside Game Over)
+
+.segment "FALL_ROAR"
+; The native shaft setup at $C705 requests $EE bit 0 on entry to mode $0F.
+; Keep ownership of DMC through the destination room load and until the full
+; clip ends, even if normal gameplay has already resumed.
+FallRoarAudio:
+    lda ROAR_REQUEST
+    cmp #FALL_ROAR_ACTIVE
+    beq @active
     lda $0736
     cmp #$0B
     beq @game
-    jmp RoarLaughDelay
+    cmp #$0F
+    bne @other
+    lda $EE
+    lsr
+    bcc @other
+    jmp RoarFallStart
+@active:
+    jmp RoarActive
 @game:
+    jmp RoarGameAudio
+@other:
+    jmp RoarLaughDelay
+
+.segment "SAMPLED_ROAR"
+RoarAudio:
+.ifdef WALDO_PORTAL
+    jsr RoarRestoreBank
+.endif
+    jmp FallRoarAudio
+RoarFallStart:
+    jsr $90B5          ; native fall cue's music and channel reset
+    lda #FALL_ROAR_ACTIVE
+    sta ROAR_REQUEST
+    ldx #ROAR_LENGTH
+    bne RoarStart
+RoarGameAudio:
     lda ROAR_COOLDOWN
     beq :+
     dec ROAR_COOLDOWN
@@ -29,7 +61,7 @@ RoarAudio:
 @itemPhase:
     bit ROAR_REQUEST
     bpl @full
-    jmp @active
+    jmp RoarActive
 :
     lda ROAR_REQUEST
     and #$04
@@ -38,19 +70,18 @@ RoarAudio:
     lda $E9
     and #$01
     beq :+
-    jmp @nativeHurt
+    lda ROAR_REQUEST
+    jmp RoarKeepPending
 :
     lda ROAR_REQUEST
     bpl :+
-    jmp @active
+    jmp RoarActive
 :
     and #$40
     bne @fullWait
     ; Attacks never start a voice; only injury, spells and victories do.
     lda ROAR_REQUEST
-    and #$10           ; keep victory completion latched until the scene consumes it
-    sta ROAR_REQUEST
-    jmp @native
+    jmp RoarKeepPending ; bit 6 is clear, preserve only victory completion
 @fullWait:
     ; Victory requests arrive as their fanfare ends.
     ; Spell requests retain their menu/tally deferral.
@@ -71,14 +102,14 @@ RoarAudio:
     ora #$80
     sta ROAR_REQUEST
     ldx #ROAR_LENGTH
-    bne @start
+    bne RoarStart
 @hurt:
     lda ROAR_REQUEST
     and #$40
     ora #$A0           ; bit 5: injury-only downward pitch tail
     sta ROAR_REQUEST
     ldx #HURT_LENGTH
-@start:
+RoarStart:
     ; The early fixed-bank input path will use these stable raw buttons during
     ; playback. Refresh them after the HUD split, avoiding a long early hook.
     lda $F7
@@ -101,7 +132,7 @@ RoarAudio:
     lda #$1F
     sta $4015
     rts
-@active:
+RoarActive:
     jsr RoarReadPads
     lda ROAR_REQUEST
     and #$20
@@ -127,7 +158,7 @@ RoarAudio:
 @status:
     lda $4015
     and #$10
-    bne @done
+    bne RoarActiveDone
     lda ROAR_REQUEST
     cmp #$88
     beq @drain
@@ -145,16 +176,11 @@ RoarAudio:
     lda #$00
     sta ITEM_HOLD
 :
+RoarKeepPending:
     and #$50           ; keep a queued full voice or completed victory
     sta ROAR_REQUEST
-@native:
     jmp $920B
-@nativeHurt:
-    lda ROAR_REQUEST
-    and #$50
-    sta ROAR_REQUEST
-    jmp $920B
-@done:
+RoarActiveDone:
     rts
 
 ; Re-read both controllers until two consecutive captures agree. DMC DMA can
@@ -237,11 +263,68 @@ RoarPulse2:
     plp
     rts
 
-; Four distinct native waveforms retain the descending contour. The opening
-; pair shares a prefix with different lengths; other native effects keep rate 15.
+.ifdef WALDO_PORTAL
+LAUGH_BANK_STATE = $64F9 ; 0 = normal bank, 2 = ready to start, 1 = fetching
+.endif
+
 RoarNativeRate:
     lda $07FA
     cmp #$02
+.ifdef WALDO_PORTAL
+    bne @rate
+    ; Select the sample bank before the native driver enables DMC DMA.
+    jsr RoarSetBank
+@rate:
+    lda #$0F
+    sta $4010
+    rts
+
+; Mapper 176 mode 2 uses PRG pages 14/15 at $C000-$FFFF. Mode 1 uses pages
+; 30/31. Both map the same executable code and the same $8000/$A000 banks.
+RoarSetBank:
+    pha
+    lda #$80
+    sta $A001          ; unlock outer registers while keeping WRAM enabled
+    pla
+    sta $5FF0
+    and #$02
+    sta LAUGH_BANK_STATE
+    lda #$A0
+    sta $A001
+    rts
+
+.segment "LAUGH_BANK"
+.export RoarNativeEnable
+RoarNativeEnable:
+    lda $07FA
+    cmp #$02
+    bne @enable
+    ; Native audio polls $4015 for several frames. Once DMA has completed,
+    ; another enable would replay the sample address from the normal roar bank.
+    lda LAUGH_BANK_STATE
+    cmp #$02
+    bne @done
+    dec LAUGH_BANK_STATE
+@enable:
+    lda #$1F
+    sta $4015
+@done:
+    rts
+
+.segment "BANK6"
+.export RoarRestoreBank
+RoarRestoreBank:
+    lda LAUGH_BANK_STATE
+    beq @done
+    lda $4015
+    and #$10
+    bne @done          ; leave the bank mapped until the last byte is fetched
+    lda #$01
+    jmp RoarSetBank
+@done:
+    rts
+.else
+    ; Standalone MMC3 shares the opening waveform to fit its fixed bank.
     beq @laugh
     lda #$0F
     bne @write
@@ -252,12 +335,13 @@ RoarNativeRate:
     rts
 @rates:
     .byte 15,15,15,15,6,15,15,15,6,15,6,15,10,15,10,15
+.endif
 
 .segment "ITEM_ROAR"
 ; Called from the player's bank-0 renderer. The standing item pose already
-; has two full torso chunks. For the raised-head pose, lift its three rows
-; 8px and complete the second torso chunk at the original feet by overlapping
-; the matching top 8px.
+; has two full torso chunks. For the raised-head pose, lift the head and
+; neck 8px. Bridge the neck to the foot-level bend with an overlapping
+; upright torso row.
 ; A frozen/menu frame may reuse OAM, so shift only freshly drawn coordinates.
 RoarGemTorso:
     lda ITEM_HOLD
@@ -267,10 +351,13 @@ RoarGemTorso:
     lda ROAR_REQUEST
     and #$88
     cmp #$88
-    bne @done
+    bne @skip
     lda DRAW_FRAME
     cmp #$48
-    bne @done
+    beq @geometry
+@skip:
+    jmp $FFC5
+@geometry:
     lda GEOMETRY
     and #$06
     bne @done
@@ -280,15 +367,15 @@ RoarGemTorso:
     lda DRAW_TOP
     cmp #$30
     bcc @done
+    cmp #$D0           ; the bend at DRAW_TOP + 32 must stay below $F0
+    bcs @done
     cmp $0204
     bne @done
     clc
-    adc #$20
-    cmp #$F0
-    bcs @done
+    adc #$10
     sta $0220
     sta $0224
-    ldy #$08
+    ldy #$05
 @lift:
     ldx @rows,y
     lda $0200,x
@@ -300,15 +387,23 @@ RoarGemTorso:
     lda DRAW_ATTR
     sta $0222
     sta $0226
+    lda #(TRAIL_BEND_CENTER ^ $01)
+    sta $0219
+    lda #(TRAIL_BEND_BACK ^ $01)
+    bit DRAW_ATTR
+    bvs @right
+    sta $021D
+    ldx #$06
+    ldy #$08
+    lda DRAW_LEFT
+    clc
+    adc #$08
+    bcc @place
+@right:
+    sta $0215
     ldx #$08
     ldy #$06
     lda DRAW_LEFT
-    bit DRAW_ATTR
-    bvs @place
-    ldx #$06
-    ldy #$08
-    clc
-    adc #$08
 @place:
     sta $0223
     stx $0221
@@ -323,7 +418,7 @@ RoarGemTorso:
 @done:
     jmp $FFC5          ; restore bank 0 before returning to the player renderer
 @rows:
-    .byte $04,$4C,$C4,$08,$0C,$10,$14,$18,$1C
+    .byte $04,$4C,$C4,$08,$0C,$10
 
 ; Keep the native item tiles, horizontal placement and palette. Move them from
 ; the native hold slots to the spare side-view records, above the taller head.
@@ -389,25 +484,6 @@ RoarItemFanfareEnd:
     sta ROAR_REQUEST
 @resume:
     lda $0707          ; displaced world load for native music restart
-    rts
-
-.segment "SAMPLE_GEM"
-RoarGemEnd:
-    lda ROAR_REQUEST
-    and #$18
-    beq @fanfare
-    cmp #$10
-    bne @wait          ; pending, playing or draining: keep the native $DE lock
-    lda #$00
-    sta ROAR_REQUEST
-    tay
-    jmp $9B4C          ; native refill and advance to the XP stage
-@fanfare:
-    ldy $07FB          ; original fanfare status check
-    bne @wait
-    lda #$48           ; queue full voice and raised-head pose
-    sta ROAR_REQUEST
-@wait:
     rts
 
 .segment "LAUGH_DELAY"

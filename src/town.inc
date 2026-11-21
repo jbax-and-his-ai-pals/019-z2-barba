@@ -4,7 +4,8 @@
 ; ($0C, $21..$23) and $0B always keep their native routines.
 .segment "TOWN"
 .export TownUpdate, TownEligible, TownBurnable, TownOutdoorRooms, TownEnd, TownDialog, TownFearText, TownFearPointers, TownHide
-.export TownNativeDialog, TownSetNpcDialog, TownFastDialogReady, TownLetterDelay, TownLineDelay, TownAsh, TownDoorCoords, TownDoorEmerged, TownNativeTalk
+.export TownNativeDialog, TownSetNpcDialog, TownFastDialogReady, TownAsh, TownDoorCoords, TownDoorEmerged, TownNativeTalk
+.export TownDoorRender
 .include "ash_layout.inc"
 
 ; Native generator $96E0 clears AF before initializing each new actor.
@@ -18,7 +19,17 @@ TownUpdate:
     jmp @eligible
 :
     lda $05C3,x
-    bne @native
+    beq :+
+    lda $AF,x
+    cmp #$A0
+    bcc @go_native
+    cmp #$C0
+    bcs @go_native
+    jsr TownBurnable
+    bcs :+
+@go_native:
+    jmp @native
+:
     lda $A1,x
     cmp #$13
     bcc @check_burnable
@@ -95,6 +106,7 @@ TownUpdate:
 @native_19_20:
     jmp $9878
 @native_0F:
+    jsr SageBasementTick
     jmp $97A9
 @native_10_12:
     jmp $9793
@@ -444,13 +456,52 @@ TownDoor:
     bcc @pause
     jmp TownHide
 
-; Hidden house-opener ($13..$18, AF=$80) emergence gate. Native L97E1 judges
-; "Barba is near" from $C9/$CD, but L9A90 never refreshes them for this actor,
-; so another actor's screen position leaks through and the opener can emerge
-; while its doorway is a page or two away. Its door macro ($9946/$994A/$994E)
-; then writes into nametable (page & 1) and paints a phantom door in open street.
-; Require Barba to really be within native 96 px before the native check runs.
 .segment "BANK3_SIGN"
+; All three native door macros share $9950. Their nametable address keeps
+; only page bit 0, so validate the full world position before queuing tiles.
+; X holds the tile sequence on entry; callers expect the NPC slot on return.
+TownDoorRender:
+    txa
+    pha
+    ldx $10
+    jsr TownDoorOnScreen
+    bcc @skip
+    ldy $059F,x
+    cpy #$04
+    bcs @skip
+    lda DoorRowLo,y
+    sta $00
+    lda DoorRowHi,y
+    sta $01
+    lda $0599,x
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    tay
+    lda ($00),y
+    cmp #$8B                  ; upper door collision tile remains when open
+    bne @skip
+    pla
+    tax
+    lda $C9                   ; displaced native offscreen-sprite check
+    and #$0C
+    cmp #$0C
+    bne :+
+    ldx #$0C
+:
+    jmp $995A
+@skip:
+    pla
+    rts
+
+DoorRowLo:
+    .byte <$60A0, <$6170, <$6240, <$6310
+DoorRowHi:
+    .byte >$60A0, >$6170, >$6240, >$6310
+
+; Native L97E1 reads $C9/$CD, which can belong to the previous actor.
+; Require the hidden house-opener to be within 96 px of Barba first.
 TownOpenerGate:
     lda $AF,x
     cmp #$80
@@ -542,6 +593,8 @@ TownBurning:
 ; Charcoal and ember pile remains about two seconds. It is not a living NPC:
 ; no fleeing, conversations, further damage or background edits occur here.
 TownAsh:
+    jsr ErrorAshCheck
+    bcs @draw
     lda $12
     and #$03
     bne @draw
@@ -905,7 +958,7 @@ TownDialog:
     sta $0569
     lda TownFearPointers+1,y
     sta $056A
-    lda #$02
+    lda #$0A
     sta $0566
     lda #$00
     sta $0489
@@ -920,11 +973,7 @@ TownNativeDialog:
     ldy $A1,x
     cpy #$0F
     bne @check_healer
-    ldy $05
-    beq TownNativeIndex
-    lda #<TownWiseManText
-    ldy #>TownWiseManText
-    jmp TownSetNpcDialog
+    jmp SageDialogCheck
 @check_healer:
     cpy #$17
     bne @check_magic
@@ -939,7 +988,7 @@ TownNativeDialog:
 TownSetNpcDialog:
     sta $0569
     sty $056A
-    lda #$2A
+    lda #$0A
     sta $0566
     lda #$00
     sta $0489
@@ -951,53 +1000,6 @@ TownNativeIndex:
     lda $0707
     jmp $B5FD
 
-; Only generated outdoor wanderers get faster typewriting and line breaks.
-TownLetterDelay:
-    php
-    txa
-    pha
-    tya
-    pha
-    ldx $048B
-    jsr TownEligible
-    lda #$05
-    bcc :+
-    lda #$01
-:
-    sta $0566
-    pla
-    tay
-    pla
-    tax
-    plp
-    lda $0566
-    rts
-TownLineDelay:
-    php
-    pha
-    txa
-    pha
-    tya
-    pha
-    ldx $048B
-    jsr TownEligible
-    bcc @native
-    lda #$01
-    sta $0566
-    jmp @restore
-@native:
-    pla
-    tay
-    tya
-    pha
-    sta $0566
-@restore:
-    pla
-    tay
-    pla
-    tax
-    pla
-    plp
-    rts
 .include "town_dialogue.inc"
 TownEnd:
+.include "dialog_box.inc"

@@ -1,4 +1,4 @@
-"""Create a 10-slot save-state pack inside Waldo inside Zelda II (play/barba-waldo.nes)."""
+"""Create a 10-slot save-state pack inside Waldo inside Zelda II (build/barba.nes)."""
 from __future__ import annotations
 
 import argparse
@@ -12,9 +12,9 @@ from emulator_test import run
 from prepare_player import apply_play_defaults
 
 ROOT = Path(__file__).resolve().parents[1]
-ROM_PATH = ROOT / 'play/barba-waldo.nes'
+ROM_PATH = ROOT / 'build/barba.nes'
 PACK_DIR = ROOT / 'build/waldo-z2-pack'
-PROFILE_DIR = ROOT / 'build/mesen-scenarios/barba-waldo'
+PROFILE_DIR = ROOT / 'build/mesen-scenarios/waldo-z2'
 
 SLOTS = [
     ('title', "Title Screen (WHERE'S BARBA?)", 'Inside Waldo from Rauru door. Press Start to advance, or Start+Select anytime to return to Zelda II.'),
@@ -32,8 +32,8 @@ SLOTS = [
 
 def create(force: bool = False) -> dict:
     if not ROM_PATH.is_file():
-        import pack_waldo
-        pack_waldo.pack()
+        import build
+        build.build(ROOT / 'roms/z2.nes', ROOT / 'build', ROOT / 'roms/roar.wav')
 
     digest = hashlib.sha256(ROM_PATH.read_bytes()).hexdigest()
     manifest_path = PACK_DIR / 'manifest.json'

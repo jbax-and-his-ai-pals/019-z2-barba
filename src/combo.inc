@@ -9,6 +9,8 @@ COMBO_TIMER = $646F         ; decay frames remaining
 COMBO_SLAM  = $6488         ; tier-up slam/jitter animation counter
 COMBO_DECAY_TIME = $B4      ; 180 frames (~3.0s) before combo dies
 COMBO_BASE_Y     = $28      ; top row Y (clear of $20 HUD split)
+COMBO_COUNTER_SLOT = 12     ; first counter entry in ComboOam
+COMBO_OAM_COUNT = 16
 
 ComboReset:
     lda #$00
@@ -20,7 +22,7 @@ ComboReset:
     rts
 
 ComboHide:
-    ldx #$0F
+    ldx #COMBO_OAM_COUNT-1
     lda #$F8
 @loop:
     ldy ComboOam,x
@@ -177,27 +179,8 @@ ComboDraw:
     lda ComboRow1Start,x
     sta $05
     lda #$00
-    sta $04                     ; OAM slot index 0..11
-@row1_loop:
-    ldx $05
-    lda ComboRow1Tiles,x
-    beq @row1_done
-    ldx $04
-    ldy ComboOam,x
-    sta $0201,y
-    lda $00
-    sta $0200,y
-    lda $02
-    sta $0202,y
-    lda $01
-    sta $0203,y
-    clc
-    adc $03
-    sta $01
-    inc $04
-    inc $05
-    bne @row1_loop
-@row1_done:
+    sta $04
+    jsr @draw_line
     ldx $06
     cpx #$04
     beq @godlike_flames
@@ -211,28 +194,9 @@ ComboDraw:
     clc
     adc $07
     sta $01
-    ldx #$00
-    stx $05
-@row2_loop:
-    ldx $05
-    lda ComboKillTiles,x
-    beq @after_row2
-    ldx $04
-    ldy ComboOam,x
-    sta $0201,y
-    lda $00
-    sta $0200,y
-    lda $02
-    sta $0202,y
-    lda $01
-    sta $0203,y
-    clc
-    adc $03
-    sta $01
-    inc $04
-    inc $05
-    bne @row2_loop
-@after_row2:
+    lda #(ComboKillTiles-ComboRow1Tiles)
+    sta $05
+    jsr @draw_line
     lda $00
     clc
     adc #$10                    ; Row 3 Y = Row 2 Y + $10
@@ -260,17 +224,17 @@ ComboDraw:
     ldx #$03
 @copy_e:
     lda $02F4,x
-    sta $0228,x
+    sta $0234,x
     lda $02FC,x
-    sta $022C,x
+    sta $0264,x
     dex
     bpl @copy_e
     ldy #$F4
     lda #$FC
     bne @draw_flames
 @flames_first:
-    ldy #$28
-    lda #$2C
+    ldy #$34
+    lda #$64
 @draw_flames:
     sta $05
     lda $00
@@ -302,6 +266,9 @@ ComboDraw:
     adc #$0D                    ; align counter to Row 1 Y + $10 (undo +$03 flame offset)
     sta $00
 @draw_counter:
+    lda #COMBO_COUNTER_SLOT
+    jsr @hide_rest              ; clear the unused title slots before drawing digits
+    stx $04
     ; Convert COMBO_PTS (1..255) to decimal: $09 = hundreds, $0A = tens, $05 = ones.
     lda COMBO_PTS
     ldx #$00
@@ -338,11 +305,11 @@ ComboDraw:
     adc $07
     sta $01
     lda #ShoutTile_X
-    jsr @emit_counter_sprite
+    jsr @emit_sprite
     ldx $09
     beq @maybe_tens
     lda ComboDigits,x
-    jsr @emit_counter_sprite
+    jsr @emit_sprite
     ldx $0A
     bpl @draw_tens              ; $0A is 0..9 (always non-negative)
 @maybe_tens:
@@ -350,16 +317,18 @@ ComboDraw:
     beq @draw_ones
 @draw_tens:
     lda ComboDigits,x
-    jsr @emit_counter_sprite
+    jsr @emit_sprite
 @draw_ones:
     ldx $05
     lda ComboDigits,x
-    jsr @emit_counter_sprite
+    jsr @emit_sprite
+    lda #COMBO_OAM_COUNT
 @hide_rest:
+    sta $06
     ldx $04
     lda #$F8
 @hide_loop:
-    cpx #$10
+    cpx $06
     bcs @done
     ldy ComboOam,x
     sta $0200,y
@@ -367,7 +336,26 @@ ComboDraw:
     bne @hide_loop
 @done:
     rts
-@emit_counter_sprite:
+@draw_line:
+    ldx $05
+    lda ComboRow1Tiles,x
+    beq @done
+    ldx $04
+    ldy ComboOam,x
+    sta $0201,y
+    lda $00
+    sta $0200,y
+    lda $02
+    sta $0202,y
+    lda $01
+    sta $0203,y
+    clc
+    adc $03
+    sta $01
+    inc $04
+    inc $05
+    bne @draw_line
+@emit_sprite:
     ldx $04
     ldy ComboOam,x
     sta $0201,y
@@ -384,7 +372,8 @@ ComboDraw:
     rts
 
 ComboOam:
-    .byte $DC, $E0, $E4, $E8, $EC, $F0, $F4, $FC, $28, $2C, $30, $34, $D8, $64, $AC, $94
+    .byte $DC, $E0, $E4, $E8, $EC, $F0, $F4, $FC, $34, $64, $AC, $94
+    .byte $00, $28, $2C, $30   ; the score evaluates ahead of town actors, fire and clouds
 ComboDigits:
     .byte ShoutTile_O, ShoutTile_1, ShoutTile_2, ShoutTile_3, ShoutTile_4
     .byte ShoutTile_5, ShoutTile_6, ShoutTile_7, ShoutTile_8, ShoutTile_9

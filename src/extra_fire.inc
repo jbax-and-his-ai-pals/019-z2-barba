@@ -397,14 +397,13 @@ BarbaExtraUpdate:
     tax
     rts
 
-; Root fixed helpers reconstruct the original entry prefixes and return in
-; BANK0. Run originals once for the two real slots, then each backed slot.
-SafeNativeShieldFire:
-    lda #>(NativeReturn0-1)
-    pha
-    lda #<(NativeReturn0-1)
-    pha
-    jmp NativeShieldFire
+; The shield test and its melee escape use fixed code and RAM. The extra
+; return address lets $E654 discard it when a melee hit meets the shield.
+NativeShieldFire:
+    lda $C8
+    asl
+    jsr $E61A
+    rts
 BarbaEnemyFire:
     lda $B6,x
     cmp #$01
@@ -418,7 +417,7 @@ BarbaEnemyFire:
     lda #$00
     jmp ExtraCollision
 BarbaShieldFire:
-    jsr SafeNativeShieldFire
+    jsr NativeShieldFire
     php
     pha
     tya
@@ -492,7 +491,7 @@ ExtraCollision:
     jsr NativeEnemyFire
     jmp @store
 @shield:
-    jsr SafeNativeShieldFire
+    jsr NativeShieldFire
 @store:
     jsr ExtraStoreRecord
 @next:

@@ -129,6 +129,7 @@ emu.addEventCallback(function()
             check(read(0x524) == 0x09 and read(0x766) == 0x01, 'Message box finished typing and awaits B')
         elseif rf == 280 then
             check(read(0x74C) == 0x00 and read(0x524) == 0x00, 'Pressing B dismissed the return message box')
+            check(read(0x648B) == 0x57, string.format('Moon ending set WALDO_HAT ($648B=%02X)', read(0x648B)))
             report:write(errors == 0 and 'RESULT PASS\n' or 'RESULT FAIL\n')
             report:close()
             emu.stop(errors == 0 and 0 or 1)

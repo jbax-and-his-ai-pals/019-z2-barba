@@ -88,7 +88,7 @@ assert(LABELS and LABELS.BarbaVolleyPlaced,'build must export BarbaVolleyPlaced'
 emu.addMemoryCallback(function()
     if phase==0 or not phases[phase] or base==nil then return end
     local s=emu.getState()
-    if (s['mapper.prgReg'] or ((s['mapper.registers6'] or -1)//2))~=0 then return end
+    if r(0x8506)~=0xF0 then return end -- bank 0 fingerprint, including Mapper 176
     local x=s['cpu.x'];if x>1 then return end
     st.placed[#st.placed+1]={dir=r(0x6D+x),flags=r(0x5FC+x),y=r(0x36+x),class=r(0x5CA+x)}
     f:write(string.format('PLACED age=%d slot=%d dir=%d flags=%02X y=%d class=%02X\n',

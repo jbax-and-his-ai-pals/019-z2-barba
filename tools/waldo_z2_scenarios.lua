@@ -1,4 +1,4 @@
--- Generate a 10-slot save-state pack inside Where's Barba? inside Zelda II (barba-waldo.nes).
+-- Generate a 10-slot save-state pack inside Where's Barba? inside Zelda II (barba.nes).
 dofile(TEST_DIR .. '/newgame.lua')
 local mem = emu.memType.nesMemory
 local function r(a) return emu.read(a, mem) end
@@ -73,7 +73,8 @@ emu.addEventCallback(function()
     frame = frame + 1
     if phase == 'setup' then
         if frame == 1000 then
-            w(0x707, 1); w(0x706, 0); w(0x769, 3); w(0x561, 1)
+            w(0x707, 1); w(0x706, 0); w(0x70A, 0); w(0x769, 3); w(0x561, 1)
+            w(0x73, 54); w(0x74, 46); w(0x748, 0x2C)
             w(0x701, 0); w(0x75C, 0); w(0x704, 0); w(0x736, 0)
             w(0x73D, 0); w(0x726, 1)
         elseif frame > 1100 and r(0x3B) == 1 and r(0x4D) >= 0x26 then

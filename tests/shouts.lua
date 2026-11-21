@@ -56,7 +56,7 @@ emu.addEventCallback(function()
     age=age+1
     if r(0x74C)~=0 or r(0xDE)~=0 or r(0x524)~=0 then noLock=false end
     local glyphs=0
-    for a=0x2E0,0x2F0,4 do if r(a)<0xEF then glyphs=glyphs+1 end end
+    for _,a in ipairs({0x200,0x228,0x22C,0x230,0x234,0x240,0x2DC}) do if r(a)<0xEF then glyphs=glyphs+1 end end
     for a=0x2006,0x2019 do if emu.read(a,p)~=hud[a] then hudUnchanged=false end end
     if r(0x6461)==0x78 then cooldownSeen=true end
     if r(0x6467)~=0 and r(0x6465)==slot and glyphs>0 then

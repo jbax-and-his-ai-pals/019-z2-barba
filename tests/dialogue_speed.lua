@@ -1,18 +1,18 @@
--- Fast panic typing must not change quest/service text timing or registers.
+-- Standardized dialogue speed: all town/quest/service/panic actors share
+-- initial=10 ($0A), letter=2 ($02), newline $FD=5 ($05), pause $FE=24 ($18).
 dofile(TEST_DIR..'/newgame.lua')
 local m=emu.memType.nesMemory
 local function r(a)return emu.read(a,m)end
 local function w(a,v)emu.write(a,v,m)end
 local cases={
-    {kind='letter',room=1,origin=255,npc=0x19,delay=1},
-    -- Scripted outdoor actors now share generated actors' panic timing.
-    {kind='letter',room=1,origin=5,npc=0x19,delay=1},
-    {kind='letter',room=0x1C,origin=255,npc=0x19,delay=5},
-    {kind='letter',room=1,origin=255,npc=0x0F,delay=5},
-    {kind='line',room=1,origin=255,npc=0x19,delay=1},
-    {kind='line',room=1,origin=5,npc=0x19,delay=1},
-    {kind='line',room=0x1C,origin=255,npc=0x19,delay=11},
-    {kind='line',room=1,origin=255,npc=0x0F,delay=11}
+    {kind='letter',room=1,origin=255,npc=0x19,delay=2},
+    {kind='letter',room=1,origin=5,npc=0x19,delay=2},
+    {kind='letter',room=0x1C,origin=255,npc=0x19,delay=2},
+    {kind='letter',room=1,origin=255,npc=0x0F,delay=2},
+    {kind='line_fd',room=1,origin=255,npc=0x19,delay=5},
+    {kind='line_fd',room=1,origin=5,npc=0x19,delay=5},
+    {kind='line_fd',room=0x1C,origin=255,npc=0x19,delay=5},
+    {kind='line_fe',room=1,origin=255,npc=0x0F,delay=0x18},
 }
 local frame,current,errors=0,0,0
 local ready,running=false,false
@@ -24,20 +24,31 @@ end
 local function advance()
     current=current+1
     local c=cases[current]
-    if not c then f:write('RESULT '..(errors==0 and 'PASS' or 'FAIL')..'\n');f:close();running=false;stopScenario(errors==0 and 0 or 1);return end
+    if not c then
+        check(r(0xB615)==0x0A,'initial native delay patched to 10 frames')
+        f:write('RESULT '..(errors==0 and 'PASS' or 'FAIL')..'\n');f:close();running=false;stopScenario(errors==0 and 0 or 1);return
+    end
     w(0x769,3);w(0x707,1);w(0x561,c.room);w(0x48B,0)
     w(0xB6,1);w(0xBC,c.origin);w(0xA1,c.npc)
-    local entry=c.kind=='line' and LABELS.TownLineDelay or LABELS.TownLetterDelay
-    local program={0x20,0xC9,0xFF,0xA9,0xA5,0xA2,3,0xA0,11,0x38,0x20,entry%256,math.floor(entry/256),0x4C,13,6}
+    local program
+    if c.kind=='letter' then
+        -- Call $B74D (LDA #$02; STA $0566) up to $B752 (before INC $0569)
+        program={0x20,0xC9,0xFF,0xA9,0xA5,0xA2,3,0xA0,11,0x38,0x20,0x4D,0xB7}
+        -- Wait: $B74D falls through to $B752..$B75A (RTS). Just call $B74D!
+    elseif c.kind=='line_fd' then
+        program={0x20,0xC9,0xFF,0xA9,0xFD,0xA2,3,0xA0,11,0x38,0x20,0x56,0xB6}
+    else
+        program={0x20,0xC9,0xFF,0xA9,0xFE,0xA2,3,0xA0,11,0x38,0x20,0x56,0xB6}
+    end
+    -- Append JMP $060D (done) at $060D
+    program[14]=0x4C;program[15]=0x0D;program[16]=0x06
     for i,v in ipairs(program)do w(0x5FF+i,v)end
     emu.setState({['cpu.pc']=0x600,['cpu.sp']=0xFD,['cpu.ps']=0x24})
 end
 emu.addMemoryCallback(function()
     if not running then return end
-    local c=cases[current];local s=emu.getState()
-    check(r(0x566)==c.delay,'case '..current..' selects correct panic/native delay')
-    check(s['cpu.x']==3 and s['cpu.y']==11 and (s['cpu.ps']&1)==1,'case '..current..' preserves caller indexes and carry')
-    check(s['cpu.a']==(c.kind=='line' and 0xA5 or c.delay),'case '..current..' retains native accumulator behavior')
+    local c=cases[current]
+    check(r(0x566)==c.delay,'case '..current..' ('..c.kind..') sets standardized delay '..c.delay)
     advance()
 end,emu.callbackType.exec,0x60D)
 emu.addEventCallback(function()frame=frame+1;if frame==120 then ready=true end end,emu.eventType.endFrame)

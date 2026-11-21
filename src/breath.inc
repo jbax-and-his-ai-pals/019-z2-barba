@@ -212,14 +212,18 @@ BarbaAdvanceVolley:
 ; Bits 6+7 together (METEOR_WAVE) fly flat along the floor.
 ; Carry set if still alive, clear if expired/clipped.
 BarbaStepSlotY:
+    lda $7D,x
+    and #REBOUND_SPEED_BIT
+    bne @rebound
     dec VOLLEY_SLOT,x
     lda VOLLEY_SLOT,x
+    tay
     and #$3F
     beq @kill
-    lda VOLLEY_SLOT,x
+    tya
     and #$40
     bne @up
-    lda VOLLEY_SLOT,x
+    tya
     bpl @steep
     and #$01
     beq @alive
@@ -229,22 +233,18 @@ BarbaStepSlotY:
 @add_y:
     clc
     adc $36,x
-    bcs @kill
+    cmp #$10
+    bcc @kill
     cmp #$E0
     bcs @kill
     sta $36,x
     sec
     rts
 @up:
-    lda VOLLEY_SLOT,x
+    tya
     bmi @alive          ; METEOR_WAVE: flat
-    lda $36,x
-    sec
-    sbc #$03
-    bcc @kill
-    cmp #$10
-    bcc @kill
-    sta $36,x
+    lda #$FD            ; -3; underflow also fails the upper bound
+    bne @add_y
 @alive:
     sec
     rts
@@ -254,6 +254,9 @@ BarbaStepSlotY:
     sta VOLLEY_SLOT,x
     clc
     rts
+@rebound:
+    clc
+    jmp ShieldReboundBank4
 
 ; The initial shot alone uses the native attack/delay gate.
 ; Subsequent shots continue after the animation ends, without locking input.
@@ -342,6 +345,12 @@ BarbaBurstAllowed:
     ora $0726
     ora $DE
     bne @no
+    lda $0728
+    cmp #LAIR_CONTROL_LOCK
+    bne :+
+    jsr LavaLinkRoom
+    beq @no
+:
     lda $13
     beq @ok
     lda $0707

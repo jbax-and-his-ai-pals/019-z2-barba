@@ -1,0 +1,509 @@
+id,group,source,status,constraints,vanilla_text,current_text,new_text,notes
+story:00,Title & Story,tools/build.py (PRG5:$A932),custom,"28 chars exact (A-Z 0-9 . , space @)","AFTER GANON WAS DESTROYED,",AFTER BARBA WOKE UP FROM A,,Title screen story scroll line
+story:01,Title & Story,tools/build.py (PRG5:$A94F),custom,"28 chars exact (A-Z 0-9 . , space @)",IMPA TOLD LINK A SLEEPING,"LONG NAP, HE FOUND LINK",,Title screen story scroll line
+story:02,Title & Story,tools/build.py (PRG5:$A96C),custom,"28 chars exact (A-Z 0-9 . , space @)",SPELL WAS CAST ON PRINCESS,SQUATTING IN PALACE 6.,,Title screen story scroll line
+story:03,Title & Story,tools/build.py (PRG5:$A989),custom,"28 chars exact (A-Z 0-9 . , space @)",ZELDA. SHE WILL WAKE ONLY,"FURIOUS, BARBA LEFT HIS",,Title screen story scroll line
+story:04,Title & Story,tools/build.py (PRG5:$A9A6),custom,"28 chars exact (A-Z 0-9 . , space @)",WITH THE POWER OF NO.3,LAVA BATH TO SPEAK WITH,,Title screen story scroll line
+story:05,Title & Story,tools/build.py (PRG5:$A9C3),custom,"28 chars exact (A-Z 0-9 . , space @)",TRIFORCE SEALED IN A PALACE,THE TOWNSFOLK OF HYRULE.,,Title screen story scroll line
+story:06,Title & Story,tools/build.py (PRG5:$A9E0),custom,"28 chars exact (A-Z 0-9 . , space @)",IN HYRULE. TO BREAK THE,"UNFORTUNATELY, HE STILL",,Title screen story scroll line
+story:07,Title & Story,tools/build.py (PRG5:$A9FD),custom,"28 chars exact (A-Z 0-9 . , space @)","SEAL,CRYSTALS MUST BE",BREATHES FIVE FIREBALLS,,Title screen story scroll line
+story:08,Title & Story,tools/build.py (PRG5:$AA1A),custom,"28 chars exact (A-Z 0-9 . , space @)",PLACED IN STATUES IN 6,EVERY TIME HE SAYS HELLO.,,Title screen story scroll line
+story:09,Title & Story,tools/build.py (PRG5:$AA37),custom,"28 chars exact (A-Z 0-9 . , space @)",WELL GUARDED PALACES.,NOW BARBA MUST ROAST HIS,,Title screen story scroll line
+story:10,Title & Story,tools/build.py (PRG5:$AA54),custom,"28 chars exact (A-Z 0-9 . , space @)",LINK SET OUT ON HIS MOST,WAY BACK TO PALACE 6 AND,,Title screen story scroll line
+story:11,Title & Story,tools/build.py (PRG5:$AA71),custom,"28 chars exact (A-Z 0-9 . , space @)",ADVENTURESOME QUEST YET...,EVICT THAT GREEN SQUATTER...,,Title screen story scroll line
+story:12,Title & Story,tools/build.py (PRG5:$AA8E),custom,"28 chars exact (A-Z 0-9 . , space @)",       @1987 NINTENDO,     @2026 JERBTRUNDLES,,Title screen story scroll line
+town_fear:0,Town Panic Dialogue,src/town_dialogue.inc (TownFearText),custom,max 3 lines x 10 chars (A-Z . ! ? ' space),,"OH SHIT!
+BARBA'S
+HERE! RUN!",,Fleeing outdoor villager
+town_fear:1,Town Panic Dialogue,src/town_dialogue.inc (TownFearHide),custom,max 3 lines x 10 chars (A-Z . ! ? ' space),,"A DRAGON!
+HIDE IN
+A HOUSE!",,Fleeing outdoor villager
+town_fear:2,Town Panic Dialogue,src/town_dialogue.inc (TownFearLeaving),custom,max 3 lines x 10 chars (A-Z . ! ? ' space),,"FUCK THAT!
+I'M OUT
+OF HERE!",,Fleeing outdoor villager
+town_fear:3,Town Panic Dialogue,src/town_dialogue.inc (TownFearPlea),custom,max 3 lines x 10 chars (A-Z . ! ? ' space),,"PLEASE
+DON'T
+EAT ME!",,Fleeing outdoor villager
+town_fear:4,Town Panic Dialogue,src/town_dialogue.inc (TownFearBarbaAlert),custom,max 3 lines x 10 chars (A-Z . ! ? ' space),,"IT'S BARBA
+EVERYONE
+GO INSIDE!",,Fleeing outdoor villager
+town_fear:5,Town Panic Dialogue,src/town_dialogue.inc (TownFearBarbaLoose),custom,max 3 lines x 10 chars (A-Z . ! ? ' space),,"BARBA IS
+IN TOWN!
+HELP!",,Fleeing outdoor villager
+town_fear:6,Town Panic Dialogue,src/town_dialogue.inc (TownFearBarbaSight),custom,max 3 lines x 10 chars (A-Z . ! ? ' space),,"NO WAY!
+THAT'S
+BARBA!",,Fleeing outdoor villager
+town_fear:7,Town Panic Dialogue,src/town_dialogue.inc (TownFearBarbaBurn),custom,max 3 lines x 10 chars (A-Z . ! ? ' space),,"BARBA WILL
+BURN US!
+RUN AWAY!",,Fleeing outdoor villager
+town_npc:wiseman,Town Panic Dialogue,src/town_dialogue.inc (TownWiseManText),custom,max 3 lines x 10 chars (A-Z . ! ? ' space),,"TAKE THIS
+MAGIC AND
+SPARE ME!",,Wise Man indoor panic
+town_npc:healer,Town Panic Dialogue,src/town_dialogue.inc (TownHealerText),custom,max 3 lines x 10 chars (A-Z . ! ? ' space),,"OH NO!
+I CAN HEAL
+YOU BARBA!",,Healer indoor panic
+town_npc:magic,Town Panic Dialogue,src/town_dialogue.inc (TownMagicText),custom,max 3 lines x 10 chars (A-Z . ! ? ' space),,"TAKE MY
+MAGIC! GO
+IN PEACE!",,Magic teacher indoor panic
+shout:1,Town Shouts,src/shouts.inc,custom,max 7 visible glyphs + space (uses shout_glyphs.json font),,OH SHIT!,,Villager sprite shout
+shout:2,Town Shouts,src/shouts.inc,custom,max 7 visible glyphs + space (uses shout_glyphs.json font),,OH FUCK!,,Villager sprite shout
+shout:3,Town Shouts,src/shouts.inc,custom,max 7 visible glyphs + space (uses shout_glyphs.json font),,RUN!,,Villager sprite shout
+shout:4,Town Shouts,src/shouts.inc,custom,max 7 visible glyphs + space (uses shout_glyphs.json font),,OH NO!,,Villager sprite shout
+shout:5,Town Shouts,src/shouts.inc,custom,max 7 visible glyphs + space (uses shout_glyphs.json font),,OH GOD!,,Villager sprite shout
+shout:6,Town Shouts,src/shouts.inc,custom,max 7 visible glyphs + space (uses shout_glyphs.json font),,HELP!,,Villager sprite shout
+shout:7,Town Shouts,src/shouts.inc,custom,max 7 visible glyphs + space (uses shout_glyphs.json font),,SAVE ME!,,Villager sprite shout
+shout:8,Town Shouts,src/shouts.inc,custom,max 7 visible glyphs + space (uses shout_glyphs.json font),,NO!,,Villager sprite shout
+shout:9,Town Shouts,src/shouts.inc,custom,max 7 visible glyphs + space (uses shout_glyphs.json font),,BARBA!,,Villager sprite shout
+shout:10,Town Shouts,src/shouts.inc,custom,max 7 visible glyphs + space (uses shout_glyphs.json font),,OOPS...,,Barba in North Palace when Zelda is scorched
+combo:1,Town Combo,src/combo.inc,custom,uses combo glyphs in CHR bank 6,,MULTI,,12+ combo pts (+KILL!)
+combo:2,Town Combo,src/combo.inc,custom,uses combo glyphs in CHR bank 6,,MEGA,,24+ combo pts (+KILL!)
+combo:3,Town Combo,src/combo.inc,custom,uses combo glyphs in CHR bank 6,,ULTRA,,40+ combo pts (+KILL!)
+combo:4,Town Combo,src/combo.inc,custom,uses combo glyphs in CHR bank 6,,MONSTER,,60+ combo pts (+KILL!)
+combo:5,Town Combo,src/combo.inc,custom,uses combo glyphs in CHR bank 6,,GODLIKE!,,85+ combo pts (1-row)
+combo:suffix,Town Combo,src/combo.inc,custom,uses combo glyphs in CHR bank 6,,KILL!,,Row 2 suffix for tiers 1-4
+sign:0,Burned Signs,src/sign.inc (SignChar),custom,max 3 lines x 10 chars (A-Z . ! ? ' space),,"CHARRED.
+YOU CAN'T
+READ IT.",,Rotating burned town sign
+sign:1,Burned Signs,src/sign.inc (SignBurned),custom,max 3 lines x 10 chars (A-Z . ! ? ' space),,"WELL. YOU
+BURNED IT.",,Rotating burned town sign
+sign:2,Burned Signs,src/sign.inc (SignAshPile),custom,max 3 lines x 10 chars (A-Z . ! ? ' space),,"WELCOME TO
+THIS ASH
+PILE.",,Rotating burned town sign
+sign:3,Burned Signs,src/sign.inc (SignWhatLeft),custom,max 3 lines x 10 chars (A-Z . ! ? ' space),,"WELCOME TO
+WHAT IS
+LEFT.",,Rotating burned town sign
+sign:4,Burned Signs,src/sign.inc (SignDidThat),custom,max 3 lines x 10 chars (A-Z . ! ? ' space),,"SIGN IS
+ASH. YOU
+DID THAT.",,Rotating burned town sign
+sign:5,Burned Signs,src/sign.inc (SignWasSign),custom,max 3 lines x 10 chars (A-Z . ! ? ' space),,"THIS WAS
+A SIGN.",,Rotating burned town sign
+levelup:breath,Menus & HUD,tools/build.py (PRG0:$9BE9),custom,6 chars exact,ATTACK,BREATH,,Level-up pane stat
+levelup:magic,Menus & HUD,PRG0:$9BF3,vanilla,5 chars exact,MAGIC,MAGIC,,Level-up pane stat
+levelup:life,Menus & HUD,PRG0:$9BFD,vanilla,4 chars exact,LIFE,LIFE,,Level-up pane stat
+gameover:subtitle,Menus & HUD,tools/build.py (PRG0:$8010),custom,15 chars exact (A-Z space),RETURN OF GANON,LINK KEEPS LAVA,,Game Over screen subtitle
+spell:0,Menus & HUD,tools/build.py (PRG0:$9C2A),custom,"max 7 chars (A-Z, padded with .)",SHIELD,SCALES,,Pause/spell menu entry
+spell:1,Menus & HUD,tools/build.py (PRG0:$9C38),vanilla,"max 7 chars (A-Z, padded with .)",JUMP,JUMP,,Pause/spell menu entry
+spell:2,Menus & HUD,tools/build.py (PRG0:$9C46),vanilla,"max 7 chars (A-Z, padded with .)",LIFE,LIFE,,Pause/spell menu entry
+spell:3,Menus & HUD,tools/build.py (PRG0:$9C54),custom,"max 7 chars (A-Z, padded with .)",FAIRY,WYRMLNG,,Pause/spell menu entry
+spell:4,Menus & HUD,tools/build.py (PRG0:$9C62),custom,"max 7 chars (A-Z, padded with .)",FIRE,METEOR,,Pause/spell menu entry
+spell:5,Menus & HUD,tools/build.py (PRG0:$9C70),vanilla,"max 7 chars (A-Z, padded with .)",REFLECT,REFLECT,,Pause/spell menu entry
+spell:6,Menus & HUD,tools/build.py (PRG0:$9C7E),vanilla,"max 7 chars (A-Z, padded with .)",SPELL,SPELL,,Pause/spell menu entry
+spell:7,Menus & HUD,tools/build.py (PRG0:$9C8C),custom,"max 7 chars (A-Z, padded with .)",THUNDER,INFERNO,,Pause/spell menu entry
+ending:zelda,Ending & Credits,tools/build.py (PRG5:$BDA1),custom,4 lines x 15 chars (A-Z space ! ? .),"YOU SAVED
+HYRULE AND
+YOU ARE A
+REAL HERO!","BARBA?
+HOLY SHIT!
+THE FUCK ARE
+YOU DOING HERE?",,Zelda wake-up dialogue
+credit:00,Ending & Credits,tools/build.py (PRG5:$9259),vanilla,A-Z space . (fits within PRG5:$9259-$9400),EXECUTIVE PRODUCER,EXECUTIVE PRODUCER,,Ending credits roll
+credit:01,Ending & Credits,tools/build.py (PRG5:$9259),vanilla,A-Z space . (fits within PRG5:$9259-$9400),H.YAMAUCHI,H.YAMAUCHI,,Ending credits roll
+credit:02,Ending & Credits,tools/build.py (PRG5:$9259),vanilla,A-Z space . (fits within PRG5:$9259-$9400),PRODUCER,PRODUCER,,Ending credits roll
+credit:03,Ending & Credits,tools/build.py (PRG5:$9259),vanilla,A-Z space . (fits within PRG5:$9259-$9400),MIYAHON,MIYAHON,,Ending credits roll
+credit:04,Ending & Credits,tools/build.py (PRG5:$9259),vanilla,A-Z space . (fits within PRG5:$9259-$9400),DIRECTOR,DIRECTOR,,Ending credits roll
+credit:05,Ending & Credits,tools/build.py (PRG5:$9259),vanilla,A-Z space . (fits within PRG5:$9259-$9400),SUGIYAN / YAMAHEN,SUGIYAN / YAMAHEN,,Ending credits roll
+credit:06,Ending & Credits,tools/build.py (PRG5:$9259),vanilla,A-Z space . (fits within PRG5:$9259-$9400),DESIGNER,DESIGNER,,Ending credits roll
+credit:07,Ending & Credits,tools/build.py (PRG5:$9259),vanilla,A-Z space . (fits within PRG5:$9259-$9400),ISSHIN,ISSHIN,,Ending credits roll
+credit:08,Ending & Credits,tools/build.py (PRG5:$9259),vanilla,A-Z space . (fits within PRG5:$9259-$9400),SOUND COMPOSER,SOUND COMPOSER,,Ending credits roll
+credit:09,Ending & Credits,tools/build.py (PRG5:$9259),vanilla,A-Z space . (fits within PRG5:$9259-$9400),TSUKASAN,TSUKASAN,,Ending credits roll
+credit:10,Ending & Credits,tools/build.py (PRG5:$9259),vanilla,A-Z space . (fits within PRG5:$9259-$9400),PROGRAMER,PROGRAMER,,Ending credits roll
+credit:11,Ending & Credits,tools/build.py (PRG5:$9259),vanilla,A-Z space . (fits within PRG5:$9259-$9400),MORIKAZU / MARUMARU,MORIKAZU / MARUMARU,,Ending credits roll
+credit:12,Ending & Credits,tools/build.py (PRG5:$9259),vanilla,A-Z space . (fits within PRG5:$9259-$9400),SHIGECHAN / NISHIYAN,SHIGECHAN / NISHIYAN,,Ending credits roll
+credit:13,Ending & Credits,tools/build.py (PRG5:$9259),vanilla,A-Z space . (fits within PRG5:$9259-$9400),NAKAZOO,NAKAZOO,,Ending credits roll
+credit:14,Ending & Credits,tools/build.py (PRG5:$9259),custom,A-Z space . (fits within PRG5:$9259-$9400),,BARBA EDITION,,Ending credits roll
+credit:15,Ending & Credits,tools/build.py (PRG5:$9259),custom,A-Z space . (fits within PRG5:$9259-$9400),,JERBTRUNDLES,,Ending credits roll
+credit:16,Ending & Credits,tools/build.py (PRG5:$9259),custom,A-Z space . (fits within PRG5:$9259-$9400),,LAVA RECLAIMED.,,Ending credits roll
+credit:17,Ending & Credits,tools/build.py (PRG5:$9259),custom,A-Z space . (fits within PRG5:$9259-$9400),,PUSH START / TO REPLAY,,Ending credits roll
+bank3:08,Vanilla Town & Quest,PRG3:$A457,vanilla,"max 41 text bytes (max 10 chars/line, 4 lines)","EACH TOWN
+HAS A WISE
+MAN. LEARN
+FROM HIM.","EACH TOWN
+HAS A WISE
+MAN. LEARN
+FROM HIM.",,
+bank3:10,Vanilla Town & Quest,PRG3:$A4A4,vanilla,"max 40 text bytes (max 10 chars/line, 4 lines)","ONLY THE
+HAMMER CAN
+DESTROY A
+ROADBLOCK.","ONLY THE
+HAMMER CAN
+DESTROY A
+ROADBLOCK.",,
+bank3:11,Vanilla Town & Quest,PRG3:$A4CD,vanilla,"max 19 text bytes (max 10 chars/line, 4 lines)","WELCOME
+  TO
+ RAURU","WELCOME
+  TO
+ RAURU",,
+bank3:12,Vanilla Town & Quest,PRG3:$A4E1,vanilla,"max 37 text bytes (max 10 chars/line, 4 lines)","GET CANDLE
+IN PARAPA
+PALACE.
+GO WEST.","GET CANDLE
+IN PARAPA
+PALACE.
+GO WEST.",,
+bank3:13,Vanilla Town & Quest,PRG3:$A507,vanilla,"max 35 text bytes (max 10 chars/line, 4 lines)","GORIYA OF
+TANTARI
+STOLE OUR
+TROPHY.","GORIYA OF
+TANTARI
+STOLE OUR
+TROPHY.",,
+bank3:14,Vanilla Town & Quest,PRG3:$A52B,vanilla,"max 39 text bytes (max 10 chars/line, 4 lines)","YOU SAVED
+THE TROPHY
+COME SEE
+MY UNCLE.","YOU SAVED
+THE TROPHY
+COME SEE
+MY UNCLE.",,
+bank3:15,Vanilla Town & Quest,PRG3:$A553,vanilla,"max 42 text bytes (max 10 chars/line, 4 lines)","IN PARAPA
+DESERT USE
+THIS MAGIC
+TO SURVIVE","IN PARAPA
+DESERT USE
+THIS MAGIC
+TO SURVIVE",,
+bank3:16,Vanilla Town & Quest,PRG3:$A57E,vanilla,"max 34 text bytes (max 10 chars/line, 4 lines)","I CANNOT
+HELP YOU
+ANYMORE.
+GO NOW.","I CANNOT
+HELP YOU
+ANYMORE.
+GO NOW.",,
+bank3:18,Vanilla Town & Quest,PRG3:$A5C8,vanilla,"max 33 text bytes (max 10 chars/line, 4 lines)","DO NOT GO
+SOUTH
+WITHOUT A
+CANDLE.","DO NOT GO
+SOUTH
+WITHOUT A
+CANDLE.",,
+bank3:20,Vanilla Town & Quest,PRG3:$A614,vanilla,"max 13 text bytes (max 10 chars/line, 4 lines)","TOWN
+ OF
+RUTO","TOWN
+ OF
+RUTO",,
+bank3:21,Vanilla Town & Quest,PRG3:$A622,vanilla,"max 33 text bytes (max 10 chars/line, 4 lines)","I FOUND A
+MIRROR
+UNDER THE
+TABLE.","I FOUND A
+MIRROR
+UNDER THE
+TABLE.",,
+bank3:22,Vanilla Town & Quest,PRG3:$A644,vanilla,"max 17 text bytes (max 10 chars/line, 4 lines)","I LOST
+MY MIRROR.","I LOST
+MY MIRROR.",,
+bank3:23,Knight Lessons / Quest,PRG3:$A656,custom,"max 35 text bytes (max 10 chars/line, 4 lines)","OH! YOU
+FOUND MY
+MIRROR!
+FOLLOW ME.","OH MY GOD!
+MY MIRROR!
+FOLLOW ME.",,Saria mirror lady
+bank3:24,Vanilla Town & Quest,PRG3:$A67A,vanilla,"max 33 text bytes (max 10 chars/line, 4 lines)","WITH THIS
+YOU CAN
+JUMP VERY
+HIGH.","WITH THIS
+YOU CAN
+JUMP VERY
+HIGH.",,
+bank3:25,Vanilla Town & Quest,PRG3:$A69C,vanilla,"max 11 text bytes (max 10 chars/line, 4 lines)","I AM
+ERROR.","I AM
+ERROR.",,
+bank3:26,Vanilla Town & Quest,PRG3:$A6A8,vanilla,"max 40 text bytes (max 10 chars/line, 4 lines)","SOUTH OF
+KINGS TOMB
+IN MIDO IS
+A TUNNEL.","SOUTH OF
+KINGS TOMB
+IN MIDO IS
+A TUNNEL.",,
+bank3:28,Vanilla Town & Quest,PRG3:$A6F5,vanilla,"max 39 text bytes (max 10 chars/line, 4 lines)","EYES OF
+GANON ARE
+EVERYWHERE
+BE CAREFUL","EYES OF
+GANON ARE
+EVERYWHERE
+BE CAREFUL",,
+bank3:29,Vanilla Town & Quest,PRG3:$A71D,vanilla,"max 25 text bytes (max 10 chars/line, 4 lines)","WATER TOWN
+    OF
+  SARIA","WATER TOWN
+    OF
+  SARIA",,
+bank3:30,Vanilla Town & Quest,PRG3:$A737,vanilla,"max 27 text bytes (max 10 chars/line, 4 lines)","IF ALL
+ELSE FAILS
+USE FIRE.","IF ALL
+ELSE FAILS
+USE FIRE.",,
+bank3:32,Vanilla Town & Quest,PRG3:$A75C,vanilla,"max 43 text bytes (max 10 chars/line, 4 lines)","RETURN THE
+CRYSTAL TO
+THE PALACE
+IN PARAPA.","RETURN THE
+CRYSTAL TO
+THE PALACE
+IN PARAPA.",,
+bank3:33,Vanilla Town & Quest,PRG3:$A788,vanilla,"max 38 text bytes (max 10 chars/line, 4 lines)","USE KEYS
+IN PALACES
+THEY ARE
+FOUND IN.","USE KEYS
+IN PALACES
+THEY ARE
+FOUND IN.",,
+bank3:34,Vanilla Town & Quest,PRG3:$A7AF,vanilla,"max 41 text bytes (max 10 chars/line, 4 lines)","TALK WITH
+MY FATHER
+BEFORE YOU
+LEAVE TOWN","TALK WITH
+MY FATHER
+BEFORE YOU
+LEAVE TOWN",,
+bank3:35,Vanilla Town & Quest,PRG3:$A7D9,vanilla,"max 36 text bytes (max 10 chars/line, 4 lines)","USE THIS
+MAGIC TO
+RESTORE
+YOUR LIFE.","USE THIS
+MAGIC TO
+RESTORE
+YOUR LIFE.",,
+bank3:36,Vanilla Town & Quest,PRG3:$A7FE,vanilla,"max 36 text bytes (max 10 chars/line, 4 lines)","ONLY TOWN
+FOLK MAY
+CROSS THIS
+RIVER!","ONLY TOWN
+FOLK MAY
+CROSS THIS
+RIVER!",,
+bank3:37,Vanilla Town & Quest,PRG3:$A823,vanilla,"max 41 text bytes (max 10 chars/line, 4 lines)","YOU KNOW
+BAGU? THEN
+I CAN HELP
+YOU CROSS.","YOU KNOW
+BAGU? THEN
+I CAN HELP
+YOU CROSS.",,
+bank3:38,Vanilla Town & Quest,PRG3:$A84D,vanilla,"max 42 text bytes (max 10 chars/line, 4 lines)","NO ONE IS
+HERE BUT A
+CHURCHBELL
+WILL RING.","NO ONE IS
+HERE BUT A
+CHURCHBELL
+WILL RING.",,
+bank3:41,Vanilla Town & Quest,PRG3:$A8C8,vanilla,"max 23 text bytes (max 10 chars/line, 4 lines)","HARBOR
+ TOWN
+  OF
+ MIDO","HARBOR
+ TOWN
+  OF
+ MIDO",,
+bank3:42,Vanilla Town & Quest,PRG3:$A8E0,vanilla,"max 38 text bytes (max 10 chars/line, 4 lines)","THE DOOR
+WILL NOT
+OPEN. ITS
+VERY QUIET","THE DOOR
+WILL NOT
+OPEN. ITS
+VERY QUIET",,
+bank3:43,Vanilla Town & Quest,PRG3:$A907,vanilla,"max 38 text bytes (max 10 chars/line, 4 lines)","PLEASE. MY
+DAUGHTER
+IS SICK.
+HELP HER!","PLEASE. MY
+DAUGHTER
+IS SICK.
+HELP HER!",,
+bank3:44,Vanilla Town & Quest,PRG3:$A92E,vanilla,"max 38 text bytes (max 10 chars/line, 4 lines)","THE WATER
+OF LIFE!
+QUICK COME
+WITH ME.","THE WATER
+OF LIFE!
+QUICK COME
+WITH ME.",,
+bank3:45,Vanilla Town & Quest,PRG3:$A955,vanilla,"max 35 text bytes (max 10 chars/line, 4 lines)","ASK ERROR
+OF RUTO
+ABOUT THE
+PALACE.","ASK ERROR
+OF RUTO
+ABOUT THE
+PALACE.",,
+bank3:46,Vanilla Town & Quest,PRG3:$A979,vanilla,"max 36 text bytes (max 10 chars/line, 4 lines)","THIS MAGIC
+WORD WILL
+GIVE YOU
+POWER.","THIS MAGIC
+WORD WILL
+GIVE YOU
+POWER.",,
+bank3:47,Knight Lessons / Quest,PRG3:$A99E,custom,"max 37 text bytes (max 10 chars/line, 4 lines)","WHEN YOU
+JUMP PRESS
+DOWNWARD
+TO STAB.","JUMP. HOLD
+DOWN FOR A
+WYRM DIVE.",,Mido downstab knight
+bank3:48,Vanilla Town & Quest,PRG3:$A9C4,vanilla,"max 43 text bytes (max 10 chars/line, 4 lines)","BAGU IS MY
+NAME. SHOW
+MY NOTE TO
+RIVER MAN.","BAGU IS MY
+NAME. SHOW
+MY NOTE TO
+RIVER MAN.",,
+bank3:49,Vanilla Town & Quest,PRG3:$A9F0,vanilla,"max 6 text bytes (max 10 chars/line, 4 lines)",ZZZ...,ZZZ...,,
+bank3:50,Vanilla Town & Quest,PRG3:$A9F7,vanilla,"max 40 text bytes (max 10 chars/line, 4 lines)","LET ME BE!
+MASTER IS
+IN WOODS
+N OF RIVER","LET ME BE!
+MASTER IS
+IN WOODS
+N OF RIVER",,
+bank3:51,Vanilla Town & Quest,PRG3:$AA20,vanilla,"max 18 text bytes (max 10 chars/line, 4 lines)","THIS IS
+KINGS TOMB","THIS IS
+KINGS TOMB",,
+bank3:52,Vanilla Town & Quest,PRG3:$AA33,vanilla,"max 18 text bytes (max 10 chars/line, 4 lines)","STOP BY
+FOR AWHILE","STOP BY
+FOR AWHILE",,
+bank3:62,Vanilla Town & Quest,PRG3:$AB24,vanilla,"max 20 text bytes (max 10 chars/line, 4 lines)","WELCOME
+  TO
+NABOORU","WELCOME
+  TO
+NABOORU",,
+bank3:63,Vanilla Town & Quest,PRG3:$AB39,vanilla,"max 23 text bytes (max 10 chars/line, 4 lines)","WANT TO
+GET SOME
+WATER?","WANT TO
+GET SOME
+WATER?",,
+bank3:64,Vanilla Town & Quest,PRG3:$AB51,vanilla,"max 40 text bytes (max 10 chars/line, 4 lines)","SEE A MAN
+IN DARUNIA
+BEFORE THE
+ISLANDS.","SEE A MAN
+IN DARUNIA
+BEFORE THE
+ISLANDS.",,
+bank3:65,Vanilla Town & Quest,PRG3:$AB7A,vanilla,"max 13 text bytes (max 10 chars/line, 4 lines)","I AM
+THIRSTY.","I AM
+THIRSTY.",,
+bank3:66,Vanilla Town & Quest,PRG3:$AB88,vanilla,"max 33 text bytes (max 10 chars/line, 4 lines)","YOU HAVE
+WATER.
+COME TO
+MY HOUSE.","YOU HAVE
+WATER.
+COME TO
+MY HOUSE.",,
+bank3:67,Vanilla Town & Quest,PRG3:$ABAA,vanilla,"max 37 text bytes (max 10 chars/line, 4 lines)","WITH BOOTS
+I COULD
+WALK ON
+THE WATER.","WITH BOOTS
+I COULD
+WALK ON
+THE WATER.",,
+bank3:68,Vanilla Town & Quest,PRG3:$ABD0,vanilla,"max 36 text bytes (max 10 chars/line, 4 lines)","EAST OF
+TRIPLE EYE
+ROCK AT
+SEASHORE.","EAST OF
+TRIPLE EYE
+ROCK AT
+SEASHORE.",,
+bank3:69,Vanilla Town & Quest,PRG3:$ABF5,vanilla,"max 29 text bytes (max 10 chars/line, 4 lines)","COME BACK
+WHEN YOU
+ARE READY.","COME BACK
+WHEN YOU
+ARE READY.",,
+bank3:73,Vanilla Town & Quest,PRG3:$AC7E,vanilla,"max 37 text bytes (max 10 chars/line, 4 lines)","A POWERFUL
+KNIGHT
+LIVES IN
+THIS TOWN.","A POWERFUL
+KNIGHT
+LIVES IN
+THIS TOWN.",,
+bank3:74,Vanilla Town & Quest,PRG3:$ACA4,vanilla,"max 37 text bytes (max 10 chars/line, 4 lines)","MAGIC KEY
+READS...
+TREASURE
+OF KASUTO","MAGIC KEY
+READS...
+TREASURE
+OF KASUTO",,
+bank3:76,Vanilla Town & Quest,PRG3:$ACE6,vanilla,"max 26 text bytes (max 10 chars/line, 4 lines)","MOUNTAIN
+ TOWN OF
+ DARUNIA","MOUNTAIN
+ TOWN OF
+ DARUNIA",,
+bank3:77,Vanilla Town & Quest,PRG3:$AD01,vanilla,"max 37 text bytes (max 10 chars/line, 4 lines)","IT IS SAID
+THE EAST
+OF NABOORU
+HAS...","IT IS SAID
+THE EAST
+OF NABOORU
+HAS...",,
+bank3:78,Vanilla Town & Quest,PRG3:$AD27,vanilla,"max 33 text bytes (max 10 chars/line, 4 lines)","THERE IS
+SOMEONE
+BEHIND THE
+DOOR!","THERE IS
+SOMEONE
+BEHIND THE
+DOOR!",,
+bank3:79,Vanilla Town & Quest,PRG3:$AD49,vanilla,"max 40 text bytes (max 10 chars/line, 4 lines)","RESCUE THE
+KIDNAPPED
+CHILD ON
+THE ISLAND","RESCUE THE
+KIDNAPPED
+CHILD ON
+THE ISLAND",,
+bank3:80,Vanilla Town & Quest,PRG3:$AD72,vanilla,"max 39 text bytes (max 10 chars/line, 4 lines)","YOU ARE A
+HERO FOR
+SAVING MY
+CHILD.COME","YOU ARE A
+HERO FOR
+SAVING MY
+CHILD.COME",,
+bank3:82,Knight Lessons / Quest,PRG3:$ADBF,custom,"max 31 text bytes (max 10 chars/line, 4 lines)","WHEN YOU
+JUMP PRESS
+UP TO STAB.","JUMP. HOLD
+UP TO RAM
+HEADFIRST.",,Darunia upstab knight
+bank3:83,Vanilla Town & Quest,PRG3:$ADDF,vanilla,"max 22 text bytes (max 10 chars/line, 4 lines)","WE HAD
+TO FLEE
+KASUTO.","WE HAD
+TO FLEE
+KASUTO.",,
+bank3:86,Vanilla Town & Quest,PRG3:$AE1F,vanilla,"max 24 text bytes (max 10 chars/line, 4 lines)","HIDDEN
+ TOWN
+  OF
+KASUTO","HIDDEN
+ TOWN
+  OF
+KASUTO",,
+bank3:87,Vanilla Town & Quest,PRG3:$AE38,vanilla,"max 38 text bytes (max 10 chars/line, 4 lines)","LOOKS LIKE
+I CAN GET
+IN THE
+FIREPLACE.","LOOKS LIKE
+I CAN GET
+IN THE
+FIREPLACE.",,
+bank3:90,Vanilla Town & Quest,PRG3:$AEA9,vanilla,"max 34 text bytes (max 10 chars/line, 4 lines)","DO YOU
+HAVE THE
+7 MAGIC
+CONTAINERS","DO YOU
+HAVE THE
+7 MAGIC
+CONTAINERS",,
+bank3:91,Vanilla Town & Quest,PRG3:$AECC,vanilla,"max 31 text bytes (max 10 chars/line, 4 lines)","YOU
+DESERVE
+MY HELP.
+FOLLOW ME.","YOU
+DESERVE
+MY HELP.
+FOLLOW ME.",,
+bank3:92,Vanilla Town & Quest,PRG3:$AEEC,vanilla,"max 34 text bytes (max 10 chars/line, 4 lines)","THERE IS
+A SECRET
+AT EDGE
+OF TOWN.","THERE IS
+A SECRET
+AT EDGE
+OF TOWN.",,
+bank3:94,Vanilla Town & Quest,PRG3:$AF28,vanilla,"max 34 text bytes (max 10 chars/line, 4 lines)","KASUTO.
+STRANGE...
+IT IS
+DESERTED.","KASUTO.
+STRANGE...
+IT IS
+DESERTED.",,
+bank3:95,Vanilla Town & Quest,PRG3:$AF4B,vanilla,"max 37 text bytes (max 10 chars/line, 4 lines)","THE TOWN
+IS DEAD.
+LOOK EAST
+IN WOODS.","THE TOWN
+IS DEAD.
+LOOK EAST
+IN WOODS.",,
+bank3:97,Vanilla Town & Quest,PRG3:$AF95,vanilla,"max 40 text bytes (max 10 chars/line, 4 lines)","YOU ARE
+PERSISTENT
+FIND HEART
+OVER OCEAN","YOU ARE
+PERSISTENT
+FIND HEART
+OVER OCEAN",,

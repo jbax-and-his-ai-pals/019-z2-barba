@@ -1,6 +1,7 @@
 # User-supplied game data and generated builds never belong in Git.
 /roms/
 /build/
+/.build-history.sqlite3*
 /dist/
 /.tools/
 /.cache/

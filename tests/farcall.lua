@@ -1,4 +1,4 @@
--- Real MMC1: all banks, mismatched $0769, flags/registers/scratch, nesting,
+-- All PRG banks, mismatched $0769, flags/registers/scratch, nesting,
 -- target low-byte borrow, inline operand page crossing, and stack balance.
 local mem=emu.memType.nesMemory
 local report=assert(io.open(OUTPUT_DIR..'/farcall.txt','w'))
@@ -8,6 +8,10 @@ local tests={}
 local L=LABELS
 local function w(a,v)emu.write(a,v,mem)end
 local function r(a)return emu.read(a,mem)end
+local function mappedBank()
+ local address=emu.convertAddress(0x8506,mem)
+ return address and address.address//0x4000
+end
 local function check(ok,msg)
  report:write((ok and 'PASS ' or 'FAIL ')..msg..'\n')
  if not ok then failures=failures+1 end
@@ -53,8 +57,7 @@ emu.addMemoryCallback(started,emu.callbackType.exec,0x6FD)
 local function targetEntry()
  if not active then return end
  local s=emu.getState()
- local prg=s['mapper.prgReg'] or ((s['mapper.registers6'] or -1)//2)
- check(prg==0,'target mapped bank0 from '..current.bank)
+ check(mappedBank()==0,'target mapped bank0 from '..current.bank)
  check(s['cpu.a']==0xA6 and s['cpu.x']==0x53 and s['cpu.y']==0xC7,'input registers')
  check((s['cpu.ps'] & 0xCF)==(current.ps & 0xCF),'input flags')
  check(r(0)==0x39 and r(1)==0xD7,'input scratch preserved')
@@ -71,8 +74,7 @@ emu.addMemoryCallback(targetEntry,emu.callbackType.exec,0x700)
 local function returned()
  if not active then return end
  local s=emu.getState()
- local prg=s['mapper.prgReg'] or ((s['mapper.registers6'] or -1)//2)
- check(prg==current.bank,'restored actual bank '..current.bank)
+ check(mappedBank()==current.bank,'restored actual bank '..current.bank)
  check(s['cpu.a']==0x42 and s['cpu.x']==0x96 and s['cpu.y']==0x17,'output registers')
  check((s['cpu.ps'] & 0xCF)==0x83,'output flags')
  check(r(0)==0x5A and r(1)==0xD7,'target scratch output retained')

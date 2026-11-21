@@ -4,18 +4,21 @@
 ;   CHR: 0..256KB Barba, 256..512KB Waldo
 ;   WRAM ($A001): bank 0 = Barba, bank 1 = snapshot, bank 2 = Waldo
 
-PORTAL_DEBOUNCE  = $64F2
-MELT_FRAME       = $64F3
-MELT_WIPE        = $64F4
-MELT_BAND        = $64F5
-MELT_NT          = $64F6
-MELT_BASE        = $64F7
-WALDO_RETURN_MSG = $64F8
-WALDO_ENTER_MSG  = $64F9
-MELT_DIR         = $64FA
+PORTAL_DEBOUNCE  = $6478
+MELT_FRAME       = $6479
+MELT_WIPE        = $647A
+MELT_BAND        = $647B
+MELT_NT          = $647C
+MELT_BASE        = $647D
+WALDO_RETURN_MSG = $647E
+WALDO_ENTER_MSG  = $647F
+MELT_DIR         = $6480
+PORTAL_GAME      = $648A
+WALDO_HAT        = $648B
+WALDO_HAT_MAGIC  = $57
 
 .macro WaldoLine text, terminator
-    .assert .strlen(text) <= 11, error, "Waldo dialogue line is too wide"
+    .assert .strlen(text) <= 14, error, "Waldo dialogue line is too wide"
     .repeat .strlen(text), character
         .if .strat(text, character) = ' '
             .byte $F4
@@ -37,50 +40,27 @@ MELT_DIR         = $64FA
 .endmacro
 
 .segment "ITEM_ROAR"
-.export BarbaWaldoPortal6
+.export BarbaWaldoPortal6, UpdateWaldoHatChr6
 
 BarbaWaldoPortal6:
     lda $0707
     cmp #$01
-    bne @not_rauru
-    lda $0561
-    cmp #$01
-    bne @not_rauru
+    bne @clear_all
     lda $0736
     cmp #$0B
-    beq @in_rauru
-@not_rauru:
-    jmp @clear_all
+    bne @clear_all
 @in_rauru:
     lda WALDO_ENTER_MSG
     bne @wait_enter_msg
     lda $074C
-    bne @not_door
-    lda $3B
-    cmp #$01
-    bne @not_door
+    bne @clear_deb
     lda $29
     cmp #$B0
-    bne @not_door
-    lda $4D
-    cmp #$20
-    bcc @not_door
-    cmp #$30
-    bcc @on_door
-@not_door:
-    jmp @clear_deb
+    bne @clear_deb
+    jsr CheckPortalDoor6
+    bcs @on_door
+    bcc @clear_deb
 @on_door:
-    lda #$01
-    sta $4016
-    lda #$00
-    sta $4016
-    bit $4016               ; A
-    bit $4016               ; B
-    bit $4016               ; Select
-    bit $4016               ; Start
-    lda $4016               ; Up
-    and #$01
-    beq @clear_deb
     lda PORTAL_DEBOUNCE
     bne @done
     lda #$01
@@ -130,6 +110,42 @@ BarbaWaldoPortal6:
 @done:
     rts
 
+; Swap MMC3 R2 ($1000-$13FF) to the Waldo-hat Barba CHR bank once Waldo is beaten.
+UpdateWaldoHatChr6:
+    lda WALDO_HAT
+    cmp #WALDO_HAT_MAGIC
+    bne @hat_done
+    lda #>(UpdateWaldoHatChr3 - 1)
+    pha
+    jmp WaldoHatHop6
+@hat_done:
+    rts
+
+.segment "WALDO_HAT_1"
+WaldoHatHop6:
+    lda #<(UpdateWaldoHatChr3 - 1)
+    pha
+    lda #$03
+    jmp $FFCC
+
+.segment "BANK3_PAD"
+UpdateWaldoHatChr3:
+    lda $0736
+    cmp #$05
+    bcc @ret
+    beq @ow
+    lda #155
+    .byte $2C
+@ow:
+    lda #156
+    ldx #$02
+    stx $64D5
+    stx $8000
+    sta $8001
+@ret:
+    lda #$06
+    jmp $FFCC
+
 .segment "BANK6"
 .export BarbaWaldoRestore6
 
@@ -145,32 +161,38 @@ BarbaWaldoEnter6:
     sta $2000
     sta $2001
 
+    ldy PORTAL_GAME
     lda #$A1
     sta $A001
     tsx
     stx $7020
+    tya
+    pha
 
     ; Save 2KB internal RAM ($0000-$07FF -> $6000-$67FF)
     ldx #$00
-@save_ram:
-    lda $0000,x
+@save_zp:
+    lda $00,x
     sta $6000,x
-    lda $0100,x
-    sta $6100,x
-    lda $0200,x
-    sta $6200,x
-    lda $0300,x
-    sta $6300,x
-    lda $0400,x
-    sta $6400,x
-    lda $0500,x
-    sta $6500,x
-    lda $0600,x
-    sta $6600,x
-    lda $0700,x
-    sta $6700,x
     inx
-    bne @save_ram
+    bne @save_zp
+    stx $00
+    stx $02
+    lda #$01
+    sta $01
+    lda #$61
+    sta $03
+    ldx #$07
+    ldy #$00
+@save_page:
+    lda ($00),y
+    sta ($02),y
+    iny
+    bne @save_page
+    inc $01
+    inc $03
+    dex
+    bne @save_page
 
     ; Save PPU nametables ($2000-$23FF -> $6800-$6BFF, $2400-$27FF -> $6C00-$6FFF)
     lda #$00
@@ -216,18 +238,14 @@ BarbaWaldoEnter6:
     lda #$A2
     sta $A001
     lda #$00
-    sta $7FFD
-    sta $7FFE
     sta $7FFF
 
-    ; Copy RAM trampoline to $0300 and jump to Waldo
-    ldx #(@tramp_end - @tramp - 1)
-@copy_tramp:
-    lda @tramp,x
-    sta $0300,x
-    dex
-    bpl @copy_tramp
-    jmp $0300
+    lda #>(PortalTramp3 - 1)
+    pha
+    lda #<(PortalTramp3 - 1)
+    pha
+    lda #$03
+    jmp $FFCC
 
 @save_nt_1k:
     sta $2006
@@ -248,17 +266,105 @@ BarbaWaldoEnter6:
     bne @nt_read
     rts
 
-@tramp:
+CheckPortalDoor6:
+    jmp CheckPortalDoorBody6
+
+PortalTblRoom: .byte $01, $05
+PortalTblPage: .byte $01, $00
+PortalTblXlo:  .byte $20, $90
+PortalTblXhi:  .byte $30, $A0
+PortalDoorHit:
+    stx PORTAL_GAME
+    jsr PollUpKey6
+    beq @no_up
+    sec
+    rts
+@no_up:
+    clc
+    rts
+
+PollUpKey6:
+    lda #$01
+    sta $4016
+    lsr a
+    sta $4016
+    ldx #$04
+@up_skip:
+    bit $4016
+    dex
+    bne @up_skip
+    lda $4016
+    and #$01
+    rts
+
+.segment "ITEM_ROAR"
+CheckPortalDoorBody6:
+    ldx #$01
+@chk:
+    lda $0561
+    cmp PortalTblRoom,x
+    bne @next
+    lda $3B
+    cmp PortalTblPage,x
+    bne @next
+    lda $4D
+    cmp PortalTblXlo,x
+    bcc @next
+    cmp PortalTblXhi,x
+    bcs @next
+    jmp PortalDoorHit
+@next:
+    dex
+    bpl @chk
+    clc
+    rts
+
+.segment "BANK3_PAD"
+PortalTramp3:
+    ldx #(PortalTrampEnd - PortalTramp - 1)
+@copy_tramp:
+    lda PortalTramp,x
+    sta $0300,x
+    dex
+    bpl @copy_tramp
+    pla
+    beq @go
+    jmp PatchF13TrampA
+@go:
+    jmp $0300
+
+PatchF13TrampB:
+    lda #$30
+    sta $0310
+    lda #$80
+    sta $0320
+    jmp $0300
+
+PortalTramp:
     lda #$80
     sta $A001               ; unlock $5FF0-$5FF3
-    lda #$01
+    lda #$01                ; [$0306] $03 for F13
     sta $5FF0               ; 256KB MMC3 mode
-    lda #$10
+    lda #$10                ; [$030B] $08 for F13
     sta $5FF1               ; Waldo PRG (256..512KB)
-    lda #$20
+    lda #$20                ; [$0310] $30 for F13
     sta $5FF2               ; Waldo CHR (256..512KB)
-    jmp $E000               ; Waldo Reset
-@tramp_end:
+    lda #$06
+    sta $8000
+    lda #$00
+    sta $8001               ; Map bank 0 at $8000 for F13 (Waldo Reset in $E000-$FFFF)
+    jmp $E000               ; [$0320] $80 for F13
+PortalTrampEnd:
+
+.segment "BANK3_SIGN"
+PatchF13TrampA:
+    lda #$01
+    sta $0306
+    lda #$20
+    sta $030B
+    jmp PatchF13TrampB
+
+.segment "BANK6"
 
 BarbaWaldoRestore6:
     sei
@@ -298,25 +404,29 @@ BarbaWaldoRestore6:
 
     ; Restore 2KB internal RAM ($6000-$67FF -> $0000-$07FF)
     ldx #$00
-@rest_ram:
+    stx $00
+    stx $02
+    lda #$61
+    sta $01
+    lda #$01
+    sta $03
+    ldx #$07
+    ldy #$00
+@rest_page:
+    lda ($00),y
+    sta ($02),y
+    iny
+    bne @rest_page
+    inc $01
+    inc $03
+    dex
+    bne @rest_page
+    ldx #$00
+@rest_zp:
     lda $6000,x
-    sta $0000,x
-    lda $6100,x
-    sta $0100,x
-    lda $6200,x
-    sta $0200,x
-    lda $6300,x
-    sta $0300,x
-    lda $6400,x
-    sta $0400,x
-    lda $6500,x
-    sta $0500,x
-    lda $6600,x
-    sta $0600,x
-    lda $6700,x
-    sta $0700,x
+    sta $00,x
     inx
-    bne @rest_ram
+    bne @rest_zp
 
     ldx $7020
     txs
@@ -351,16 +461,7 @@ BarbaWaldoRestore6:
     sta $F5
 
 @wait_up_rel:
-    lda #$01
-    sta $4016
-    lda #$00
-    sta $4016
-    bit $4016
-    bit $4016
-    bit $4016
-    bit $4016
-    lda $4016
-    and #$01
+    jsr PollUpKey6
     bne @wait_up_rel
 
     jsr BarbaWipeIn6
@@ -372,7 +473,7 @@ BarbaWaldoRestore6:
     lda $FF
     sta $2000
     cli
-    jmp $FFC5               ; SwapToPRG0 and RTS to BarbaUpdate
+    rts                     ; Resume NmiVblankSetup6 in bank 6; it swaps to PRG0
 
 @rest_nt_1k:
     sta $2006

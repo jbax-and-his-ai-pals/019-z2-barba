@@ -44,7 +44,8 @@ local function nextState()
 end
 emu.addEventCallback(function()
     local feature=PACK_SCENES and PACK_SCENES[index] and PACK_SCENES[index].feature
-    emu.setInput({start=not PACK_SCENES and index==2 and age>=90 and age<93,select=false,a=false,b=false,up=feature=='elevator' and age>=25 and age<37,down=(feature=='elevator' and age>=10 and age<22) or PACK_SCENES~=nil and PACK_SCENES[index]~=nil and PACK_SCENES[index].mode==5 and age>=22 and age<38,left=feature=='pit' and age>=10 and age<16,right=(dropProbe and age>=130 and age<146) or (PACK_SCENES~=nil and feature~='elevator' and feature~='pit' and age>=10 and age<22)},0)
+    local duckUnderCeiling=feature=='ceiling' and age>=4 and age<9
+    emu.setInput({start=not PACK_SCENES and index==2 and age>=90 and age<93,select=false,a=false,b=false,up=feature=='elevator' and age>=25 and age<37,down=duckUnderCeiling or (feature=='elevator' and age>=10 and age<22) or PACK_SCENES~=nil and PACK_SCENES[index]~=nil and PACK_SCENES[index].mode==5 and age>=22 and age<38,left=feature=='pit' and age>=10 and age<16,right=(dropProbe and age>=130 and age<146) or (PACK_SCENES~=nil and feature~='elevator' and feature~='pit' and age>=10 and age<22)},0)
 end,emu.eventType.inputPolled)
 emu.addEventCallback(function()
     frame=frame+1
@@ -74,6 +75,22 @@ emu.addEventCallback(function()
         if age==38 then
             elevatorUp=r(0x29)<downY;moved=elevatorDown and elevatorUp
             check(moved,ids[index]..string.format(' elevator controller Y=%d -> %d -> %d',initialY,downY,r(0x29)))
+        end
+    end
+    if PACK_SCENES and PACK_SCENES[index].feature=='ceiling' and age==6 then
+        local right=r(0x9F)==1
+        local headY=r(0x29)+8
+        local back=right and 0x6514 or 0x651C
+        check(r(0x5FA)==54 and r(0x6508)==headY and r(0x650C)==headY and r(0x6510)==headY
+            and r(0x6509)==(right and 0x05 or 0x01) and r(0x650D)==0x03 and r(0x6511)==(right and 0x01 or 0x05),
+            ids[index]..' Down draws all three full head columns')
+        check(r(0x6518)==headY+16 and r(back)==headY+16 and r(0x6519)==0x33 and r(back+1)==0x55,
+            ids[index]..' Down draws the cropped elbow entirely below the full head')
+        local floorY=r(0x29)+32
+        for i,tile in ipairs({0x15,0x3F,0x45,0x31})do
+            local slot=0x6550+4*(i-1)
+            check(r(slot)+16==floorY-1 and r(slot+1)==tile,
+                ids[index]..' crouched trail column '..i..' stays above the brick surface')
         end
     end
     if PACK_SCENES and age==45 then
@@ -124,6 +141,13 @@ emu.addEventCallback(function()
         local colors=0;for _ in pairs(distinct)do colors=colors+1 end
         check(colors>3,ids[index]..' visible game frame')
         if not PACK_SCENES and index<7 then check(r(0x736)==11,ids[index]..' side-view gameplay ready') end
+        if not PACK_SCENES and (index==1 or index==2 or index==8) then
+            for i,tile in ipairs({0x15,0x3F,0x45,0x31})do
+                local slot=0x6550+4*(i-1)
+                check(r(slot)<0xF0 and r(slot+1)==tile,
+                    ids[index]..' draws default horizontal body column '..i)
+            end
+        end
         if not PACK_SCENES and index==2 then check(r(0x774)<255 and r(0x707)==3,'combat has damaged health and Palace 1 geometry') end
         if not PACK_SCENES and index==3 then
             local spells=true
@@ -169,19 +193,32 @@ emu.addEventCallback(function()
         if r(0x0736)==0x0F and r(0x0208)<0xF0 then
             sawFallMode=true
             if r(0x80)~=9 or r(0x81)~=9 then fallPoseValid=false end
-            local by,sy=r(0x0208),r(0x0230)
-            if by>=0x20 and by<0xD8 and sy>=0x20 and sy<0xD8 then
+            local by,sy=r(0x0208),r(0x023C)
+            if by>=0x40 and by<0xD8 and sy>=0x40 and sy<0xD8 then
                 fallFullFrames=fallFullFrames+1
+                if fallFullFrames==20 then screenshot('barba-drop-shaft') end
                 local right=r(0x9F)==1
+                -- Pose 9 uses the native six-tile draw table. The asset
+                -- compiler may reassign its CHR indexes when it shares art.
+                local headTiles=0xEB25+r(0xEB97+9)
                 local function fallOk(base,py,px,pal)
-                    local h0=right and {0x56,0x4C,0x4A} or {0x4A,0x4C,0x56}
-                    local h1=right and {0x5C,0x5A,0x58} or {0x58,0x5A,0x5C}
+                    -- Validate DMA order: all 13 player sprites precede the shadow.
+                    for offset=0,36,4 do
+                        local src,dst=base+offset,base+offset+0x6300
+                        if r(dst)~=r(src) or r(dst+1)~=(r(src+1)~1)
+                            or r(dst+2)~=r(src+2) or r(dst+3)~=r(src+3) then return false end
+                    end
+                    local outer=base+0x6300+40
                     local tt=right and {0x06,0x08} or {0x08,0x06}
                     local hattr=(right and 0x40 or 0)+pal
                     local tattr=(right and 0x80 or 0xC0)+pal
-                    for i=0,2 do
-                        if r(base+i*4)~=py or r(base+i*4+1)~=h0[i+1] or r(base+i*4+2)~=hattr then return false end
-                        if r(base+12+i*4)~=py+16 or r(base+12+i*4+1)~=h1[i+1] or r(base+12+i*4+2)~=hattr then return false end
+                    for row=0,1 do
+                        for col=0,2 do
+                            local sprite=base+row*12+col*4
+                            local tile=r(headTiles+row*3+(right and 2-col or col))
+                            if tile==0xF5 or r(sprite)~=py+row*16 or r(sprite+1)~=tile
+                                or r(sprite+2)~=hattr then return false end
+                        end
                     end
                     for row=0,1 do
                         local ty=py-(row+1)*16
@@ -191,14 +228,20 @@ emu.addEventCallback(function()
                                 or r(rowBase+c*4+2)~=tattr or r(rowBase+c*4+3)~=px+8+c*8 then return false end
                         end
                     end
-                    return true
+                    for c=0,1 do
+                        local slot=outer+c*4
+                        if r(slot)~=py-0x30 or r(slot+1)~=tt[c+1]+1
+                            or r(slot+2)~=tattr or r(slot+3)~=px+8+c*8 then return false end
+                    end
+                    return r(outer+8)==py-0x40 and r(outer+9)==0x0B
+                        and r(outer+10)==(tattr~0xC0) and r(outer+11)==px+12
                 end
-                if not fallOk(0x0208,by,0x78,0) or not fallOk(0x0230,sy,0x80,1) then fallPoseValid=false end
+                if not fallOk(0x0208,by,0x78,0) or not fallOk(0x023C,sy,0x80,1) then fallPoseValid=false end
             end
         end
         if age==350 then
             check(sawFallMode and fallFullFrames>0 and fallPoseValid,
-                ids[index]..string.format(' fall-in-hole renders 64px torpedo pose for Barba and shadow (%d full frames)',fallFullFrames))
+                ids[index]..string.format(' fall-in-hole mirrors the tips and draws all of Barba ahead of the shadow (%d full frames)',fallFullFrames))
             check(dropBelowScreen and r(0x561)==45 and r(0x700)==dropLives and r(0xB5)==1,
                 ids[index]..string.format(' native drop reaches room $%02X, lives %d -> %d (NOT lethal)',r(0x561),dropLives,r(0x700)))
             pending=true

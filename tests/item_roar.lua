@@ -9,6 +9,7 @@ local overlap,completionLatch=false,false
 local heldX
 local holdFrames,poseFrames,sampleStarts=0,0,0
 local stationary,itemHigh,standingTorso,roaringTorso,actionsLocked=true,true,true,true,true
+local roundedTrail=true
 local drained=false
 local function check(ok,message)
     report:write((ok and 'PASS ' or 'FAIL ')..message..'\n')
@@ -62,7 +63,11 @@ emu.addEventCallback(function()
             if holdFrames==10 then screenshot('item-roar-holding') end
         elseif (roar==0x8A or roar==0x9A) and r(0x5FA)==72 then
             roaringTorso=roaringTorso and r(0x204)==top-8 and r(0x20C)==top+8
-                and r(0x218)==top+24 and r(0x220)==top+32 and r(0x224)==top+32
+                and r(0x220)==top+16 and r(0x224)==top+16
+            roundedTrail=roundedTrail and r(0x6518)==top+32 and r(0x6519)==0x35
+                and r(0x651C)==top+32 and r(0x651D)==0x37
+                and r(0x6550)==top+32 and r(0x6554)==top+32
+                and r(0x6558)==top+32 and r(0x655C)==top+32
             poseFrames=poseFrames+1
             if poseFrames==10 then screenshot('item-roar-candle') end
         end
@@ -77,7 +82,8 @@ emu.addEventCallback(function()
         check(poseFrames>90 and drained and released,'Barba holds the tilt through the buffered tail and then lowers the item')
         check(itemHigh,'Candle stays above the head in both poses')
         check(standingTorso,'standing uses its two torso chunks without a partial third chunk')
-        check(roaringTorso,'raised head uses the gem overlap to complete the second torso chunk')
+        check(roaringTorso,'raised head keeps a continuous upright torso down to the bend')
+        check(roundedTrail,'rounded bend and all four tail columns stay at foot height throughout the roar')
         check(stationary and actionsLocked and moved,'movement and actions stay locked until the ceremony ends')
         check(not completionLatch,'pickup leaves no completed palace ceremony state')
         report:write('RESULT '..(failures==0 and 'PASS' or 'FAIL')..'\n')

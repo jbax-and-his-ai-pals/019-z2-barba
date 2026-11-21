@@ -95,6 +95,7 @@ DarkBarbaDraw:
 
 DarkBarbaTiles:
 .scope
+DARK_BARBA_LAYOUT = 1
 .include "tall_layout.inc"
 .endscope
 

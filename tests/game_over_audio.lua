@@ -9,7 +9,21 @@ local file=assert(io.open(OUTPUT_DIR..'/build-report.json','r'))
 local buildReport=file:read('*a');file:close()
 local digest=buildReport:match('"output_sha256"%s*:%s*"(%x+)"')
 local compact=buildReport:find('"game_over_shared_laugh"',1,true)~=nil
+local banked=LABELS.RoarRestoreBank~=nil
 local statePath=OUTPUT_DIR..'/test-pack/'..digest:sub(1,12)..'/edges/game-over-danger.mss'
+local rom, bankModes, restores = nil, {}, {}
+local fetches, enableWrites = {}, {}
+if banked then
+    local romFile=assert(io.open(OUTPUT_DIR..'/barba.nes','rb'))
+    rom=romFile:read('*a');romFile:close()
+end
+local function matchesBank(page,address,count)
+    local offset=16+page*0x2000+address-0xE000
+    for i=1,count do
+        if r(address+i-1)~=rom:byte(offset+i) then return false end
+    end
+    return true
+end
 emu.addMemoryCallback(function(addr,value)
     if loaded and value==2 and requestFrame==nil then requestFrame=frame end
 end,emu.callbackType.write,0xE9)
@@ -24,6 +38,31 @@ emu.addMemoryCallback(function(addr,value)
         starts[#starts+1]=frame;lengths[#lengths+1]=value
     end
 end,emu.callbackType.write,0x4010,0x4013)
+if banked then
+    emu.addMemoryCallback(function(_,value)
+        if not loaded then return end
+        bankModes[#bankModes+1]=value
+        if value==1 then restores[#restores+1]=frame end
+    end,emu.callbackType.write,0x5FF0)
+    emu.addMemoryCallback(function(_,value)
+        local i=#starts
+        if not loaded or value~=0x1F or r(0x07FA)~=2 or i==0 then return end
+        enableWrites[i]=(enableWrites[i] or 0)+1
+    end,emu.callbackType.write,0x4015)
+    -- This address range contains only sample data. Inspect the actual APU
+    -- fetches, including any repeat fetches caused by late $4015 writes.
+    emu.addMemoryCallback(function(address,value)
+        local i=#starts
+        if not loaded or r(0x07FA)~=2 or i==0 then return end
+        local physical=emu.convertAddress(address,mem).address
+        local sampleStart=0xC000+addresses[i]*64
+        local sampleRead=fetches[i] or {count=0,correct=true}
+        sampleRead.correct=sampleRead.correct and address==sampleStart+sampleRead.count
+            and physical//0x2000==15 and value==rom:byte(16+physical+1)
+        sampleRead.count=sampleRead.count+1
+        fetches[i]=sampleRead
+    end,emu.callbackType.read,0xF400,0xFD70)
+end
 emu.addMemoryCallback(function()
     if frame>=120 and not loaded then
         local f=assert(io.open(statePath,'rb'));local state=f:read('*a');f:close()
@@ -43,7 +82,7 @@ emu.addEventCallback(function()
         end
         check(sawScreen,'natural death reaches native GAME OVER')
         check(#starts==5,'exactly five laughs ('..#starts..')')
-        if compact then
+        if compact or banked then
             report:write('INFO initial request frame='..tostring(requestFrame)..'\n')
             -- Native requests reach the audio driver one frame later; add 36.
             check(requestFrame~=nil and starts[1]~=nil and starts[1]-requestFrame==37,
@@ -65,6 +104,19 @@ emu.addEventCallback(function()
                 check(starts[i]~=nil and starts[i-1]~=nil and starts[i]-starts[i-1]==23,
                     'laugh '..i..' preserves native 23-frame spacing')
             end
+            if banked then
+                check(enableWrites[i]==1, 'laugh '..i..' enables DMC exactly once')
+                local sampleRead=fetches[i]
+                check(sampleRead~=nil and sampleRead.correct and sampleRead.count==lengths[i]*16+1,
+                    'laugh '..i..' fetches only its complete waveform ('..(sampleRead and sampleRead.count or 0)..' bytes)')
+                check(bankModes[i*2-1]==2 and bankModes[i*2]==1 and restores[i]~=nil
+                    and starts[i]~=nil and restores[i]-starts[i]<=5,
+                    'laugh '..i..' switches banks only for its DMA window')
+            end
+        end
+        if banked then
+            check(#bankModes==10 and matchesBank(31,0xF400,128),
+                'the normal roar bank is restored after all five laughs')
         end
         report:write('RESULT '..(errors==0 and 'PASS' or 'FAIL')..'\n');report:close()
         stopScenario(errors==0 and 0 or 1)

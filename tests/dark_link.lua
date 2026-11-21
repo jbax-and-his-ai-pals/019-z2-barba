@@ -21,6 +21,7 @@ local maxDelta=0
 local sawHurtTimer=false
 local sawDeath=false
 local sawTallDarkBarba=false
+local sawDarkTrail=false
 local sawTallPause=false
 local pauseAlwaysTall=true
 local sawAirborne=false
@@ -33,6 +34,7 @@ local sampledAudio=LABELS and LABELS.RoarAudio
 local fanfareEnd,roarStart,roarTail,endingStart
 local roarStarts=0
 local roarPoseHeld=true
+local roarTrailSeen=false
 local standingDuringFanfare=false
 local lastMusic=0
 local lastVoice=0
@@ -100,6 +102,20 @@ emu.addEventCallback(function()
         if r(0xB6)==1 and r(0xA1)==0x23 then
             sawTrigger=true
             local phase=r(0x63)
+            if phase==3 and r(0x6561)==0x35 and r(0x6560)<0xF0 then
+                local pieces={}
+                local right=(r(0x6562)&0x40)~=0
+                local step=right and -8 or 8
+                local firstX=r(0x6563)+2*step
+                for slot=0x6578,0x65FC,4 do
+                    if r(slot)==r(0x6560) and r(slot+2)==r(0x6562) then
+                        pieces[r(slot+3)]=r(slot+1)
+                    end
+                end
+                sawDarkTrail=sawDarkTrail or (r(0x6562)&3)==2
+                    and pieces[firstX]==0x15 and pieces[firstX+step]==0x3F
+                    and pieces[firstX+2*step]==0x45 and pieces[firstX+3*step]==0x31
+            end
             if phase==3 and r(0x0505)>0 then
                 if r(0x0505)<0x70 and (r(0xC9)&0xF0)==0 then
                     sawTallPause=true
@@ -169,7 +185,9 @@ emu.addEventCallback(function()
             if voice==0x98 then roarTail=frame end
             if voice==0x88 or voice==0x98 then
                 roarPoseHeld=roarPoseHeld and music==0 and r(0x076C)~=3
-                    and r(0x05FA)==0x48 and r(0x0220)-r(0x0204)==0x28
+                    and r(0x05FA)==0x48 and r(0x0218)-r(0x0204)==0x28
+                local y=r(0x218)
+                roarTrailSeen=roarTrailSeen or y<0xF0 and r(0x6518)==y and r(0x6519)==0x35 and r(0x6550)==y
             end
         end
         if r(0x076C)==3 then endingStart=frame end
@@ -196,6 +214,7 @@ emu.addEventCallback(function()
         check(sawDeath,'Dark Link reached 0 HP with death state ($050D == 0xFF)')
         check(stompSurvived,'Descending onto 4-HP Dark Barba does not stomp-kill him')
         check(sawTallDarkBarba,'Dark Barba renders 24x48 tall top row ($026C at Y - 16)')
+        check(sawDarkTrail,'Dark Barba draws the joined torso and tail in shadow palette 2')
         check(sawTallPause and pauseAlwaysTall,'Dark Barba stands at full 48px height during pre-fight landing pause')
         check(not sawAirborne or airborneAlwaysTall,'Dark Barba keeps full 48px two-torso height while airborne')
         check(sawShadowPalette,'Dark Barba uses shadow palette 2 ($0753 == 2, OAM attr & 3 == 2)')
@@ -210,6 +229,7 @@ emu.addEventCallback(function()
             check(roarStarts==1 and fanfareEnd and roarStart==fanfareEnd+1,
                 'Full roar starts once on the first audio tick after the fanfare')
             check(roarStart and roarPoseHeld,'Barba raises his head and torso throughout the roar')
+            check(roarTrailSeen,'Triforce roar draws the rounded bend and lowered tail')
             check(roarTail and endingStart==roarTail+1 and lastVoice==0,
                 'Zelda awakening starts after the buffered roar tail')
         end

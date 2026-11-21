@@ -13,23 +13,39 @@ local function check(ok,msg)
     f:write((ok and 'PASS ' or 'FAIL ')..msg..'\n');f:flush()
     if not ok then errors=errors+1 end
 end
-local oamSlots={0x2DC,0x2E0,0x2E4,0x2E8,0x2EC,0x2F0,0x2F4}
-local lengths={8,8,4,6,7,5,8,3,6}
-local words={
-    {0,1,3,4,5,6,7},   -- 1 OH SHIT!
-    {0,1,3,4,5,6,7},   -- 2 OH FUCK!
-    {0,1,2,3},         -- 3 RUN!
-    {0,1,3,4,5},       -- 4 OH NO!
-    {0,1,3,4,5,6},     -- 5 OH GOD!
-    {0,1,2,3,4},       -- 6 HELP!
-    {0,1,2,3,5,6,7},   -- 7 SAVE ME!
-    {0,1,2},           -- 8 NO!
-    {0,1,2,3,4,5},     -- 9 BARBA!
+local oamSlots={0x200,0x228,0x22C,0x230,0x234,0x240,0x2DC}
+local playerSlots={0x204,0x208,0x20C,0x210,0x214,0x218,0x21C,0x220,0x224,0x24C,0x2C4}
+local rows={
+    {2,5}, -- OH / SHIT!
+    {2,5}, -- OH / FUCK!
+    {0,4}, -- RUN!
+    {2,3}, -- OH / NO!
+    {2,4}, -- OH / GOD!
+    {0,5}, -- HELP!
+    {4,3}, -- SAVE / ME!
+    {0,3}, -- NO!
+    {0,4}, -- BA, R, BA, !
 }
+local function glyphPositions(word,actorX,actorY)
+    local fields={}
+    for row,length in ipairs(rows[word]) do
+        for col=0,length-1 do
+            fields[#fields+1]={x=actorX+8-4*length+8*col,y=actorY-32-16*(2-row)}
+        end
+    end
+    return fields
+end
 local function glyphsVisible()
     local n=0
     for _,a in ipairs(oamSlots) do if r(a)<0xEF then n=n+1 end end
     return n
+end
+local function shadowSlot(a)
+    for s=0x6500,0x65FC,4 do
+        if r(s)==r(a) and r(s+1)==(r(a+1)~1) and r(s+2)==r(a+2) and r(s+3)==r(a+3) then
+            return s
+        end
+    end
 end
 -- Actor's own sprite box from its native OAM block this same frame.
 local function actorBox()
@@ -82,6 +98,7 @@ end
 local function playerX() return r(0x4D)+256*r(0x3B) end
 local burned,burnHidden=false,false
 local sceneHidden=false
+local crossed,shoutFrames,lostRows,wrongOrder=0,0,0,0
 local talkStarted,talkHidden,talkFrames=false,true,0
 local menuOpened,menuHidden,menuFrames=false,true,0
 local function setup()
@@ -124,6 +141,7 @@ emu.addEventCallback(function()
             if phase==6 then b.up=age>=10 and age<40 end
             if phase==7 then b.start=age>=10 and age<13 end
             if phase==7 and age>=60 and age<63 then b.start=true end
+            if phase==10 then b.a=age>=3 and age<20 end
         end
     end
     emu.setInput(b,0)
@@ -136,7 +154,7 @@ emu.addMemoryCallback(function()
         check(r(0x707)==1 and r(0x561)==1,'native Rauru street loaded')
     end
     phase=phase+1
-    if phase>9 then
+    if phase>10 then
         f:write('RESULT '..(errors==0 and 'PASS' or 'FAIL')..'\n');f:close();stopScenario(errors==0 and 0 or 1);return
     end
     setup()
@@ -164,19 +182,16 @@ emu.addEventCallback(function()
             if not seen then seen=true;firstAt=age;firstWord=word end
             local n,ax,ay=actorBox()
             if n==4 and r(0xB6+slot)==1 then
-                local len=lengths[word]
-                local cols=words[word]
-                local left=ax+8-4*len
+                local positions=glyphPositions(word,ax,ay)
                 local err=0
-                for idx,col in ipairs(cols) do
+                for idx,pos in ipairs(positions) do
                     local a=oamSlots[idx]
-                    local gx=left+8*col
-                    if gx>=4 and gx<252 then
-                        err=math.max(err,math.abs(r(a)-(ay-32)),math.abs(r(a+3)-gx))
-                        if (r(a+1)%2~=1 and r(a+1)~=0x7C) or r(a+2)~=2 then err=999 end
+                    if pos.x>=4 and pos.x<252 then
+                        err=math.max(err,math.abs(r(a)-pos.y),math.abs(r(a+3)-pos.x))
+                        if r(a+2)~=2 then err=999 end
                     end
                 end
-                for idx=#cols+1,#oamSlots do if r(oamSlots[idx])<0xEF then err=999 end end
+                for idx=#positions+1,#oamSlots do if r(oamSlots[idx])<0xEF then err=999 end end
                 if err>maxErr then maxErr=err;f:write(string.format('note new max error=%d age=%d ax=%d ay=%d g0=%d,%d\n',err,age,ax,ay,r(OAM+3),r(OAM))) end
                 tracked=tracked+1
                 if not startScroll then startScroll=r(0x72C) end
@@ -290,15 +305,68 @@ emu.addEventCallback(function()
         end
         if age==4 then
             local ok=true
-            local left=sx+8-4*lengths[1]
-            for idx,col in ipairs(words[1]) do
+            for idx,pos in ipairs(glyphPositions(1,sx,r(0x2A+slot))) do
                 local a=oamSlots[idx]
-                local gx=left+8*col
-                if gx<0 or gx>255 then
+                if pos.x<0 or pos.x>255 then
                     if r(a)<0xEF then ok=false end
-                elseif r(a)~=r(0x2A+slot)-32 or r(a+3)~=gx then ok=false end
+                elseif r(a)~=pos.y or r(a+3)~=pos.x then ok=false end
             end
             check(ok and r(WORD)==1,(phase==8 and 'left' or 'right')..' edge clips glyphs one by one without wraparound')
+            pending=true
+        end
+    elseif phase==10 then
+        if age==2 then
+            w(0x4D,96)
+            w(WORD,1);w(SLOT,slot);w(TIMER,100);w(0x6461,0xB4)
+        elseif age>=5 and age<=45 and vis==7 then
+            shoutFrames=shoutFrames+1
+            local lastPlayer,firstGlyph,overlap=0,0x6600,false
+            local bent=r(0x6519)==0x35 and r(0x6518)<0xEF
+            local rear=(r(0x651A)&0x40)~=0 and 0x214 or 0x21C
+            for _,p in ipairs(playerSlots) do
+                if r(p)<0xEF and r(p+1)~=0xF5 then
+                    if bent and (p==0x214 or p==0x218 or p==0x21C) then
+                        local s=0x6300+p
+                        local tile=p==0x218 and 0x35 or 0x37
+                        if p==0x218 or p==rear then
+                            local same=r(s)==r(p) and r(s+1)==tile and r(s+2)==r(p+2) and r(s+3)==r(p+3)
+                            lastPlayer=math.max(lastPlayer,same and s or 0x6600)
+                        elseif r(s)<0xEF then
+                            lastPlayer=0x6600
+                        end
+                    else
+                        lastPlayer=math.max(lastPlayer,shadowSlot(p) or 0x6600)
+                    end
+                    for _,g in ipairs(oamSlots) do
+                        local dx,dy=r(p+3)-r(g+3),r(p)-r(g)
+                        -- Glyph art occupies the lower eight pixels of its sprite pair.
+                        if r(g)<0xEF and math.abs(dx)<8 and dy>-8 and dy<16 then overlap=true end
+                    end
+                end
+            end
+            for _,g in ipairs(oamSlots) do
+                local shadow=shadowSlot(g)
+                firstGlyph=math.min(firstGlyph,shadow or 0)
+                if shadow then
+                    -- The PPU evaluates eight 8x16 sprites by Y, regardless of X or pixel opacity.
+                    for line=r(g)+1,r(g)+16 do
+                        local ahead=0
+                        for s=0x6500,shadow-4,4 do
+                            if r(s)<line and line<=r(s)+16 then ahead=ahead+1 end
+                        end
+                        if ahead>=8 then lostRows=lostRows+1 end
+                    end
+                else
+                    lostRows=lostRows+16
+                end
+            end
+            if overlap then crossed=crossed+1 end
+            if lastPlayer==0 or lastPlayer>=firstGlyph then wrongOrder=wrongOrder+1 end
+            if age==12 then screenshot('shout-jump-overlap') end
+        elseif age==46 then
+            check(shoutFrames==41 and crossed>0,'jump overlaps a full seven-glyph shout for '..crossed..' frames')
+            check(wrongOrder==0,'all visible Barba sprites draw ahead of the shout in DMA order')
+            check(lostRows==0,'all shout rows survive the eight-sprite limit across the jump ('..lostRows..' lost)')
             pending=true
         end
     end

@@ -59,6 +59,7 @@ emu.addEventCallback(function()
     if frame==1489 then
         screenshot('barba-lava-crouch')
         check((r(0x5F6)&6)==0 and r(0x20C)<0xF8,'crouching on lava keeps full head row above lava')
+        check(r(0x6487)==0,'crouching on lava hides encounter trail')
     end
     if frame>=1490 and frame<1530 and r(0x29)<standingY-4 then
         jumped=true

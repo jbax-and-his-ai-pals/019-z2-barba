@@ -1,20 +1,41 @@
 """Compile editable pixel rows into native NES tiles and player metasprites."""
 from __future__ import annotations
 import json
+import math
 import re
 from pathlib import Path
 from nes import CHR_OFFSET, decode_tile, encode_tile, load_source, write_png
-from boss_art import make_frames
+from boss_art import make_frames, resize_x
 
 COLORS = [(20, 22, 28), (194, 43, 25), (255, 168, 57), (255, 243, 205)]
 TALL_POSES = ('walk0', 'walk1', 'walk2', 'idle', 'windup', 'attack',
               'crouch', 'crouch-attack', 'up', 'down', 'hurt', 'death', 'jump')
 ASH_TILES = (0x7E, 0x80)
 # Player-bank pairs the tall renderer must never allocate: Myu crawl frame (0x24,
-# mirrored by the bank-7 sprite table at $EE7B), weapon/candle (0x32, 0x52, 0x54),
+# mirrored by the bank-7 sprite table at $EE7B), candle (0x52), corridor bend
+# (0x32, 0x54, formerly the hidden horizontal slash sprites),
 # Ache/bat enemy (0x4E, 0x50), ending ash (0x5E, 0x62, patched in build.py),
 # and the XP "3" score digit (0x60, drawn by the bank-7 score table at $DD4C).
 PLAYER_RESERVED_PAIRS = frozenset({0x24, 0x32, 0x4E, 0x50, 0x52, 0x54, 0x5E, 0x60, 0x62})
+# Sparse pose columns can share the idle seam with small pixel differences.
+# Keep the original allocator order so tiles referenced directly stay stable.
+ENCOUNTER_TRAIL_PAIRS = (0x14, 0x3E, 0x44, 0x30)
+ENCOUNTER_CONNECTOR_PAIRS = (0x34, 0x36)
+CROUCH_BEND_PAIRS = (0x32, 0x54)
+ENCOUNTER_SEAM_PAIR = 0x0A
+FALL_TIP_PAIR = ENCOUNTER_SEAM_PAIR
+# The far tip column borrows the crouch-attack neck pair, which differs from
+# the crouch/death neck $22 by 16 pixels in a brief pose.
+ENCOUNTER_TIP_ALIAS = (0x30, 0x22, 16)
+# Flick-up tip, 16px wide: (top, bottom) rows per column. The near column
+# overlaps the turned torso's end (rows 2-11) so the delayed Y never opens a gap.
+ENCOUNTER_TIP_PROFILE = ((1, 13), (2, 13), (3, 13), (3, 12), (4, 12), (4, 11), (5, 11), (5, 10),
+                         (5, 10), (5, 9), (5, 9), (5, 8), (4, 7), (4, 6), (3, 5), (2, 3))
+ENCOUNTER_TIP_SPINE_EVERY = 3
+# Elbow corner: the upright torso swept a quarter turn around a pivot just
+# outside the top-right corner (x, y, outer radius). Spines thin on the inner arc.
+ENCOUNTER_ELBOW = (17.5, -1.0, 17.0)
+
 
 # Two poses of the ending projectile, facing right. Index 0 is transparent.
 # The warm palette progresses from red (1) to orange (2) to white (3).
@@ -97,7 +118,7 @@ SHOUT_PAIR_SHA256 = {
     (7, 0xA0): '56c8c7c281e4177f', (7, 0xA2): '904a335528773b88', (7, 0xA8): '8a67b0ac638f1721',
     (7, 0xAA): '28d9e3968e5dce9e',
     (7, 0xBA): '77125f6e91a0dc9e', (7, 0xBC): '14f9bfc9ad98c854', (7, 0xBE): '5155a7a4143a9e04',
-    # Combo counter X/1-9, B, and H: unused Link-only pairs of town sprite bank 6.
+    # Combo counter X/1-9, BA, and H: unused Link-only pairs of town sprite bank 6.
     (6, 0x6C): '41bbc50209ce0558', (6, 0x78): '3054cb3b20613bbd', (6, 0x7A): 'd5aa306916f80c94',
     (6, 0x7C): 'dd16785f9de0c5fe',
     (6, 0x9C): 'e5f9ae051f2311dd', (6, 0x9E): '4c70c04982e6fd14', (6, 0xA0): 'ba30f82dfe5d2a47',
@@ -156,7 +177,7 @@ def compile_shout_glyphs(root: Path, source: bytes) -> dict[tuple[int, int], byt
     include = (root / 'src/shout_layout.inc').read_text()
     tiles = {m.group(1): int(m.group(2), 16) for m in
              re.finditer(r'^ShoutTile_(\w+)\s*=\s*\$([0-9A-F]{2})\s*$', include, re.MULTILINE)}
-    names = {'Bang': '!'}
+    names = {'Bang': '!', 'Ba': 'BA'}
     result: dict[tuple[int, int], bytes] = {}
     for name, tile in tiles.items():
         char = names.get(name, name)
@@ -183,6 +204,25 @@ def compile_castle_shout_glyphs(root: Path, source: bytes) -> dict[int, bytes]:
 
 
 TITLE_CHR_BANK = 1  # title screen BG pattern table ($1000 when $76E == 0)
+TITLE_LAVA_TILES = (0x68, 0x69, 0x6A)
+TITLE_FOREST_EDGE_TILES = (0x6D, 0x6E, 0x6F, 0x70)
+
+
+def compile_title_shore(tile: int, forest: bytes, lava: bytes) -> bytes:
+    """Composite lava through the original forest's index-3 water mask."""
+    # This corner tile's only foliage is a detached two-pixel fleck.
+    if tile == 0x70:
+        forest = b'\xff' * 16
+    # Palette 1 has black (0), gold (1), green (2), red (3). Map open-lava
+    # dark red (1), red (2), and gold (3) to black (0), red (3), and gold (1).
+    lava_colors = (0, 0, 3, 1)
+    return encode_tile([
+        ''.join(str(lava_colors[liquid] if tree == 3 else tree & 2)
+                for tree, liquid in zip(forest_row, lava_row))
+        for forest_row, lava_row in zip(decode_tile(forest), decode_tile(lava))
+    ])
+
+
 # Truncated SHA-256 of each original 16-byte tile in bank 1 used exclusively by
 # the "LINK" title logo (never shared with "ZELDA II", "THE ADVENTURE OF",
 # "TM", story scroll, or borders).
@@ -382,7 +422,9 @@ def validate_layout(root: Path) -> bytes:
         if len(tokens) != 9 or any(not re.fullmatch(r'\$[0-9A-F]{2}', token) for token in tokens):
             raise ValueError(f'Tall layout {name} requires nine byte indexes')
         tiles = [int(token[1:], 16) for token in tokens]
-        if any(tile != 0xF5 and (tile % 2 or tile >= 0x64 or tile in PLAYER_RESERVED_PAIRS) for tile in tiles):
+        if any(tile != 0xF5 and (tile % 2 or tile >= 0x64 or tile in PLAYER_RESERVED_PAIRS
+                                 or tile in ENCOUNTER_TRAIL_PAIRS or tile in ENCOUNTER_CONNECTOR_PAIRS)
+               for tile in tiles):
             raise ValueError(f'Tall layout {name} uses a reserved or invalid body pair')
         if name in ('crouch', 'crouch-attack') and tiles[:3] != [0xF5]*3:
             raise ValueError(f'Tall layout {name} exceeds the compact crouch lane')
@@ -397,6 +439,80 @@ def sprite_pairs(rows: list[str]) -> list[bytes]:
     return [b''.join(encode_tile([rows[y+dy][x:x+8] for dy in range(8)])
                      for y in (top, top+8))
             for top in range(0, len(rows), 16) for x in range(0, width, 8)]
+
+
+def _encounter_torso(graphics: dict[int, bytes]) -> list[str]:
+    def pair_rows(pair: bytes) -> list[str]:
+        return [''.join(map(str, row)) for offset in (0, 16) for row in decode_tile(pair[offset:offset+16])]
+
+    left, right = (pair_rows(graphics[tile]) for tile in (0x06, 0x08))
+    return [a + b for a, b in zip(left, right)]
+
+
+def _outline(rows: list[str]) -> list[str]:
+    """Give every opaque pixel that touches transparency the outline colour."""
+    h, w = len(rows), len(rows[0])
+    out = [list(row) for row in rows]
+    for y in range(h):
+        for x in range(w):
+            if rows[y][x] != '0' and any(
+                    0 <= nx < w and 0 <= ny < h and rows[ny][nx] == '0'
+                    for nx, ny in ((x-1, y), (x+1, y), (x, y-1), (x, y+1))):
+                out[y][x] = '1'
+    return [''.join(row) for row in out]
+
+
+def encounter_trail_rows(graphics: dict[int, bytes]) -> list[str]:
+    """32x16: the turned torso (two pairs) followed by the 16px tip (two pairs)."""
+    torso = _encounter_torso(graphics)
+    # The left-facing original has spines on its right edge. CCW brings that
+    # edge to the top. The renderer mirrors horizontally for the other facing.
+    turned = [''.join(row[x] for row in torso) for x in range(15, -1, -1)]
+    # Close the outline on the corner side so the delayed Y never shows a gap.
+    closed = [list(row) for row in turned]
+    for y in range(2, 13):
+        lead = len(turned[y]) - len(turned[y].lstrip('0'))
+        if lead:
+            closed[y][lead - 1] = '1'
+    # The tip tiles columns 10-12 of the turned torso, which repeat its scale
+    # pattern, so the dark upper scales drop away first and the belly
+    # carries through to the hooked point.
+    tip = [['0'] * len(ENCOUNTER_TIP_PROFILE) for _ in range(16)]
+    for x, (top, bottom) in enumerate(ENCOUNTER_TIP_PROFILE):
+        for y in range(top, bottom + 1):
+            if y in (top, bottom):
+                tip[y][x] = '1'
+            else:
+                pixel = turned[min(max(y, 2), 12)][10 + x % 3]
+                tip[y][x] = pixel if pixel != '0' else '2'
+        if x % ENCOUNTER_TIP_SPINE_EVERY == 0 and top >= 1 and x < len(ENCOUNTER_TIP_PROFILE) - 1:
+            tip[top - 1][x] = '3'
+    return [''.join(a) + ''.join(b) for a, b in zip(closed, tip)]
+
+
+def encounter_connector_rows(graphics: dict[int, bytes]) -> list[str]:
+    """16x16 elbow: the upright torso swept from vertical (top edge) to
+    horizontal (right edge). Belly rides the outer arc, spines the inner."""
+    torso = _encounter_torso(graphics)
+    pivot_x, pivot_y, radius = ENCOUNTER_ELBOW
+    n = len(torso)
+    rows = []
+    for y in range(16):
+        line = ''
+        for x in range(16):
+            dx, dy = pivot_x - (x + .5), (y + .5) - pivot_y
+            angle = math.atan2(dy, dx)
+            u = int(math.floor((radius - math.hypot(dx, dy)) * n / radius))
+            if not (-0.05 <= angle <= math.pi / 2 + .05 and 0 <= u < n):
+                line += '0'
+                continue
+            v = int(angle / (math.pi / 2) * (n - 1) + .5)
+            pixel = torso[v][u]
+            if u >= n - 3 and pixel == '3' and v % 3:
+                pixel = '1'
+            line += pixel
+        rows.append(line)
+    return _outline(rows)
 
 
 def compile_file_select_doll(root: Path) -> bytes:
@@ -479,6 +595,35 @@ def compile_assets(root: Path, source_path: Path | None = None) -> tuple[bytes, 
     down_index = TALL_POSES.index('down')
     tall_mapping[down_index][1:3] = tall_mapping[down_index][1:3][::-1]
     mapping = b''.join(allocate(rows) for rows in fallback)
+    remap = bytearray(range(256))
+    seam_aliases = {slot: (ENCOUNTER_SEAM_PAIR, 14) for slot in ENCOUNTER_TRAIL_PAIRS[:3]}
+    seam_aliases.update({0x34: (ENCOUNTER_SEAM_PAIR, 17), 0x36: (0x2A, 20)})
+    tip_slot, tip_replacement, tip_limit = ENCOUNTER_TIP_ALIAS
+    seam_aliases[tip_slot] = (tip_replacement, tip_limit)
+    for slot, (replacement, limit) in seam_aliases.items():
+        if _pair_pixel_diff(graphics[slot], graphics[replacement]) > limit:
+            raise ValueError(f'Encounter trail would replace a distinct body column at ${slot:02X}')
+        remap[slot] = replacement
+    tall_mapping = [row.translate(bytes(remap)) for row in tall_mapping]
+    mapping = mapping.translate(bytes(remap))
+    graphics.update(zip(ENCOUNTER_TRAIL_PAIRS, sprite_pairs(encounter_trail_rows(graphics))))
+    graphics.update(zip(ENCOUNTER_CONNECTOR_PAIRS, sprite_pairs(encounter_connector_rows(graphics))))
+    # The old seam is four isolated pixels. Its slots can disappear in the
+    # upright poses, freeing a pair for the tapered, upward-pointing pit tail.
+    if _pair_pixel_diff(graphics[FALL_TIP_PAIR], bytes(32)) != 4:
+        raise ValueError('Falling tail would replace a distinct seam')
+    hide_seam = bytes(range(FALL_TIP_PAIR)) + bytes([0xF5]) + bytes(range(FALL_TIP_PAIR + 1, 256))
+    tall_mapping = [row.translate(hide_seam) for row in tall_mapping]
+    mapping = mapping.translate(hide_seam)
+    tip_pairs = [graphics[slot] for slot in ENCOUNTER_TRAIL_PAIRS[2:]]
+    near, far = (decode_tile(pair[:16]) + decode_tile(pair[16:]) for pair in tip_pairs)
+    tip_rows = [''.join(str(pixel) for pixel in left + right) for left, right in zip(near, far)]
+    # Turn the flick so its end points toward the top, then fit the narrow
+    # tip into one 8x16 sprite. Its base meets the center of the third chunk.
+    vertical_tip = [''.join(column) for column in zip(*tip_rows)][::-1]
+    graphics[FALL_TIP_PAIR] = sprite_pairs(resize_x(vertical_tip, 8))[0]
+    for slot, elbow in zip(CROUCH_BEND_PAIRS, ENCOUNTER_CONNECTOR_PAIRS):
+        graphics[slot] = graphics[elbow][:16] + bytes(16)
     # This file contains indexes only, never extracted CHR pixels. Keeping it
     # checked in lets ca65 validate the renderer without redistributing a ROM.
     include = '; Generated by tools/assets.py from the local verified ROM.\n'
@@ -486,15 +631,24 @@ def compile_assets(root: Path, source_path: Path | None = None) -> tuple[bytes, 
     include += 'BarbaTallTiles:\n'
     for name, tiles in zip(TALL_POSES, tall_mapping):
         include += '    .byte ' + ', '.join(f'${v:02X}' for v in tiles) + f' ; {name}\n'
+    include += '\n.ifndef DARK_BARBA_LAYOUT\n'
+    include += '; Full head above the eight visible rows of the corridor bend.\n'
+    for label, pose in (('BarbaCorridorCrouch', 'idle'), ('BarbaCorridorAttack', 'attack')):
+        head = tall_mapping[TALL_POSES.index(pose)][:3]
+        tiles = [0xF5]*3 + list(head) + [0xF5, *CROUCH_BEND_PAIRS]
+        include += f'{label}:\n    .byte ' + ', '.join(f'${v:02X}' for v in tiles) + '\n'
+    include += '.endif\n'
+    include += '\n; Encounter trail tile indexes rebased for shadow OAM.\n'
+    trail_indexes = ('TRAIL_TORSO_LEFT', 'TRAIL_TORSO_RIGHT', 'TRAIL_TIP', 'TRAIL_TIP_FAR',
+                     'TRAIL_BEND_CENTER', 'TRAIL_BEND_BACK')
+    for name, slot in zip(trail_indexes, ENCOUNTER_TRAIL_PAIRS + ENCOUNTER_CONNECTOR_PAIRS):
+        include += f'{name} = ${slot | 1:02X}\n'
+    include += f'TRAIL_CORRIDOR_BEND = ${CROUCH_BEND_PAIRS[0] | 1:02X}\n'
+    include += f'FALL_TAIL_TILE = ${FALL_TIP_PAIR | 1:02X}\n'
     include_path = root / 'src/tall_layout.inc'
     if not include_path.exists() or include_path.read_text() != include:
         include_path.write_text(include, encoding='ascii')
 
-    flame = ['00000000']*3 + [
-        '10000000','12100000','12211010','12322121','12333222',
-        '12333222','12322121','12211010','12100000','10000000'] + ['00000000']*3
-    for tile, rows in ((0x32, flame), (0x54, flame)):
-        graphics[tile] = sprite_pairs([row[::-1] for row in rows])[0]
     # Fairy's 8x16 slot becomes a front-facing Wyrmling, preserving flight logic.
     # The native draw never flips it, so the design is facing-neutral; frames
     # $68/$6A alternate every 4 frames (wings up / wings down).
@@ -533,8 +687,11 @@ def compile_assets(root: Path, source_path: Path | None = None) -> tuple[bytes, 
               [[ash_colors[int(pixel)] for pixel in row] for row in ash_rows], 12)
     (root / 'build/barba-assets.json').write_text(json.dumps({
         'poses': list(TALL_POSES), 'size': [24, 48],
-        'body_pairs': len(set(pairs.values()) - {0xF5}), 'available_body_pairs': len([i for i in range(0, 0x64, 2) if i not in PLAYER_RESERVED_PAIRS]),
-        'weapon_pairs': [0x32, 0x54], 'wyrmling_pairs': [0x68, 0x6A],
+        'body_pairs': len(set(mapping).union(*tall_mapping) - {0xF5}),
+        'available_body_pairs': 0x64//2 - len(PLAYER_RESERVED_PAIRS) - len(seam_aliases),
+        'encounter_trail_pairs': list(ENCOUNTER_TRAIL_PAIRS),
+        'encounter_connector_pairs': list(ENCOUNTER_CONNECTOR_PAIRS),
+        'crouch_bend_pairs': list(CROUCH_BEND_PAIRS), 'wyrmling_pairs': [0x68, 0x6A],
         'ash_pairs': list(ASH_TILES), 'ash_visible_size': [16,8],
         'ash_sprite_npc_y_offset': 24,
         'mapping': [list(row) for row in tall_mapping],

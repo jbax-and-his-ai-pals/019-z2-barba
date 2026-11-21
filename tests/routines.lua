@@ -40,8 +40,8 @@ for _,pose in ipairs({5,7,8,9})do
             check(r(0x220)==0xF8 and r(0x224)==0xF8,'pose '..pose..' hides both attached-flame sprites')
         end
         check(r(0x80)==pose,'renderer preserves native attack pose')
-        local st=emu.getState()
-        check((st['mapper.prgReg'] or ((st['mapper.registers6'] or -1)//2))==0,'renderer retains player PRG bank')
+        local prg=emu.convertAddress(0x8506,mem)
+        check(prg and prg.address//0x4000==0,'renderer retains player PRG bank')
     end)
 end
 

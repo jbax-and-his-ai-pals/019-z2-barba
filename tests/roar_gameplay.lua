@@ -14,6 +14,8 @@ local function add(name,bank,entry,setup,verify)
  cases[#cases+1]={name=name,bank=bank,entry=entry,setup=setup,verify=verify}
 end
 local function playing()return r(0x4015)&0x10~=0 end
+-- RoarGemEnd keeps its floor-pulse timer in $04A0,x (0 = fanfare, 33 = pulse done).
+local function gemTimer(v)for a=0x4A0,0x4A5 do w(a,v)end end
 local function gemBody()
  w(0x5EE,0x88);w(0x5FA,72);w(0x5F6,1);w(0x5F4,0x80);w(0x5F5,0x54);w(0x5FB,0)
  for _,a in ipairs({0x204,0x24C,0x2C4})do w(a,0x80)end
@@ -88,12 +90,12 @@ add('native hurt rate unchanged',6,LABELS.RoarNativeRate,function()
  w(0x7FA,1)
 end,function()check(rate==15,'native Link hurt retains rate 15 with descending laughs')end)
 add('gem fanfare still playing',4,0x9B47,function()
- w(0x7FB,0x40);w(0x70C,0);w(0x70D,0);w(0xAF,2)
+ gemTimer(0);w(0x7FB,0x40);w(0x70C,0);w(0x70D,0);w(0xAF,2)
 end,function()
  check(r(0x5EE)==0 and r(0xAF)==2,'gem stays quiet until victory fanfare ends')
 end)
 add('gem fanfare finished',4,0x9B47,function()
- w(0x7FB,0);w(0x70C,0);w(0x70D,0);w(0xAF,2)
+ gemTimer(0);w(0x7FB,0);w(0x70C,0);w(0x70D,0);w(0xAF,2)
 end,function()
  check(r(0x5EE)==0x48 and r(0xAF)==2,'fanfare end queues the victory roar and keeps the statue waiting')
  check(r(0x70C)==0 and r(0x70D)==0,'fanfare end defers magic and life refill')
@@ -127,7 +129,7 @@ for _,phase in ipairs({0x48,0x88,0x98})do
  end)
 end
 add('gem refills after the roar',4,0x9B47,function()
- w(0x5EE,0x10);w(0x70C,0);w(0x70D,0);w(0xAF,2);w(0xDE,1)
+ gemTimer(33);w(0x5EE,0x10);w(0x70C,0);w(0x70D,0);w(0xAF,2);w(0xDE,1)
 end,function()
  check(r(0x5EE)==0 and r(0xAF)==3 and r(0xDE)==1,'statue consumes the completed roar and advances to the native XP stage')
  check(r(0x70C)==255 and r(0x70D)==255,'completed roar starts native magic and life refill')

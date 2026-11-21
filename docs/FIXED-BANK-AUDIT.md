@@ -1,5 +1,9 @@
 # Fixed-bank audit (starting commit 3ce5d3e)
 
+This records the original fixed-bank audit and subsequent dated findings.
+Use [AGENTS.md](../AGENTS.md#rom-banks--free-space), `src/barba.cfg`, and the
+current build report to check allocations for the combined Mapper 176 build.
+
 All addresses are CPU addresses in fixed PRG bank 7. Counts include every byte
 reserved/written by Barba, even bytes equal to the original. No original game
 bytes are reproduced here. Source: src/barba.cfg, src/barba.asm, tools/build.py,
@@ -113,3 +117,17 @@ Both changes pay for themselves inside vanilla code, so no padding region was us
 - **Offscreen-column mask `$F27D-$F2D1`** (85 bytes, guarded): same outputs from one
   16-bit subtraction. `$F2D2` (old RTS) is now 1 unused byte. The table byte
   `$F27C = $40` is read by `BIT` and must stay.
+
+## 2026-11-19: OAM clear and column clipping
+
+- **Native OAM clear `$D24C-$D25D`**. Both old entries cleared all 64 Y
+  coordinates after the sprite-zero removal patch. The shared entry at `$D24C`
+  now starts Y at `$80` and clears one entry in each half of page 2 per iteration.
+  The loop wraps to Y=0 with A=`$F8`, X unchanged, and the original flags.
+  The gameplay NMI (`$C182`), pause pane (`$C212`), and title (`$A7A8` in
+  bank 5) all use the shared entry. `$D250` is now inside the loop.
+- **Two-column clip `$F1D7-$F1F3`**. The sole caller at `$F24F` supplies
+  an eight-byte OAM row in page 2. Test `$C9` bits 3 and 2 directly and hide
+  the same columns. X is restored from `$08`, Y remains equal to `$09`, and
+  `$0A` retains the old final value of 2. The caller reloads A and sets carry
+  for its next calculation.

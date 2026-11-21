@@ -7,6 +7,7 @@ import zlib
 from pathlib import Path
 
 import roar_sample
+from assets import compile_assets, encounter_connector_rows, encounter_trail_rows
 from boss_art import resize_x, source_head, source_pair
 from nes import CHR_OFFSET, HEADER_SIZE, decode_tile, encode_tile, load_source
 
@@ -36,6 +37,13 @@ def remap_rows(rows: list[str], mapping: dict[str, str]) -> list[str]:
     return [''.join(mapping[c] for c in r) for r in rows]
 
 
+def resize_xy(rows: list[str], width: int, height: int) -> list[str]:
+    """Nearest-neighbor 2D resize."""
+    old_h = len(rows)
+    y_scaled = [rows[min(old_h - 1, (y * old_h + height // 2) // height)] for y in range(height)]
+    return resize_x(y_scaled, width)
+
+
 def put_grid(buf: bytearray, bank_4k: int, base_tile: int, rows: list[str], cols: int, tile_rows: int) -> None:
     """Write a (cols*8) x (tile_rows*8) pixel grid into consecutive CHR tiles row-major."""
     for tr in range(tile_rows):
@@ -53,6 +61,9 @@ def build() -> Path:
 
     barba = json.loads(BARBA_JSON.read_text(encoding='utf-8'))
     z2 = load_source(Z2_PATH)  # verified source ROM for boss-derived art
+    _, z2_graphics, _, _ = compile_assets(ROOT, Z2_PATH)
+    elbow_16 = encounter_connector_rows(z2_graphics)  # 16x16 vertical-to-horizontal curve
+    trail_32 = encounter_trail_rows(z2_graphics)      # 32x16 horizontal torso + tapered tail tip
 
     out = bytearray(waldo)
 
@@ -77,22 +88,35 @@ def build() -> Path:
     put(out, HEADER_SIZE + 0x1E801, bytes([0x16, 0x27, 0x38]), expected=bytes([0x16, 0x20, 0x38]))
     put(out, HEADER_SIZE + 0x1E805, bytes([0x16, 0x27, 0x38]), expected=bytes([0x16, 0x22, 0x20]))
 
-    # Build 16x48 LEFT-facing Barba from vanilla Z2 boss chunks (head + two undulating torso chunks).
+    # Build 48x48 LEFT-facing Barba from Z2 boss chunks (24x16 head + undulating neck + elbow + horizontal trail/tail).
     head_16 = resize_x(source_head(z2, 'closed'), 16)
+    head_24 = resize_x(source_head(z2, 'closed'), 24)
     neck_raw = [''.join((source_pair(z2, 0xA0)[y], source_pair(z2, 0xA2)[y])) for y in range(16)]
     neck_12 = resize_x(neck_raw, 12)
+    map_trail_24 = resize_x(trail_32, 24)
 
     def make_map_barba(phase: int) -> list[str]:
-        canvas = [['0'] * 16 for _ in range(48)]
+        canvas = [['0'] * 48 for _ in range(48)]
         head_y = 1 if (phase % 2 == 1) else 0
-        for y in range(head_y + 14, 48):
-            sway = (0, -1, 0, 1)[((y - head_y) // 4 + phase) % 4]
-            row = neck_12[max(0, y - head_y - 16) % 16]
-            nx = 4 + sway
+        tail_bob = -1 if (phase % 2 == 1) else 0
+        for iy, row in enumerate(elbow_16):
             for ix, px in enumerate(row):
-                if px != '0' and 0 <= nx + ix < 16:
+                if px != '0':
+                    canvas[32 + iy][8 + ix] = px
+        for iy, row in enumerate(map_trail_24):
+            for ix, px in enumerate(row):
+                if px != '0':
+                    yy = 32 + iy + (tail_bob if ix >= 12 else 0)
+                    if 0 <= yy < 48:
+                        canvas[yy][24 + ix] = px
+        for y in range(head_y + 14, 34):
+            sway = (0, -1, 0, 1)[((y - head_y) // 4 + phase) % 4] if y < 30 else 0
+            row = neck_raw[(y - head_y - 16) % 16]
+            nx = 8 + sway
+            for ix, px in enumerate(row):
+                if px != '0' and 0 <= nx + ix < 48:
                     canvas[y][nx + ix] = px
-        for iy, row in enumerate(head_16):
+        for iy, row in enumerate(head_24):
             for ix, px in enumerate(row):
                 if px != '0' and 0 <= head_y + iy < 48:
                     canvas[head_y + iy][ix] = px
@@ -100,27 +124,27 @@ def build() -> Path:
 
     pose_a = make_map_barba(0)
     pose_b = make_map_barba(2)
-    put_grid(out, bank_4k=2, base_tile=0x00, rows=pose_a, cols=2, tile_rows=6)
-    put_grid(out, bank_4k=2, base_tile=0x0C, rows=pose_b, cols=2, tile_rows=6)
-    for tid in range(0x18, 0x60):
+    put_grid(out, bank_4k=2, base_tile=0x00, rows=pose_a, cols=6, tile_rows=6)
+    put_grid(out, bank_4k=2, base_tile=0x24, rows=pose_b, cols=6, tile_rows=6)
+    for tid in range(0x48, 0x60):
         put_chr_tile(out, 2, tid, ['0' * 8] * 8)
 
-    # Extend Overworld Map sprite height from 4 to 6 tile rows (16x48, 12 sprites) in Bank 14.
-    put(out, HEADER_SIZE + 0x1CA6C, bytes([0x06]), expected=bytes([0x04]))
-    put(out, HEADER_SIZE + 0x1C49A, bytes([0xA2, 0x0C]), expected=bytes([0xA2, 0x08]))
-    put(out, HEADER_SIZE + 0x1C4AB, bytes([0xA2, 0x0C]), expected=bytes([0xA2, 0x08]))
+    # Extend Overworld Map sprite size from 2x4 to 6x6 (48x48, 36 sprites) in Bank 14.
+    put(out, HEADER_SIZE + 0x1CA6B, bytes([0x06, 0x06]), expected=bytes([0x02, 0x04]))
+    put(out, HEADER_SIZE + 0x1C49A, bytes([0xA2, 0x24]), expected=bytes([0xA2, 0x08]))
+    put(out, HEADER_SIZE + 0x1C4AB, bytes([0xA2, 0x24]), expected=bytes([0xA2, 0x08]))
 
-    # Replace the 24 overworld sprite descriptors ($8BA2..$8D51) with 4 shared 20-byte descriptors (2x6 tiles).
-    desc_addrs = (0x8BD2, 0x8BE6, 0x8BFA, 0x8C0E)
-    left_a_tiles = list(range(0x00, 0x0C))
-    left_b_tiles = list(range(0x0C, 0x18))
-    right_a_tiles = [t ^ 1 for t in left_a_tiles]
-    right_b_tiles = [t ^ 1 for t in left_b_tiles]
+    # Replace the 24 overworld sprite descriptors ($8BA2..$8D51) with 4 shared 44-byte descriptors (6x6 tiles).
+    desc_addrs = (0x8BD2, 0x8BFE, 0x8C2A, 0x8C56)
+    left_a_tiles = list(range(0x00, 0x24))
+    left_b_tiles = list(range(0x24, 0x48))
+    right_a_tiles = [r * 6 + (5 - c) for r in range(6) for c in range(6)]
+    right_b_tiles = [0x24 + r * 6 + (5 - c) for r in range(6) for c in range(6)]
     descs = bytes([
-        0x02, 0x06, 0xBF, 0x00, 0x00, 0x00, 0x00, 0x00, *left_a_tiles,
-        0x02, 0x06, 0xBF, 0x00, 0x00, 0x00, 0x00, 0x00, *left_b_tiles,
-        0x02, 0x06, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, *right_a_tiles,
-        0x02, 0x06, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, *right_b_tiles,
+        0x06, 0x06, 0xBF, 0x00, 0x00, 0x00, 0x00, 0x00, *left_a_tiles,
+        0x06, 0x06, 0xBF, 0x00, 0x00, 0x00, 0x00, 0x00, *left_b_tiles,
+        0x06, 0x06, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, *right_a_tiles,
+        0x06, 0x06, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, *right_b_tiles,
     ])
     ptrs = bytearray()
     for i in range(24):
@@ -172,22 +196,36 @@ def build() -> Path:
             if in_stamp_box(x, y):
                 grid[y][x] = 1
 
-    # Blit Barba's open-jaw head (scaled 24x16) + 12px-wide neck clipped strictly inside the stamp
+    # Blit Barba's open-jaw head (20x14) + curved neck + elbow + horizontal tail clipped inside the stamp
     head = source_head(z2, 'open')
-    neck = [''.join((source_pair(z2, 0xA0)[y], source_pair(z2, 0xA2)[y])) for y in range(16)]
-    stamp_head = resize_x(head, 24)
-    stamp_neck = resize_x(neck, 12)
+    neck = neck_raw
+    stamp_head = resize_xy(head, 20, 14)
+    stamp_neck = resize_x(neck, 10)
+    stamp_elbow = resize_xy(elbow_16, 10, 10)
+    stamp_trail = resize_xy(trail_32, 14, 10)
     # Map Z2 colors (1=red, 2=gold, 3=ivory) -> stamp colors (2=black, 3=red, 0=white)
     cmap = {'1': '2', '2': '3', '3': '0'}
-    ox, oy = 17, 15
-    for y in range(16):
-        for x in range(12):
-            p = stamp_neck[y][x]
-            yy, xx = oy + 14 + y, ox + 10 + x
+    ox, oy = 15, 13
+    for y in range(10):
+        for x in range(10):
+            p = stamp_elbow[y][x]
+            yy, xx = oy + 19 + y, ox + 7 + x
             if p != '0' and 0 <= yy < 48 and 0 <= xx < 48 and in_stamp_box(xx, yy):
                 grid[yy][xx] = int(cmap[p])
-    for y in range(16):
-        for x in range(24):
+    for y in range(10):
+        for x in range(14):
+            p = stamp_trail[y][x]
+            yy, xx = oy + 19 + y, ox + 17 + x
+            if p != '0' and 0 <= yy < 48 and 0 <= xx < 48 and in_stamp_box(xx, yy):
+                grid[yy][xx] = int(cmap[p])
+    for y in range(10):
+        for x in range(10):
+            p = stamp_neck[y][x]
+            yy, xx = oy + 12 + y, ox + 7 + x
+            if p != '0' and 0 <= yy < 48 and 0 <= xx < 48 and in_stamp_box(xx, yy):
+                grid[yy][xx] = int(cmap[p])
+    for y in range(14):
+        for x in range(20):
             p = stamp_head[y][x]
             yy, xx = oy + y, ox + x
             if p != '0' and 0 <= yy < 48 and 0 <= xx < 48 and in_stamp_box(xx, yy):
@@ -477,36 +515,31 @@ def build() -> Path:
     # BG Pal 1 = [20(white), 0E(black), 38(pale yellow), 16(red)].
     slot_w, slot_h = 32, 64
     sgrid = [['0'] * slot_w for _ in range(slot_h)]
-    head_26 = resize_x(source_head(z2, 'open'), 26)
-    # Stretch head slightly vertically (16 -> 22 px) for better reel proportion
-    head_26_22 = [head_26[(y * 16) // 22] for y in range(22)]
+    body_mask = [[False] * slot_w for _ in range(slot_h)]
+    head_24_19 = resize_xy(source_head(z2, 'open'), 24, 19)
     scmap = {'1': '3', '2': '2', '3': '0'}
-    # Draw undulating neck + widening torso/shoulders in lower half (y=24..62)
-    neck_16 = resize_x(neck, 16)
-    for y in range(24, 63):
-        t = y - 24
-        sway = int(round(2.0 * math.sin(t * 0.22)))
-        half_w = 8 + (t * 5) // 38  # widens from 16px neck to 26px chest
-        row_src = neck_16[t % 16]
-        cx = 17 + sway
-        for ix in range(-half_w, half_w):
-            sx = ((ix + half_w) * 16) // (2 * half_w)
-            px = row_src[sx]
-            if px != '0' and 1 <= cx + ix < 31:
-                sgrid[y][cx + ix] = scmap[px]
-    # Draw head at x=2..27, y=7..28
-    hx0, hy0 = 2, 7
-    for iy, row in enumerate(head_26_22):
-        for ix, px in enumerate(row):
-            if px != '0' and 1 <= hx0 + ix < 31 and 1 <= hy0 + iy < 63:
-                sgrid[hy0 + iy][hx0 + ix] = scmap[px]
+
+    def sblit(rows_src: list[str], x0: int, y0: int) -> None:
+        for iy, row in enumerate(rows_src):
+            for ix, px in enumerate(row):
+                xx, yy = x0 + ix, y0 + iy
+                if px != '0' and 1 <= xx < 31 and 1 <= yy < 63:
+                    sgrid[yy][xx] = scmap[px]
+                    body_mask[yy][xx] = True
+
+    # Draw coiled elbow (curving left) + horizontal torso + tapered tail tip, then curving neck (y=21..44)
+    slot_elbow = [r[::-1] for r in resize_xy(elbow_16, 12, 14)]
+    slot_trail = [r[::-1] for r in resize_xy(trail_32, 16, 14)]
+    sblit(slot_elbow, 17, 43)
+    sblit(slot_trail, 2, 43)
+    neck_12_slot = resize_x(neck, 12)
+    for y in range(21, 45):
+        t = y - 21
+        cx = 13 + min(4, (t * 5) // 22)
+        sblit([neck_12_slot[t % 16]], cx, y)
+    # Draw head at x=2..25, y=5..23
+    sblit(head_24_19, 2, 5)
     # Add 1px black outline around Barba (on white background)
-    body_mask = [[sgrid[y][x] != '0' for x in range(slot_w)] for y in range(slot_h)]
-    # Also outline ivory ('0' inside head) by checking Z2 source masks
-    for iy, row in enumerate(head_26_22):
-        for ix, px in enumerate(row):
-            if px != '0' and 1 <= hx0 + ix < 31 and 1 <= hy0 + iy < 63:
-                body_mask[hy0 + iy][hx0 + ix] = True
     for y in range(1, slot_h - 1):
         for x in range(1, slot_w - 1):
             if not body_mask[y][x]:
@@ -521,35 +554,136 @@ def build() -> Path:
         sgrid[y][slot_w - 1] = '1'
     put_grid(out, bank_4k=3, base_tile=0x00, rows=[''.join(r) for r in sgrid], cols=4, tile_rows=8)
 
-    # 9. Moon Ending Barba sprite (CHR Bank 16, tiles $F0..$F7, 16x32 px, 8x16 sprite mode).
-    # Patch Bank 0 $A06E: bottom half OAM #58/#59 attr $01 -> $02 so all 4 sprites use Sprite Pal 2
-    # [0E(trans), 20(white), 16(red), 38(pale yellow)].
-    put(out, HEADER_SIZE + 0x0006E, bytes([0xA9, 0x02]), expected=bytes([0xA9, 0x01]))
-    # Build 16x32 RIGHT-facing Barba (mirror of Z2 left-facing art)
+    # 9. Moon Ending Barba sprite (1KB CHR Bank 65 = 4KB Bank 16 $40..$53, 44x48 px, 10 sprites in 8x16 mode).
+    # Map R4 ($1800-$1BFF, tiles $80-$BF) -> Bank 65 at $A042 via $BF9F, and draw 10 sprites at $A1B6 via $BFB2.
+    # All 10 sprites use Sprite Pal 2 [0E(trans), 20(white), 16(red), 38(pale yellow)].
     mcmap = {'0': '0', '1': '2', '2': '3', '3': '1'}
-    mgrid = [['0'] * 16 for _ in range(32)]
-    mhead = [r[::-1] for r in head_16]
-    mneck = [r[::-1] for r in neck_12]
-    for y in range(14, 32):
-        sway = (0, -1, 0, 1)[(y // 4) % 4]
-        row = mneck[(y - 14) % 16]
-        nx = 1 + sway
-        for ix, px in enumerate(row):
-            if px != '0' and 0 <= nx + ix < 16:
-                mgrid[y][nx + ix] = mcmap[px]
-    for iy, row in enumerate(mhead):
-        for ix, px in enumerate(row):
-            if px != '0' and 0 <= iy < 32 and 0 <= ix < 16:
-                mgrid[iy][ix] = mcmap[px]
-    # 8x16 sprite tiles in Bank 16 $F0..$F7:
-    # $F0/$F1 = top-left (x=0..7, y=0..15), $F2/$F3 = top-right (x=8..15, y=0..15)
-    # $F4/$F5 = bottom-left (x=0..7, y=16..31), $F6/$F7 = bottom-right (x=8..15, y=16..31)
-    mrows = [''.join(r) for r in mgrid]
-    for half_y, base_tid in ((0, 0xF0), (16, 0xF4)):
-        for col_x, tid_off in ((0, 0), (8, 2)):
-            for sub_y in (0, 8):
-                tile_rows = [mrows[half_y + sub_y + y][col_x:col_x + 8] for y in range(8)]
-                put_chr_tile(out, 16, base_tid + tid_off + (sub_y // 8), tile_rows)
+    mcanvas = [['0'] * 44 for _ in range(48)]
+    mhead = [r[::-1] for r in head_24]
+    mneck = [r[::-1] for r in neck_raw]
+    melbow = [r[::-1] for r in elbow_16]
+    mtail = [r[::-1] for r in resize_x(trail_32, 16)]
+
+    def mblit(rows: list[str], ox: int, oy: int) -> None:
+        for iy, row in enumerate(rows):
+            for ix, px in enumerate(row):
+                if px != '0' and 0 <= oy + iy < 48 and 0 <= ox + ix < 44:
+                    mcanvas[oy + iy][ox + ix] = mcmap[px]
+
+    mblit(mtail, 0, 32)
+    mblit(melbow, 16, 32)
+    mblit(mneck, 16, 16)
+    mblit(mneck[:4], 16, 30)
+    mblit(mhead, 16, 3)
+
+    # Waldo space helmet bubble around Barba's head (center (27.5, 10.5), rx=15.0, ry=10.0).
+    for y in range(21):
+        for x in range(12, 44):
+            if mcanvas[y][x] != '0':
+                continue
+            dx = (x - 27.5) / 15.0
+            dy = (y - 10.5) / 10.0
+            r2 = dx * dx + dy * dy
+            if 0.80 <= r2 <= 1.08:
+                mcanvas[y][x] = '1'
+            elif dx < -0.20 and dy < -0.20 and 0.48 <= r2 <= 0.64:
+                mcanvas[y][x] = '1'
+            elif 0.35 <= dx <= 0.55 and -0.60 <= dy <= -0.35 and 0.45 <= r2 <= 0.65:
+                mcanvas[y][x] = '1'
+    # Helmet neck collar at y=19..20 across neck (x=17..30)
+    for x in range(17, 31):
+        mcanvas[19][x] = '1'
+        if x % 2 == 1:
+            mcanvas[20][x] = '2'
+
+    mrows = [''.join(r) for r in mcanvas]
+    # 10 8x16 sprite pairs in Bank 65 (4KB Bank 16, tiles $40..$53):
+    # 0..3: Head+Helmet at (x=12,20,28,36, y=0..15)
+    # 4..5: Neck+Collar at (x=16,24, y=16..31)
+    # 6..9: Tail+Torso+Elbow at (x=0,8,16,24, y=32..47)
+    moon_sprites = [
+        (12, 0), (20, 0), (28, 0), (36, 0),
+        (16, 16), (24, 16),
+        (0, 32), (8, 32), (16, 32), (24, 32),
+    ]
+    for idx, (sx, sy) in enumerate(moon_sprites):
+        for sub_y in (0, 8):
+            tile_rows = [mrows[sy + sub_y + y][sx:sx + 8] for y in range(8)]
+            put_chr_tile(out, 16, 0x40 + idx * 2 + (sub_y // 8), tile_rows)
+
+    # Move Rocket interior cols 3..4, rows 1..5 (20 tiles) into Moon BG (4K Bank 10: $AC..$BF)
+    # with Rocket aligned at X=$F0 (-16, so cols 2..7 are at X=0..47) and Y=$60 (96).
+    # That reduces Rocket to 4 sprites/scanline across rows 1..5, giving 4 sprites/scanline for Barba at all heights.
+    rocket_bg_cmap = {0: 0, 1: 3, 2: 1, 3: 0}
+    bg_next = 0xAC
+    col3_tiles = []
+    col4_tiles = []
+    for r in range(1, 6):
+        for c, dst in ((3, col3_tiles), (4, col4_tiles)):
+            i = r * 8 + c
+            t = 0x80 + i * 2 if i < 32 else 0xC0 + (i - 32) * 2
+            for h in (0, 1):
+                off = WALDO_CHR_OFFSET + 16 * 4096 + (t + h) * 16
+                d = decode_tile(bytes(waldo[off:off + 16]))
+                put_chr_tile(out, 10, bg_next, [''.join(str(rocket_bg_cmap[p]) for p in row) for row in d])
+                dst.append(bg_next)
+                bg_next += 1
+    assert bg_next <= 0xC1
+    put(out, HEADER_SIZE + 0x000CD, bytes([0x60]), expected=bytes([0x5C]))  # Rocket Y = $60
+    put(out, HEADER_SIZE + 0x00145, bytes([0xEF]), expected=bytes([0xF4]))  # Rocket X = $F0
+    put(out, HEADER_SIZE + 0x00158, bytes.fromhex('20 10 ae ea'), expected=bytes.fromhex('a9 2c 85 26'))
+
+    # Store col3_tiles (10 bytes) + col4_tiles (10 bytes) + hide OAM offsets (10 bytes) at $AF00
+    hide_oam = bytes([
+        0x2C, 0x30, 0x4C, 0x50, 0x6C, 0x70, 0x8C, 0x90, 0xAC, 0xB0,  # Rocket cols 3..4 rows 1..5
+    ])
+    put(out, HEADER_SIZE + 0x00F00, bytes(col3_tiles) + bytes(col4_tiles) + hide_oam, expected=bytes(30))
+    # $AE10: VBlank-sync write of Rocket cols 3..4 (c=1..2, r=14..23) + clear $228B..$229E + attrs $23D8/$23E0/$23E8
+    rocket_bg_code = bytes.fromhex(
+        'a5 00 29 7f 8d 00 20 2c 02 20 2c 02 20 10 fb '
+        'a5 00 09 04 8d 00 20 '
+        'a9 21 8d 06 20 a9 c1 8d 06 20 '
+        'a2 00 bd 00 af 8d 07 20 e8 e0 0a d0 f5 '
+        'a9 21 8d 06 20 a9 c2 8d 06 20 '
+        'a2 00 bd 0a af 8d 07 20 e8 e0 0a d0 f5 '
+        'a5 00 29 fb 8d 00 20 '
+        'a9 23 8d 06 20 a9 d8 8d 06 20 a9 50 8d 07 20 '
+        'a9 23 8d 06 20 a9 e0 8d 06 20 a9 55 8d 07 20 '
+        'a9 23 8d 06 20 a9 e8 8d 06 20 a9 55 8d 07 20 '
+        'a9 00 8d 06 20 8d 06 20 8d 05 20 8d 05 20 '
+        'a5 00 8d 00 20 '
+        'a0 00 a9 f4 be 14 af 9d 00 07 c8 c0 0a d0 f5 '
+        'a9 2c 85 26 60'
+    )
+    assert len(rocket_bg_code) <= 0xF0, f'rocket_bg_code too large: {len(rocket_bg_code)}'
+    put(out, HEADER_SIZE + 0x00E10, rocket_bg_code, expected=bytes(len(rocket_bg_code)))
+
+    # Patch Bank 0 $A042 -> JSR $BF9F to map R4 = Bank 65, and $A1B6 -> JMP $BFB2 for 10-sprite OAM.
+    put(out, HEADER_SIZE + 0x00042, bytes.fromhex('20 9f bf ea ea'), expected=bytes.fromhex('a9 47 8d 04 02'))
+    moon_oam_tables = bytes([
+        0xE0, 0xE4, 0xE8, 0xEC, 0xF0, 0xF4, 0xF8, 0xFC, 0xAC, 0xB0,  # OAM offsets (#56..#63, #43..#44)
+        12, 20, 28, 36, 16, 24, 0, 8, 16, 24,                        # dx
+        0xE6, 0xE6, 0xE6, 0xE6, 0xF6, 0xF6, 0x06, 0x06, 0x06, 0x06,  # dy (-26, -10, +6)
+    ])
+    put(
+        out, HEADER_SIZE + 0x001B6,
+        bytes.fromhex('4c b2 bf') + moon_oam_tables + bytes([0x60]),
+        expected=waldo[HEADER_SIZE + 0x001B6:HEADER_SIZE + 0x001D8],
+    )
+    moon_bank0_code = bytes.fromhex(
+        # $BF9F: map R4 = Bank 65, restore R7 = 0 ($A042)
+        'a9 44 8d 00 80 a9 41 8d 01 80 a9 47 8d 04 02 8d 00 80 60'
+    )
+    moon_oam_code = bytes.fromhex(
+        'a0 00 a9 81 85 08 '           # LDY #0; LDA #$81; STA $08
+        'be b9 a1 '                    # LDX $A1B9,Y
+        'a5 27 18 79 cd a1 9d 00 07 '  # LDA $27; CLC; ADC $A1CD,Y; STA $0700,X
+        'a5 08 9d 01 07 18 69 02 85 08 '  # LDA $08; STA $0701,X; CLC; ADC #2; STA $08
+        'a9 02 9d 02 07 '              # LDA #2; STA $0702,X
+        'a5 26 18 79 c3 a1 9d 03 07 '  # LDA $26; CLC; ADC $A1C3,Y; STA $0703,X
+        'c8 c0 0a d0 d7 60'            # INY; CPY #10; BNE loop (-41 = $D7); RTS
+    )
+    put(out, HEADER_SIZE + 0x01F9F, moon_bank0_code + moon_oam_code, expected=bytes(len(moon_bank0_code + moon_oam_code)))
 
     # 7. Expand PRG from 128KB (8x16KB) to 256KB (16x16KB) and add Barba's sampled roar in Bank 16 ($C000).
     # Waldo uses MMC3 PRG Mode 1 ($8000 bit 6=1: $8000=Bank 30, $A000=R7, $C000=R6, $E000=Bank 31)
@@ -597,10 +731,10 @@ def build() -> Path:
         prg_256[0x20964:0x20964 + len(moon_ending_roar)] = moon_ending_roar
         prg_256[0x2096A:0x2096A + len(title_start_roar)] = title_start_roar
 
-        # Bank 31 ($E000-$FFFF at 0x3E000): RESET sets R6=16 (at $F65B, leaving $F603-$F653 free), plus NMI/level/ending hooks
-        put(prg_256, 0x3E03B, bytes.fromhex('20 5b f6 ea ea ea ea ea ea ea'),
+        # Bank 31 ($E000-$FFFF at 0x3E000): RESET sets R6=16 (in $FFE0-$FFF9 tail padding), plus NMI/level/ending hooks
+        put(prg_256, 0x3E03B, bytes.fromhex('20 e0 ff ea ea ea ea ea ea ea'),
             expected=bytes.fromhex('a9 47 8d 00 80 a9 52 8d 01 80'))
-        put(prg_256, 0x3F65B, bytes.fromhex('a9 46 8d 00 80 a9 10 8d 01 80 a9 47 8d 00 80 a9 52 8d 01 80 60'),
+        put(prg_256, 0x3FFE0, bytes.fromhex('a9 46 8d 00 80 a9 10 8d 01 80 a9 47 8d 00 80 a9 52 8d 01 80 60'),
             expected=bytes(21))
         put(prg_256, 0x3FA13, bytes.fromhex('20 30 c9'), expected=bytes.fromhex('ad f6 03'))
         put(prg_256, 0x3EBC8, bytes.fromhex('20 50 c9 ea ea ea'), expected=bytes.fromhex('90 04 a0 6c a9 ea'))

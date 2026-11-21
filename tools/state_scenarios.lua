@@ -34,10 +34,12 @@ local function upgraded()
     w(0x770,math.floor(target/256));w(0x771,target%256)
 end
 local function palace(world,region,number,room,page)
-    w(0x707,world);w(0x706,region);w(0x769,world==3 and 3 or 4)
+    w(0x707,world);w(0x706,region);w(0x70A,region==2 and 2 or 0);w(0x769,world==3 and 3 or 4)
     w(0x561,room);w(0x568,number-1);w(0x56B,number);w(0x56C,number==6 and 1 or 0)
     w(0x701,0);w(0x75C,page or 0);w(0x704,0)
     w(0x736,0);w(0x73D,0);w(0x726,1)
+    if number==1 then w(0x73,32);w(0x74,62)
+    elseif number==6 then w(0x73,100);w(0x74,45) end
 end
 local scenes={
     {id='castle',name='Starting castle',frames=0},
@@ -52,7 +54,7 @@ local scenes={
         upgraded();palace(4,2,6,0x33,0)
     end},
     {id='barba',name='Palace 6 boss encounter',frames=120,setup=function()
-        upgraded();palace(4,2,6,0x3A,1)
+        upgraded();palace(4,2,6,0x3A,0)
     end,capture=function()return r(0x499)==2 end},
     {id='raft',name='Sea crossing',frames=150,setup=function()
         upgraded();w(0x707,0);w(0x706,0);w(0x769,1)
@@ -60,7 +62,8 @@ local scenes={
         w(0x7A9,0);w(0x7AA,0);w(0x7AC,0);w(0x7AD,0);w(0x726,1)
     end},
     {id='town',name='Rauru town street',frames=150,setup=function()
-        upgraded();w(0x707,1);w(0x706,0);w(0x769,3);w(0x561,0)
+        upgraded();w(0x707,1);w(0x706,0);w(0x70A,0);w(0x769,3);w(0x561,0)
+        w(0x73,54);w(0x74,46);w(0x748,0x2C)
         w(0x701,0);w(0x75C,1);w(0x704,0);w(0x736,0);w(0x73D,0);w(0x726,1)
     end,capture=function()
         return r(0xCC)>=88 and r(0xCC)<=168
@@ -75,7 +78,8 @@ local scenes={
     -- Great Palace Thunderbird / Dark Link encounter with max stats, all spells, and full meters.
     {id='great-palace',name='Great Palace final boss',frames=60,setup=function()
         upgraded()
-        w(0x707,5);w(0x706,2);w(0x769,5)
+        w(0x707,5);w(0x706,2);w(0x70A,2);w(0x769,5)
+        w(0x73,73);w(0x74,4)
         w(0x561,0x35);w(0x568,6);w(0x56B,7);w(0x56C,2)
         w(0x701,0);w(0x75C,0);w(0x704,0)
         w(0x736,0);w(0x73D,0);w(0x726,1)
@@ -135,6 +139,12 @@ emu.addEventCallback(function()
             local id=scenes[index].id
             if id=='combat' then buttons.right=age>=100 and age<125 end
             if id=='lava-surface' then buttons.right=age>=100 and age<230 end
+            if id=='barba' then
+                -- Reach the center platform under normal player movement before
+                -- capturing the active fight. Core F9 captures the approach.
+                buttons.right=r(0x0728)~=2
+                buttons.a=r(0x3B)*256+r(0x4D)>=0xDA and (age+28)%36<27
+            end
             if id=='raft' then buttons.right=age>=90 and age<110 end
             if id=='town' then buttons.right=(r(0x736)==11 and r(0xCC)<116) end
         end

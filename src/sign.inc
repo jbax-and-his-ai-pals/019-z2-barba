@@ -67,6 +67,16 @@ SignDialog:
     pla
     jmp TownSetNpcDialog
 @no:
+    jsr TownIsError
+    bcc @native
+    lda $AF,x
+    cmp #$A0
+    bcc @native
+    pla
+    lda #<ErrorAshText
+    ldy #>ErrorAshText
+    jmp TownSetNpcDialog
+@native:
     jmp TownNativeDialog
 
 SIGN_LINES = 6
@@ -94,3 +104,52 @@ SignDidThat:
 SignWasSign:
     TownLine "THIS WAS", $FD
     TownLine "A SIGN.", $FF
+
+; Error of Ruto: world 1 ($0707=1), town 1 ($056B=1), actor $0E.
+TownIsError:
+    lda $0707
+    cmp #$01
+    bne @no
+    lda $056B
+    cmp #$01
+    bne @no
+    lda $A1,x
+    cmp #$0E
+    bne @no
+    sec
+    rts
+@no:
+    clc
+    rts
+
+; Keep Error's ash pile persistent in the room and allow talking to it.
+ErrorAshCheck:
+    jsr TownIsError
+    bcc @not_error
+    lda $05C3,x
+    bne @keep
+    lda $F5
+    and #$40
+    bne @try_talk
+    lda TALK_LATCH
+    bne @keep
+    lda $F7
+    and #$08
+    beq @keep
+@try_talk:
+    jsr TownCanTalk
+    bcc @keep
+    stx $048B
+    lda #$01
+    sta TALK_LATCH
+    jsr $9A33
+@keep:
+    sec
+    rts
+@not_error:
+    clc
+    rts
+
+ErrorAshText:
+    TownLine "I AM", $FD
+    TownLine "ASH PILE.", $FF

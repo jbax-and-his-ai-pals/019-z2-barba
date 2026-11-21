@@ -6,10 +6,10 @@ local jaws, badHead = {}, false
 emu.addMemoryCallback(function()
     if rd(0x8506)~=0x2F or rd(0x21C)~=0x7F then return end
     local first=rd(0x21D)
-    local expected=({[0x00]={0x02,0x04},[0x1A]={0x1C,0x04},[0x1E]={0x20,0x04}})[first]
-    if not expected or rd(0x221)~=expected[1] or rd(0x23D)~=expected[2] then badHead=true end
+    local expected=({[0x00]=0x02,[0x1A]=0x1C,[0x1E]=0x20})[first]
+    if not expected or rd(0x221)~=expected or rd(0x23D)~=0x04 then badHead=true end
     jaws[first]=true
-end,emu.callbackType.exec,0xA58E)
+end,emu.callbackType.exec,0xA588)
 emu.addMemoryCallback(function() noiseWrites = noiseWrites + 1 end, emu.callbackType.write, 0x400E, 0x400E)
 -- Vanilla's title sets $ED bit 6 on its own; count only writes made by Barba's title code ($A54F-$A5E7).
 emu.addMemoryCallback(function(addr, value)
@@ -29,7 +29,7 @@ local function endFrame()
     end
     if frame == 1500 then
         local f = assert(io.open(OUTPUT_DIR..'/title-roar.txt', 'w'))
-        local headOk=jaws[0] and jaws[0x1A] and jaws[0x1E] and not badHead
+        local headOk=jaws[0x00] and jaws[0x1A] and jaws[0x1E] and not badHead
         local timerLimit=LABELS.RoarAudio and 97 or 0x30
         local ok = starts >= 1 and maxTimer <= timerLimit and sfx == 0 and headOk
         f:write(string.format('roar starts=%d maxTimer=%d barbaSfxWrites=%d noiseWrites=%d jawCount=%d\n', starts, maxTimer, sfx, noiseWrites, rd(0x05FA)))

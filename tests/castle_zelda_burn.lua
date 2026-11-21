@@ -65,7 +65,7 @@ emu.addEventCallback(function()
             if not shoutSeenAt then
                 shoutSeenAt=frame
             elseif #shoutTiles==0 then
-                for o=0x28,0x38,4 do
+                for _,o in ipairs({0x28,0x2C,0x30,0x34,0x40}) do
                     if r(0x200+o)<0xF8 then shoutTiles[#shoutTiles+1]=r(0x201+o) end
                 end
             end

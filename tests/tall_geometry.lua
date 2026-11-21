@@ -38,7 +38,8 @@ local function geometry(name,setup,x,y,flags)
             string.format('mouth %02X,%02X expected %02X,%02X',r(0x5F2),r(0x5F3),x,y))end
         local state=emu.getState()
         check(state['cpu.x']==7 and state['cpu.y']==9,'geometry preserves caller X and Y')
-        check((state['mapper.prgReg'] or ((state['mapper.registers6'] or -1)//2))==0,'terrain probe restores player PRG bank')
+        local prg=emu.convertAddress(0x8506,mem)
+        check(prg and prg.address//0x4000==0,'terrain probe restores player PRG bank')
     end)
 end
 geometry('standing right in open space',function()end,0x6C,0x84,1)
@@ -53,6 +54,12 @@ geometry('right head edge under actual solid tile',function()w(0x6066,0x4C)end,0
 geometry('head bottom edge catches stone below its top row',function()
     w(0x29,0x88);w(0x6064,0x4C)
 end,0x6C,0x8C,3)
+geometry('head bottom-right edge catches stone below its top row',function()
+    w(0x29,0x88);w(0x6066,0x4C)
+end,0x6C,0x8C,3)
+geometry('stale ZP $07 solid value does not tuck head in open space',function()
+    w(0x07,0x4C)
+end,0x6C,0x84,1)
 geometry('right probe crosses a world-page boundary',function()
     w(0x4D,0xF0);w(0x6130,0x4C)
 end,0x6C,0x94,3)
@@ -96,6 +103,33 @@ end)
 add('crouching does not leave a raised head ghost','BarbaDisplay',function()
     w(0x17,0);w(0x80,6)
 end,function()check(allHidden(extraHead),'crouch hides all extra head sprites')end)
+for _,case in ipairs({
+    {name='open crouch facing right',pose=6,facing=1},
+    {name='open crouch attack facing left',pose=7,facing=2},
+    {name='corridor crouch facing right',pose=6,facing=1,ceiling=0x6064},
+    {name='corridor crouch attack facing left',pose=7,facing=2,ceiling=0x6066},
+})do
+    add(case.name,'BarbaDisplay',function()
+        w(0x17,0);w(0x80,case.pose);w(0x9F,case.facing)
+        if case.ceiling then w(case.ceiling,0x4C)end
+    end,function()
+        local back=case.facing==1 and 0x214 or 0x21C
+        local front=case.facing==1 and 0x21C or 0x214
+        local head=case.pose==6 and {0x00,0x02,0x04} or {0x1E,0x20,0x04}
+        for col=0,2 do
+            local oam=0x208+4*col
+            local tile=case.facing==1 and head[3-col] or head[1+col]
+            check(r(oam)==0x98 and r(oam+1)==tile,
+                'full head column '..col..' draws at crouch height')
+        end
+        check(r(0x219)==0x32 and r(back+1)==0x54 and r(front)==0xF8,
+            'only the two cropped elbow columns draw below the head')
+        check(r(0x218)==0xA8 and r(back)==0xA8 and
+            (r(back+2)&0x40)==(case.facing==1 and 0x40 or 0),
+            'cropped elbow starts 16px below the head and keeps facing')
+        check(r(0x5F3)==0x9A and r(0x5F6)==1,'crouch keeps its fire origin')
+    end)
+end
 for _,attack in ipairs({0,2})do
     add('elevator duck attack='..attack,'BarbaDisplay',function()
         w(0x754,0x10);w(0x400,attack)
@@ -181,15 +215,34 @@ add('downstab near HUD hides second torso chunk','BarbaDisplay',function()
 end,function()
     check(allHidden({0x220,0x224}),'downstab does not draw extra torso into the HUD')
 end)
-add('downstab under ceiling tuck hides second torso chunk','BarbaDisplay',function()
+add('downstab under ceiling tuck hides second torso chunk and draws full downward head','BarbaDisplay',function()
     w(0x80,9);w(0x479,2);w(0x6064,0x4C)
 end,function()
     check(allHidden({0x220,0x224}),'tucked downstab hides extra torso chunk')
+    check(r(0x204)==0x90 and r(0x24C)==0x90 and r(0x2C4)==0x90,'tucked downstab places upper head row at DRAW_TOP+16')
+    check(r(0x205)==0x56 and r(0x24D)==0x4C and r(0x2C5)==0x4A,'tucked downstab draws full 24x32 downward head')
 end)
 add('downstab near right edge hides wrapped torso sprite','BarbaDisplay',function()
     w(0x80,9);w(0x479,2);w(0x9F,1);w(0x4D,0xF4)
 end,function()
     check(r(0x220)==0x70 and r(0x224)==0xF8,'downstab clips offscreen right half of extra torso')
+end)
+add('downstab collapses all extra chunks when ceiling blocks Y1','BarbaDisplay',function()
+    w(0x80,9);w(0x479,2);w(0x6054,0x4C)
+end,function()
+    check(r(0x64FE)==0 and allHidden({0x220,0x224}),'ceiling at Y1 keeps only Row 0..2 below roof')
+end)
+add('downstab collapses torso chunks into wagging tip when ceiling blocks Y2','BarbaDisplay',function()
+    w(0x80,9);w(0x479,2);w(0x6044,0x4C)
+end,function()
+    check(r(0x64FE)==1,'ceiling at Y2 sets DOWNSTAB_ROWS=1')
+    check(r(0x220)==0x70 and r(0x221)==0x0A and r(0x224)==0xF8,'ceiling at Y2 places wagging tip at Y1')
+end)
+add('downstab collapses third torso chunk when ceiling blocks Y3','BarbaDisplay',function()
+    w(0x80,9);w(0x479,2);w(0x6034,0x4C)
+end,function()
+    check(r(0x64FE)==2,'ceiling at Y3 sets DOWNSTAB_ROWS=2')
+    check(r(0x220)==0x70 and r(0x224)==0x70,'ceiling at Y3 keeps second torso chunk at Y1')
 end)
 add('swamp water shifts head down and hides bottom row','BarbaDisplay',function()
     w(0x752,0x20)
@@ -199,18 +252,164 @@ end,function()
     check(allHidden({0x214,0x218,0x21C}),'swamp hides bottom row')
 end)
 
+local NEAR,OUTER,TIP,FAR=0x6550,0x6554,0x6558,0x655C
+local function encounterTorso(keepHistory)
+    w(0x6518,0xA0);w(0x6519,0x0D);w(0x651A,0x40);w(0x651B,0x54)
+    w(0x5FA,3*9)
+    for slot=0x6550,0x65FC,4 do w(slot,0xF8)end
+    if not keepHistory then w(0x6487,0)end
+end
+local function enemy(slot,y)
+    w(slot,y);w(slot+1,0xB5);w(slot+2,0x01);w(slot+3,0x40)
+end
+local function isEnemy(slot,y)
+    return r(slot)==y and r(slot+1)==0xB5 and r(slot+2)==0x01 and r(slot+3)==0x40
+end
+local function checkTrail(y,x,attr)
+    local facesRight=attr&0x40~=0
+    check(r(NEAR)==y and r(OUTER)==y,'both trail sprites have the expected Y')
+    check(r(NEAR+3)==x+(facesRight and 8 or 0) and r(OUTER+3)==x+(facesRight and 0 or 8),
+        'the column nearest Barba has first priority in either facing')
+    check(r(NEAR+1)==0x15 and r(OUTER+1)==0x3F,'the rotated torso uses its near column before its outer column')
+    check(r(NEAR+2)==attr and r(OUTER+2)==attr,'trail inherits Barba palette and draws in front of the background')
+end
+local function checkTip(y,x,attr)
+    local farX=x+((attr&0x40~=0) and -8 or 8)
+    check(r(TIP)==y and r(TIP+1)==0x45 and r(TIP+2)==attr and r(TIP+3)==x,
+        'the near tip column follows the torso')
+    check(r(FAR)==y and r(FAR+1)==0x31 and r(FAR+2)==attr and r(FAR+3)==farX,
+        'the far tip column follows, 8px further out')
+end
+add('right-facing encounter trail at rest','DrawEncounterTorso',encounterTorso,function()
+    checkTrail(0xA0,0x3C,0x40)
+    checkTip(0xA0,0x34,0x40)
+    check(r(0x6519)==0x35 and r(0x6515)==0x37,'the bend uses the center and rear body slots facing right')
+    check(r(0x651C)==0xF8,'the old front seam does not use a third lower-row sprite')
+    local prg=emu.convertAddress(0x8506,mem)
+    check(prg and prg.address//0x4000==0,'the bank-1 shadow pass restores the player PRG bank')
+end)
+add('the bend mirrors onto the rear slot during a jump','DrawEncounterTorso',function()
+    encounterTorso();w(0x651A,1);w(0x5FA,12*9);w(0x6515,0x0B)
+end,function()
+    check(r(0x6519)==0x35 and r(0x651D)==0x37 and r(0x6514)==0xF8,
+        'the bend mirrors into two body slots facing left and hides the old seam')
+end)
+add('the bend applies during the hurt pose','DrawEncounterTorso',function()
+    encounterTorso();w(0x651A,1);w(0x5FA,10*9);w(0x6515,0x0B)
+end,function()
+    check(r(0x6519)==0x35 and r(0x651D)==0x37 and r(0x6514)==0xF8,
+        'hurt pose replaces the straight torso with the curved junction tiles')
+end)
+add('downstab suppresses the horizontal encounter trail','DrawEncounterTorso',function()
+    encounterTorso();w(0x5FA,9*9);w(0x6519,0x5B);w(0x6515,0x5D)
+end,function()
+    check(r(0x6519)==0x5B and r(0x6515)==0x5D,'the downstab body tiles are intact')
+    check(allHidden({NEAR,OUTER,TIP,FAR}),'downstab does not sprout a horizontal tail from the downward head')
+    check(r(0x6487)==0,'downstab resets the encounter trail history index')
+end)
+add('encounter trail stays visible over grass','DrawEncounterTorso',function()
+    encounterTorso();w(0x651A,0x62)
+end,function()
+    checkTrail(0xA0,0x3C,0x42)
+end)
+add('corridor crouch lifts both horizontal pieces above the floor','DrawEncounterTorso',function()
+    encounterTorso()
+    w(0x6518,0xA8);w(0x6519,0x33);w(0x5FA,6*9)
+    for address=0x6481,0x6486 do w(address,0xB0)end
+    w(0x6487,1)
+end,function()
+    checkTrail(0x9F,0x3C,0x40)
+    checkTip(0x9F,0x34,0x40)
+    check(r(0x6518)==0xA8 and r(0x6519)==0x33,'the crouch bend stays below the full head')
+end)
+local jumpY={0xA0,0x9C,0x98,0x94,0x98,0x9C,0xA0,0xA4,0xA0,0xA0,0xA0,0xA0,0xA0,0xA0}
+for frame,y in ipairs(jumpY)do
+    add('encounter trail bounce sample '..frame,'DrawEncounterTorso',function()
+        encounterTorso(frame>1);w(0x6518,y);w(0x651A,1)
+    end,function()
+        checkTrail(jumpY[math.max(1,frame-3)],0x64,0x01)
+        checkTip(jumpY[math.max(1,frame-6)],0x74,0x01)
+    end)
+end
+local walkPose={0,1,1,2,2,0,0,1,1,2,2,0,0}
+local walkY={[0]=0xA0,[1]=0x9E,[2]=0xA2}
+for frame,pose in ipairs(walkPose)do
+    add('encounter trail walk sway sample '..frame,'DrawEncounterTorso',function()
+        encounterTorso(frame>1);w(0x80,pose)
+    end,function()
+        checkTrail(walkY[walkPose[math.max(1,frame-3)]],0x3C,0x40)
+        checkTip(walkY[walkPose[math.max(1,frame-6)]],0x34,0x40)
+    end)
+end
+add('encounter trail snaps to a teleported lower body','DrawEncounterTorso',function()
+    encounterTorso(true);w(0x6518,0x55)
+end,function()
+    checkTrail(0x55,0x3C,0x40)
+    checkTip(0x55,0x34,0x40)
+end)
+add('the trail outranks an enemy and moves it to the end of OAM','DrawEncounterTorso',function()
+    encounterTorso();enemy(NEAR,0xA2)
+end,function()
+    checkTrail(0xA0,0x3C,0x40)
+    checkTip(0xA0,0x34,0x40)
+    check(isEnemy(0x65FC,0xA2),'the enemy sprite keeps its data in the last free entry')
+end)
+add('moved enemies skip occupied HUD entries','DrawEncounterTorso',function()
+    encounterTorso();w(0x65F8,0x0F);w(0x65FC,0x0F);enemy(OUTER,0xA2);enemy(FAR,0xA6)
+end,function()
+    checkTrail(0xA0,0x3C,0x40)
+    checkTip(0xA0,0x34,0x40)
+    check(isEnemy(0x65F4,0xA2) and isEnemy(0x65F0,0xA6),'enemies fill free entries from the end inward')
+    check(r(0x65F8)==0x0F and r(0x65FC)==0x0F,'the HUD entries are intact')
+end)
+add('the trail stops when no entry is free','DrawEncounterTorso',function()
+    encounterTorso()
+    for slot=0x6560,0x65FC,4 do w(slot,0x30)end
+    w(0x65FC,0xF8);enemy(NEAR,0xA2);enemy(OUTER,0xA4)
+end,function()
+    check(r(NEAR+1)==0x15 and isEnemy(0x65FC,0xA2),'the near torso takes the last free entry')
+    check(isEnemy(OUTER,0xA4),'the next enemy stays when it has nowhere to go')
+    check(allHidden({TIP,FAR}),'no tip is drawn past the gap')
+end)
+add('the tip clips at the left edge','DrawEncounterTorso',function()
+    encounterTorso();w(0x651B,0x1C)
+end,function()
+    checkTrail(0xA0,0x04,0x40)
+    check(allHidden({TIP,FAR}),'no tip column is drawn')
+end)
+add('the far tip hides at the right edge','DrawEncounterTorso',function()
+    encounterTorso();w(0x651A,1);w(0x651B,0xD8)
+end,function()
+    checkTrail(0xA0,0xE8,0x01)
+    check(r(TIP)==0xA0 and r(TIP+1)==0x45 and r(TIP+3)==0xF8,'the near tip still draws')
+    check(r(FAR)==0xF8,'the far tip column stays hidden instead of wrapping')
+end)
+for _,case in ipairs({
+    {'hidden lower row',function()w(0x6518,0xF8)end},
+    {'left edge',function()w(0x651B,0x17)end},
+    {'right edge',function()w(0x651A,0);w(0x651B,0xE8)end},
+    {'HUD edge',function()w(0x6518,0x1F)end},
+    {'fairy',function()w(0x13,1)end},
+})do
+    add('no encounter trail at '..case[1],'DrawEncounterTorso',function()
+        encounterTorso();case[2]()
+    end,function()
+        check(allHidden({NEAR,OUTER,TIP,FAR}),'all trail slots stay hidden')
+    end)
+end
+
 local function fallSetup(isShadow,facing,y)
     for address=0x200,0x2FF,4 do w(address,0xF8)end
     w(0xB5,1);w(0x80,9);w(0x81,9)
     if isShadow then
-        w(0x11,1);w(0x91,0x30);w(0xCD,0x80);w(0x2A,y);w(0xA0,facing);w(0xC9,0);w(0x0753,1);w(0x050D,0)
+        w(0x11,1);w(0x91,0x3C);w(0xCD,0x80);w(0x2A,y);w(0xA0,facing);w(0xC9,0);w(0x0753,1);w(0x050D,0)
     else
         w(0x11,0);w(0x90,0x08);w(0xCC,0x78);w(0x29,y);w(0x9F,facing);w(0xC8,0);w(0x0752,0);w(0x050C,0)
     end
 end
 for _,actor in ipairs({
     {name='Barba',shadow=false,base=0x208,x=0x78,pal=0},
-    {name='Shadow',shadow=true,base=0x230,x=0x80,pal=1},
+    {name='Shadow',shadow=true,base=0x23C,x=0x80,pal=1},
 })do
     for _,facing in ipairs({1,2})do
         local dir=facing==1 and 'right' or 'left'

@@ -1,7 +1,7 @@
 ; Original panic dialogue. Font: capitals, space, period, '!', '?' and apostrophe.
-; Max 10 chars per line and 3 lines, so a blank tile pads every border; $FD newline, $FF end.
+; Max 14 chars per line and 4 lines, so a blank tile pads every border; $FD newline, $FF end.
 .macro TownLine text, terminator
-    .assert .strlen(text) <= 10, error, "Town dialogue line is too wide"
+    .assert .strlen(text) <= 14, error, "Town dialogue line is too wide"
     .repeat .strlen(text), character
         .if .strat(text, character) = ' '
             .byte $F4

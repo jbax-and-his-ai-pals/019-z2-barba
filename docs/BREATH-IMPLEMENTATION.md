@@ -15,8 +15,9 @@ of the 1,200 measured idle and volley frames.
 The body repeats the boss's narrow segmented neck without an added belly coil.
 Vanilla reuses crouch frame 6 during ascent; the renderer selects a separate
 full-body jump pose while airborne, leaving native animation and physics state
-intact. Airborne low attacks also retain the whole body. Only grounded crouch and elevator contact use a compact 24px pose with eight
-pixels of segmented neck beneath the head. Boss-defeat shadows (`$DD18` ->
+intact. Airborne low attacks also retain the whole body. A grounded crouch
+uses a compact 24px pose with eight pixels of rounded elbow beneath the
+head. Elevator contact also selects a compact pose. Boss-defeat shadows (`$DD18` ->
 `BarbaBossShadow` in `src/tall_player.inc` via `FarCall0`) also draw all 9
 `BarbaTallTiles` sprites into `$026C..$0274` + `$0250..$0264` with black palette 2
 so the shadow beside Barba has two torso chunks. Similarly, Dark Barba
@@ -48,7 +49,20 @@ Four head corners use the area's native solid-tile predicate through a
 single batched bank round-trip at fixed-bank `$FF4C`. Under stone the head shifts down sixteen pixels and the
 middle neck row disappears. When grounded on lava (`LAVA_CONTACT != 0`) or in
 swamp water (`$0752 != 0`), `GEOMETRY` bit 2 (`$04`) shifts the head and upper
-neck down sixteen pixels into the native box and omits the bottom row. Crouch now draws a 24px body while retaining the native 16px physical lane.
+neck down sixteen pixels into the native box and omits the bottom row.
+On open floors and under low ceilings, a grounded crouch or crouch attack
+draws the full 16px head at the original crouch height. The eight visible
+rows below it use the top of the encounter elbow through pairs `$32/$54`.
+Their lower halves are transparent, so the pose still fits in 24px. Both
+jaw poses mirror with facing and use the existing crouched fire origin.
+The cropped bend anchors the horizontal torso
+and tip nine pixels higher. The tallest trail column ends immediately
+above the brick floor after the PPU's one-line sprite offset. This height
+refills the delay buffer while crouched so a previous dip cannot carry the
+pieces into the floor. `tall_geometry` checks both facings and jaw poses in
+open and low-ceiling fixtures. Core F1 gives an open-floor playtest. Tricky
+Movement F2 and Endgame F4 check the head, bend, and trail positions in DMA
+OAM under native ceilings.
 Movement and enemy-contact collision retain their native sizes: the extra
 head height is visual and needs human review.
 
@@ -112,18 +126,144 @@ avoiding the original enemy-projectile slots at `$28/$2C/$30`. During downstab
 the HUD/screen edges. Both torso chunks flip horizontally and vertically in place
 during downstab: their two tile columns reverse and OAM attribute bits 6/7 toggle,
 retaining palette. The turned head keeps its existing attributes.
-Gem victory (2026-11-17) completes the torso only during the sampled
-looking-up roar: `RoarTorsoHop` maps bank 6, `RoarGemTorso` lifts the three
-existing rows 8px, then fills sword/shield slots `$20/$24` with the existing
-`$06/$08` torso at the original feet height. Its top 8px overlap the identical
-half-segment already in the look-up art: two complete chunks, no third partial
-chunk, total height 56px. Facing controls column order and
-flip attributes. Geometry tuck/submersion, HUD and right-edge clipping suppress
-the extension; normal look-up attacks and other roars keep their existing art.
-The helper restores bank 0 before returning. No new CHR, OAM slots or RAM.
-`tall_geometry` checks both facing directions. Native shots and
+The downstab-specific torso draw runs in bank 1 and restores bank 0 before
+the rest of the player draw. The lag-frame NMI recognizes the bank 1
+fingerprint if it interrupts this draw.
+The sampled raised-head roar shares a pose across key-item pickups,
+crystal placement, Lava Link's entrance and the Triforce hold.
+`RoarGemTorso` lifts the head and neck 8px. The upright torso in
+`$20/$24` overlaps the neck by 8px and meets the rounded bend at the
+original feet height. The bend uses the lower center and rear body slots.
+The shadow OAM pass refills the trail history there so the torso and tip
+settle on the first roar frame. Facing mirrors the bend and tail.
+Tucked, submerged and clipped poses bypass the extension.
+`item_roar` checks the left-facing pose and `palace_roar` checks all six
+crystals facing right. `link_boss` and `dark_link` check the two boss
+ceremonies. Native shots and
 their original OAM remain intact. Native enemy and shield entry hooks execute
 through fixed-bank gateways and retain the original vulnerability routines.
+
+For other poses, start with **Busy Areas F1** for upstab, downstab and airborne
+hurt, **Core F1** for open crouch and the ordinary jump, and **Tricky
+Movement F2** for the cropped bend under a low ceiling. The upstab, downstab
+and hurt silhouettes have their own lower-row art. **Tricky
+Movement F7** exercises the separate pit-fall pose for Barba and his
+shadow. **Bosses F8** covers Dark Barba's separate trail renderer, and
+**Edge Scenarios F1** can trigger the fatal-hit silhouette. The title cliff
+and Zelda ending also place their trails independently.
+
+The default side-view Barba has an elbow, one horizontal torso chunk and a
+flick tip in North Palace, towns, palaces, caves, bridges and other encounters.
+The same shape appears on the title cliff and in the ending, where it inherits
+the body’s curtain priority. Dark Barba draws the torso and tip in his black
+palette, in free OAM behind the fight’s actors and projectiles. The overworld
+and raft side views show a compact curl within their 16px sprite width.
+The art recipes in
+`tools/assets.py` derive all three shapes from the original `$06/$08` torso:
+
+- **Elbow corner** (`$34/$36`, 16x16): the torso swept a quarter turn around a
+  pivot just outside the top-right corner (`ENCOUNTER_ELBOW`). The belly rides
+  the outer arc and the spines thin out on the inner one. It replaces the
+  center and rear bottom-body tiles and hides the old front seam.
+- **Turned torso** (`$14/$3E`, 16x16): the torso turned 90 degrees
+  counterclockwise so the spines point up, at full width, with its outline
+  closed on the corner side.
+- **Flick tip** (`$44/$30`, 16x16): `ENCOUNTER_TIP_PROFILE` tapers the top
+  edge down and curls the end up. It tiles columns 10-12 of the turned torso,
+  so the scale pattern carries through, with spines every third column.
+
+Walking, hurt and look-up poses share the idle seam column to free
+`$14/$3E/$44`. Two crouch-attack columns share existing pairs to free
+`$34/$36`. The crouch-attack neck `$30` shows `$22` instead (16 pixels
+differ) to free the far tip column. `tools/trail_candidates.py` writes a
+local-only review sheet (`build/trail-candidates.html`) for trying other
+corners, torsos and tips.
+
+After `CopyOamShadow6` copies the live sprites, `DrawEncounterTorso` in bank 0
+samples lower-body Y in `$6481-$6486`. The torso and tip follow at three
+and six frames. The three walk poses add 0, −2 or +2 pixels before
+sampling so the sway passes through both pieces. The sampling index
+at `$6487` resets for hidden poses and scene transitions. X follows Barba's
+current position and facing.
+`DrawEncounterTrailSprites` passes the four X coordinates in `$08-$0B`
+and their Y coordinates in `$0C-$0F`. A column that wraps off the screen
+gets Y `$F8`. In standing, walking,
+forward attack and full-height jump poses it swaps in the elbow and lifts
+it 1px while the delayed torso rides higher.
+
+The bank-1 pass writes the four columns to shadow OAM `$50-$5C`, behind
+Barba, fireballs, projectiles and encounter clouds. Town shouts and Gooma’s
+weapon receive their priority slots first. Visible occupants
+move to free slots found from `$FC` down to `$60`. If the pass runs out
+of slots, it skips the remaining trail columns. `tall_geometry` checks
+the delay, join, clipping and full OAM handling. `ow_clouds` checks
+both trail facings and sprite preservation in East grass.
+
+### Second horizontal torso trial
+
+The trial inserted a second 16px turned torso using the same two CHR
+pairs. Its two extra columns brought the elbow and trail to eight
+sprites on shared scanlines, before the player could fire or any enemy
+could draw there. The new intermediate joint used the existing six-frame
+sample ring, with the torso, second torso and tip following at two,
+four and six frames.
+
+| Build | Priority | Result |
+| --- | --- | --- |
+| `032e6b5abb38` | All six trail columns ahead of enemies | The producer could barely see Bits and Bots while grounded. In the West grass walk-and-fire trace, 454 of 1,071 grounded enemy columns fit on every covered scanline. |
+| `7483ee3b9d96` | All six trail columns behind enemies and projectiles | The same trace rose to 1,066 of 1,071. With no controller input at F10, the second torso went 224 consecutive frames without a visible pixel and the tip went 416. |
+| `95f9db389858` | Trail first every fourth encounter frame, enemies first on the other three | Both idle blackout streaks dropped to three frames and 906 of 1,071 enemy columns fit in the walk-and-fire trace. The producer still found the sustained tail flicker too strong. |
+
+All three builds ran the same 2,814 sampled West and East grass gameplay
+frames with zero lag or HUD shifts. The last variant peaked at 29,713
+and 29,271 NMI cycles respectively, versus 29,338 and 29,136 for the
+one-torso control `1633f7138573`. The first extra-chunk build also added
+10 lag frames in Old Kasuto and two each on the Palace 2 crowded floor
+and the Gooma approach in the opt-in Busy Areas trial. The rollout was
+reverted after the stationary playtest.
+
+To revisit, use Tricky Movement F10 with no input for 480 frames so
+the Bits and Bots can gather. The idle trace skips the first 20 frames
+and measures the longest run with no opaque CHR row surviving sprite
+evaluation for each chunk. Then run the same walk-and-fire input through
+F10 and Endgame F9 for enemy visibility, NMI cycles, lag and HUD shifts.
+CPU savings could make more selective sprite placement affordable.
+The hardware still evaluates at most eight sprites per scanline and
+counts transparent rows within each 8x16 sprite, so the art or placement
+must reduce shared sprite spans if priority changes alone still flicker
+too much. A narrower one-column extension or a redraw that combines
+existing columns would be worth testing before adding two full columns again.
+
+### Connected torso playtest
+
+The local comparison in `build/torso-flow-trial/` keeps the elbow, turned
+torso and flick tip at their existing widths and sprite priority. The
+Connected build carries the scale colors through the interior seams and
+shortens the follow delays from three and six frames to two and four. The
+Current build uses the regular art and timing. Both have matching Tricky
+Movement checkpoints and separate portable Mesen profiles.
+
+The producer liked the closer join in Connected and saw the Bits and Bots
+flicker. High Profile uses Current's three- and six-frame delays, sprite
+positions, and priority. It softens the seams and widens the painted join
+between the torso and tip within the existing sprite tiles. Open
+`play/Test Barba - Torso High Profile.cmd` and press F10. Stand still as the
+Bits and Bots gather, then walk, reverse, and jump. Use
+`play/Test Barba - Torso Current.cmd` as the control.
+
+The automated F10 comparison sampled 1,556 gameplay frames per version,
+starting at rest and then walking, jumping, and firing. The largest vertical
+step between torso and tip fell from 15 to 10 px, and steps over 6 px fell
+from 242 to 57 frames. Far-tip scanline clipping rose from 114 to 133 frames.
+Both versions had zero lag frames, VBlank recoveries, and HUD shifts.
+Geometry passed with the expected delay for each version, and the Connected
+build passed the East Hyrule cloud and trail regression.
+
+High Profile and Current produced identical shadow OAM for all 1,556
+gameplay frames with the same F10 inputs. At least two visible rows of
+contact between torso and tip rose from 1,533 to 1,554 frames. High
+Profile also passed the unmodified geometry regression and checkpoint
+reload validation.
 
 The fatal-hit transition calls `BarbaDeathDisplay` in bank 3 through the
 guarded driver at `$C9EE-$C9F7`. It lifts the compact death head by 16px
@@ -139,11 +279,17 @@ and `$8FEE` for Barba) with `BarbaFallDraw` (`src/tall_player.inc`, `BANK0`).
 After `$EC02` draws the two-row downward head, `BarbaFallDraw` draws two
 inverted (`$C0`-flipped) `$06/$08` torso chunks at `head_Y - $10` and
 `head_Y - $20` in OAM `$0218..$0227,y` (`$0208..$022F` for Barba,
-`$0230..$0257` for his shadow), preserving palette/priority and clipping cleanly
-against the top of the screen (`head_Y < $10` / `< $20`) so both Barba and his
-shadow torpedo downward as full 64px silhouettes. `tall_geometry` checks both
-actors, facings and top-edge clips; `state_pack` verifies the live 64px
-torpedo pose for both Barba and his shadow during the Palace 6 drop-shaft fall.
+`$023C..$0263` for his shadow), preserving palette/priority and clipping cleanly
+against the top of the screen. The bank-6 shadow pass adds a third chunk at
+`head_Y - $30` and the upward-pointing tip at `head_Y - $40`. The tip is
+rotated and narrowed from the horizontal art in `tools/assets.py` and uses
+pair `$0A`, which previously held four isolated seam pixels. Each actor's
+tip reverses the torso's horizontal flip and points up. In DMA OAM, Barba
+uses offsets `$08` through `$38` and his shadow uses `$3C` through `$6C`.
+The lower OAM indexes give Barba priority wherever the sprites overlap.
+Each row clips independently at the top edge. `tall_geometry` checks both
+actors and facings in the native draw. `state_pack` checks the full DMA
+sprite order and mirrored tips in the Palace 6 drop.
 
 2026-11-16 sprite follow-up: odd-frame priority rotation now swaps only Barba's
 outer head sprites. The lower body stays in `$0214-$021F`; the renderer no longer
@@ -167,6 +313,25 @@ The title jaw tables now come from the compiled idle/windup/attack head rows.
 The old open-jaw right column `$22` had become crouch art after tile allocation
 changed; the correct shared horn column is `$04`. `title_roar` checks all three
 complete jaws as well as the unchanged noise-channel roar.
+
+## Ironknuckle shield rebounds
+
+In palace bank 4, Ironknuckles (`$18–$1A`) can send a shield-blocked
+downward fireball back at 3.5 pixels per frame. It rises 11 pixels, then
+drops. It keeps its damage class, can hit a second enemy, and expires on
+solid terrain during descent or after 17 movement updates. A second
+shield contact uses the usual clang and disintegration.
+
+The guarded `$E646` hook runs after the native shield overlap and clang.
+The rebound puts the shot on the incoming side of the Ironknuckle's body,
+clear of its hurtbox. The fractional X speed identifies the rebound
+and routes backed shots through the native slot update. The arc reuses the
+normal lifetime byte. Both projectile paths use the same hit rules.
+
+`tests/shield_enemies.lua` checks high and low shield coverage and an
+airborne shot that comes back to kill a Bot. In Busy Areas F4 before Gooma,
+face left and breathe at the approaching Ironknuckle. Look for the fireball
+to arc back to the right when you hear the clang.
 
 ## METEOR slam (spell slot 4)
 
@@ -199,6 +364,14 @@ new build stays at line 31 in idle, Fire idle, damaged-health Fire attacks and
 full-health attacks with XP display updates. This addresses HUD scroll jitter;
 the NES eight-sprites-per-line limit can still cause sprite flicker.
 
+Gooma in Palace 5 draws the ball and chain into four room-specific OAM entries
+at `$02A0-$02AF`, freeing his old ball entries for fireballs. While the fight
+locks the camera and the ball is on screen, Bank 6 moves those four weapon
+sprites ahead of the projectiles and Gooma's body in the DMA shadow. The
+eight-sprite limit still applies to other sprites on crowded scanlines.
+`tests/gooma.lua` checks the DMA order under load, then finishes the fight with
+fireballs and checks the key and exit.
+
 Existing movement, collisions, graphics, lifetime and sound use native handlers.
 The volley borrows the boss's timed-fire idea while respecting the player's
 native collision rules; it does not copy aimed enemy-projectile code.
@@ -223,6 +396,14 @@ native collision rules; it does not copy aimed enemy-projectile code.
 - `hud_timing.lua`: 900 Palace 1 frames with a stable line-31 split.
 - `meteor.lua`: dive, fall cap, two flat fire-class floor waves at `$29+$12`,
   a floor Bot hit, and no dive without the spell.
+
+East Hyrule forest room `$27` spawns Girobokku (`$15`). A headless run of
+`f36b2013b860` recorded partial sprite clipping under the eight-sprites-per-line
+limit. Every contact hit and kill sampled in that room had drawable eye sprites.
+The nearby graveyard uses Moas (`$06`). The original Moa routine at `$DACF`
+skips drawing in East Hyrule before the Palace 6 Cross (`$078A`), while contact
+damage stays active. Toggling the Cross in graveyard room `$34` confirmed both
+behaviors in Mesen.
 
 Carock (Palace 4) has 48 HP and an eight-pip bar worth six HP per pip. An Attack 7
 fireball deals 18 HP during his solid visible window (`$AF = $E0–$EF`). Face him

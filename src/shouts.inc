@@ -15,10 +15,8 @@ TALK_LATCH = $6466
 SHOUT_WORD = $6467          ; 0 none, else word 1..8 drawn above SHOUT_SLOT
 SHOUT_WORD_TIMER = $6468    ; frames left for the word
 SHOUT_CYCLE = $6469         ; rotating offset so repeated shouts cycle phrases
-; Seven consecutive OAM entries $DC..$F4. Natively enemy-projectile windows
-; ($E0/$E8/$F0 in $D59B); town streets never fill them. Written only while
-; a word is live in town play, yielding to any enemy projectile ($87..$8C).
-SHOUT_OAM = $DC
+; Seven OAM entries via ShoutOam ($00, $28, $2C, $30, $34, $40, $DC): low slots
+; keep town shouts above clouds/villagers/fireballs; yielded to enemy projectiles.
 SHOUT_WORD_TIME = $64
 
 BarbaShouts:
@@ -197,9 +195,8 @@ ShoutWord:
     bne @hide
     dey
     bpl :-
-    ; Glyphs sit in the lower half of each 8x16 pair: sprite Y = top - 32
-    ; puts the letters at Y-24..Y-17, clear of Barba's 48px head so 7-glyph
-    ; shouts don't hit the 8-sprites-per-scanline limit when Barba stands nearby.
+    ; Glyphs use the lower half of each 8x16 pair. Place the letters
+    ; at villager Y-24..Y-17 to reduce overlap with Barba.
     lda $2A,x
     sec
     sbc #$20
@@ -224,35 +221,58 @@ ShoutWord:
     bcc @hide
     lda #$FF
 @onscreen:
-    sta $02
-    ; Centre over the 16 px body: left = x + 8 - 4 * length (signed).
-    ldy SHOUT_WORD
-    lda ShoutWordLength-1,y
-    asl
-    asl
-    sta $03
+    sta $07
     lda $01
+    sta $06
+    ldy SHOUT_WORD
+    ldx ShoutWordStart-1,y
+    lda #$00
+    sta $05
+    lda ShoutTopLength-1,y
+    beq @bottom_row
+    sta $04
+    lda $00
+    sec
+    sbc #$10                    ; separate the two 16-pixel sprite rows
+    cmp #$20
+    bcc @hide
+    sta $00
+    lda $04
+    asl
+    asl
+    sec
+    sbc #$08
+    jsr @center_row
+    jsr @glyph
+    inx                         ; first tile of the bottom row
+    lda $00
     clc
-    adc #$08
-    bcc :+
-    inc $02
-:
+    adc #$10
+    sta $00
+    ldy SHOUT_WORD
+@bottom_row:
+    lda ShoutBottomInset-1,y
+    jsr @center_row
+    lda #$07
+    sta $04
+    bne @glyph
+@center_row:
+    ; A = 4 * width in tiles - 8, the inset from the villager's left edge.
+    sta $03
+    lda $06
     sec
     sbc $03
     sta $01
-    lda $02
+    lda $07
     sbc #$00
     sta $02
-    lda ShoutWordStart-1,y
-    tax
-    lda #SHOUT_OAM+$1C
-    sta $04
-    ldy #SHOUT_OAM
+    rts
 @glyph:
     lda ShoutWordTiles,x
-    beq @hide_rest              ; $00 ends phrases with <5 visible glyphs
-    cmp #ShoutTile_Space
-    beq @advance_x              ; spaces advance X without consuming an OAM slot
+    beq @hide_rest              ; $00 ends phrases with <7 visible glyphs
+    ldy $05
+    lda ShoutOam,y
+    tay
     lda $02
     bne @blank                  ; clip each glyph off either screen edge
     lda $00
@@ -268,13 +288,10 @@ ShoutWord:
     lda #$F8
     sta $0200,y
 @next:
-    iny
-    iny
-    iny
-    iny
-    cpy $04
+    inc $05
+    lda $05
+    cmp $04
     beq @word_done
-@advance_x:
     lda $01
     clc
     adc #$08
@@ -285,15 +302,15 @@ ShoutWord:
     inx
     jmp @glyph
 @hide_rest:
+    ldy $05
+    lda ShoutOam,y
+    tay
     lda #$F8
-@hide_loop:
     sta $0200,y
-    iny
-    iny
-    iny
-    iny
-    cpy $04
-    bne @hide_loop
+    inc $05
+    lda $05
+    cmp $04
+    bne @hide_rest
 @word_done:
     rts
 
@@ -330,10 +347,11 @@ ShoutWord:
     lda $02
     sbc #$00
     sta $02
-    ldx #72                     ; CastleShoutTiles offset in ShoutWordTiles
-    lda #$3C
+    ldx #(CastleShoutTiles-ShoutWordTiles)
+    lda #$06
     sta $04
-    ldy #$28                    ; higher priority than North Palace torches ($50..$5C)
+    lda #$01                    ; indices 1..5 ($28,$2C,$30,$34,$40): above torches ($50..$5C)
+    sta $05
     jmp @glyph
 
 ShoutWordCancel:
@@ -342,43 +360,64 @@ ShoutWordCancel:
     lda #$00
     sta SHOUT_WORD
 ShoutWordHide:
-    ldy #SHOUT_OAM
-    lda #SHOUT_OAM+$1C
+    ldy #$00
+    lda #$07
     ldx SHOUT_SLOT
     bpl :+
-    ldy #$28
-    lda #$3C
+    ldy #$01
+    lda #$06
 :
     sta $04
     lda #$F8
 :
-    sta $0200,y
-    iny
-    iny
-    iny
+    ldx ShoutOam,y
+    sta $0200,x
     iny
     cpy $04
     bne :-
 ShoutWordDone:
     rts
 
+ShoutOam:
+    .byte $00, $28, $2C, $30, $34, $40, $DC
+
 ; Fear phrases per shout word 1..9, up to seven visible glyphs plus optional space.
-; ShoutWordTiles comes from shout_layout.inc: eight bytes per phrase, $FF space, $00 end.
-ShoutTile_Space = $FF
-ShoutWordLength:
-    .byte 8, 8, 4, 6, 7, 5, 8, 3, 6
+.segment "BANK6_HAZE"
+ShoutTopLength:
+    .byte 2, 2, 0, 2, 2, 0, 4, 0, 0
+ShoutBottomInset:
+    .byte 12, 12, 8, 4, 8, 12, 4, 4, 8
+
+.segment "BANK6"
+; A split phrase lists its top row first. $00 ends the phrase.
 ShoutWordStart:
-    .byte 0, 8, 16, 24, 32, 40, 48, 56, 64
+    .byte ShoutOhShit-ShoutWordTiles, ShoutOhFuck-ShoutWordTiles, ShoutRun-ShoutWordTiles
+    .byte ShoutOhNo-ShoutWordTiles, ShoutOhGod-ShoutWordTiles, ShoutHelp-ShoutWordTiles
+    .byte ShoutSaveMe-ShoutWordTiles, ShoutNo-ShoutWordTiles, ShoutBarba-ShoutWordTiles
 ShoutWordTiles:
-    .byte ShoutTile_O, ShoutTile_H, ShoutTile_Space, ShoutTile_S, ShoutTile_H, ShoutTile_I, ShoutTile_T, ShoutTile_Bang ; 1 OH SHIT!
-    .byte ShoutTile_O, ShoutTile_H, ShoutTile_Space, ShoutTile_F, ShoutTile_U, ShoutTile_C, ShoutTile_K, ShoutTile_Bang ; 2 OH FUCK!
-    .byte ShoutTile_R, ShoutTile_U, ShoutTile_N, ShoutTile_Bang, $00, $00, $00, $00                                     ; 3 RUN!
-    .byte ShoutTile_O, ShoutTile_H, ShoutTile_Space, ShoutTile_N, ShoutTile_O, ShoutTile_Bang, $00, $00               ; 4 OH NO!
-    .byte ShoutTile_O, ShoutTile_H, ShoutTile_Space, ShoutTile_G, ShoutTile_O, ShoutTile_D, ShoutTile_Bang, $00       ; 5 OH GOD!
-    .byte ShoutTile_H, ShoutTile_E, ShoutTile_L, ShoutTile_P, ShoutTile_Bang, $00, $00, $00                           ; 6 HELP!
-    .byte ShoutTile_S, ShoutTile_A, ShoutTile_V, ShoutTile_E, ShoutTile_Space, ShoutTile_M, ShoutTile_E, ShoutTile_Bang ; 7 SAVE ME!
-    .byte ShoutTile_N, ShoutTile_O, ShoutTile_Bang, $00, $00, $00, $00, $00                                           ; 8 NO!
-    .byte ShoutTile_B, ShoutTile_A, ShoutTile_R, ShoutTile_B, ShoutTile_A, ShoutTile_Bang, $00, $00                   ; 9 BARBA!
+ShoutOhShit:
+    .byte ShoutTile_O, ShoutTile_H
+    .byte ShoutTile_S, ShoutTile_H, ShoutTile_I, ShoutTile_T, ShoutTile_Bang, $00
+ShoutOhFuck:
+    .byte ShoutTile_O, ShoutTile_H
+    .byte ShoutTile_F, ShoutTile_U, ShoutTile_C, ShoutTile_K, ShoutTile_Bang, $00
+ShoutRun:
+    .byte ShoutTile_R, ShoutTile_U, ShoutTile_N, ShoutTile_Bang, $00
+ShoutOhNo:
+    .byte ShoutTile_O, ShoutTile_H
+    .byte ShoutTile_N, ShoutTile_O, ShoutTile_Bang, $00
+ShoutOhGod:
+    .byte ShoutTile_O, ShoutTile_H
+    .byte ShoutTile_G, ShoutTile_O, ShoutTile_D, ShoutTile_Bang, $00
+ShoutHelp:
+    .byte ShoutTile_H, ShoutTile_E, ShoutTile_L, ShoutTile_P, ShoutTile_Bang, $00
+ShoutSaveMe:
+    .byte ShoutTile_S, ShoutTile_A, ShoutTile_V, ShoutTile_E
+    .byte ShoutTile_M, ShoutTile_E, ShoutTile_Bang, $00
+ShoutNo:
+    .byte ShoutTile_N, ShoutTile_O, ShoutTile_Bang, $00
+ShoutBarba:
+    .byte ShoutTile_Ba, ShoutTile_R, ShoutTile_Ba, ShoutTile_Bang, $00
 ; 10: North Palace "OOPS..." (CHR bank 3 odd 8x16 sprite tiles, offset 72).
 CastleShoutTiles:
     .byte $5F, $5F, $61, $63, $65, $00

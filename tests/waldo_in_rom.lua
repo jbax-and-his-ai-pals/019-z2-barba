@@ -16,12 +16,40 @@ local enterStart = 0
 local waldoStart = 0
 local returnStart = 0
 local departure = ''
+local meltStarts = 0
+local meltScroll = {}
+local wipeScroll = {}
 local report = assert(io.open(OUTPUT_DIR .. '/waldo-in-rom.txt', 'w'))
 local errors = 0
 local function check(cond, msg)
     report:write((cond and 'PASS ' or 'FAIL ') .. msg .. '\n')
     if not cond then errors = errors + 1 end
 end
+
+local function finish()
+    phase = 'done'
+    report:write(errors == 0 and 'RESULT PASS\n' or 'RESULT FAIL\n')
+    report:close()
+    emu.stop(errors == 0 and 0 or 1)
+end
+
+local function countValues(values)
+    local count = 0
+    for _ in pairs(values) do count = count + 1 end
+    return count
+end
+
+emu.addMemoryCallback(function()
+    if phase == 'waldo' then meltStarts = meltStarts + 1 end
+end, emu.callbackType.exec, 0xCB10)
+
+emu.addMemoryCallback(function(_, value)
+    if phase == 'waldo' and meltStarts > 0 then
+        meltScroll[value] = true
+    elseif phase == 'return' and frame - returnStart < 40 then
+        wipeScroll[value] = true
+    end
+end, emu.callbackType.write, 0x2005)
 
 emu.addEventCallback(function()
     if phase == 'setup' then
@@ -79,7 +107,7 @@ emu.addEventCallback(function()
             waldoStart = frame
         elseif ef > 320 then
             check(false, 'Timed out waiting for Waldo PRG bank')
-            report:write('RESULT FAIL\n'); report:close(); emu.stop(1)
+            finish()
         end
     elseif phase == 'waldo' then
         local wf = frame - waldoStart
@@ -88,15 +116,18 @@ emu.addEventCallback(function()
         end
         if read(0xFFFA) ~= 0x03 or read(0xFFFB) ~= 0xF6 then
             check(true, 'Waldo Start+Select returned in-ROM to Barba')
+            check(meltStarts == 1, 'Wave-out started once while Start+Select was held')
+            check(countValues(meltScroll) >= 5, 'Wave-out varied horizontal scroll')
             phase = 'return'
             returnStart = frame
         elseif wf > 1500 then
             check(false, 'Timed out waiting for Waldo return to Barba')
-            report:write('RESULT FAIL\n'); report:close(); emu.stop(1)
+            finish()
         end
     elseif phase == 'return' then
         local rf = frame - returnStart
-        if rf == 30 then
+        if rf == 50 then
+            check(countValues(wipeScroll) >= 5, 'Wave-in varied horizontal scroll')
             local arrival = location()
             check(arrival == departure, 'Exact Rauru return: ' .. arrival .. ' == ' .. departure)
             check(read(0xFFFA) ~= 0x03, 'Held Up did not reopen the portal')
@@ -106,9 +137,7 @@ emu.addEventCallback(function()
             screenshot('barba-after-waldo')
         elseif rf == 280 then
             check(read(0x74C) == 0x00 and read(0x524) == 0x00, 'Pressing B dismissed the return message box')
-            report:write(errors == 0 and 'RESULT PASS\n' or 'RESULT FAIL\n')
-            report:close()
-            emu.stop(errors == 0 and 0 or 1)
+            finish()
         end
     end
 end, emu.eventType.endFrame)

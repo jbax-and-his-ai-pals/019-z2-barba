@@ -61,3 +61,19 @@ GeldarmHits:
     sta $C2,x
     sta $AF,x
     rts
+
+; Carry from the native RLE run comparison. Keep the run available via
+; ($0E),Y, but report unwalkable terrain for West Hyrule's quicksand.
+.export WestQuicksandTerrain1
+WestQuicksandTerrain1:
+    bcc @next_run
+    lda $02
+    cmp #$0A
+    bne @done
+    lda #$0C
+    sta $02
+@done:
+    rts
+@next_run:
+    iny
+    jmp $83EB

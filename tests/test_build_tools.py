@@ -1,17 +1,48 @@
 """Validate patch integrity and build safety without requiring a Nintendo ROM."""
+import json
 import random
+import sqlite3
 import sys
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'tools'))
 from bps import apply, encode
 from build import Overlay
+from build_history import HISTORICAL_BASELINE, record_build
 from assets import TALL_POSES, validate_layout
 import build as builder
 from nes import decode_tile, encode_tile, load_source, prg_offset
+
+
+class BuildHistoryTests(unittest.TestCase):
+    def test_rebuilds_share_sequence_and_failed_reports_do_not_consume_numbers(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            history = root / 'history.sqlite3'
+            metadata = {'output_dir': 'build', 'bps_sha256': 'patch', 'audio': 'sampled',
+                        'waldo_portal': True, 'git_commit': None, 'git_dirty': None,
+                        'release': None}
+            report = {'output_sha256': 'same-rom'}
+            record_build(history, root, report.copy(), metadata)
+            with self.assertRaises(FileNotFoundError):
+                record_build(history, root / 'missing', report.copy(), metadata)
+            alternate = root / 'alternate'
+            alternate.mkdir()
+            record_build(history, alternate, report.copy(),
+                         {**metadata, 'output_dir': 'alternate', 'release': 'example'})
+
+            first = HISTORICAL_BASELINE + 1
+            with closing(sqlite3.connect(history)) as connection:
+                rows = connection.execute(
+                    'SELECT build_number, output_sha256, release FROM builds ORDER BY build_number'
+                ).fetchall()
+            self.assertEqual(rows, [(first, 'same-rom', None), (first + 1, 'same-rom', 'example')])
+            self.assertEqual(json.loads((alternate / 'build-report.json').read_text())['build_number'],
+                             first + 1)
 
 
 class PatchTests(unittest.TestCase):

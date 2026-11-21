@@ -49,9 +49,7 @@ BarbaGeometry:
 @not_fairy:
     lda $80
     cmp #$0C
-    bcc :+
-    jmp @done
-:
+    bcs @to_done
     ; Native elevator contact is set by the enemy pass before this renderer.
     ; Fold visually without taking Down away from the elevator controller.
     lda $0754
@@ -79,132 +77,13 @@ BarbaGeometry:
     sta DRAW_TOP
     jmp @add_4
 @not_lava:
-    ; Check both edges of the raised head against the area's solid-tile
-    ; predicate. Its bank switch lives in fixed ROM, never in swapped code.
-    lda $29
-    cmp #$30
-    bcs :+
-    jmp @tuck
-:
-    ; Top row ($29 - $30) and bottom row ($29 - $21)
-    sec
-    sbc #$30
-    and #$F0
-    sta $00
-    lda $29
-    sec
-    sbc #$21
-    and #$F0
-    sta $01
-    ; Left X ($4D + 4) -> probes 0 (top-left) and 2 (bottom-left)
-    lda $4D
-    clc
-    adc #$04
-    tax
-    lda $3B
-    adc #$00
-    and #$03
-    tay
-    lda $EAE0,y
-    sta $0E
-    lda $EAE4,y
-    sta $0F
-    txa
-    lsr
-    lsr
-    lsr
-    lsr
-    tax
-    ora $00
-    tay
-    lda ($0E),y
-    sta $04
-    txa
-    ora $01
-    tay
-    lda ($0E),y
-    sta $06
-    ; Right X ($4D + 27) -> probes 1 (top-right) and 3 (bottom-right)
-    lda $4D
-    clc
-    adc #$1B
-    tax
-    bcc @same_page
-    lda $3B
-    adc #$00
-    and #$03
-    tay
-    lda $EAE0,y
-    sta $0E
-    lda $EAE4,y
-    sta $0F
-@same_page:
-    txa
-    lsr
-    lsr
-    lsr
-    lsr
-    tax
-    ora $00
-    tay
-    lda ($0E),y
-    sta $05
-    txa
-    ora $01
-    tay
-    lda ($0E),y
-    sta $07
-    lda GEO_CACHE_RES
-    bmi @probe_miss
-    lda $0769
-    cmp GEO_CACHE_BANK
-    bne @probe_miss
-    lda $0707
-    cmp GEO_CACHE_WORLD
-    bne @probe_miss
-    lda $04
-    cmp GEO_CACHE_TILES
-    bne @probe_miss
-    lda $05
-    cmp GEO_CACHE_TILES+1
-    bne @probe_miss
-    lda $06
-    cmp GEO_CACHE_TILES+2
-    bne @probe_miss
-    lda $07
-    cmp GEO_CACHE_TILES+3
-    bne @probe_miss
-    lda GEO_CACHE_RES
-    bne @tuck
-    beq @standing_open
-@probe_miss:
-    lda $04
-    sta GEO_CACHE_TILES
-    lda $05
-    sta GEO_CACHE_TILES+1
-    lda $06
-    sta GEO_CACHE_TILES+2
-    lda $07
-    sta GEO_CACHE_TILES+3
-    lda $0769
-    sta GEO_CACHE_BANK
-    lda $0707
-    sta GEO_CACHE_WORLD
-    jsr TerrainBatch
-    bcs @cache_tuck
-    lda #$00
-    sta GEO_CACHE_RES
-@standing_open:
+    jsr BarbaCeiling
+    sta GEOMETRY
+    bne @add_4
     lda $29
     sec
     sbc #$0C
     bne @mouth_y
-@cache_tuck:
-    lda #$02
-    sta GEO_CACHE_RES
-@tuck:
-    lda #$02
-    sta GEOMETRY
 @add_4:
     lda #$04
     .byte $2C
@@ -239,6 +118,120 @@ BarbaGeometry:
     tay
     pla
     tax
+    rts
+
+; Return the standing ceiling fold flag in A.
+BarbaCeiling:
+    ; Check both edges of the raised head against the area's solid-tile
+    ; predicate. Its bank switch lives in fixed ROM, never in swapped code.
+    lda $29
+    cmp #$30
+    bcs :+
+    lda #$02
+    rts
+:
+    ; Top row ($29 - $30) and bottom row ($29 - $21)
+    sec
+    sbc #$30
+    and #$F0
+    sta $00
+    lda $29
+    sec
+    sbc #$21
+    and #$F0
+    sta $01
+    ; Left X ($4D + 4) -> probes 0 (top-left) and 2 (bottom-left)
+    lda $4D
+    clc
+    adc #$04
+    tax
+    jsr @set_page_ptr
+    jsr @probe_col
+    sta $04
+    txa
+    ora $01
+    tay
+    lda ($0E),y
+    sta $06
+    ; Right X ($4D + 27) -> probes 1 (top-right) and 3 (bottom-right)
+    lda $4D
+    clc
+    adc #$1B
+    tax
+    bcc @same_page
+    jsr @set_page_ptr
+@same_page:
+    jsr @probe_col
+    sta $05
+    txa
+    ora $01
+    tay
+    lda ($0E),y
+    sta $07
+    lda GEO_CACHE_RES
+    bmi @probe_miss
+    lda $0769
+    cmp GEO_CACHE_BANK
+    bne @probe_miss
+    lda $0707
+    cmp GEO_CACHE_WORLD
+    bne @probe_miss
+    lda $04
+    cmp GEO_CACHE_TILES
+    bne @probe_miss
+    lda $05
+    cmp GEO_CACHE_TILES+1
+    bne @probe_miss
+    lda $06
+    cmp GEO_CACHE_TILES+2
+    bne @probe_miss
+    lda $07
+    cmp GEO_CACHE_TILES+3
+    bne @probe_miss
+    lda GEO_CACHE_RES
+    rts
+@probe_miss:
+    lda $04
+    sta GEO_CACHE_TILES
+    lda $05
+    sta GEO_CACHE_TILES+1
+    lda $06
+    sta GEO_CACHE_TILES+2
+    lda $07
+    sta GEO_CACHE_TILES+3
+    lda $0769
+    sta GEO_CACHE_BANK
+    lda $0707
+    sta GEO_CACHE_WORLD
+    jsr TerrainBatch
+    bcs @cache_tuck
+    lda #$00
+    beq @cache_result
+@cache_tuck:
+    lda #$02
+@cache_result:
+    sta GEO_CACHE_RES
+    rts
+@set_page_ptr:
+    lda $3B
+    adc #$00
+    and #$03
+    tay
+    lda $EAE0,y
+    sta $0E
+    lda $EAE4,y
+    sta $0F
+    rts
+@probe_col:
+    txa
+    lsr
+    lsr
+    lsr
+    lsr
+    tax
+    ora $00
+    tay
+    lda ($0E),y
     rts
 
 BarbaDisplay:
@@ -373,6 +366,28 @@ BarbaDisplay:
 
     tax
     stx DRAW_FRAME
+    cpx #6*9
+    beq @crouch_bend
+    cpx #7*9
+    bne @clear_body
+@crouch_bend:
+    lda $17
+    ora $0479
+    bne @clear_body
+    lda $29
+    cmp #$30
+    bcc @clear_body
+    ; Start the full 16px head at the original crouch horns. The cropped
+    ; curve starts 16px later and ends at the original crouch feet.
+    sbc #$08
+    sta DRAW_TOP
+    cpx #6*9
+    beq @closed_head
+    ldx #BarbaCorridorAttack-BarbaTallTiles
+    bne @clear_body
+@closed_head:
+    ldx #BarbaCorridorCrouch-BarbaTallTiles
+@clear_body:
     lda #$F8
     sta $0208
     sta $020C
@@ -382,7 +397,7 @@ BarbaDisplay:
     sta $021C
     bit DRAW_ATTR
     bvc :+
-    jmp @draw_right
+    jmp BarbaDisplayRight
 :
     lda GEOMETRY
     and #$02
@@ -423,71 +438,25 @@ BarbaDisplay:
 @l_bot:
     lda GEOMETRY
     and #$04
-    bne @done_draw
+    bne BarbaDisplayDone
     lda DRAW_TOP
     clc
     adc #$20
-    bcs @done_draw
+    bcs BarbaDisplayDone
     cmp #$20
-    bcc @done_draw
+    bcc BarbaDisplayDone
     cmp #$F0
-    bcs @done_draw
+    bcs BarbaDisplayDone
     sta $00
     ldy DRAW_ATTR
     TALL_SPRITE 6, $0214, 0
     TALL_SPRITE 7, $0218, 8
     TALL_SPRITE 8, $021C, 16
-@done_draw:
-    ; Downstab (pose 9, DRAW_FRAME == $51) adds a second torso chunk above
-    ; Row 0 using the unused native sword/shield OAM slots ($0220/$0224).
+BarbaDisplayDone:
     lda DRAW_FRAME
     cmp #$51
     bne @no_extra_torso
-    ; Flip both neck chunks horizontally and vertically in place. The down
-    ; layout and extra chunk reverse tile columns to match the horizontal flip.
-    lda DRAW_ATTR
-    eor #$C0
-    sta $0206
-    sta $024E
-    sta $02C6
-    lda GEOMETRY
-    and #$06
-    bne @no_extra_torso
-    lda DRAW_TOP
-    sec
-    sbc #$10
-    cmp #$20
-    bcc @no_extra_torso
-    cmp #$F0
-    bcs @no_extra_torso
-    sta $00
-    ldx #$08
-    ldy #$06
-    lda DRAW_LEFT
-    bit DRAW_ATTR
-    bvc @extra_left
-    ldx #$06
-    ldy #$08
-    bcc @extra_place
-@extra_left:
-    clc
-    adc #$08
-    bcs @no_extra_torso
-@extra_place:
-    sta $0223
-    stx $0221
-    ldx $00
-    stx $0220
-    ldx $0206
-    stx $0222
-    clc
-    adc #$08
-    bcs @no_extra_torso
-    sta $0227
-    sty $0225
-    lda $00
-    sta $0224
-    stx $0226
+    jsr DownstabTorsoHop
 @no_extra_torso:
 .ifdef SAMPLED_ROAR
     ; Skip the mapper round trip unless there's an item or raised-head roar.
@@ -524,7 +493,385 @@ BarbaDisplay:
 @no_rot:
     rts
 
-@draw_right:
+DownstabTorsoHop:
+    lda #>(DownstabTorso1-1)
+    pha
+    lda #<(DownstabTorso1-1)
+    pha
+    lda #$03
+    jmp $FFCC
+
+DownstabTerrain0:
+    jsr TerrainBatch
+    rol $00
+    lda #$03
+    jmp $FFCC
+
+DOWNSTAB_ROWS = $64FE
+
+.segment "BANK3_DLG"
+; Pose 9 draws the 2nd torso chunk above row 0 in open air (BANK6_OAM/BANK3_DLG
+; extends the 3rd chunk and wagging tip into free shadow OAM), or replaces
+; row 0 with row 1 ($4A, $4C, $56) for a 24x32 head under a 2-tile tuck.
+DownstabTorso1:
+    lda #$00
+    sta DOWNSTAB_ROWS
+    lda GEOMETRY
+    and #$02
+    beq @open_air
+    lda DRAW_TOP
+    clc
+    adc #$10
+    bcs @done
+    cmp #$20
+    bcc @done
+    cmp #$F0
+    bcs @done
+    sta $0204
+    sta $024C
+    sta $02C4
+    lda DRAW_ATTR
+    sta $0206
+    sta $024E
+    sta $02C6
+    ldx #$4A
+    ldy #$56
+    bit DRAW_ATTR
+    bvc @tuck_tiles
+    ldx #$56
+    ldy #$4A
+@tuck_tiles:
+    stx $0205
+    lda #$4C
+    sta $024D
+    sty $02C5
+    lda DRAW_LEFT
+    sta $0207
+    clc
+    adc #$08
+    bcs @hide_mid
+    sta $024F
+    adc #$08
+    bcs @hide_right
+    sta $02C7
+@done:
+    jmp $FFC5
+@hide_mid:
+    lda #$F8
+    sta $024C
+@hide_right:
+    lda #$F8
+    sta $02C4
+    jmp $FFC5
+
+@open_air:
+    ; Flip Row 0 neck chunks horizontally and vertically in place.
+    lda DRAW_ATTR
+    eor #$C0
+    sta $0206
+    sta $024E
+    sta $02C6
+    lda GEOMETRY
+    and #$04
+    bne @open_ret_near
+    ; Probe Y1 = DRAW_TOP - $10, Y2 = -$20, Y3 = -$30 so the tail collapses
+    ; cleanly under any ceiling instead of clipping into roof stone.
+    lda DRAW_TOP
+    sec
+    sbc #$10
+    bcc @open_ret_near
+    jsr DownstabProbeBand3
+    bcc :+
+@open_ret_near:
+    jmp $FFC5
+:
+    lda #$01
+    sta DOWNSTAB_ROWS
+    lda DRAW_TOP
+    sec
+    sbc #$20
+    bcc @draw_tip_y1
+    jsr DownstabProbeBand3
+    bcc @y2_clear
+@draw_tip_y1:
+    lda DRAW_TOP
+    sec
+    sbc #$10
+    sta $00
+    jsr @torso_x
+    bcs @open_done
+    lda $01
+    clc
+    adc #$04
+    bcs @open_done
+    sta $0223
+    lda $00
+    sta $0220
+    lda #$0A
+    sta $0221
+    jsr DownstabWagAttr3
+    sta $0222
+    jmp $FFC5
+@y2_clear:
+    lda #$02
+    sta DOWNSTAB_ROWS
+    lda DRAW_TOP
+    sec
+    sbc #$30
+    bcc @draw_chunk2
+    jsr DownstabProbeBand3
+    bcs @draw_chunk2
+    inc DOWNSTAB_ROWS
+@draw_chunk2:
+    lda DRAW_TOP
+    sec
+    sbc #$10
+    sta $00
+    jsr @torso_x
+    bcs @open_done
+    lda $01
+    sta $0223
+    stx $0221
+    lda $00
+    sta $0220
+    lda $0206
+    sta $0222
+    lda $01
+    clc
+    adc #$08
+    bcs @open_done
+    sta $0227
+    sty $0225
+    lda $00
+    sta $0224
+    lda $0206
+    sta $0226
+@open_done:
+    jmp $FFC5
+
+; Input: none. Output: C=0 valid ($01 = left X, X = left tile, Y = right tile).
+@torso_x:
+    ldx #$08
+    ldy #$06
+    lda DRAW_LEFT
+    bit DRAW_ATTR
+    bvc @tx_left
+    ldx #$06
+    ldy #$08
+    clc
+    bcc @tx_ok
+@tx_left:
+    clc
+    adc #$08
+    bcs @tx_ret
+@tx_ok:
+    sta $01
+    clc
+@tx_ret:
+    rts
+
+.segment "BANK3_SIGN"
+; Input: A = screen Y of 16px band. Output: C=1 if offscreen/HUD or solid.
+DownstabProbeBand3:
+    cmp #$20
+    bcc @band_solid
+    cmp #$F0
+    bcs @band_solid
+    pha
+    sec
+    sbc #$20
+    and #$F0
+    sta $00
+    pla
+    sec
+    sbc #$11
+    and #$F0
+    sta $01
+    lda $4D
+    clc
+    adc #$04
+    tax
+    jsr DownstabBandPtr3
+    jsr DownstabBandCol3
+    sta $04
+    txa
+    ora $01
+    tay
+    lda ($0E),y
+    sta $06
+    lda $4D
+    clc
+    adc #$1B
+    tax
+    bcc @band_same
+    jsr DownstabBandPtr3
+@band_same:
+    jsr DownstabBandCol3
+    sta $05
+    txa
+    ora $01
+    tay
+    lda ($0E),y
+    sta $07
+    lda #$00
+    sta $00
+    lda #>(@after_probe - 1)
+    pha
+    lda #<(@after_probe - 1)
+    pha
+    lda #>(DownstabTerrain0 - 1)
+    pha
+    lda #<(DownstabTerrain0 - 1)
+    pha
+    jmp $FFC5
+@after_probe:
+    lsr $00
+    rts
+@band_solid:
+    sec
+    rts
+.segment "BANK3_DLG"
+DownstabBandPtr3:
+    lda $3B
+    adc #$00
+    and #$03
+    tay
+    lda $EAE0,y
+    sta $0E
+    lda $EAE4,y
+    sta $0F
+    rts
+DownstabBandCol3:
+    txa
+    lsr
+    lsr
+    lsr
+    lsr
+    tax
+    ora $00
+    tay
+    lda ($0E),y
+    rts
+DownstabWagAttr3:
+    lda $12
+    and #$04
+    beq :+
+    lda #$40
+:   eor DRAW_ATTR
+    and #$7F
+    rts
+
+; Called from FinishSceneOam6 via Bank 3 hop. Return to Bank 6 via $FFCC.
+DrawDownstabTail3:
+    lda $0736
+    cmp #$05
+    bne :+
+    lda #>(OwSparkle4-1)
+    pha
+    lda #<(OwSparkle4-1)
+    pha
+    lda #$04
+    jmp $FFCC
+:
+    lda DRAW_FRAME
+    cmp #$51
+    bne @tail_early
+    lda DOWNSTAB_ROWS
+    cmp #$02
+    bcc @tail_early
+    lda $6520                 ; 2nd torso chunk Y (hidden when tucked/submerged/HUD)
+    cmp #$F0
+    bcs @tail_early
+    sec
+    sbc #$10
+    bcc @tail_early
+    cmp #$20
+    bcc @tail_early
+    sta $00
+    ldx #$FC
+    jsr @find_free
+    bcc :+
+@tail_early:
+    jmp @tail_ret
+:
+    lda DOWNSTAB_ROWS
+    cmp #$02
+    beq @tip_at_00
+    lda $00
+    sta $6500,x
+    lda $6521
+    sta $6501,x
+    lda $6522
+    sta $6502,x
+    lda $6523
+    sta $6503,x
+    lda $6524
+    cmp #$F0
+    bcs @tip
+    jsr @next_free
+    bcs @tail_ret
+    lda $00
+    sta $6500,x
+    lda $6525
+    sta $6501,x
+    lda $6522
+    sta $6502,x
+    lda $6527
+    sta $6503,x
+@tip:
+    lda $00
+    sec
+    sbc #$10
+    bcc @tail_ret
+    cmp #$20
+    bcc @tail_ret
+    sta $00
+    jsr @next_free
+    bcs @tail_ret
+@tip_at_00:
+    lda $6523
+    clc
+    adc #$04
+    bcs @tail_ret
+    sta $01
+    lda $00
+    sta $6500,x
+    lda #FALL_TAIL_TILE
+    sta $6501,x
+    jsr DownstabWagAttr3
+    sta $6502,x
+    lda $01
+    sta $6503,x
+@tail_ret:
+    lda #$06
+    jmp $FFCC
+
+@next_free:
+    txa
+    sec
+    sbc #$04
+    bcc @none
+    tax
+@find_free:
+    lda $6500,x
+    cmp #$F0
+    bcs @found
+    txa
+    sec
+    sbc #$04
+    bcs @find_free_next
+@none:
+    sec
+    rts
+@find_free_next:
+    tax
+    bcs @find_free
+@found:
+    clc
+    rts
+
+.segment "BANK0"
+BarbaDisplayRight:
     lda GEOMETRY
     and #$02
     sta $01
@@ -578,7 +925,71 @@ BarbaDisplay:
     TALL_SPRITE 7, $0218, 8
     TALL_SPRITE 6, $021C, 16
 @r_done:
-    jmp @done_draw
+    jmp BarbaDisplayDone
+
+; Called from the Bank 6 NMI tail after all regular OAM has been copied.
+; Return through the fixed mapper routine to restore Bank 6.
+TRAIL_HISTORY = $6481       ; six lower-body Y samples, oldest overwritten next
+TRAIL_INDEX   = $6487       ; 1..6, 0 means refill on the next visible frame
+EncounterTorsoFrom6:
+    lda $0736
+    cmp #$0B
+    bne @reset
+    lda $0726
+    bne @reset
+    lda $074C
+    cmp #$03
+    bcc @check_dark
+@reset:
+    jsr ResetEncounterTrail
+    beq EncounterTorsoReturn6
+@check_dark:
+    lda $0561
+    cmp #$36
+    bne DrawPlayerTrailReturn6
+    lda #>(DrawDarkTrail4-1)
+    pha
+    lda #<(DrawDarkTrail4-1)
+    pha
+    lda #$04
+    jmp $FFCC
+DrawPlayerTrailReturn6:
+    jsr DrawEncounterTorso
+EncounterTorsoReturn6:
+    jmp SwapToBank6
+
+; Three frames behind Barba and a further three behind the torso. Refill
+; after a transition or a displacement outside normal six-frame travel.
+SampleEncounterTrail:
+    ldx TRAIL_INDEX
+    beq @refill
+    cpx #$07
+    bcs @refill
+    tya
+    sec
+    sbc TRAIL_HISTORY-1,x
+    clc
+    adc #$30
+    cmp #$61
+    bcs @refill
+    lda TRAIL_HISTORY-1,x
+    sta $03
+    tya
+    sta TRAIL_HISTORY-1,x
+    lda TrailHalfCycle-1,x
+    tay
+    lda TRAIL_HISTORY-1,y
+    sta $00
+    inx
+    cpx #$07
+    bne @save
+    ldx #$01
+@save:
+    stx TRAIL_INDEX
+    rts
+@refill:
+    jmp EncounterTrailRefill
+
 .ifdef SAMPLED_ROAR
 RoarTorsoHop:
     lda #>(RoarGemTorso-1)
@@ -588,10 +999,10 @@ RoarTorsoHop:
     lda #$06
     jmp $FFCC
 .endif
-; Game Mode $0F (Fall in Hole Main) draws both the shadow ($91 = $30) and
+; Game Mode $0F (Fall in Hole Main) draws both the shadow ($91 = $3C) and
 ; Barba ($90 = $08) in pose $09. Extend the 2-row downward head from $EC02
-; upward with two inverted $06/$08 torso chunks ($0218..$0227,y), yielding a
-; 4-row (64px) downward-torpedoing silhouette.
+; upward with two inverted $06/$08 torso chunks ($0218..$0227,y). The
+; DMA shadow pass adds the third chunk and tapered tip after each actor.
 BarbaFallDraw:
     jsr $EC02
     lda #$F8
@@ -701,7 +1112,7 @@ BarbaBossShadow:
     lda $02
     and #$40
     bne @bs_right
-    lda @bs_order_l,x
+    txa
     bpl @bs_order
 @bs_right:
     lda @bs_order_r,x
@@ -751,8 +1162,6 @@ BarbaBossShadow:
     .byte $00, $08, $10, $00, $08, $10, $00, $08, $10
 @bs_row_y:
     .byte $F0, $F0, $F0, $00, $00, $00, $10, $10, $10
-@bs_order_l:
-    .byte $00, $01, $02, $03, $04, $05, $06, $07, $08
 @bs_order_r:
     .byte $02, $01, $00, $05, $04, $03, $08, $07, $06
 

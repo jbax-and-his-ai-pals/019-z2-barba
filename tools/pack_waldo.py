@@ -1,11 +1,10 @@
-"""Build a single NES 2.0 Mapper 176 ROM containing Barba + Where's Waldo?."""
+"""Pack Barba + Where's Waldo? into a single NES 2.0 Mapper 176 ROM."""
 from __future__ import annotations
 
-import zlib
 from pathlib import Path
 
 import build_waldo
-from build import ROOT, build
+from roar_sample import SAMPLE_ADDRESS, SAMPLE_CAPACITY
 
 
 def make_waldo_nmi_hook() -> bytes:
@@ -33,6 +32,18 @@ def make_waldo_nmi_hook() -> bytes:
         '68 4c 37 e2 '
         '4c a4 f9'
     )
+
+
+def make_waldo_win_hook() -> bytes:
+    """Assemble Waldo's $F620 Moon Ending hook (set Barba WRAM $648B = $57, then melt out)."""
+    # A9 A0       LDA #$A0
+    # 8D 01 A0    STA $A001      ; WRAM bank 0 (keep $5FF0-$5FF3 locked)
+    # A9 57       LDA #$57
+    # 8D 8B 64    STA $648B      ; WALDO_HAT = WALDO_HAT_MAGIC
+    # A9 A2       LDA #$A2
+    # 8D 01 A0    STA $A001      ; restore WRAM bank 2 for Waldo
+    # 4C A4 F9    JMP $F9A4      ; normal melt-out & return
+    return bytes.fromhex('a9 a0 8d 01 a0 a9 57 8d 8b 64 a9 a2 8d 01 a0 4c a4 f9')
 
 
 def make_waldo_melt_out() -> bytes:
@@ -136,16 +147,12 @@ def make_waldo_melt_out() -> bytes:
     return bytes(buf)
 
 
-def pack() -> Path:
-    waldo_path = build_waldo.build()
-    waldo = waldo_path.read_bytes()
+def pack_combined(barba: bytes, restore_addr: int, waldo: bytes,
+                  alternate_laugh_data: bytes | None = None,
+                  f13: bytes | None = None) -> bytes:
+    """Combine a waldo_portal-enabled Barba ROM and modded Waldo ROM into Mapper 176."""
     assert waldo[:4] == b'NES\x1a' and waldo[4] in (8, 16) and waldo[5] == 0x10
     w_prg_size = waldo[4] * 16384
-
-    work_dir = ROOT / 'build/waldo-work'
-    report = build(ROOT / 'roms/z2.nes', work_dir, ROOT / 'roms/roar.wav', waldo_portal=True)
-    barba = (work_dir / 'barba.nes').read_bytes()
-    restore_addr = report['labels']['BarbaWaldoRestore6']
 
     b_prg = bytearray(barba[16 : 16 + 128 * 1024])
     b_chr = barba[16 + 128 * 1024 :]
@@ -173,20 +180,30 @@ def pack() -> Path:
 
     # Patch Waldo's NMI hook at $F603-$F653 (free 0x00 region) + vector $FFFA
     hook = make_waldo_nmi_hook()
-    assert len(hook) <= 81
-    assert all(x == 0 for x in w_prg[e000_off + 0x1603 : e000_off + 0x1603 + len(hook)])
+    win_hook = make_waldo_win_hook()
+    assert len(hook) <= 0x1D and len(win_hook) <= 81 - 0x1D
+    assert all(x == 0 for x in w_prg[e000_off + 0x1603 : e000_off + 0x1620 + len(win_hook)])
     w_prg[e000_off + 0x1603 : e000_off + 0x1603 + len(hook)] = hook
+    w_prg[e000_off + 0x1620 : e000_off + 0x1620 + len(win_hook)] = win_hook
     assert w_prg[e000_off + 0x1FFA : e000_off + 0x1FFC] == bytes.fromhex('37 e2')
     w_prg[e000_off + 0x1FFA : e000_off + 0x1FFC] = bytes.fromhex('03 f6')
 
-    # Hook end of Moon Ending ($A1B3 in Bank 0: JMP $E4EC -> JMP $F9A4) so it waves out to Barba
+    # Hook end of Moon Ending ($A1B3 in Bank 0: JMP $E4EC -> JMP $F620) so it sets WALDO_HAT and waves out to Barba
     assert w_prg[0x01B3:0x01B6] == bytes.fromhex('4c ec e4')
-    w_prg[0x01B3:0x01B6] = bytes.fromhex('4c a4 f9')
+    w_prg[0x01B3:0x01B6] = bytes.fromhex('4c 20 f6')
 
-    # Patch Waldo's $F9A4 return stage: JSR $CB10 (WaldoMeltOut), map bank 16 @ $8000, JMP $8C00
+    # Hook end of Game Over ($E1D9 in Fixed Bank: JMP $E0F2 -> JMP $F9A4) so it skips the main menu and returns to Barba
+    assert w_prg[e000_off + 0x01D9 : e000_off + 0x01DC] == bytes.fromhex('4c f2 e0')
+    w_prg[e000_off + 0x01D9 : e000_off + 0x01DC] = bytes.fromhex('4c a4 f9')
+
+    # Disable PPU NMI before the melt waits for its first VBlank. The shortcut
+    # enters here from NMI, and a second NMI would restart the melt every frame.
+    # Keep Waldo's other PPUCTRL bits during the transition.
     stage = bytes.fromhex(
-        '20 10 cb '
-        'a9 06 8d 00 80 a9 10 8d 01 80 4c 00 8c'
+        'a5 00 29 7f 8d 00 20 '          # PPUCTRL = $00 & $7F
+        '20 10 cb '                      # JSR WaldoMeltOut
+        'a9 06 8d 00 80 a9 10 8d 01 80 ' # Map bank 16 at $8000
+        '4c 00 8c'                       # JMP return trampoline loader
     )
     assert len(stage) <= 29
     assert all(x == 0 for x in w_prg[e000_off + 0x19A4 : e000_off + 0x19A4 + len(stage)])
@@ -199,6 +216,11 @@ def pack() -> Path:
     prg512 = bytearray(b'\xFF' * (512 * 1024))
     prg512[0 : 128 * 1024] = b_prg
     prg512[240 * 1024 : 256 * 1024] = b_prg[112 * 1024 : 128 * 1024]
+    if alternate_laugh_data is not None:
+        assert len(alternate_laugh_data) == SAMPLE_CAPACITY
+        # Pages 14/15 and 30/31 mirror each other except for the DMC allocation.
+        start = 112 * 1024 + SAMPLE_ADDRESS - 0xC000
+        prg512[start : start + SAMPLE_CAPACITY] = alternate_laugh_data
     if w_prg_size == 128 * 1024:
         prg512[256 * 1024 : 384 * 1024] = w_prg
         prg512[496 * 1024 : 512 * 1024] = w_prg[112 * 1024 : 128 * 1024]
@@ -281,25 +303,45 @@ def pack() -> Path:
     prg512[off_504 + 0x19C1 : off_504 + 0x19C1 + len(boot)] = boot
     prg512[off_504 + 0x1FFC : off_504 + 0x1FFE] = bytes.fromhex('c1 f9')
 
-    # 512KB CHR: 0..256KB Barba, 256..384KB Waldo, 384..512KB free
+    # 512KB CHR: 0..256KB Barba, 256..384KB Waldo, 384..416KB F13 (if provided), 416..512KB free
     chr512 = bytearray(b'\xFF' * (512 * 1024))
     chr512[0 : 256 * 1024] = b_chr
     chr512[256 * 1024 : 384 * 1024] = w_chr
 
-    # NES 2.0 Mapper 176 (FK23C), 512KB PRG, 512KB CHR, 32KB battery WRAM
+    if f13 is not None:
+        import pack_f13
+        f13_prg, f13_chr = pack_f13.patch_f13(f13)
+        f13_bank0 = pack_f13.make_f13_bank0(restore_addr)
+        prg1024 = bytearray(b'\xFF' * (1024 * 1024))
+        prg1024[0 : 512 * 1024] = prg512
+        prg1024[512 * 1024 : 520 * 1024] = f13_bank0
+        prg1024[736 * 1024 : 768 * 1024] = f13_prg
+        prg1024[1008 * 1024 : 1024 * 1024] = prg512[496 * 1024 : 512 * 1024]
+        chr512[384 * 1024 : 416 * 1024] = f13_chr
+        prg_out = bytes(prg1024)
+        prg_16k_count = 64
+    else:
+        prg_out = bytes(prg512)
+        prg_16k_count = 32
+
+    # NES 2.0 Mapper 176 (FK23C), 512KB/1024KB PRG, 512KB CHR, 32KB battery WRAM
     hdr = bytearray(16)
     hdr[0:4] = b'NES\x1a'
-    hdr[4] = 32
+    hdr[4] = prg_16k_count
     hdr[5] = 64
     hdr[6] = 0x02
     hdr[7] = 0xB8
     hdr[10] = 0x90
 
-    play_dir = ROOT / 'play'
-    play_dir.mkdir(exist_ok=True)
-    out_path = play_dir / 'barba-waldo.nes'
-    out_path.write_bytes(bytes(hdr) + bytes(prg512) + bytes(chr512))
-    return out_path
+    return bytes(hdr) + prg_out + bytes(chr512)
+
+
+def pack() -> Path:
+    """Build the combined Barba + Waldo ROM as build/barba.nes and play/barba.nes."""
+    from build import ROOT, build
+
+    build(ROOT / 'roms/z2.nes', ROOT / 'build', ROOT / 'roms/roar.wav', waldo_portal=True)
+    return ROOT / 'play/barba.nes'
 
 
 if __name__ == '__main__':

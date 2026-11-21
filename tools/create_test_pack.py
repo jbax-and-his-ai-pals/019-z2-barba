@@ -17,7 +17,7 @@ SCENES=[
     ('barba','Palace 6 boss encounter','Test the playable dragon against Lava Link in Palace 6.'),
     ('raft','Sea crossing','Observe the dragon crossing on the original raft route; no free-flight cheat.'),
     ('town','Rauru town street','Approach random outdoor wanderers, watch them flee, and test fireballs and town scorch/combo.'),
-    ('boss-door','Before Palace 6 boss','Left edge of the Palace 6 boss room with max stats, all spells and full meters. Walk right to start the fight.'),
+    ('boss-door','Before Palace 6 boss','Jump right over the lava ledges and keep holding Right. Barba roars on landing, then holds still for half a second before Lava Link rises.'),
     ('great-palace','Great Palace final boss','Great Palace Thunderbird / Dark Link corridor with max stats, all spells and full meters. Test Inferno, fireballs and ending progression.')
 ]
 RECIPE_FILES=['tools/state_scenarios.lua','tests/newgame.lua','tests/state_pack.lua',
@@ -30,6 +30,34 @@ EDGE_SCENES=[
      'Inspect the final black Link portrait immediately. Press Start to continue; reload F2 to inspect again.')
 ]
 SETS=['core',*RECIPES['sets'],'edges']
+
+
+TOWN_OW_COORDS = {
+    0: (54, 46),   # Rauru
+    1: (36, 2),    # Ruto
+    2: (88, 8),    # Saria
+    3: (75, 60),   # Mido
+    4: (60, 23),   # Nabooru
+    5: (33, 3),    # Darunia
+    6: (99, 61),   # New Kasuto
+    7: (99, 34),   # Old Kasuto
+}
+PALACE_OW_COORDS = {
+    1: (32, 62),   # Palace 1
+    2: (64, 11),   # Palace 2
+    3: (98, 57),   # Palace 3
+    4: (58, 59),   # Palace 4 (Maze Island)
+    5: (60, 62),   # Palace 5
+    6: (100, 45),  # Palace 6 (Hidden Palace)
+    7: (73, 4),    # Great Palace
+}
+ENCOUNTER_OW_COORDS = {
+    (0, 1): (82, 16),   # West Hyrule water bridge
+    (0, 14): (69, 9),   # Medicine cave
+    (0, 16): (62, 54),  # Myu cave
+    (0, 34): (32, 40),  # West Hyrule grass
+    (2, 2): (76, 21),   # Valley of Death Lizalfos
+}
 
 
 def checkpoint_writes(scene: dict) -> tuple[dict,dict]:
@@ -51,9 +79,20 @@ def checkpoint_writes(scene: dict) -> tuple[dict,dict]:
             0x76F:0,0x749:0,0x74A:0}
     world,region,number=scene['world'],scene['region'],scene['number']
     code={1:0,2:1,3:2,4:0,5:0,6:1,7:2}.get(number,0)
-    writes.update({0x707:world,0x706:region,0x769:3 if world in (1,2) else (5 if world==5 else 4),
+    prev_region=2 if (region==2 or (region==1 and number==4)) else 0
+    writes.update({0x707:world,0x706:region,0x70A:prev_region,
+                   0x769:3 if world in (1,2) else (5 if world==5 else 4),
                    0x561:scene['room'],0x568:max(0,number-1),0x56B:number,0x56C:code,
                    0x701:0,0x75C:scene['page'],0x704:0,0x736:0,0x73D:0,0x726:1})
+    if scene.get('town') and number in TOWN_OW_COORDS:
+        ow_y,ow_x=TOWN_OW_COORDS[number]
+        writes.update({0x73:ow_y,0x74:ow_x})
+    elif world in (3,4,5) and number in PALACE_OW_COORDS:
+        ow_y,ow_x=PALACE_OW_COORDS[number]
+        writes.update({0x73:ow_y,0x74:ow_x})
+    elif world==0 and (region,scene['room']) in ENCOUNTER_OW_COORDS:
+        ow_y,ow_x=ENCOUNTER_OW_COORDS[(region,scene['room'])]
+        writes.update({0x73:ow_y,0x74:ow_x})
     if scene.get('town'):writes[0x748]=0x2C+(number%4)*2
     else:writes[0x748]=0x34+code
     writes.update({int(a):v for a,v in scene.get('entry',{}).items()})

@@ -19,6 +19,7 @@ end
 local triggered=false
 local sawBarbaWait=false
 local sawBarbaAndZelda=false
+local endingTrailInFront,endingTrailBehind=false,false
 local sawNoLinkTiles=true
 local sawCleanPaletteInS2=true
 local sawFireballPose={}
@@ -50,6 +51,16 @@ emu.addEventCallback(function()
     end
     if triggered and not finished then
         local s=r(0x0761)
+        if s>=1 and s<=8 then
+            local trail=true
+            for i,tile in ipairs({0x15,0x3F,0x45,0x31}) do
+                local slot=0x6548+4*(i-1)
+                trail=trail and r(slot)==0xC0 and r(slot+1)==tile
+                    and r(slot+2)==r(0x6526) and r(slot+3)==0x60-i*8
+            end
+            if s<6 then endingTrailInFront=endingTrailInFront or trail and r(0x6526)==0x40 end
+            if s>=6 then endingTrailBehind=endingTrailBehind or trail and r(0x6526)==0x60 end
+        end
         if s>=1 and s<=5 then
             for i=4,15 do
                 local t=r(0x0201+i*4)
@@ -114,6 +125,7 @@ emu.addEventCallback(function()
                 frame,s,r(0x076C),r(0x07A0),r(0x0033),r(0x0037),r(0x0027),r(0x0028),r(0x05F8),r(0x05F9)))
             check(sawBarbaWait,'Ending renders 24x48 Barba OAM sprites')
             check(sawBarbaAndZelda,'Ending renders Barba alongside woken Zelda')
+            check(endingTrailInFront and endingTrailBehind,'Ending torso and tail follow the curtain priority')
             check(sawNoLinkTiles,'Ending OAM contains zero Link tiles ($E0-$E6)')
             check(sawNoCloserStep,'Barba stays in place without stepping closer to Zelda')
             check(sawFireballPose[0xE0] and sawFireballPose[0xE2],'Both fireball poses draw with the two halves aligned behind the curtain')

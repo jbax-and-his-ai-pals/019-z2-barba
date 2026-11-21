@@ -1,12 +1,16 @@
 # Research notes
 
-## Local input
+## Clean Zelda II input
 
 - Size: 262,160 bytes, including a 16-byte iNES header.
 - Header: `4e45531a081012000000000000000000`.
 - Mapper 1 (MMC1); 128 KiB PRG; 128 KiB CHR; battery-backed save flag.
 - SHA-256: `ad8c0fbcf092bf84b48e69fd3964eea4ed91bfe62abc352943d537979782680c`.
 - Headerless CRC32: `BA322865`.
+
+These values identify the clean source ROM. The current combined output uses
+NES 2.0 Mapper 176. See the [build guide](BUILD.md) for the output layout and
+the other build inputs.
 
 ## Disassembly evaluation
 

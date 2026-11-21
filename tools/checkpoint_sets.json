@@ -21,8 +21,15 @@
     "nabooru": {"levels":[5,4,5],"magic":6,"hearts":6,"spells":5,"items":[0,1,2,6],"tech":16,"placed":3,"flags":{"1944":16,"1945":1,"1946":72,"1947":1}}
   },
   "sets": {
+    "saria": [
+      {"id":"saria-sandbar","name":"Saria quicksand river on the overworld","profile":"ruto","world":0,"region":0,"number":0,"room":0,"page":0,"mode":5,"frames":90,"entry":{"115":88,"116":8,"1801":1,"1802":0,"1846":0,"1897":1},"instructions":"Look for the rippling quicksand through Saria. Press Down to enter town."},
+      {"id":"saria-guard","name":"Saria bridge guard before Bagu","profile":"ruto","world":1,"region":0,"number":2,"room":30,"page":1,"position":{"x":320,"y":176},"town":true,"instructions":"Press Up beside the bridge guard to read his quicksand warning."},
+      {"id":"saria-entrance","name":"North Saria entrance","profile":"ruto","world":1,"region":0,"number":2,"room":8,"page":3,"position":{"x":944,"y":176},"town":true,"instructions":"Walk left past the entrance sign to see the first quicksand bridge."},
+      {"id":"saria-graveyard-bridge","name":"Saria graveyard bridge","profile":"ruto","world":1,"region":0,"number":2,"room":7,"page":2,"position":{"x":552,"y":176},"town":true,"instructions":"Cross the bridge in either direction. Watch the quicksand and passing villagers' shouts."}
+    ],
     "items": [
-      {"id":"candle-pickup","name":"Palace 1 Candle pickup","profile":"p1","world":3,"region":0,"number":1,"room":8,"page":0,"position":{"x":180,"y":160},"instructions":"Walk left to pick up the Candle. Listen for the roar after the fanfare and watch Barba tilt his head up."}
+      {"id":"candle-pickup","name":"Palace 1 Candle pickup","profile":"p1","world":3,"region":0,"number":1,"room":8,"page":0,"position":{"x":180,"y":160},"instructions":"Walk left to pick up the Candle. Listen for the roar after the fanfare and watch Barba tilt his head up."},
+      {"id":"saria-mirror","name":"Saria mirror lady","profile":"saria","world":1,"region":0,"number":2,"room":8,"page":1,"position":{"x":320,"y":176},"town":true,"instructions":"Press Up beside the mirror lady to give her the mirror and see her reaction before she opens the door."}
     ],
     "palaces": [
       {"id":"p1-entrance","name":"Palace 1 entrance","profile":"p1","world":3,"region":0,"number":1,"room":0,"page":0,"position":{"x":64,"y":176},"instructions":"Check movement, head clearance, combat and HUD."},
@@ -40,11 +47,12 @@
       {"id":"p6-entrance","name":"Palace 6 entrance","profile":"p6","world":4,"region":2,"number":6,"room":36,"page":0,"position":{"x":64,"y":176},"instructions":"Check movement, head clearance, combat and HUD."},
       {"id":"gp-entrance","name":"Great Palace entrance","profile":"gp","world":5,"region":2,"number":7,"room":0,"page":0,"position":{"x":64,"y":176},"instructions":"Check movement, head clearance, combat and HUD."},
       {"id":"gp-elevator","name":"Great Palace elevator","profile":"gp","world":5,"region":2,"number":7,"room":1,"page":0,"instructions":"Start on the native elevator. Hold Down to descend; Up to return.","position":{"x":112,"y":160},"feature":"elevator"},
-      {"id":"gp-tunnel","name":"Great Palace low tunnel","profile":"gp","world":5,"region":2,"number":7,"room":44,"page":0,"instructions":"Walk through the 32-pixel-high lane; the raised head must fold under stone.","position":{"x":64,"y":176},"feature":"ceiling"},
+      {"id":"gp-tunnel","name":"Great Palace low tunnel","profile":"gp","world":5,"region":2,"number":7,"room":44,"page":0,"instructions":"Hold Down in the 32-pixel-high lane. Check that the full head fits and the horizontal pieces stay above the bricks.","position":{"x":64,"y":176},"feature":"ceiling"},
       {"id":"thunderbird","name":"Before Thunderbird","profile":"gp","world":5,"region":2,"number":7,"room":53,"page":0,"instructions":"Check movement, head clearance, combat and HUD."},
       {"id":"dark-link","name":"Before Dark Link","profile":"gp","world":5,"region":2,"number":7,"room":54,"page":0,"instructions":"Check movement, head clearance, combat and HUD."},
-      {"id":"p6-boss-approach","name":"Palace 6 boss and crystal approach","profile":"p6boss","world":4,"region":2,"number":6,"room":58,"page":0,"frames":60,"instructions":"Walk right to Lava Link; win normally and approach the crystal statue."},
-      {"id":"valley-lizalfos","name":"Valley of Death rock throwers","profile":"gp","world":0,"region":2,"number":0,"room":2,"page":0,"frames":130,"entry":{"1864":2,"1897":2},"feature":"rock-lizalfos","instructions":"Walk left toward the Lizalfos on the wall. Face it, jump and press Up+B as it leans out to throw."}
+      {"id":"p6-boss-approach","name":"Palace 6 boss and crystal approach","profile":"p6boss","world":4,"region":2,"number":6,"room":58,"page":0,"frames":60,"instructions":"Jump right across the lava ledges, fight Lava Link, then approach the crystal statue."},
+      {"id":"valley-lizalfos","name":"Valley of Death rock throwers","profile":"gp","world":0,"region":2,"number":0,"room":2,"page":0,"frames":130,"entry":{"1864":2,"1897":2},"feature":"rock-lizalfos","instructions":"Walk left toward the Lizalfos on the wall. Face it, jump and press Up+B as it leans out to throw."},
+      {"id":"east-grass","name":"East Hyrule grass encounter","profile":"gp","world":0,"region":2,"number":0,"room":34,"page":0,"entry":{"1379":5,"1864":255,"1897":2},"instructions":"Walk right while firing, then turn back before the room exit. Watch for steady ground scroll and intact clouds, then pause to see the clouds drift right."}
     ],
     "bosses": [
       {"id":"boss-horsehead","name":"Horsehead (Palace 1)","profile":"p1boss","world":3,"region":0,"number":1,"room":13,"page":0,"instructions":"Walk right to start the fight. Reload this key to retry with full meters."},
@@ -52,7 +60,7 @@
       {"id":"boss-rebonack","name":"Rebonack (Palace 3)","profile":"p3boss","world":4,"region":0,"number":3,"room":14,"page":0,"instructions":"Walk right to start the fight. Reload this key to retry with full meters."},
       {"id":"boss-carock","name":"Carock (Palace 4)","profile":"p4boss","world":4,"region":1,"number":4,"room":28,"page":0,"instructions":"Walk right to start the fight. Try three Attack 7 fireball hits or cast Reflect, face Carock and crouch to return his bolts. Reload this key to try the other route."},
       {"id":"boss-gooma","name":"Gooma (Palace 5)","profile":"p5boss","world":3,"region":2,"number":5,"room":41,"page":0,"instructions":"Walk right to start the fight. Reload this key to retry with full meters."},
-      {"id":"boss-lava-link","name":"Lava Link (Palace 6)","profile":"p6boss","world":4,"region":2,"number":6,"room":58,"page":0,"frames":60,"instructions":"Walk right to start the fight. Reload this key to retry with full meters."},
+      {"id":"boss-lava-link","name":"Lava Link (Palace 6)","profile":"p6boss","world":4,"region":2,"number":6,"room":58,"page":0,"frames":60,"instructions":"Jump right over the lava ledges and keep holding Right. Barba roars on landing, then holds still for half a second before Lava Link rises."},
       {"id":"boss-thunderbird","name":"Thunderbird (Great Palace)","profile":"gp","world":5,"region":2,"number":7,"room":53,"page":0,"frames":60,"instructions":"Walk right to start the fight. Reload this key to retry with full meters."},
       {"id":"boss-dark-link","name":"Dark Link (Great Palace)","profile":"gp","world":5,"region":2,"number":7,"room":54,"page":1,"frames":590,"instructions":"Starts the moment the intro ends: the shadow dragon is already beside you. Reload this key to retry with full meters."}
     ],
@@ -69,7 +77,7 @@
       {"id":"maze-island","name":"Maze Island near Palace 4","profile":"p4","world":0,"region":1,"number":0,"room":0,"page":0,"mode":5,"frames":90,"entry":{"115":58,"116":59,"1801":1,"1802":2,"1846":0,"1897":2},"instructions":"Walk the native overworld; enter nearby caves or Palace 4."}
     ],
     "gem": [
-      {"id":"palace-gem","name":"Palace 6 gem placement","profile":"p6boss","world":4,"region":2,"number":6,"room":58,"page":3,"frames":120,"position":{"x":848,"y":144},"instructions":"Boss is behind you. Walk right to the crystal statue; listen for the victory fanfare then immediate roar and watch Barba look up. Reload F1 to repeat."}
+      {"id":"palace-gem","name":"Palace 6 gem placement","profile":"p6boss","world":4,"region":2,"number":6,"room":58,"page":3,"frames":120,"position":{"x":848,"y":144},"instructions":"Walk right to the crystal statue. Watch the floor pulse and the raised stonework light up during Barba's victory roar. Reload F1 to repeat."}
     ],
     "busy": [
       {"id":"p5-two-magos","name":"Palace 5 two-Mago room","profile":"p5boss","world":3,"region":2,"number":5,"room":62,"page":0,"feature":"magos","magos":2,"instructions":"Jump and alternate upstab and downstab while both Magos are active. Let a shot hit you and watch for a red duplicate."},
@@ -85,7 +93,7 @@
     ],
     "movement": [
       {"id":"p6-water-lava","name":"Palace 6 lava ledge","profile":"p6boss","world":4,"region":2,"number":6,"room":51,"page":0,"instructions":"Walk onto lava, jump back, check native body and folded head."},
-      {"id":"p1-low-ceiling","name":"Palace 1 low tunnel","profile":"p1boss","world":3,"region":0,"number":1,"room":3,"page":0,"frames":90,"instructions":"Walk and crouch under the ceiling.","position":{"x":112,"y":176},"feature":"ceiling","walk_in_view":true},
+      {"id":"p1-low-ceiling","name":"Palace 1 low tunnel","profile":"p1boss","world":3,"region":0,"number":1,"room":3,"page":0,"frames":90,"instructions":"Crouch immediately and watch where the horizontal pieces meet the brick floor.","position":{"x":112,"y":176},"feature":"ceiling","walk_in_view":true},
       {"id":"p1-shaft","name":"Palace 1 elevator shaft","profile":"p1","world":3,"region":0,"number":1,"room":1,"page":0,"instructions":"Start on the native elevator. Hold Down to descend; Up to return.","position":{"x":112,"y":160},"feature":"elevator"},
       {"id":"p2-floor","name":"Palace 2 floor corridor","profile":"p2boss","world":3,"region":0,"number":2,"room":20,"page":1,"position":{"x":368,"y":176},"walk_in_view":true,"instructions":"Inspect floor and jump clearance."},
       {"id":"west-water","name":"West Hyrule water bridge","profile":"saria","world":0,"region":0,"number":0,"room":1,"page":0,"entry":{"1801":0,"1864":19,"1897":1},"instructions":"Walk left and compare cloud motion with the bridge. Watch the water shimmer below the deck."},

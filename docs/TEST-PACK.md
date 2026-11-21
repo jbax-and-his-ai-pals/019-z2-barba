@@ -2,33 +2,59 @@
 
 ## Experimental Waldo portal
 
-On `codex/waldo-portal`, build Barba with `python tools/build.py`, then open
-**play/Test Barba - Waldo Portal.cmd**. With the US dump at `roms/waldo.nes`,
-the launcher puts Barba on the Rauru doorstep. Press **Up** to enter. Play
-*Where's Waldo?* through the Moon landing or press **Start + Select** (Enter
-and Space) for a quick return. Barba resumes at the same position and scroll.
+Build the combined ROM with `python tools/build.py` using the US dump at
+`roms/waldo.nes` and the other [build inputs](BUILD.md). The output uses
+NES 2.0 Mapper 176. In Rauru, press **Up** at the portal door and dismiss the
+message with **B**. Play through the Moon landing or press **Start + Select**
+(Enter and Space) to wave out of Waldo and wave back into Rauru. Barba resumes
+at the same position and scroll. Press **B** to dismiss the return message.
 
-This prototype switches between two local ROMs in an isolated Mesen profile.
+**play/Test Barba - Waldo Portal.cmd** launches the two-ROM prototype in a
+separate Mesen profile.
 `python tools/waldo_portal.py --smoke` exercises the native door, starts Waldo's
 first level, and verifies the shortcut return, including with Up held. The
 report and Waldo screenshot are in `build/waldo-portal.txt` and `.png`.
 
 For a 10-slot F1–F10 save-state pack **inside Waldo inside Zelda II** on the
-single-ROM `play/barba-waldo.nes`, double-click **play/Test Barba - Waldo States.cmd**
+combined `barba.nes`, double-click **play/Test Barba - Waldo States.cmd**
 (or run `python tools/create_waldo_z2_pack.py --force`): F1–F8 cover Title Screen,
 Moon Ticket, Overworld Map, Train Station, The Castle, and the three Slots stages;
 **F9** (`moon-ending`, ~27 s before return) and **F10** (`moon-return`, ~1 s
-before return) let you test the automatic wavy transition back to Rauru in Zelda II
-(or press **Start + Select** from any slot).
+before return) let you test the automatic wavy transition back to Rauru in Zelda II.
+**Start + Select** works from any slot. Try **F4** (Train Station), watch the
+station wave out and Rauru wave in, then dismiss the return message with **B**.
+
+For the default Barba silhouette, launch **Play Barba.cmd** and look at the
+dragon on the title cliff. Start a file to see the same elbow, horizontal
+torso and flicking tail in North Palace, or use **Test Barba.cmd**, **F1**.
+In **Test Barba - Tricky Movement.cmd**, load **F7** and walk right into
+the Palace 6 shaft. Watch for three inverted torso sections and a tapered
+tip above the downward-facing head as Barba and his shadow fall. Listen for
+the music to cut as the shaft animation starts. Barba roars once, and the
+palace theme starts in the lower room.
 
 For the palace victory roar, double-click **play/Test Barba - Gem Celebration.cmd**
 and press **F1**. Barba starts beside the Palace 6 crystal statue, past the boss,
 with the final gem still unplaced. Walk right: the native gem sequence plays its
-fanfare, immediately followed by the roar with Barba looking up. Press F1 again
-to repeat. This uses its own isolated `gem` profile and leaves Core F9 intact.
+fanfare, immediately followed by the roar with Barba looking up. Watch the
+floor brighten in pairs moving away from the statue and two patches of raised
+stonework light in sequence. Press F1 again to repeat. This uses its own
+isolated `gem` profile and leaves Core F9 intact.
 `tests/gem_checkpoint.lua` reloads this checkpoint and verifies placement,
 fanfare, exactly one roar, raised head during playback and automatic pose release.
 Prepare without opening Mesen: `./tools/launch.ps1 -TestPack -CheckpointSet gem -PrepareOnly`.
+
+To playtest the Lava Link entrance, load **Test Barba - Bosses F6** or **Core F9**
+and jump right off the lava. Keep holding Right when the camera locks. Barba
+stops horizontally at the center of the middle stone platform, a little to the
+right of screen center. The jump continues vertically at its usual speed.
+Barba lands and holds still for a brief beat before roaring. The HUD, Barba and
+the room shake side to side together throughout the roar. Then the screen
+settles for half a second while Barba holds position. When Lava Link rises,
+Barba regains movement and the boss theme starts. Later rises follow his
+regular attack cycle.
+`tests/link_boss.lua` checks the entrance and `tests/palace_roar.lua` checks the
+floor pulse in all six crystal rooms.
 
 For game-over checks, double-click **play/Test Barba - Edge Scenarios.cmd**.
 It rebuilds the ROM as needed and installs a separate `edges` test profile:
@@ -51,15 +77,17 @@ On Windows, double-click **play/Test Barba.cmd**, or run:
 ./tools/launch.ps1 -TestPack
 ```
 
-The launcher rebuilds the current alpha, generates its checkpoints if needed,
-and opens a separate Mesen test profile with the test ROM loaded. Press one of
+The launcher rebuilds the ROM, generates its checkpoints if needed, and opens
+a separate Mesen test profile. When using a previously built ROM, run
+`./tools/launch.ps1 -NoRebuild -TestPack` and add `-CheckpointSet <set>` for a
+specific set. Press one of
 these keys once the game appears; you do not need to start a file or play the intro.
 Press the same key again at any time to restart that test and refill its meters.
 
 | Key | Checkpoint | What to try |
 | --- | --- | --- |
 | F1 | Starting castle | Normal starting stats. Walk, turn, crouch, jump and attack. |
-| F2 | Palace 1 combat corridor | Fight in both directions. Every health level has five diagonal fireballs; Fire-only enemies now take ordinary breath. |
+| F2 | Palace 1 combat corridor | Fight in both directions and try the five-shot volley at different health levels. |
 | F3 | All spells and techniques | Safe castle, full health/magic, all spells and both thrusts. Press Space to cast Inferno. Use Enter for the spell menu or reload F3 to refill or leave the flying form. |
 | F4 | Palace 6 lava ledge | Walk right into the lava, stop, move, jump and return. |
 | F5 | Standing on lava | Already on the lava surface. Check for sinking and test jumps immediately. |
@@ -67,7 +95,7 @@ Press the same key again at any time to restart that test and refill its meters.
 | F7 | Sea crossing in progress | Watch the dragon complete the normal raft route to East Hyrule. Reload F7 to repeat. |
 | F8 | Rauru town street | Approach random outdoor wanderers, watch them flee, and test fireballs and town scorch/combo. |
 | F9 | Before Palace 6 boss | Left edge of the boss room with level 8 attack/magic/life, all spells and full meters. Walk right to start the fight against Lava Link. |
-| F10 | Great Palace final boss | Great Palace room $35 corridor before Thunderbird and Dark Link with max stats, all spells and full meters. Test `INFERNO`, Dark Link combat and ending progression. |
+| F10 | Great Palace approach | Great Palace room $35 corridor before Thunderbird and Dark Barba with max stats, all spells and full meters. Test `INFERNO`, the final battles, and ending progression. |
 
 The checkpoint launchers open Mesen at 4× windowed scale. The arrows move,
 **X** jumps, **Z** attacks, **Enter** starts/pauses, and **Space** is Select/cast.
@@ -94,7 +122,9 @@ consumption work normally: no invulnerability or unlimited-magic cheat runs.
   ready. Screenshots, capture logs and reload validation remain alongside them.
 - No state files, screenshots or test ROMs are committed to the public repository.
 
-To regenerate manually: `python tools/create_test_pack.py --force`.
+To regenerate manually against `build/barba.nes`, run
+`python tools/create_test_pack.py --force`. Pass `--rom play/barba.nes` to
+select an existing artifact explicitly.
 To prepare everything without opening another window:
 `./tools/launch.ps1 -TestPack -PrepareOnly`.
 
@@ -151,9 +181,10 @@ Unused F-keys do not point at another set's states. Script equivalent:
 ./tools/launch.ps1 -TestPack -CheckpointSet palaces -PrepareOnly
 ```
 
-Replace palaces with core, endgame, bosses, world or movement. Generation with
-`python tools/create_test_pack.py --force` builds and validates **every** set,
-then leaves Core selected. Add `--set world` to regenerate just one set.
+Use `core`, `items`, `palaces`, `endgame`, `bosses`, `world`, `gem`, `busy`,
+`movement`, or `edges` as the set name. `python tools/create_test_pack.py --force`
+generates and validates all ten standard sets from an existing ROM, then
+leaves Core selected. Add `--set world` to regenerate just one set.
 
 ### Assumed normal route (not a completed-game save)
 
@@ -210,6 +241,10 @@ Crystals are $078D-$0792, in palace order; $0794 is 6 minus placed. Keys $0793=0
 
 ### palaces
 
+Stand still at F1, F3, or F5 to see the western entrance clouds drift right to left.
+At F7 on Maze Island and F9 at Palace 5, they drift left to right. Walk toward
+the facade to see the clouds scroll more slowly than the building.
+
 | Key | Where | Loadout | Look for |
 | --- | --- | --- | --- |
 | F1 | Palace 1 entrance (world 3, room $00, entry 0) | p1; keys 0 | Check movement, head clearance, combat and HUD. |
@@ -225,16 +260,19 @@ Crystals are $078D-$0792, in palace order; $0794 is 6 minus placed. Keys $0793=0
 
 ### endgame
 
+At F1 and F2, the clouds at Palace 6 and Great Palace drift left to right.
+
 | Key | Where | Loadout | Look for |
 | --- | --- | --- | --- |
 | F1 | Palace 6 entrance (world 4, room $24, entry 0) | p6; keys 0 | Check movement, head clearance, combat and HUD. |
 | F2 | Great Palace entrance (world 5, room $00, entry 0) | gp; keys 0 | Check movement, head clearance, combat and HUD. |
 | F3 | Great Palace elevator (world 5, room $01, entry 0, x=112, y=160) | gp; keys 0 | Start on the native elevator. Hold Down to descend; Up to return. |
-| F4 | Great Palace low tunnel (world 5, room $2C, entry 0, x=64, y=176) | gp; keys 0 | Walk through the 32-pixel-high lane; the raised head must fold under stone. |
+| F4 | Great Palace low tunnel (world 5, room $2C, entry 0, x=64, y=176) | gp; keys 0 | Hold Down in the 32-pixel-high lane. Check the full head and the horizontal pieces above the bricks. |
 | F5 | Before Thunderbird (world 5, room $35, entry 0) | gp; keys 0 | Check movement, head clearance, combat and HUD. |
-| F6 | Before Dark Link (world 5, room $36, entry 0) | gp; keys 0 | Defeat Dark Link and watch the ending. As the curtain drops, look for the bright fireball with a flickering tail traveling down and right into Zelda, then disappearing as she turns to ash. |
+| F6 | Before Dark Barba (world 5, room $36, entry 0) | gp; keys 0 | Defeat Dark Barba and watch the ending. As the curtain drops, look for the bright fireball with a flickering tail traveling down and right into Zelda, then disappearing as she turns to ash. |
 | F7 | Palace 6 boss and crystal approach (world 4, room $3A, entry 0) | p6boss; keys 0 | Walk right to Lava Link; win normally and approach the crystal statue. |
 | F8 | Valley of Death rock throwers (East Hyrule, world 0, room $02) | gp; keys 0 | Walk left toward the wall Lizalfos. Face it, jump and press Up+B while it leans out to throw. |
+| F9 | East Hyrule grass encounter (world 0, room $22, random battle entry) | gp; keys 0 | Walk right while firing, then turn back before the exit. Check that the ground scrolls steadily and the clouds stay whole. Stand still to see them drift right. |
 
 ### bosses
 
@@ -250,11 +288,20 @@ itself (no door to walk through) with that boss's pre-boss loadout. Reload the k
 | F5 | Gooma (Palace 5) | world 3, room $29, page 0 | p5boss |
 | F6 | Lava Link (Palace 6) | world 4, room $3A, page 0 | p6boss |
 | F7 | Thunderbird (Great Palace) | world 5, room $35, page 0 | gp |
-| F8 | Dark Link (Great Palace) | world 5, room $36, page 1 | gp |
+| F8 | Dark Barba (Great Palace) | world 5, room $36, page 1 | gp |
 
 Rooms match the boss scenarios in tests/ (horsehead.lua ... dark_link.lua). Dark Link's
 intro freezes the player for ~340 frames, so F8 is captured at 590 frames, just as control
 returns: the fight is already live. F9/F10 are unused.
+
+Watch the eight-pip meter at the left edge while jumping and firing. Red pips turn
+white as the boss takes damage. In F3, the meter follows the knight after he is
+unhorsed. In F4, it stays visible while Carock teleports. In F6, it appears as Lava
+Link starts to rise after the entrance roar and pause. In F7, cast INFERNO to make
+Thunderbird vulnerable. The meter clears on defeat.
+
+With a current Bosses pack, run `python tools/emulator_test.py tests/boss_meter.lua`
+to check the pips in hardware OAM and on screen during all eight fights.
 
 ### world
 
@@ -290,10 +337,13 @@ python tools/emulator_test.py tests/darunia_exit.lua --rom "<world pack folder>/
 
 ### movement
 
+Load F5 or F10 and stand still to see West Hyrule's clouds drift from right to left.
+For the reverse drift, load F8 in the Endgame pack and pause at the Valley of Death encounter.
+
 | Key | Where | Loadout | Look for |
 | --- | --- | --- | --- |
 | F1 | Palace 6 lava ledge (world 4, room $33, entry 0) | p6boss; keys 0 | Walk onto lava, jump back, check native body and folded head. |
-| F2 | Palace 1 low tunnel (world 3, room $03, entry 0, x=112, y=176) | p1boss; keys 0 | Walk and crouch under the ceiling. |
+| F2 | Palace 1 low tunnel (world 3, room $03, entry 0, x=112, y=176) | p1boss; keys 0 | Crouch immediately and watch where the horizontal pieces meet the brick floor. |
 | F3 | Palace 1 elevator shaft (world 3, room $01, entry 0, x=112, y=160) | p1; keys 0 | Start on the native elevator. Hold Down to descend; Up to return. |
 | F4 | Palace 2 floor corridor (world 3, room $14, entry 1) | p2boss; keys 0 | Inspect floor and jump clearance. |
 | F5 | West Hyrule water bridge (world 0, room $01, native right-hand entry) | saria; keys 0 | Walk left and compare cloud motion with the bridge. Watch the water shimmer below the deck. |
@@ -312,7 +362,7 @@ key-area tables. Loadout field meanings come from z2disassembly/ram-map.txt.
 The checked-in tools/checkpoint_sets.json is the shared source for generation,
 manifest descriptions and reload assertions; Core retains its original scene order.
 
-Thunderbird and Dark Link are safe **approaches**, not fabricated active-boss states.
+The Thunderbird and Dark Barba checkpoints start on safe approaches before the fights activate.
 Crystal placement and ending snapshots are omitted: no controller-driven boss defeat
 and ending capture was established, and writing boss-death/cutscene state would fake
 those milestones. The Palace 6 boss approach lets the producer pursue its crystal normally.
@@ -327,15 +377,73 @@ native collision returns $40 below Y 208), but falling does not kill. Surveyed
 palace gaps were floor transitions or shafts; lava/water are different hazards.
 No death flag, collision tile, or game code was changed to fabricate a lethal pit.
 A qualifying native lethal-pit location is still needed for that acceptance item.
-Endgame has eight checkpoints and Movement has nine.
+Endgame has nine checkpoints and Movement has ten.
+
+### Checkpoint exit investigation (November 19, 2026)
+
+All ten packs for ROM `e2a1410f459e` passed their existing reload checks. A
+separate Mesen input sweep tried left and right from 67 side-view states. It
+reached 35 adjacent rooms and 34 overworld returns, recorded three life losses,
+and reached the 620-frame limit on 62 attempts. Some routes require elevators,
+jumps, combat, or other inputs beyond that sweep. It stopped at the first room
+or overworld boundary and did not reproduce a CPU halt. The pack's regular
+validation usually exercises short movement within the starting room.
+
+All ten packs were also regenerated and passed reload checks on the play ROM
+`46657414e2ee`. Focused runs repeated the Rauru, New Kasuto, Palace 4, and
+both grass encounter results on that ROM.
+
+| Checkpoint | Observed result | Native state to seed |
+| --- | --- | --- |
+| Core F8, Rauru | Right exit returned to the starting castle at West Hyrule `($17,$34)`. Setting `$0748=$2C` in the loaded state returned to Rauru at `($32,$58)` on the same walk. | Core's older setup inherits `$0748=$00` from the castle. It needs the native area ID for each town or palace. The Core palace fixtures also inherit `$00`, so their full exit routes still need tests. |
+| Towns and World F7, New Kasuto | Left exit returned to East Hyrule `($00,$66)`. Setting `$0748=$31` returned to New Kasuto at `($3D,$51)`. | The generic town formula produces `$30`. The game uses `$31` for the hidden town. Re-entry still needs a test that exercises the town reveal. |
+| Palaces F7, Palace 4 | Left exit selected overworld PRG bank 1. Setting `$070A=$02` selected bank 2. Both returned to `($3C,$3A)` and the region-1 map bytes match across the two banks. | The native loader uses `$070A` to distinguish the west-side and east-side routes through region 1. The Towns and World Maze Island checkpoint already sets it to East Hyrule. Follow-on routing from Palace 4 remains unverified. |
+| Tricky Movement F10 and Endgame F9, grass encounters | Both exits used random encounter slot `$3E`. West returned to `($00,$20)` and East to `($00,$66)`. | The game derived slot `$3E` from the synthetic overworld coordinates. Each fixture needs a verified walkable grass origin in its own region. |
+| Towns and World F2, Ruto | From directly seeded room `$03`, the right exit used unused West Hyrule entry `$2E` and returned to `($00,$66)`. Starting through the native area loader at entry `$2F` opened room `$05`. The tested left route passed through `$04`, and both routes returned to `($02,$24)`. | Preserve the native connector rooms and their exit directions. The area's normalized ID is already `$2E` on the native route, so correcting only that byte would miss the difference. |
+
+The native area loader also chooses distinct Rauru entrance rooms. Entry
+`$2C` from the overworld loads room `$3C`; entry `$2D` loads room `$02`.
+The existing Core F8 starts in room `$00`. Setting its area ID corrects the
+tested exit, and a full round trip still needs to exercise the connector.
+
+Inventory and item history also diverge. Picking up the Candle with controller
+input in Key Items F1 sets inventory `$0785` to 1 and changes Palace 1 room
+`$08` item presence at `$0684` from `$FD` to `$7D`. Palaces F2 starts with
+`$0785=1` and still has `$0684=$FD`. The game keeps this per-room history
+separately from inventory, spells, quests, crystals, and loose keys. Progression
+fixtures should record pickups and unlocked doors that the chosen route has
+already passed. Interaction fixtures such as Key Items F1 need an explicit
+pre-pickup state.
+
+The Darunia F6 regression still passes with ROM `c3bac750d883`. With
+`e2a1410f459e` and `46657414e2ee`, the first crossing exits alive to the expected East Hyrule
+`($0A,$24)` with three lives, but X is `$3EF` and the test requires at least
+`$3F0`. A diagnostic run that accepted that position and allowed more time
+also completed the second return with the generator active on `e2a1410f459e`.
+It missed the downstab, so the original crash trigger remains unverified.
+
+Start the generator repair with native overworld area IDs and explicit encounter
+origins. Load through the native overworld and area-entry routines where
+possible, then place Barba in the desired room. For the repaired checkpoints,
+validate the first adjacent room or overworld destination and a live re-entry
+with controller input. Keep route-dependent pickup, door, and quest history
+with each profile. When tracking an opcode report, record the ROM hash, F-key,
+input sequence, PC and opcode at the failure, and the source and destination
+world, region, and room.
+
+To reproduce the current exits, open Core F8 and walk right, then open Towns
+and World F7 and walk left. Both should reach the overworld and show the wrong
+destinations listed above. The Palace 4 difference is visible in Mesen's
+debugger through `$0769` after walking left from Palaces F7.
 
 ### Numeric feature and palette checks
 
 Generation and reload share tests/checkpoint_features.lua: elevator object and
 player Y attachment; stone above the raised head, clear body lane and grounded
 floor; open-bottom gap beside a supported player. Controller and 120-frame checks
-still apply. Movement F7 additionally replays the native drop and checks room $2D
-and unchanged lives. Endgame F4 is GP $2C; Movement F2 is P1 $03, not GP $36.
+still apply. Movement F7 additionally checks the complete fall pose for both
+actors, arrival in room `$2D` and unchanged lives. Endgame F4 is GP `$2C`.
+Movement F2 is P1 `$03`.
 
 Run python tools/check_checkpoint_palettes.py to compare the same World fixtures
 on build/barba.nes and the untouched roms/z2.nes. Both 16-byte background palettes

@@ -1,11 +1,11 @@
 ; MMC3 Scanline IRQ engine & OAM shadow (Bank 6).
 ; Replaces Sprite-0 busy-wait + LateSplit with deterministic scanline IRQs:
 ;   1. Zero-jitter HUD split at scanline 30 (frees OAM slot 0 + ~1,600+ cycles).
-;   2. Cloud parallax in Overworld side-view encounters ($0707=0).
-;   3. Surface shimmer over encounter water and palace lava.
+;   2. Cloud parallax in overworld side-view encounters and palace entrances.
+;   3. Surface shimmer over encounter water, palace lava, and title lava (R0 CHR swaps).
 ;   4. Bottom cinematic letterbox bar on Title roar, Dark Barba entrance, and Ending.
 
-.export NmiVblankSetup6, CopyOamShadow6, TitleEndNmi6
+.export NmiVblankSetup6, CopyOamShadow6, CopySceneOam6, TitleEndNmi6, NmiRng6
 
 IRQ_STAGE     = $64D6
 IRQ_COUNT     = $64D7
@@ -22,10 +22,16 @@ IRQ_TMP2      = $64ED   ; camX/2 nt  / temp
 OW_PARALLAX_LINE = $64EE ; 0 = off, else sky/ground split scanline (16k+31)
 LAVA_CHR_BANK = $64EF   ; last liquid R1 bank, for emulator checks
 OW_HAS_GRASS = $64F0    ; qualifying row using the West Hyrule sprig art
-OW_HAS_WATER  = $64F1
 CLOUD_DRIFT_SUB = $64FB ; fractional subpixel accumulator for idle cloud drift
 CLOUD_DRIFT_X   = $64FC ; cloud drift pixel offset (0..255)
 CLOUD_DRIFT_NT  = $64FD ; cloud drift nametable bit (0..1)
+CLOUD_DX_HI     = $64F2 ; palace cloud sprite 9th X bit
+CLOUD_COL       = $64F3 ; current tile column within cloud
+CLOUD_IDX       = $64F4 ; current cloud index
+CLOUD_Y         = $64F5 ; current cloud OAM Y
+CLOUD_WIDTH     = $64F6 ; current cloud width in 8x16 tiles
+CLOUD_ATTR      = $64F7 ; cloud OAM attribute ($23 palace / $21 town)
+CLOUD_TILE      = $64F8 ; cloud OAM left tile ($C1 palace / $F7 town)
 
 .segment "BANK6"
 
@@ -52,6 +58,9 @@ NmiVblankSetup6:
 @done_macro:
     sta $0725
     jsr IrqSetup6       ; arm MMC3 IRQ during VBlank (before sound driver!)
+.ifdef WALDO_PORTAL
+    jsr UpdateWaldoHatChr6
+.endif
     jsr UpdateSceneryChr6
     jsr SetupEncounterScenery6
     jsr $9000           ; native sound driver (Bank 6)
@@ -67,6 +76,46 @@ NmiVblankSetup6:
 @table0:
     .byte $00, $61, $A2
 
+; NMI RNG update in Bank 6, then copy OAM shadow and jump to SwapToPRG0 ($C1A3).
+NmiRng6:
+    inc $12
+    ldx #$00
+    ldy #$09
+    lda $051A
+    eor $051B
+    lsr
+    lsr
+@rng:
+    ror $051A,x
+    inx
+    dey
+    bne @rng
+    jsr CopySceneOam6
+    jsr FinishSceneOam6
+    ; If game logic finished inside the next VBlank ($2002 bit 7 set), reading
+    ; $2002 clears the VBlank flag so $C1B1's STA $2000 does not fire a
+    ; truncated mid-VBlank NMI that overruns into active rendering and corrupts
+    ; vertical scroll. Reset the HUD scroll and re-arm the MMC3 IRQ so the
+    ; repeated frame stays split and jitter-free.
+    bit $2002
+    bpl @exit_nmi
+    jsr VblankOverrun6
+@exit_nmi:
+    jmp $C1A3
+.segment "LAUGH_DELAY"
+VblankOverrun6:
+    lda IRQ_COUNT
+    beq @done
+    lda #$00
+    sta IRQ_STAGE
+    jsr ArmStage0_6
+    lda $0736
+    cmp #$0B
+    bne @done
+    jmp VblankHudReset6
+@done:
+    rts
+.segment "BANK6"
 ; Copy $0200-$02FF -> $6500-$65FF, rebasing the 8x16 sprite tiles.
 ; Hide native blank cells ($F5) so they cannot fetch from $0000 between
 ; $1000 sprite fetches and give the MMC3 a second A12 clock on one scanline.
@@ -101,10 +150,45 @@ CopyOamShadow6:
     beq @done
     jmp @loop
 @done:
+    jmp PrioritizeRoomOam6
+
+; Reuse the OAM copy caller's return address through the fixed mapper code.
+EncounterTorsoHop6:
+    bit $0100                 ; title has its own Barba sprite table
+    bvc @done
+    lda #>(EncounterTorsoFrom6-1)
+    pha
+    lda #<(EncounterTorsoFrom6-1)
+    pha
+    jmp $FFC5
+@done:
     rts
 
+.segment "BANK6_OAM"
+PrioritizeRoomOam6:
+    lda $0707
+    bne :+
+    jmp EncounterTorsoHop6
+:
+    jmp ShoutOamPriority6
+
+FinishSceneOam6:
+    jsr SariaTipPriority6
+    jsr DrawDownstabTailHop6
+    jsr DrawPalaceClouds6
+    jmp FinishBossOam6
+
+DrawDownstabTailHop6:
+    lda #>(DrawDownstabTail3-1)
+    pha
+    lda #<(DrawDownstabTail3-1)
+    pha
+    lda #$03
+    jmp $FFCC
+
+.segment "BANK6"
 TitleEndNmi6:
-    jsr CopyOamShadow6
+    jsr CopyTitleOam6
     jsr IrqSetup6
     bit $2002
     tsx
@@ -114,6 +198,113 @@ TitleEndNmi6:
     cli
     lda #$05
     jmp $FFCC           ; restore Bank 5 before returning to $A696
+
+CopyTitleOam6:
+    jsr CopyOamShadow6
+    lda $6560
+    cmp #$9F
+    bne @done
+    ; The table sentinel leaves $68 free, immediately before the stars.
+    sta $6568
+    lda #TRAIL_TIP_FAR
+    sta $6569
+    lda #$02
+    sta $656A
+    lda #$A4
+    sta $656B
+@done:
+    rts
+
+.segment "PALACE_SHAKE"
+CopySceneOam6:
+    jsr CopyOamShadow6
+    jsr ShakeLavaOam6
+    lda $0736
+    cmp #$0F
+    beq DrawExtendedFall6
+    lda $076C
+    cmp #$04                  ; ending routine changes game mode between phases
+    bne @done
+    lda $6528
+    cmp #$C0
+    bne @done
+    lda $6529
+    cmp #TRAIL_BEND_CENTER
+    bne @done
+    ; Ending: use the elbow's Y and curtain priority. Both the fireball
+    ; and Zelda keep their original OAM entries.
+    ldx #$00
+    ldy #$00
+@ending:
+    lda $6528
+    sta $6548,x
+    lda EndingTrailTiles,y
+    sta $6549,x
+    lda $652A
+    sta $654A,x
+    lda EndingTrailX,y
+    sta $654B,x
+    iny
+    inx
+    inx
+    inx
+    inx
+    cpx #$10
+    bne @ending
+@done:
+    rts
+
+EndingTrailTiles:
+    .byte TRAIL_TORSO_LEFT, TRAIL_TORSO_RIGHT, TRAIL_TIP, TRAIL_TIP_FAR
+EndingTrailX:
+    .byte $58, $50, $48, $40
+
+DrawExtendedFall6:
+    ; Finish Barba before the shadow starts at $3C so he wins overlaps.
+    ldx #$30
+    ldy #$08                  ; Barba's native fall sprites
+    jsr @actor
+    ldx #$64
+    ldy #$3C                  ; shadow's native fall sprites
+@actor:
+    lda $6520,y               ; second torso chunk
+    cmp #$F0
+    bcs @done
+    sec
+    sbc #$10
+    bcc @done
+    sta $6500,x
+    sta $6504,x
+    lda $6521,y
+    sta $6501,x
+    eor #$0E
+    sta $6505,x
+    lda $6522,y
+    sta $6502,x
+    sta $6506,x
+    lda $6523,y
+    sta $6503,x
+    clc
+    adc #$08
+    sta $6507,x
+    lda $6500,x
+    sec
+    sbc #$10
+    bcc @done
+    sta $6508,x
+    lda #FALL_TAIL_TILE
+    sta $6509,x
+    lda $6502,x
+    eor #$C0                  ; mirror the upward tip across the torso center
+    sta $650A,x
+    lda $6503,x
+    clc
+    adc #$04
+    sta $650B,x
+@done:
+    rts
+
+.segment "BANK6"
 
 ; Program IRQ_LINES/X/CTRL/MASK for the current frame and arm MMC3 if active.
 IrqSetup6:
@@ -161,7 +352,7 @@ IrqSetup6:
     sta IRQ_MASK        ; $2001 = $00 (black bar scanlines 216..239)
     lda #$01
     sta IRQ_COUNT
-    jmp @arm_stage0
+    jmp ArmStage0_6
 
 @check_sideview:
     cmp #$0B
@@ -194,39 +385,49 @@ IrqSetup6:
     jmp @palace_setup
 
 @single_hud_split:
-    ; Towns ($0707 = 1, 2): single HUD split.
+    ; Towns ($0707 = 1, 2): single HUD split + idle cloud drift in outdoor rooms.
+    jsr IsSpriteCloudRoom6
+    bne :+
+    jsr AdvanceCloudDrift6
+:
     lda $FD
     sta IRQ_X,y
     lda $0746
     and #$01
     sta IRQ_CTRL,y
     iny
-    jmp @check_dark_barba_letterbox
+    jmp CheckDarkBarbaLetterbox6
 
 ; Encounter sky moves at half camera speed plus a slow idle wind drift.
 @encounter_setup:
     lda OW_PARALLAX_LINE
     beq @encounter_ground
-    jsr @advance_cloud_drift
-    jsr @compute_half_camx
+    jsr AdvanceCloudDrift6
+    jsr ComputeHalfCamx6
     sta IRQ_X,y
     lda IRQ_TMP2
     sta IRQ_CTRL,y
     iny
     lda OW_PARALLAX_LINE
-    jsr @set_delta_line
+    jsr SetDeltaLine6
     lda $FE
     sta IRQ_MASK,y
 @encounter_ground:
     jsr @full_camx
-    jmp @finish_setup
+    jmp FinishSetup6
 
 ; Palaces ($0707 >= 3):
 ;   31+:   full camX (preserves palace walls, curtains, doors, and bricks; lava animates via R1 CHR)
+;   207+ (when ROOM_HAS_LAVA != 0): warm red emphasis ($2001 bit 5) over the bottom lava rows (no X wobble)
 @palace_setup:
+    jsr IsSpriteCloudRoom6
+    bne :+
+    jsr AdvanceCloudDrift6
+:
     jsr UpdateLavaRoomFlag6
     jsr @full_camx
-    jmp @check_dark_barba_letterbox
+    jsr ShakeLavaCamera6
+    jmp LavaHazeSetup6
 
 @full_camx:
     lda $FD
@@ -237,24 +438,24 @@ IrqSetup6:
     iny
     rts
 
-@check_dark_barba_letterbox:
+CheckDarkBarbaLetterbox6:
     lda $0707
     cmp #$05
-    bne @finish_setup
+    bne FinishSetup6
     lda $B6
     cmp #$01
-    bne @finish_setup
+    bne FinishSetup6
     lda $A1
     cmp #$23
-    bne @finish_setup
+    bne FinishSetup6
     lda $0505           ; Dark Barba entrance pause timer
     bne @add_letterbox
     lda $63             ; Dark Barba phase < 3 (emergence)
     cmp #$03
-    bcs @finish_setup
+    bcs FinishSetup6
 @add_letterbox:
     lda #215
-    jsr @set_delta_line
+    jsr SetDeltaLine6
     lda $FD
     sta IRQ_X,y
     lda $0746
@@ -264,9 +465,9 @@ IrqSetup6:
     sta IRQ_MASK,y
     iny
 
-@finish_setup:
+FinishSetup6:
     sty IRQ_COUNT
-@arm_stage0:
+ArmStage0_6:
     lda IRQ_LINES
     sta $C000
     sta $C001
@@ -274,7 +475,7 @@ IrqSetup6:
     rts
 
 ; Input: A = target scanline. Updates IRQ_LINES,y = target - IRQ_TMP0 - 1, IRQ_TMP0 = target.
-@set_delta_line:
+SetDeltaLine6:
     tax
     sec
     sbc IRQ_TMP0
@@ -283,25 +484,43 @@ IrqSetup6:
     stx IRQ_TMP0
     rts
 
-; Advance slow idle cloud drift (1/8 px per frame = 7.5 px/s).
-@advance_cloud_drift:
+; Advance slow idle cloud drift (1/16 px per frame = ~3.75 px/s).
+; Decreasing the sky scroll moves eastern clouds to the right.
+AdvanceCloudDrift6:
     lda CLOUD_DRIFT_SUB
     clc
-    adc #32
+    adc #16
     sta CLOUD_DRIFT_SUB
     bcc @drift_done
+    lda $0706
+    cmp #$02            ; East Hyrule
+    beq @drift_right
+    cmp #$01            ; shared Death Mountain / Maze Island region
+    bne @drift_left
+    lda $0707
+    bne @drift_right    ; Palace 4 on Maze Island
+@drift_left:
     inc CLOUD_DRIFT_X
     bne @drift_done
     lda $D1
     beq @drift_done
+@wrap:
     lda CLOUD_DRIFT_NT
     eor #$01
     sta CLOUD_DRIFT_NT
 @drift_done:
     rts
+@drift_right:
+    ; Borrow into the nametable bit even on a one-page map so the sky
+    ; scroll stays continuous as the offset goes from 0 to -1.
+    dec CLOUD_DRIFT_X
+    lda CLOUD_DRIFT_X
+    cmp #$FF
+    beq @wrap
+    rts
 
 ; Compute (camX/2 + CLOUD_DRIFT) into IRQ_TMP1 (low) and IRQ_TMP2 (nt bit 0). Returns A = IRQ_TMP1.
-@compute_half_camx:
+ComputeHalfCamx6:
     lda $072A
     lsr
     sta IRQ_TMP2
@@ -317,19 +536,6 @@ IrqSetup6:
     lda IRQ_TMP1
     rts
 
-; Compute cache key A = ($0707 << 4) | ($0706 & $0F).
-RoomCacheKey6:
-    lda $0707
-    asl
-    asl
-    asl
-    asl
-    sta IRQ_TMP2
-    lda $0706
-    and #$0F
-    ora IRQ_TMP2
-    rts
-
 ; Mode 9 step 0: the metatile map is ready and the nametables haven't been drawn.
 ; Check only the area's populated pages ($D1 is the last page index).
 SetupEncounterScenery6:
@@ -341,12 +547,15 @@ SetupEncounterScenery6:
     lda #$00
     sta OW_PARALLAX_LINE
     sta OW_HAS_GRASS
-    sta OW_HAS_WATER
     sta CLOUD_DRIFT_SUB
     sta CLOUD_DRIFT_X
     sta CLOUD_DRIFT_NT
     lda $0707
+    beq @check_ow
+    jsr IsSpriteCloudRoom6
     bne @exit
+    jmp StripPalaceClouds6
+@check_ow:
     lda $0561
     bne @scan_map
     lda $0706           ; room 0 is North Castle only in West Hyrule
@@ -357,7 +566,6 @@ SetupEncounterScenery6:
 @scan_map:
     lda #$00
     sta IRQ_TMP1        ; start offset of the row being tested
-    sta IRQ_TMP2        ; at least one completed sky row has a cloud
 @count_sky_rows:
     ldx #$00           ; require sky/cloud tiles
     lda IRQ_TMP1
@@ -365,10 +573,6 @@ SetupEncounterScenery6:
     bcs @sky_ready
     tya
     sta IRQ_TMP1
-    txa
-    and #$80
-    ora IRQ_TMP2
-    sta IRQ_TMP2
     cpy #$A0
     bcc @count_sky_rows
 @sky_ready:
@@ -377,60 +581,85 @@ SetupEncounterScenery6:
     clc
     adc #31
     sta OW_PARALLAX_LINE
-    lda IRQ_TMP2
-    bne @prune_start
-    ; The top row is empty sky. Give each page a small cloud with staggered X.
-    .repeat 4, page
-        lda #$C2
-        sta $6000 + page*$D0 + ((3 + 5*page) .mod 11)
-        lda #$C4
-        sta $6001 + page*$D0 + ((3 + 5*page) .mod 11)
-        .if page < 3
-            lda $D1
-            cmp #page+1
-            bcc @prune_start
-        .endif
-    .endrep
 @prune_start:
+    lda $00
+    pha
+    lda $01
+    pha
+    ldx #$03
+@page_loop:
+    lda PageLo6,x
+    sta $00
+    lda PageHi6,x
+    sta $01
     lda IRQ_TMP1
-    tay
-    ; Remove clouds outside the safe band and check every remaining row for
-    ; water/lava surfaces, including cave pools and bridge gaps.
-@prune:
-    .repeat 4, page
-        lda $6000 + page*$D0,y
-        cmp #$80
-        beq :+
-        cmp #$87
-        beq :+
-        cmp #$88
-        bne :++
+    beq @prune_page
+    ; Ground scrolling streams columns from all four pages into two PPU
+    ; nametables. Repeat the sky on matching page parity, including the
+    ; padding pages, so those writes preserve the independently scrolling sky.
+    ldy #$00
+    lda #$40
+@clear_sky:
+    sta ($00),y
+    iny
+    cpy IRQ_TMP1
+    bcc @clear_sky
+    ; Stagger the two clouds across rows when at least two are clear.
+    ldy #$02
+    txa
+    lsr
+    bcc :+
+    iny
 :
-        sta OW_HAS_WATER
+    lda #$C2
+    sta ($00),y
+    iny
+    lda #$C4
+    sta ($00),y
+    ldy #$0A
+    lda IRQ_TMP1
+    cmp #$20
+    bcc :+
+    ldy #$1A
 :
-        cmp #$C2
-        bcc :+
-        cmp #$C5
-        bcs :+
-        lda #$40
-        sta $6000 + page*$D0,y
+    txa
+    lsr
+    bcs :+
+    iny
 :
-        .if page < 3
-            lda $D1
-            cmp #page+1
-            bcc @prune_next
-        .endif
-    .endrep
-@prune_next:
+    lda #$C2
+    sta ($00),y
+    iny
+    lda #$C4
+    sta ($00),y
+    ; Remove clouds outside the safe band.
+@prune_page:
+    cpx $D1
+    bcc :+
+    bne @next_page
+:
+    ldy IRQ_TMP1
+@prune_y:
+    lda ($00),y
+    jsr PruneEncounterTile6
+    sta ($00),y
     iny
     cpy #$D0
-    bcs @check_grass_art
-    jmp @prune
+    bcc @prune_y
+@next_page:
+    dex
+    bpl @page_loop
+    pla
+    sta $01
+    pla
+    sta $00
 
 @check_grass_art:
     lda $076E
     and #$FE
-    cmp #$02            ; East Hyrule uses different art at pattern $4E
+    cmp #$02
+    beq @find_grass
+    cmp #$04
     bne @no_grass
 @find_grass:
     lda IRQ_TMP1
@@ -453,8 +682,80 @@ SetupEncounterScenery6:
     sta OW_HAS_GRASS
     rts
 
+.segment "BANK6_CLOUD"
+; A = world ($0707). Returns Z set iff the room uses behind-BG sprite clouds:
+; outdoor town rooms ($0707=1,2; $0561 < $19 or $3C) and outdoor palace rooms.
+; Preserve X and Y.
+IsSpriteCloudRoom6:
+    cmp #$00
+    beq @no_cloud
+    cmp #$03
+    bcc @town
+    cmp #$04
+    bcc @palaces_125
+    beq @palaces_346
+    lda $0561
+    beq @yes_cloud              ; Great Palace entrance ($00)
+    cmp #$3F
+    beq @yes_cloud              ; Great Palace exit/rooftop ($3F)
+    cmp #$37
+    bcc @no_cloud
+    cmp #$3D
+    bcc @yes_cloud              ; Great Palace outdoor bridge ($37-$3C)
+@no_cloud:
+    lda #$01
+    rts
+@town:
+    lda $0561
+    cmp #$19
+    bcc @yes_cloud
+    cmp #$3C
+    rts
+@palaces_125:
+    lda $0561
+    beq @yes_cloud              ; Palace 1
+    cmp #$0E                    ; Palace 2
+    beq @yes_cloud
+    cmp #$23                    ; Palace 5
+    rts
+@palaces_346:
+    lda $0561
+    beq @yes_cloud              ; Palace 3
+    cmp #$06                    ; Palace 3 outdoor courtyard
+    beq @yes_cloud
+    cmp #$0F                    ; Palace 4
+    beq @yes_cloud
+    cmp #$24                    ; Palace 6
+    rts
+@yes_cloud:
+    lda #$00
+    rts
+VblankHudReset6:
+    lda $0726
+    bne @done
+    lda $FF
+    and #$FC
+    sta $FF
+    sta $2000
+    lda #$00
+    sta $2005
+    sta $2005
+@done:
+    rts
+.segment "BANK6"
+
+; Input: A = metatile ID. Returns A = $40 if stray cloud, else A unchanged.
+PruneEncounterTile6:
+    cmp #$C2
+    bcc @done
+    cmp #$C5
+    bcs @done
+    lda #$40
+@done:
+    rts
+
 ; A = row offset, X = 0 for sky/clouds or 1 for sky/sprigs. C clear iff the
-; whole row matches. X bit 7 records a cloud/sprig, Y ends at the next row.
+; whole row matches. X bit 7 records a sprig, Y ends at the next row.
 CheckSceneryRow6:
     tay
     clc
@@ -490,12 +791,17 @@ CheckSceneryTile6:
     cmp #$C2
     bcc @miss
     cmp #$C5
-    bcs @miss
-    ldx #$80
-    bne @match
+    rts
 @sprig:
     cmp #$8A            ; road/desert surface has transparent top tiles
     beq @match
+    cmp #$4B            ; East Hyrule tree trunk can stand on a grass row
+    bne :+
+    lda $0706
+    cmp #$02
+    beq @match
+    bne @miss
+:
     cmp #$81            ; single/double weed or grass sprig background
     bcc @miss
     cmp #$84
@@ -549,27 +855,293 @@ UpdateLavaRoomFlag6:
     sta ROOM_HAS_LAVA
     rts
 
+.segment "BANK6_CLOUD"
+; Strip static background cloud metatiles ($C2-$C4 in palaces, $C4-$C6 in towns)
+; so behind-background parallax cloud sprites replace them cleanly.
+StripPalaceClouds6:
+    lda $00
+    pha
+    lda $01
+    pha
+    ldx #$C2
+    ldy #$C5
+    lda $0707
+    cmp #$03
+    bcs :+
+    ldx #$C4
+    ldy #$C7
+:
+    stx IRQ_TMP0
+    sty IRQ_TMP1
+    ldx $D1
+    cpx #$04
+    bcc :+
+    ldx #$03
+:
+@page_loop:
+    lda PageLo6,x
+    sta $00
+    lda PageHi6,x
+    sta $01
+    ldy #$D0
+@y_loop:
+    dey
+    lda ($00),y
+    cmp IRQ_TMP0
+    bcc :+
+    cmp IRQ_TMP1
+    bcs :+
+    lda #$40
+    sta ($00),y
+:
+    tya
+    bne @y_loop
+    dex
+    bpl @page_loop
+    pla
+    sta $01
+    pla
+    sta $00
+    rts
+PageLo6:
+    .byte $00, $D0, $A0, $70
+PageHi6:
+    .byte $60, $60, $61, $62
+
+; Compute cache key A = ($0707 << 4) | ($0706 & $0F).
+RoomCacheKey6:
+    lda $0707
+    asl
+    asl
+    asl
+    asl
+    ora $0706
+    rts
+
+; Keep all of Barba at $6500-$6528, then the villager's glyphs at $652C-$6544.
+; The NES resolves both overlapping sprite pixels and the scanline limit
+; by OAM order. Swap complete entries to keep the displaced sprites visible.
+ShoutOamPriority6:
+    lda $6467               ; SHOUT_WORD
+    beq @ret
+    lda $6465               ; SHOUT_SLOT ($FF = player shout)
+    bmi @ret
+    ldx #$04
+@swap_sprite:
+    ldy @shout_src,x
+    stx IRQ_TMP0
+    lda @shout_dst,x
+    tax
+@swap_byte:
+    lda $6500,x
+    pha
+    lda $6500,y
+    sta $6500,x
+    pla
+    sta $6500,y
+    inx
+    iny
+    txa
+    and #$03                ; both offsets start on a four-byte sprite boundary
+    bne @swap_byte
+    ldx IRQ_TMP0
+    dex
+    bpl @swap_sprite
+@ret:
+    jmp EncounterTorsoHop6
+@shout_src:
+    .byte $DC, $C4, $28, $4C, $00
+@shout_dst:
+    .byte $44, $3C, $C4, $38, $4C
+
+.segment "BANK6_HAZE"
+; Draw behind-background parallax clouds on outdoor town and palace rooms.
+; Runs right after CopyOamShadow6 so live sprites in $6500-$65FF are never overwritten.
+DrawPalaceClouds6:
+    lda $0736
+    cmp #$0B
+    bne @exit
+    lda $0726
+    bne @exit
+    lda $074C
+    cmp #$02
+    bcs @exit
+    lda $0707
+    beq @exit
+    jsr IsSpriteCloudRoom6
+    beq @active
+@exit:
+    rts
+@active:
+    ldx #$23                    ; palace: behind BG + palette 3
+    ldy #$C1                    ; palace: left=$C1, mid=$C3, right=$C5
+    lda $0707
+    cmp #$03
+    bcs :+
+    ldx #$21                    ; town: behind BG + palette 1
+    ldy #$89                    ; town: left=$89, mid=$8B, right=$8D ($89 ^ $04 == $8D)
+:
+    stx CLOUD_ATTR
+    sty CLOUD_TILE
+
+    jsr ComputeHalfCamx6        ; IRQ_TMP1 = scrollX_lo, IRQ_TMP2 = scrollX_hi (0..1)
+    ldy #$FC                    ; scan OAM shadow backward ($FC..$68) so clouds stay behind live sprites
+    ldx #$00
+    stx CLOUD_IDX
+@cloud_loop:
+    lda CLOUD_IDX
+    asl
+    asl
+    tax
+    lda @clouds,x               ; Y coordinate (0 = end of table)
+    bne :+
+    rts
+:
+    sta CLOUD_Y
+    lda @clouds+3,x             ; width in 8x16 tiles (3 or 4)
+    sta CLOUD_WIDTH
+    lda @clouds+1,x             ; baseX_lo
+    sec
+    sbc IRQ_TMP1
+    sta IRQ_TMP0                ; dx_lo
+    lda @clouds+2,x             ; baseX_hi (0 or 1)
+    sbc IRQ_TMP2
+    and #$01
+    sta CLOUD_DX_HI             ; dx_hi (0 = on-screen 0..255, 1 = off-screen 256..511)
+    beq :+
+    lda IRQ_TMP0
+    cmp #$E8                    ; off-screen (256..487): cannot wrap onto screen in <= 32px
+    bcs :+
+    jmp @next_cloud
+:
+    lda #$00
+    sta CLOUD_COL
+@tile_loop:
+    lda CLOUD_DX_HI
+    bne @next_tile
+@find_slot:
+    cpy #$68
+    bcc @done
+    lda $6500,y
+    cmp #$F0
+    bcs @slot_ok
+    dey
+    dey
+    dey
+    dey
+    bne @find_slot
+@slot_ok:
+    lda CLOUD_Y
+    sta $6500,y
+    ldx CLOUD_COL
+    beq @left_tile
+    inx
+    cpx CLOUD_WIDTH
+    beq @right_tile
+    lda CLOUD_TILE              ; middle cloud puff
+    clc
+    adc #$02
+    bne @write_tile
+@left_tile:
+    lda CLOUD_TILE              ; left cloud puff
+    bne @check_flip
+@right_tile:
+    lda CLOUD_TILE              ; right cloud puff
+    clc
+    adc #$04
+@check_flip:
+    ldx $0706
+    beq @write_tile
+    eor #$04                    ; swap left/right puff when H-flipped
+@write_tile:
+    sta $6501,y
+    lda CLOUD_ATTR              ; behind background ($20) + palette (3 palace / 1 town)
+    ldx $0706
+    beq :+
+    ora #$40                    ; + H-flip ($40) on eastern continent
+:
+    sta $6502,y
+    lda IRQ_TMP0
+    sta $6503,y
+    dey
+    dey
+    dey
+    dey
+@next_tile:
+    lda IRQ_TMP0
+    clc
+    adc #$08
+    sta IRQ_TMP0
+    bcc :+
+    lda CLOUD_DX_HI
+    eor #$01
+    sta CLOUD_DX_HI
+:
+    inc CLOUD_COL
+    lda CLOUD_COL
+    cmp CLOUD_WIDTH
+    bcs @next_cloud
+    jmp @tile_loop
+@next_cloud:
+    inc CLOUD_IDX
+    jmp @cloud_loop
+@done:
+    rts
+@clouds:
+    .byte 73,  24, 0, 4         ; (X=24,  Y=74,  32px)
+    .byte 87, 112, 0, 3         ; (X=112, Y=88,  24px)
+    .byte 111, 224, 0, 4        ; (X=224, Y=112, 32px)
+    .byte 75,  80, 1, 3         ; (X=336, Y=76,  24px)
+    .byte 95, 176, 1, 4         ; (X=432, Y=96,  32px)
+    .byte 0
+
 ; Encounter water and palace lava share surface patterns $98/$99. Swap R1
 ; during VBlank so bridges, shorelines and walls on the same lines stay still.
 UpdateSceneryChr6:
+    lda $0726
+    bne @exit_chr
     lda $0736
+    cmp #$05
+    beq @overworld_chr
     cmp #$0B
-    bne @lava_chr_done
+    bne @exit_chr
     lda $074C
     cmp #$02
-    bcs @lava_chr_done
-    lda $0726
-    bne @lava_chr_done
+    bcc @chr_active
+@exit_chr:
+    rts
+@overworld_chr:
+    jmp UpdateOverworldWaterChr6
+@chr_active:
+    jsr UpdateCastleFlameChr6
     lda $0707
     beq @encounter_surfaces
+    jsr IsSpriteCloudRoom6
+    bne :+
+    ldx #$05
+    lda #228                ; palace entrance cloud sprites ($C0-$C5) in R5
+    ldy $0707
+    cpy #$03
+    bcs @set_cloud_chr
+    ldx #$04
+    lda #229                ; town outdoor cloud sprites ($88-$8D) in R4 (bank 6 $80-$BF)
+@set_cloud_chr:
+    stx $64D5
+    stx $8000
+    sta $8001
+:
+    lda $0707
     cmp #$03
-    bcc @lava_chr_done
+    bcs :+
+    jmp TownQuicksandChr6
+:
     lda $076E
     and #$FE
+    cmp #$0A
+    bcc SceneryChrDone6
     cmp #$1A
-    bcs @lava_chr_done
-    ldx ROOM_HAS_LAVA
-    jmp @check_surface
+    bcc @cycle_surface
+    rts
 @encounter_surfaces:
     jsr UpdateGrassChr6
     lda $076E
@@ -577,16 +1149,16 @@ UpdateSceneryChr6:
     cmp #$02
     beq :+
     cmp #$04
-    bne @lava_chr_done
+    bne SceneryChrDone6
 :
-    ldx OW_HAS_WATER
-@check_surface:
-    beq @lava_chr_base
+@cycle_surface:
+    ; The variants differ only in liquid patterns $98/$99. Cycle even when
+    ; the room cache misses a liquid tile, including submerged swamp fill.
     lda $12
     lsr
     lsr
     and #$03
-    beq @lava_chr_base
+    beq SceneryChrBase6
     tax
     lda $076E
     and #$FE
@@ -597,41 +1169,51 @@ UpdateSceneryChr6:
     adc IRQ_TMP0
     asl
     clc
-    adc @lava_v_off,x
+    adc SceneryLavaVOff6,x
     ora #$80
-    bne @lava_chr_write
-@lava_chr_base:
+    bne SceneryChrWrite6
+SceneryChrBase6:
     lda $076E
     and #$FE
     asl
     asl
     ora #$06
-@lava_chr_write:
+SceneryChrWrite6:
     ldx #$01
     stx $64D5
     stx $8000
     sta $8001
     sta LAVA_CHR_BANK       ; expose active R1 bank for test verification
-@lava_chr_done:
+SceneryChrDone6:
     rts
-@lava_v_off:
+SceneryLavaVOff6:
     .byte $00, $00, $02, $04
+QuicksandBanks6:
+    .byte 146, 148, 150, 152
 
 ; Select a pre-bent tip tile during VBlank. The rest of R0, including the
 ; bottom halves of the sprigs, is identical in every phase.
+; West Hyrule clouds drift right-to-left (lead left); East Hyrule drifts left-to-right (lead right).
 UpdateGrassChr6:
     lda OW_HAS_GRASS
     beq @done
-    lda $076E
-    and #$FE
-    cmp #$02
-    bne @done
     lda $12
+    lsr
     lsr
     lsr
     lsr
     and #$07
     tax
+    lda $076E
+    and #$FE
+    cmp #$02
+    beq @write_grass
+    cmp #$04
+    bne @done
+    txa
+    ora #$08
+    tax
+@write_grass:
     lda @wind_bank,x
     ldx #$00
     stx $64D5
@@ -640,8 +1222,237 @@ UpdateGrassChr6:
 @done:
     rts
 @wind_bank:
-    .byte 12, 206, 208, 206, 12, 210, 212, 210
+    .byte 12, 210, 212, 210, 12, 206, 208, 206
+    .byte 20, 246, 248, 246, 20, 250, 252, 250
 
+.segment "BANK6"
+; Shimmer $52/$53 flame sprites in R3 during VBlank across North Palace
+; ($0707=0, $0706=0, $0561=0, $076E=$02 -> bank 9) and palaces ($0707>=3,
+; $076E in {$0A,$0C,$0E,$12,$14,$18} -> bank 9; $16 -> bank 89).
+UpdateCastleFlameChr6:
+    lda $0707
+    bne @palace
+    lda $0706
+    ora $0561
+    bne @done
+    lda $076E
+    and #$FE
+    cmp #$02
+    bne @done
+    ldy #$00
+    beq @apply
+@palace:
+    cmp #$03
+    bcc @done
+    lda $076E
+    and #$FE
+    cmp #$0A
+    bcc @done
+    cmp #$1A
+    bcs @done
+    cmp #$10
+    beq @done
+    ldy #$00
+    cmp #$16
+    bne @apply
+    iny
+@apply:
+    lda $12
+    lsr
+    lsr
+    and #$07
+    beq @base
+    clc
+    adc @var_base,y
+    bne @write
+@base:
+    lda @base_bank,y
+@write:
+    ldx #$03
+    stx $64D5
+    stx $8000
+    sta $8001
+@done:
+    rts
+@base_bank:
+    .byte 9, 89
+@var_base:
+    .byte 213, 220
+
+; Gently ripple overworld water/lava tile $6E on R0 during VBlank ($0736 = 5).
+; Base R0 is 1KB banks 68/69 (4KB bank 17); variants live in 230/232/234/236.
+UpdateOverworldWaterChr6:
+    lda $12
+    lsr
+    lsr
+    lsr
+    lsr
+    and #$07
+    tax
+    lda @water_bank,x
+    ldx #$00
+    stx $64D5
+    stx $8000
+    sta $8001
+    rts
+@water_bank:
+    .byte 68, 230, 232, 230, 68, 234, 236, 234
+
+.segment "BANK6_HAZE"
+
+; Title lava shimmer: swap R0 (BG tiles $00-$7F) between four rippled copies of
+; 1 KB banks 4/5. Lava tiles $68-$6A and the lava behind forest tiles $6D-$70
+; animate together. Entered from the bank-5
+; title NMI stub at $A5EE (hooked at $A682, before the sound driver) so the write
+; lands in VBlank. Title only ($0100 bit 6 clear). Once Start is pressed the
+; next NMI restores base R0 bank 4 for the file select screen.
+TITLE_LAVA_DIRTY = $6477
+.export TitleLavaChr6
+TitleLavaChr6:
+    bit $0100
+    bvs @done
+    lda $0726
+    bne @restore
+    lda $0736
+    cmp #$03
+    bcc @restore
+    lda $12
+    lsr
+    lsr
+    lsr
+    and #$03
+    tax
+    lda @lava_bank,x
+    ldx #$01
+    stx TITLE_LAVA_DIRTY
+@write:
+    ldx #$00
+    stx $64D5
+    stx $8000
+    sta $8001
+@done:
+    lda #$05
+    jmp $FFCC
+@restore:
+    lda TITLE_LAVA_DIRTY
+    beq @done
+    lda #$00
+    sta TITLE_LAVA_DIRTY
+    lda #$04
+    bne @write
+@lava_bank:
+    .byte 238, 240, 242, 244
+
+.segment "BANK6"
+; Warm red emphasis ($2001 bit 5) over the bottom lava rows (scanline 207+)
+; without altering X scroll so adjacent bricks and ledges stay rock-solid.
+LavaHazeSetup6:
+    lda ROOM_HAS_LAVA
+    beq @done
+    lda #207
+    jsr SetDeltaLine6
+    lda IRQ_X
+    sta IRQ_X,y
+    lda IRQ_CTRL
+    sta IRQ_CTRL,y
+    lda $FE
+    ora #$20
+    sta IRQ_MASK,y
+    iny
+@done:
+    jmp CheckDarkBarbaLetterbox6
+.segment "BANK6_PAD"
+; All three Saria street rooms use the same native town graphics ($076E=$06).
+; The $7F liquid metatile picks palette 1 as each nametable column is drawn.
+TownQuicksandChr6:
+    lda $0707
+    cmp #$01
+    bne @not_saria
+    lda $056B
+    cmp #$02
+    bne @not_saria
+    lda $0561
+    cmp #$06
+    bcc @not_saria
+    cmp #$09
+    bcs @not_saria
+    lda $12
+    lsr
+    lsr
+    and #$03
+    tax
+    lda QuicksandBanks6,x
+    jmp SceneryChrWrite6
+@not_saria:
+    jmp SceneryChrBase6
+
+; In the Saria streets, put the last two tail sprites behind the villagers.
+; The head, main body, and shout slots keep their existing priority.
+.segment "BANK6_OAM"
+SariaTipPriority6:
+    lda $0707
+    cmp #$01
+    bne @done
+    lda $0561
+    cmp #$06
+    bcc @done
+    cmp #$09
+    bcs @done
+    lda $6559
+    cmp #TRAIL_TIP
+    bne @done
+    jmp SwapSariaTips6
+@done:
+    rts
+
+.segment "BANK6_PAD"
+SwapSariaTips6:
+    ldx #$07
+@swap:
+    lda $6558,x
+    tay
+    lda $65F8,x
+    sta $6558,x
+    tya
+    sta $65F8,x
+    dex
+    bpl @swap
+    rts
+
+CheckP6GemOam6:
+    lda $0707
+    cmp #$04
+    bne @done
+    lda $056B
+    cmp #$06
+    bne @done
+    jmp CheckP6Room3A_6
+@done:
+    rts
+
+.segment "BANK6_HAZE"
+CheckP6Room3A_6:
+    lda $0561
+    cmp #$3A
+    bne :+
+    jmp RunBossMeter4From6
+:
+    rts
+
+.segment "BANK6"
+FinishBossOam6:
+    lda $0728
+    bne RunBossMeter4From6
+    jmp CheckP6GemOam6
+RunBossMeter4From6:
+    ; The bank-4 pass runs after the player and Dark Barba trail edits.
+    ; Its mapper return consumes our caller's address on the stack.
+    lda #>(DrawBossMeter4-1)
+    pha
+    lda #<(DrawBossMeter4-1)
+    pha
+    lda #$04
+    jmp $FFCC
 .segment "BANK5"
 .export TitleEndHook5
 TitleEndHook5:

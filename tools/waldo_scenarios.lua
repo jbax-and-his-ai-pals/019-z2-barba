@@ -1,11 +1,9 @@
--- Generate a 10-slot Where's Barba? save-state pack (especially Slots + key scenes).
+-- Generate a 10-slot Where's Barba? save-state pack for play/wheres-barba.nes.
 local mem = emu.memType.nesMemory
 local function r(a) return emu.read(a, mem) end
 local function w(a, v) emu.write(a, v, mem) end
 
 local pendingCapture = nil
-local pendingLoad = nil
-local ticketState = nil
 
 local function saveStateAndShot(id)
     local data = emu.createSavestate()
@@ -18,108 +16,95 @@ local function saveStateAndShot(id)
     pf:close()
 end
 
-local phase = 'boot'
 local f = 0
-
--- Phase 2 state (Slots + Castle)
-local rightHeld, downHeld, pressA = false, false, false
-local slotPhase = 'wait'
-local leftHeld, aHeld = false, false
-local aTimer = 0
+local stage = 'intro'
+local sf = 0
+local jumpToCastle = false
+local inp = {}
 local waitFrames = 0
-
-emu.addEventCallback(function()
-    if phase == 'boot' then
-        if f == 180 or f == 240 or f == 300 or f == 360 or f == 460 then
-            emu.setInput({start = true}, 0)
-        else
-            emu.setInput({}, 0)
-        end
-    elseif phase == 'cave' then
-        if f == 40 then
-            emu.setInput({start = true}, 0)
-        else
-            emu.setInput({}, 0)
-        end
-    elseif phase == 'subway' then
-        if f == 10 or f == 11 then
-            emu.setInput({a = true}, 0)
-        elseif pressA then
-            emu.setInput({a = true}, 0)
-        elseif aHeld or leftHeld then
-            emu.setInput({a = aHeld, left = leftHeld}, 0)
-        else
-            emu.setInput({right = rightHeld, down = downHeld}, 0)
-        end
-    else
-        emu.setInput({}, 0)
-    end
-end, emu.eventType.inputPolled)
+local aTimer = 0
+local slotPhase = 'wait_hand'
 
 emu.addMemoryCallback(function()
-    if pendingCapture then
+    if jumpToCastle then
+        jumpToCastle = false
+        w(0x0601, 5)
+        emu.setState({['cpu.pc'] = 0xE193})
+    elseif pendingCapture then
         local id = pendingCapture
         pendingCapture = nil
-        if id == '_ticket' then
-            ticketState = emu.createSavestate()
-        else
-            saveStateAndShot(id)
-        end
-    elseif pendingLoad then
-        local data = pendingLoad
-        pendingLoad = nil
-        emu.loadSavestate(data)
+        saveStateAndShot(id)
     end
 end, emu.callbackType.exec, 0x8000, 0xFFFF)
 
 emu.addEventCallback(function()
+    emu.setInput(inp, 0)
+end, emu.eventType.inputPolled)
+
+emu.addEventCallback(function()
     f = f + 1
-    if phase == 'boot' then
+    inp = {}
+    if stage == 'intro' then
+        if f == 180 or f == 240 or f == 300 or f == 360 or f == 460 then
+            inp = {start = true}
+        end
         if f == 280 then
             pendingCapture = 'title'
+        elseif f == 340 then
+            pendingCapture = 'skill-select'
         elseif f == 420 then
             pendingCapture = 'moon-ticket'
         elseif f == 1250 then
             pendingCapture = 'overworld-map'
         elseif f == 1450 then
             pendingCapture = 'train-station'
-        elseif f == 1455 then
-            local sf = assert(io.open(SUBWAY_STATE, 'rb'))
-            pendingLoad = sf:read('*a')
-            sf:close()
-            phase = 'subway'
-            f = 0
+        elseif f == 1460 then
+            jumpToCastle = true
+            stage = 'wait_castle'
+            sf = 0
         end
-    elseif phase == 'subway' then
-        if f >= 760 and f < 1000 then
-            local cx, cy = r(0x703), r(0x700)
-            rightHeld = (cx < 132)
-            downHeld = (cy < 80)
-            if not rightHeld and not downHeld and f < 950 then
-                pressA = (f % 15 == 0)
-            else
-                pressA = false
-            end
-        else
-            rightHeld, downHeld, pressA = false, false, false
-        end
-
-        if f == 760 then
+    elseif stage == 'wait_castle' then
+        sf = sf + 1
+        if sf == 900 then
             pendingCapture = 'castle'
-        elseif f == 1495 then
-            pendingCapture = 'slots-ready'
+            stage = 'solve_castle'
+            sf = 0
         end
-
+    elseif stage == 'solve_castle' then
+        sf = sf + 1
+        local cx, cy = r(0x703), r(0x700)
+        local scrollX = r(0x03) + (r(0x00) % 2) * 256
+        local step = math.floor(sf / 12)
+        local tx = r(0x718B) * 8 + 8 - scrollX + ((step % 3) - 1) * 4
+        local ty = r(0x718C) * 8 + 32 + ((math.floor(step / 3) % 3) - 1) * 4
+        if tx > 224 then tx = 224 elseif tx < 16 then tx = 16 end
+        if cx < tx - 1 then inp.right = true elseif cx > tx + 1 then inp.left = true end
+        if cy < ty - 1 then inp.down = true elseif cy > ty + 1 then inp.up = true end
+        if not inp.right and not inp.left and not inp.down and not inp.up and (sf % 6 == 0) then
+            inp.a = true
+        end
+        if r(0x0601) ~= 6 then
+            stage = 'wait_slots'
+            sf = 0
+        elseif sf > 600 then
+            error(string.format('Castle find timeout cx=%d cy=%d scrollX=%d tx=%d ty=%d b=(%d,%d)',
+                cx, cy, scrollX, tx, ty, r(0x718B), r(0x718C)))
+        end
+    elseif stage == 'wait_slots' then
+        sf = sf + 1
+        if sf == 735 then
+            pendingCapture = 'slots-ready'
+            stage = 'slots'
+            sf = 0
+        end
+    elseif stage == 'slots' then
+        sf = sf + 1
         if aTimer > 0 then
             aTimer = aTimer - 1
-            aHeld = (aTimer > 0)
-        else
-            aHeld = false
+            inp.a = (aTimer > 0)
         end
-        leftHeld = false
-
         local hx = r(0x703)
-        if f == 1500 then
+        if sf == 5 then
             aTimer = 4
             slotPhase = 'wait_hand'
         elseif slotPhase == 'wait_hand' and hx == 172 then
@@ -136,7 +121,7 @@ emu.addEventCallback(function()
             waitFrames = waitFrames - 1
             if waitFrames <= 0 then slotPhase = 'move_r2' end
         elseif slotPhase == 'move_r2' then
-            if hx > 112 then leftHeld = true else slotPhase = 'r2_aim' end
+            if hx > 112 then inp.left = true else slotPhase = 'r2_aim' end
         elseif slotPhase == 'r2_aim' and r(0x228) == 1 then
             aTimer = 4
             waitFrames = 20
@@ -148,7 +133,7 @@ emu.addEventCallback(function()
                 slotPhase = 'move_r1'
             end
         elseif slotPhase == 'move_r1' then
-            if hx > 48 then leftHeld = true else slotPhase = 'r1_aim' end
+            if hx > 48 then inp.left = true else slotPhase = 'r1_aim' end
         elseif slotPhase == 'r1_aim' and r(0x218) == 1 then
             aTimer = 4
             waitFrames = 25

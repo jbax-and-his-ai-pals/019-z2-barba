@@ -10,8 +10,11 @@ local base,done
 local lines,banks,patterns,hudPatterns
 local tips,roots,grassMismatch,splitMismatch,splitSamples
 local skyStart,skyEnd,groundStart,groundEnd
-local grassWind={0,1,2,1,0,-1,-2,-1}
+local eastWalk
+local grassWind={0,-1,-2,-1,0,1,2,1}
+local eastGrassWind={0,1,2,1,0,-1,-2,-1}
 local stillTip={0,0,0x08,0x08,0x10,0x10,0x10,0x10,0,0,0x18,0x18,0x30,0x30,0x30,0x30}
+local eastStillTip={0x20,0x20,0x40,0x00,0x0A,0x53,0xA6,0x04,0x00,0x00,0x20,0x22,0x40,0x23,0x24,0x41}
 local cases={
     {name='west-water-left',room=1,sky=true,water=true},
     {name='west-water-right',room=1,entry=0x13,sky=true,water=true},
@@ -22,7 +25,8 @@ local cases={
     {name='west-swamp',terrain=7,sky=true,water=true},
     {name='east-water-room-zero',region=2,room=0,entry=6,sky=true,water=true},
     {name='east-valley',region=2,room=2,entry=2,sky=true},
-    {name='east-road',region=2,room=0x39,entry=0x18,sky=true},
+    {name='east-road',region=2,room=0x39,entry=0x18,sky=true,grass=true},
+    {name='east-grass',region=2,terrain=5,sky=true,grass=true},
 }
 local function check(ok,msg)
     report:write((ok and 'PASS ' or 'FAIL ')..msg..'\n')
@@ -73,18 +77,43 @@ local function pattern(tile)
     return table.concat(bytes)
 end
 
-local function grassTip(shift)
+local function grassTip(shift,east)
+    local base=east and eastStillTip or stillTip
     local bytes={}
-    for i,pixels in ipairs(stillTip) do
+    for i,pixels in ipairs(base) do
         local row=(i-1)%8
-        local bend=(row==2 or row==3) and shift
-            or ((row==4 or row==5) and (shift>0 and 1 or (shift<0 and -1 or 0)) or 0)
+        local bend=0
+        if east then
+            if row<=1 then bend=shift
+            elseif row<=4 then bend=(shift>0 and 1 or (shift<0 and -1 or 0)) end
+        else
+            bend=(row==2 or row==3) and shift
+                or ((row==4 or row==5) and (shift>0 and 1 or (shift<0 and -1 or 0)) or 0)
+        end
         bytes[i]=string.char(bend>=0 and pixels>>bend or pixels<<-bend)
     end
     return table.concat(bytes)
 end
 
-emu.addEventCallback(function() emu.setInput(newGameInput(frame),0) end,emu.eventType.inputPolled)
+local function skyTiles(split)
+    local tiles={}
+    for page=0,1 do
+        for offset=0x80,0x80+(split-31)*2-1 do
+            tiles[#tiles+1]=string.char(emu.read(0x2000+page*0x400+offset,ppu))
+        end
+    end
+    return table.concat(tiles)
+end
+
+emu.addEventCallback(function()
+    local input=newGameInput(frame)
+    if eastWalk then
+        input.right=eastWalk.direction==1
+        input.left=eastWalk.direction==-1
+        input.b=age<325 and age%14<7
+    end
+    emu.setInput(input,0)
+end,emu.eventType.inputPolled)
 emu.addMemoryCallback(function()
     if done or frame<1050 or age~=0 then return end
     if not base then base=emu.createSavestate() end
@@ -143,26 +172,33 @@ emu.addEventCallback(function()
         end
         if scene.grass then
             -- NMI chooses the CHR phase before the game increments $12.
-            local shift=grassWind[((r(0x12)-1)>>3&7)+1]
+            local east=scene.region==2
+            local idx=((r(0x12)-1)>>4&7)+1
+            local shift=(east and eastGrassWind or grassWind)[idx]
             local tip=pattern(0x4E)
             tips[tip]=true
             roots[pattern(0x4F)]=true
-            if tip~=grassTip(shift) or countIrq~=2 then grassMismatch=grassMismatch+1 end
+            if tip~=grassTip(shift,east) or countIrq~=2 then grassMismatch=grassMismatch+1 end
         end
         banks[r(0x64EF)]=true
         patterns[pattern(0x98)..pattern(0x99)]=true
         hudPatterns[pattern(0xE7)]=true
     end
-    if age==135 then
+    if age==195 then
         check(active and r(0x706)==(scene.region or 0) and (not scene.room or r(0x561)==scene.room),
             scene.name..' loaded into live gameplay')
         checkMap(scene)
         check(lines[0]==31 and (sky==0 or lines[1]==sky),scene.name..' HUD and sky IRQs fire on their programmed lines')
         if scene.sky then
-            local skyDelta=(skyEnd-skyStart)%512
-            check(skyDelta>=8 and skyDelta<=11 and groundStart==groundEnd,
-                string.format('%s clouds drift slowly while idle (sky %d->%d, delta=%d, ground %d->%d)',
-                    scene.name,skyStart,skyEnd,skyDelta,groundStart,groundEnd))
+            -- Cloud motion on screen is opposite to the sky scroll.
+            local cloudDelta=(skyStart-skyEnd+256)%512-256
+            local east=scene.region==2
+            local distance=east and cloudDelta or -cloudDelta
+            check(distance>=6 and distance<=10 and groundStart==groundEnd,
+                string.format('%s clouds drift %s while idle (screen delta=%d, ground %d->%d)',
+                    scene.name,east and 'right' or 'left',cloudDelta,groundStart,groundEnd))
+            local driftPage=east and 1 or 0
+            check(r(0x64FD)==driftPage,scene.name..' drift wraps across the active sky nametables')
         end
         if scene.grass then
             check(grass==1 and count(tips)==5 and count(roots)==1 and grassMismatch==0
@@ -175,11 +211,89 @@ emu.addEventCallback(function()
         else
             check(grass==0,scene.name..' excludes mixed or plant-free rows from grass sway')
         end
-        check((r(0x64F1)~=0)==(scene.water==true) and count(banks)==(scene.water and 4 or 1)
-            and count(patterns)>=(scene.water and 2 or 1) and count(hudPatterns)==1,
+        check(count(banks)==4 and count(patterns)>=(scene.water and 2 or 1)
+            and count(hudPatterns)==1,
             string.format('%s liquid uses %d R1 banks and %d surface patterns, with HUD art stable',
                 scene.name,count(banks),count(patterns)))
         report:flush()
-        age=0
+        if scene.name=='east-grass' then
+            eastWalk={direction=1,tiles=skyTiles(sky),badTiles=0,badSplits=0,frames=0,turned=false,
+                trailLeft=0,trailRight=0,tipFrames=0,bends=0,badTrail=0}
+        else
+            age=0
+        end
+    end
+    if eastWalk and age>195 then
+        if active then
+            -- Verify fresh splits every frame, including during sampled combat audio.
+            if lines[0]~=31 or lines[1]~=sky then eastWalk.badSplits=eastWalk.badSplits+1 end
+            eastWalk.frames=eastWalk.frames+1
+            -- The trail sits ahead of enemies in $50-$5C; displaced enemy
+            -- sprites move to free entries, so no sprite may be lost.
+            local near,outer,tip,far=0x6550,0x6554,0x6558,0x655C
+            local function shown(slot,tile) return r(slot)<0xF0 and r(slot+1)==tile end
+            if shown(near,0x15) then
+                local facesRight=r(0x651A)&0x40~=0
+                local x=r(0x651B)+(facesRight and -24 or 16)
+                if facesRight then eastWalk.trailRight=eastWalk.trailRight+1
+                else eastWalk.trailLeft=eastWalk.trailLeft+1 end
+                local pose=r(0x5FA)
+                if pose<6*9 or pose==12*9 then
+                    eastWalk.bends=eastWalk.bends+1
+                    if r(0x6519)~=0x35 or r(facesRight and 0x6515 or 0x651D)~=0x37
+                        or r(facesRight and 0x651C or 0x6514)~=0xF8 then
+                        eastWalk.badTrail=eastWalk.badTrail+1
+                    end
+                end
+                if r(near+3)~=x+(facesRight and 8 or 0) or not shown(outer,0x3F) or r(outer)~=r(near)
+                    or r(outer+3)~=x+(facesRight and 0 or 8) then
+                    eastWalk.badTrail=eastWalk.badTrail+1
+                end
+                if shown(tip,0x45) then
+                    eastWalk.tipFrames=eastWalk.tipFrames+1
+                    if r(tip+3)~=x+(facesRight and -8 or 16) then eastWalk.badTrail=eastWalk.badTrail+1 end
+                    if shown(far,0x31) and (r(far)~=r(tip) or r(far+3)~=x+(facesRight and -16 or 24)) then
+                        eastWalk.badTrail=eastWalk.badTrail+1
+                    end
+                end
+                -- The bend hides the old front seam in bend poses.
+                local seam=(pose<6*9 or pose==12*9) and r(facesRight and 0x21C or 0x214)<0xF0 and 1 or 0
+                local nativeShown,shadowShown=-seam,0
+                for slot=0,0xFC,4 do
+                    if r(0x200+slot)<0xF0 and r(0x201+slot)~=0xF5 then nativeShown=nativeShown+1 end
+                    if r(0x6500+slot)<0xF0 then shadowShown=shadowShown+1 end
+                end
+                local pieces=0
+                for _,piece in ipairs({{near,0x15},{outer,0x3F},{tip,0x45},{far,0x31}}) do
+                    if shown(piece[1],piece[2]) then pieces=pieces+1 end
+                end
+                if shadowShown-pieces~=nativeShown then eastWalk.badTrail=eastWalk.badTrail+1 end
+            end
+            w(0x554,255) -- Keep the camera test running through enemy contact.
+            if age>=325 then
+                -- Finish the traversal after exercising the IRQs with live combat.
+                for i=0,5 do w(0xB6+i,0);w(0x1A+i,0) end
+            end
+            if skyTiles(sky)~=eastWalk.tiles then eastWalk.badTiles=eastWalk.badTiles+1 end
+            local camera=r(0x72A)*256+r(0x72C)
+            if camera>=500 then eastWalk.direction=-1;eastWalk.turned=true end
+            if eastWalk.turned and camera<=245 then eastWalk.direction=0 end
+        end
+        lines={}
+        if age==735 then
+            check(active and eastWalk.turned and eastWalk.direction==0,
+                'east-grass camera crossed the streaming seam and returned')
+            check(eastWalk.badTiles==0,string.format(
+                'east-grass cloud tiles survive ground column updates (%d changed frames)',eastWalk.badTiles))
+            check(eastWalk.frames==540 and eastWalk.badSplits==0,string.format(
+                'east-grass HUD and sky splits stay stable while walking and firing (%d/%d wrong frames)',
+                eastWalk.badSplits,eastWalk.frames))
+            check(eastWalk.trailLeft>0 and eastWalk.trailRight>0 and eastWalk.tipFrames>0
+                and eastWalk.bends>0 and eastWalk.badTrail==0,string.format(
+                'east-grass trail slots and body bend (%d left, %d right, %d tips, %d bends, %d mismatches)',
+                eastWalk.trailLeft,eastWalk.trailRight,eastWalk.tipFrames,eastWalk.bends,eastWalk.badTrail))
+            eastWalk=nil
+            age=0
+        end
     end
 end,emu.eventType.endFrame)

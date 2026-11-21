@@ -17,8 +17,13 @@ end
 
 local sawTitleLetterbox=false
 local sawBridgeParallax=false
+local sawHblankMaskWrite=true
+local minDot,maxDot=999,-1
 local sawPalaceNoLava=false
 local sawLavaShimmer=false
+local sawLavaHaze=false
+local hazeX1={}
+local hazeX2={}
 local shimmerValues={}
 local sawOam0Free=false
 local sawHud31=false
@@ -31,6 +36,17 @@ emu.addMemoryCallback(function()
     local st=r(0x64D6)
     irqLines[st]=s['ppu.scanline']
 end,emu.callbackType.exec,0xD4BE)
+emu.addMemoryCallback(function()
+    local s=emu.getState()
+    local dot=s['ppu.cycle']
+    local mask=r(0x64E4+r(0x64D6))
+    if mask~=r(0xFE) then
+        if dot<minDot then minDot=dot end
+        if dot>maxDot then maxDot=dot end
+        -- STA $2001 writes on its 4th cycle (+9..12 dots); require write cycle in HBlank (256..340).
+        if dot+9<256 or dot+12>340 then sawHblankMaskWrite=false end
+    end
+end,emu.callbackType.exec,0xC197)
 
 emu.addEventCallback(function()
     local b=newGameInput(frame)
@@ -98,16 +114,21 @@ emu.addEventCallback(function()
         w(0x736,0);w(0x73D,0);w(0x726,1)
     end
     if frame>=1690 and frame<1740 and r(0x736)==11 and r(0x726)==0 then
-        if r(0x64E8)==1 and r(0x64D7)==1 then
+        if r(0x64E8)==1 and r(0x64D7)==2 then
             sawLavaShimmer=true
             shimmerValues[r(0x64EF)]=true
+            if irqLines[1]==207 and r(0x64DD)==r(0xFD) and (r(0x64E5)&0x20)~=0 then
+                sawLavaHaze=true
+            end
         end
     end
     if frame==1740 then
         local distinct=0
         for _ in pairs(shimmerValues)do distinct=distinct+1 end
         check(sawLavaShimmer and distinct==4,
-            string.format('palace lava room animates 4 R1 CHR banks without scroll splits (distinct=%d)', distinct))
+            string.format('palace lava room animates 4 R1 CHR banks (distinct=%d)', distinct))
+        check(sawLavaHaze,
+            'palace lava room arms 207 red-emphasis split without X scroll wobble')
     end
 
     -- Phase 5: Dark Barba entrance letterbox ($0707=5, $B6=1, $A1=$23, $0505>0)
@@ -138,6 +159,7 @@ emu.addEventCallback(function()
     if frame==2020 then
         check(sawEndingLetterbox,'ending enables bottom letterbox bar at line 215')
         check(sawHud31,'HUD split fires on scanline 31')
+        check(sawHblankMaskWrite,string.format('tinted/letterbox $2001 writes land in HBlank (dots %d..%d)',minDot,maxDot))
         check(sawOam0Free,'OAM slot 0 ($0200) is freed ($F8 when unused)')
         report:write('RESULT '..(fails==0 and 'PASS' or 'FAIL')..'\n')
         report:close()

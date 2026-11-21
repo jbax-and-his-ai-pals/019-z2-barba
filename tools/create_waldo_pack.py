@@ -13,21 +13,20 @@ from prepare_player import apply_play_defaults
 
 ROOT = Path(__file__).resolve().parents[1]
 ROM_PATH = ROOT / 'play/wheres-barba.nes'
-SUBWAY_STATE = ROOT / 'build/Subway Complete.mss'
 PACK_DIR = ROOT / 'build/waldo-pack'
 PROFILE_DIR = ROOT / 'build/mesen-scenarios/wheres-barba'
 
 SLOTS = [
+    ('title', "Title Screen (WHERE'S BARBA?)", 'Postcard title screen with Barba stamp portrait.'),
+    ('skill-select', 'Skill Select (Wyrmling Cursor)', '16x16 animated Wyrmling cursor on the Skill Select screen.'),
+    ('moon-ticket', 'One Ticket to the Moon', 'Peeking Barba head above the Moon ticket.'),
+    ('overworld-map', 'Overworld Map (Walking Barba)', '48x48 full-body Barba walking across the Overworld Map to Train Station.'),
+    ('train-station', 'Level 1: Train Station', 'Search the Train Station for hidden 16x16 Barba.'),
+    ('castle', 'Level 6: The Castle', 'Search the Castle courtyard for hidden 16x16 Barba right before Launch Pad.'),
     ('slots-ready', 'Slots: Ready to Spin', 'Press A on the green button to spin all three reels.'),
     ('slots-two-barbas', 'Slots: 2 Barbas Locked', 'Reels 2 and 3 are locked on Barba. Time A on Reel 1 for the 3-Barba Moon launch!'),
     ('slots-jackpot', 'Slots: 3-Barba Jackpot', 'All three Barbas matched! Watch the rocket launch to the Moon.'),
     ('moon-ending', 'Moon Ending', 'Barba on the Moon ending sequence.'),
-    ('title', "Title Screen (WHERE'S BARBA?)", 'Postcard title screen with Barba stamp portrait.'),
-    ('moon-ticket', 'One Ticket to the Moon', 'Peeking Barba head above the Moon ticket.'),
-    ('overworld-map', 'Overworld Map (Walking Barba)', '16x48 Barba walking across the Overworld Map to Train Station.'),
-    ('train-station', 'Level 1: Train Station', 'Search the Train Station for hidden 16x16 Barba (bottom-right).'),
-    ('subway-complete', 'Level 5: Subway Complete', 'Press A once to finish the Subway pipe puzzle and advance.'),
-    ('castle', 'Level 6: The Castle', 'Barba in the Castle courtyard right before Launch Pad.'),
 ]
 
 
@@ -35,8 +34,6 @@ def create(force: bool = False) -> dict:
     if not ROM_PATH.is_file():
         import build_waldo
         build_waldo.build()
-    if not SUBWAY_STATE.is_file():
-        raise SystemExit(f'Missing source state: {SUBWAY_STATE}')
 
     digest = hashlib.sha256(ROM_PATH.read_bytes()).hexdigest()
     manifest_path = PACK_DIR / 'manifest.json'
@@ -46,13 +43,9 @@ def create(force: bool = False) -> dict:
             return manifest
 
     PACK_DIR.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(SUBWAY_STATE, PACK_DIR / 'subway-complete.mss')
 
     scenario = ROOT / 'build/generate-waldo-states.lua'
-    prefix = (
-        f'PACK_DIR = {json.dumps(PACK_DIR.as_posix())}\n'
-        f'SUBWAY_STATE = {json.dumps(SUBWAY_STATE.as_posix())}\n'
-    )
+    prefix = f'PACK_DIR = {json.dumps(PACK_DIR.as_posix())}\n'
     scenario.write_text(prefix + (ROOT / 'tools/waldo_scenarios.lua').read_text(encoding='utf-8'), encoding='utf-8')
     if run(scenario, ROM_PATH, 60):
         raise SystemExit('Where\'s Barba state generation failed; see build/generate-waldo-states-error.txt')
