@@ -23,3 +23,6 @@ __pycache__/
 .env
 .env.*
 !.env.example
+
+# stray assembler outputs (real ones live in build/)
+/*.bin
