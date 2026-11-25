@@ -24,13 +24,14 @@ end
 local cur={nmis=0,nmi=0,proj=0,extra=0,coll=0,native=0,blocks=0}
 local function cycles()return emu.getState()['cpu.cycleCount']end
 local nmiStart,projStart,extraStart
+local L=LABELS or {}
+local nmiRti=L.NmiRti or 0xC1B2
 emu.addMemoryCallback(function()nmiStart=cycles();cur.nmis=cur.nmis+1 end,emu.callbackType.exec,0xC07B)
 emu.addMemoryCallback(function()
     if nmiStart then cur.nmi=cur.nmi+cycles()-nmiStart;nmiStart=nil end
-end,emu.callbackType.exec,0xC1B5)
-local L=LABELS or {}
+end,emu.callbackType.exec,nmiRti)
 emu.addMemoryCallback(function()
-    local st=emu.getState();if (st['mapper.prgReg'] or ((st['mapper.registers6'] or -1)//2))~=0 then return end
+    local st=emu.getState();if (st['mapper.prgReg'] or ((st['mapper.mmc3Registers6'] or -1)//2))~=0 then return end
     local x=st['cpu.x'];if x<=1 and (r(0x5FC+x)&0xC0)==0xC0 then waves=waves+1 end
 end,emu.callbackType.exec,L.BarbaVolleyPlaced)
 -- Final RTS of each routine is the byte before the next exported label.

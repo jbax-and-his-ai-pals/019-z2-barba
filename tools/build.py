@@ -1,6 +1,7 @@
 """Build Barba Edition from a verified local ROM, preserving all unpatched bytes."""
 from __future__ import annotations
 import argparse
+import contextlib
 import hashlib
 import shutil
 import sqlite3
@@ -15,7 +16,7 @@ from assets import (ASH_TILES, CASTLE_FIRE_BANK, CASTLE_FIRE_TILE_SHA256,
                     BREATH_ICON_BANKS, BREATH_ICON_SHA256, BREATH_ICON_TILE,
                     compile_assets, compile_breath_icon, compile_castle_fire, compile_ending_fire,
                     compile_castle_shout_glyphs, compile_file_select_doll,
-                    compile_shout_glyphs, compile_text_glyphs, compile_title_logo,
+                    compile_shout_glyphs, compile_souls_bar_chr, compile_text_glyphs, compile_title_logo,
                     compile_title_shore, compile_town_fire, validate_layout)
 from bps import apply, encode
 from boss_art import compile_lava_link
@@ -34,8 +35,18 @@ class Overlay:
         self.source = source
         self.target = bytearray(source)
         self.ranges: list[dict] = []
+        self._group: str = 'barba_core'
 
-    def put(self, offset: int, data: bytes, expected: bytes, name: str) -> None:
+    @contextlib.contextmanager
+    def group(self, name: str):
+        prev = self._group
+        self._group = name
+        try:
+            yield
+        finally:
+            self._group = prev
+
+    def put(self, offset: int, data: bytes, expected: bytes, name: str, *, group: str | None = None) -> None:
         if len(data) != len(expected) or not 0 <= offset <= len(self.source)-len(data):
             raise ValueError(f'Invalid patch length/location: {name}')
         if self.source[offset:offset+len(data)] != expected:
@@ -45,13 +56,15 @@ class Overlay:
                 raise ValueError(f'Overlapping patches: {name} and {previous["name"]}')
         self.target[offset:offset+len(data)] = data
         self.ranges.append({'name': name, 'offset': offset, 'length': len(data),
-                            'sha256': hashlib.sha256(data).hexdigest()})
+                            'sha256': hashlib.sha256(data).hexdigest(),
+                            'group': group or self._group})
 
-    def prg(self, bank: int, address: int, data: bytes, expected: bytes, name: str) -> None:
-        self.put(prg_offset(bank, address), data, expected, name)
+    def prg(self, bank: int, address: int, data: bytes, expected: bytes, name: str, *, group: str | None = None) -> None:
+        self.put(prg_offset(bank, address), data, expected, name, group=group)
 
 
-def assemble(output: Path, sampled_roar: bool = False, waldo_portal: bool = False) -> dict[str, int]:
+def assemble(output: Path, sampled_roar: bool = False, waldo_portal: bool = False,
+             souls_boss_meter: bool = False) -> dict[str, int]:
     def find(name: str) -> str:
         local = ROOT / f'.tools/cc65/bin/{name}.exe'
         result = str(local) if local.exists() else shutil.which(name)
@@ -61,6 +74,8 @@ def assemble(output: Path, sampled_roar: bool = False, waldo_portal: bool = Fals
     defines = ['-D', 'SAMPLED_ROAR=1'] if sampled_roar else []
     if waldo_portal:
         defines += ['-D', 'WALDO_PORTAL=1']
+    if souls_boss_meter:
+        defines += ['-D', 'SOULS_BOSS_METER=1']
     subprocess.run([find('ca65'), str(ROOT/'src/barba.asm'), '-I', str(ROOT/'src'), '-I', str(output.resolve()),
                     *defines, '-g', '-o', 'barba.o'], cwd=output, check=True)
     subprocess.run([find('ld65'), '-C', str(ROOT/'src/barba.cfg'), 'barba.o',
@@ -73,8 +88,10 @@ def assemble(output: Path, sampled_roar: bool = False, waldo_portal: bool = Fals
     return labels
 
 
-def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'roms/roar.wav',
-          waldo_portal: bool = True, *, release: str | None = None) -> dict:
+def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'assets/roar.wav',
+          waldo_portal: bool = True, boss_meter: str = 'souls', *,
+          game_over_portrait: bool = True, game_over_laughs: bool = True,
+          release: str | None = None) -> dict:
     source = load_source(source_path)
     if output.resolve() == source_path.parent.resolve():
         raise ValueError('Output must not be the source ROM directory')
@@ -89,7 +106,7 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
     # Asset compilation emits the tile-index include consumed by ca65. Complete
     # it before assembling so the ROM and renderer always share one layout.
     mapping, graphics, ow, _ = compile_assets(ROOT, source_path)
-    labels = assemble(output, bool(title_roar_wav), waldo_portal)
+    labels = assemble(output, bool(title_roar_wav), waldo_portal, boss_meter == 'souls')
     overlay = Overlay(source)
     # FarCall0 identifies the ACTUAL mapped bank without touching the native
     # mapper path (and without mistaking the area-bank variable for a shadow).
@@ -98,11 +115,27 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
         offset = prg_offset(bank, 0x8506 if bank < 7 else 0xC506)
         if source[offset] != expected:
             raise ValueError(f'FarCall0 bank fingerprint changed: {bank}')
-    for filename, bank, address in [('code', 0, 0xAA40), ('bank0-ow', 0, 0xA89E), ('bank0-tail', 0, 0xBFE0),('lava', 7, 0xD39A), ('terrain', 7, 0xFF4C), ('town', 3, 0xB803), ('gateway', 7, 0xFEAA), ('bank6', 6, 0xAC09), ('bank6-cloud', 6, 0x8900), ('bank6-pad', 6, 0x8DB0), ('bank6-haze', 6, 0x9DA8), ('bank5', 5, 0xBDE0), ('bank1', 1, 0x9EB9), ('bank3-sign', 3, 0x9D0A), ('bank3-pad', 3, 0x9134), ('bank3-dlg', 3, 0x8BB1), ('bank4-spk', 4, 0x9EE0), ('bank4-spk2', 4, 0xA539), ('bank4-spk3', 4, 0xA80F)]:
+    segment_groups = {
+        'lava': 'platform', 'terrain': 'platform', 'gateway': 'platform',
+        'bank6': 'platform', 'bank6-pad': 'platform',
+        'town': 'town_chaos', 'bank2-smoke': 'town_chaos', 'bank3-sign': 'town_chaos',
+        'bank3-pad': 'town_chaos', 'bank3-dlg': 'town_chaos',
+        'bank6-cloud': 'scanline_scenery', 'bank6-haze': 'scanline_scenery',
+        'bank4-spk': 'scanline_scenery', 'bank4-spk2': 'scanline_scenery',
+        'bank4-spk3': 'scanline_scenery', 'bank4-spk4': 'scanline_scenery',
+    }
+    for filename, bank, address in [('code', 0, 0xAA40), ('bank0-ow', 0, 0xA89E), ('bank0-tail', 0, 0xBFE0),('lava', 7, 0xD39A), ('terrain', 7, 0xFF4C), ('town', 3, 0xB803), ('gateway', 7, 0xFEAA), ('bank6', 6, 0xAC09), ('bank6-cloud', 6, 0x8900), ('bank6-pad', 6, 0x8DB0), ('bank6-haze', 6, 0x9DA8), ('bank5', 5, 0xBDE0), ('bank1', 1, 0x9EB9), ('bank2-smoke', 2, 0xA933), ('bank3-sign', 3, 0x9D0A), ('bank3-pad', 3, 0x9134), ('bank3-dlg', 3, 0x8BB1), ('bank4-spk', 4, 0x9EE0), ('bank4-spk2', 4, 0xA539), ('bank4-spk3', 4, 0xA80F), ('bank4-spk4', 4, 0xA7E5)]:
         data = (output/f'barba-{filename}.bin').read_bytes()
-        overlay.prg(bank, address, data, b'\xFF'*len(data), f'New {filename} routines')
+        expected = b'\xFF'*len(data)
+        if filename == 'code' and len(data) > 0x1530:
+            expected = b'\xFF'*0x1530 + bytes.fromhex('78d8a2008e00')[:len(data)-0x1530]
+        overlay.prg(bank, address, data, expected, f'New {filename} routines',
+                    group=segment_groups.get(filename, 'barba_core'))
+    if boss_meter == 'souls':
+        souls_bin = (output/'barba-bank1-souls.bin').read_bytes()
+        overlay.prg(1, 0xA933, souls_bin, b'\xFF'*len(souls_bin), 'Dark Souls bottom boss bar (Bank 1)', group='boss_meters')
     scene_oam = (output/'barba-bank6-oam.bin').read_bytes()
-    overlay.prg(6, 0x878C, scene_oam, b'\xFF'*len(scene_oam), 'Room sprite priority and boss meters')
+    overlay.prg(6, 0x878C, scene_oam, b'\xFF'*len(scene_oam), 'Room sprite priority and boss meters', group='boss_meters')
     palace_roar = (output/'barba-palace-roar.bin').read_bytes()
     overlay.prg(4, 0x8EC3, palace_roar, b'\xFF'*len(palace_roar), 'Palace roar choreography and boss meters')
     palace_shake = (output/'barba-palace-shake.bin').read_bytes()
@@ -120,19 +153,29 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
         data = (output/f'barba-{filename}.bin').read_bytes()
         original = bytes.fromhex(expected)
         overlay.prg(0, address, data + original[len(data):], original, f'METEOR in dead vanilla {filename}')
-    def hook(bank: int, address: int, label: str, opcode: int, expected: str, pad: int = 0):
+    def hook(bank: int, address: int, label: str, opcode: int, expected: str, pad: int = 0, *, group: str | None = None):
         dest = labels[label]
         data = bytes([opcode, dest & 255, dest >> 8]) + b'\xEA'*pad
-        overlay.prg(bank, address, data, bytes.fromhex(expected), label+' hook')
+        overlay.prg(bank, address, data, bytes.fromhex(expected), label+' hook', group=group)
     hook(0, 0x877C, 'BarbaOverworld', 0x20, 'a2 0e a0 00', 1)
     hook(4, 0x9B47, 'RoarGemEnd', 0x4C, 'ac fb 07')
     hook(4, 0xB122, 'LavaLinkIntro', 0x20, '20 de b1')
     hook(0, 0x8518, 'BarbaOverworldA', 0x4C, 'ad 89 07')
     hook(0, 0x922A, 'ThunderHit', 0x20, '20 26 e7')
     hook(7, 0xD52D, 'BarbaDisplay', 0x20, '20 f0 eb')
-    death_draw = labels['BarbaDeathDisplay'].to_bytes(2, 'little')
-    overlay.prg(7, 0xC9EE, bytes.fromhex('a9 03 20 cc ff 20') + death_draw + b'\xea\xea',
+    hook(0, 0x91A1, 'BarbaDisplay', 0x4C, '4c f0 eb')
+    hook(0, 0x92DE, 'BarbaDisplay', 0x4C, '4c f0 eb')
+    death_draw = labels['BarbaDisplay'].to_bytes(2, 'little')
+    overlay.prg(7, 0xC9EE, bytes.fromhex('20 c5 ff a9 0a 85 80 20') + death_draw,
                 bytes.fromhex('20 c5 ff a9 0a 85 80 20 f0 eb'), 'Fatal-hit transition renderer')
+    lives_text = labels['BarbaLivesText'].to_bytes(2, 'little')
+    overlay.prg(7, 0xC3BE, bytes.fromhex('a9 01 20 cc ff 20') + lives_text + bytes.fromhex('4c dd c3'),
+                bytes.fromhex('a0 13 b9 58 69 99 02 03 88 10 f7'),
+                'Lives-remaining screen tightly wrapped text around Barba midsection')
+    lives_draw = labels['BarbaLivesDisplay'].to_bytes(2, 'little')
+    overlay.prg(7, 0xC405, bytes.fromhex('a9 03 20 cc ff 4c') + lives_draw + b'\xea\xea\xea',
+                bytes.fromhex('85 c8 85 13 85 11 85 90 4c 02 ec'),
+                'Lives-remaining screen full Barba renderer')
     overlay.prg(0, 0x8FC9, b'\xa9\x09', b'\xa9\x0a', 'Fall-in-hole downstab pose ($09)')
     overlay.prg(0, 0x8FD3, b'\xa9\x3c', b'\xa9\x30', 'Fall shadow OAM starts after the full player pose')
     hook(0, 0x8FE3, 'BarbaFallDraw', 0x20, '20 02 ec')
@@ -197,13 +240,13 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
         hook(5, 0x9BAC, 'DarkBarbaVictory', 0x4C, 'ac 12 05')
     lag_dest = 0xFFEA
     overlay.prg(7, 0xC065, bytes.fromhex('ad 06 85 48') + bytes([0x4C, lag_dest & 255, lag_dest >> 8]),
-                bytes.fromhex('a9 06 20 cc ff 20 00'), 'Lag-frame NMI bank preservation')
+                bytes.fromhex('a9 06 20 cc ff 20 00'), 'Lag-frame NMI bank preservation', group='platform')
     # MMC3 (Mapper 4) port: preserve $C000-$FFFF fixed (PRG mode 0), map $8000/$A000
     # in 8KB pairs, map CHR in 1KB/2KB units (BG at $0000 via R0/R1, Sprites at $1000
     # via R2-R5 so MMC3 A12 clocks on every scanline), and keep $8000 bank-select
     # NMI-safe via $64D5 shadow + LagNmiBank6 save/restore.
-    overlay.put(5, b'\x20', b'\x10', 'Expand CHR-ROM to 256 KB (32 x 8KB banks)')
-    overlay.put(6, b'\x42', b'\x12', 'iNES mapper 4 (MMC3)')
+    overlay.put(5, b'\x20', b'\x10', 'Expand CHR-ROM to 256 KB (32 x 8KB banks)', group='platform')
+    overlay.put(6, b'\x42', b'\x12', 'iNES mapper 4 (MMC3)', group='platform')
     lag_in_bank6 = labels['LagNmiInBank6']
     overlay.prg(7, 0xFF81, bytes.fromhex(
         'a9 80 8d 01 a0 8d 00 e0 a9 0f 20 9d ff 20 b1 ff a9 07 20 cc ff 4c 00 c0'
@@ -281,19 +324,84 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
                 bytes.fromhex(
                     'ae 25 07 f0 0f c8 e0 01 f0 07 c8 a9 00 e0 02 d0 13 ce 25 07 be 5d c0 a9 00 9d 01 03 a9 ff 9d 02 03 ad 25 07 8d 25 07 20 c1 c1'),
                 'NMI VBlank Bank 6 setup + CLI + IrqHandler2 ($C110)')
-    # The three early-outs that branch to the NMI tail, which moves $C1A8 -> $C19D.
-    overlay.prg(7, 0xC156, bytes([0x46]), bytes([0x51]), 'NMI tail branch (dialogue)')
-    overlay.prg(7, 0xC163, bytes([0x39]), bytes([0x44]), 'NMI tail branch (talking)')
-    overlay.prg(7, 0xC168, bytes([0x34]), bytes([0x3F]), 'NMI tail branch (routine)')
+    # The three early-outs that branch to the NMI tail, which moves $C1A8 -> $C19D (or $C19F with Souls bar).
+    if boss_meter == 'souls':
+        overlay.prg(7, 0xC156, bytes([0x48]), bytes([0x51]), 'NMI tail branch (dialogue)')
+        overlay.prg(7, 0xC163, bytes([0x3b]), bytes([0x44]), 'NMI tail branch (talking)')
+        overlay.prg(7, 0xC168, bytes([0x36]), bytes([0x3F]), 'NMI tail branch (routine)')
+        if waldo_portal or not title_roar_wav:
+            souls_irq_addr = 0xFC90
+            souls_irq_split = bytes.fromhex(
+                'a9 00 8d 01 20 '                # blank scanline 214 immediately in HBlank of 213
+                'a9 01 8d 00 80 a9 9c 8d 01 80 ' # R1 = 156 (Souls CHR) while rendering is off
+                'ad d5 64 8d 00 80 '             # restore MMC3 $8000 shadow
+                '2c 02 20 a9 04 8d 06 20 a9 00 8d 06 20 ' # PPUADDR = $0400 ($2400 row 0, col 0)
+                'a9 09 38 e9 01 d0 fb '          # wait ~64 cycles to HBlank of scanline 214
+                'a9 0e 4c 99 c1'                 # $2001 = $0E (BG on, sprites off) -> $C199
+            )
+            souls_irq_off = prg_offset(7, souls_irq_addr)
+            overlay.prg(7, souls_irq_addr, souls_irq_split, source[souls_irq_off:souls_irq_off+len(souls_irq_split)],
+                        'Dark Souls bottom boss bar IRQ split ($FC90)', group='boss_meters')
+        else:
+            # Sampled no-portal builds pack the roar and 4 compact laughs into $F400-$FD70,
+            # so place the Souls split across the free displaced-laugh pockets ($F3E0, $FCF1, $FD71).
+            souls_irq_addr = 0xF3E0
+            souls_irq_parts = [
+                (0xF3E0, bytes.fromhex(
+                    'a9 00 8d 01 20 '                # blank scanline 214 immediately in HBlank of 213
+                    'a9 01 8d 00 80 a9 9c 8d 01 80 ' # R1 = 156 (Souls CHR) while rendering is off
+                    'ad d5 64 8d 00 80 '             # restore MMC3 $8000 shadow
+                    '2c 02 20 a9 04 8d 06 20 '       # PPUADDR high byte = $04
+                    '4c f1 fc'                       # JMP $FCF1
+                ), 'Dark Souls bottom boss bar IRQ split part 1 ($F3E0)'),
+                (0xFCF1, bytes.fromhex(
+                    'a9 00 8d 06 20 '                # PPUADDR low byte = $00 ($0400)
+                    'a9 08 38 e9 01 d0 fb '          # wait ~62 cycles to HBlank of scanline 214
+                    '4c 71 fd'                       # JMP $FD71
+                ), 'Dark Souls bottom boss bar IRQ split part 2 ($FCF1)'),
+                (0xFD71, bytes.fromhex(
+                    'a9 0e 4c 99 c1'                 # $2001 = $0E (BG on, sprites off) -> $C199
+                ), 'Dark Souls bottom boss bar IRQ split part 3 ($FD71)'),
+            ]
+            for part_addr, part_bytes, part_name in souls_irq_parts:
+                part_off = prg_offset(7, part_addr)
+                overlay.prg(7, part_addr, part_bytes, source[part_off:part_off+len(part_bytes)], part_name, group='boss_meters')
+        nmi_tail_bytes = (
+            bytes.fromhex('20 4c d2 20 ca c2')
+            + b'\x20' + swap_b6.to_bytes(2, 'little')
+            + b'\x4c' + nmi_rng6.to_bytes(2, 'little')
+            + bytes.fromhex('48 a9 7f 4a d0 fd 68 4a b0 1b 2a 8d 01 20 4c 1a c1')
+            + b'\x20' + swap_b6.to_bytes(2, 'little')
+            + b'\x20' + copy_oam6.to_bytes(2, 'little')
+            + bytes.fromhex('20 c5 ff')
+            + bytes.fromhex('a5 ff 09 80 85 ff 8d 00 20 68 40')
+            + b'\x4c' + souls_irq_addr.to_bytes(2, 'little')
+        )
+        nmi_rti = 0xC182 + len(nmi_tail_bytes) - 4
+    else:
+        overlay.prg(7, 0xC156, bytes([0x46]), bytes([0x51]), 'NMI tail branch (dialogue)')
+        overlay.prg(7, 0xC163, bytes([0x39]), bytes([0x44]), 'NMI tail branch (talking)')
+        overlay.prg(7, 0xC168, bytes([0x34]), bytes([0x3F]), 'NMI tail branch (routine)')
+        nmi_tail_bytes = (
+            bytes.fromhex('20 4c d2 20 ca c2')
+            + b'\x20' + swap_b6.to_bytes(2, 'little')
+            + b'\x4c' + nmi_rng6.to_bytes(2, 'little')
+            + bytes.fromhex('ea ea 48 a9 7f 4a d0 fd 68 8d 01 20 4c 1a c1')
+            + b'\x20' + swap_b6.to_bytes(2, 'little')
+            + b'\x20' + copy_oam6.to_bytes(2, 'little')
+            + bytes.fromhex('20 c5 ff ea ea ea ea ea a5 ff 09 80 85 ff 8d 00 20 68 40')
+        )
+        nmi_rti = 0xC182 + len(nmi_tail_bytes) - 1
+    assert nmi_tail_bytes[nmi_rti - 0xC182] == 0x40
+    nmi_work_end = 0xC182 + nmi_tail_bytes.index(b'\x20' + copy_oam6.to_bytes(2, 'little'))
+    labels['NmiWorkEnd'] = nmi_work_end
+    labels['NmiRti'] = nmi_rti
+    with (output / 'barba.lbl').open('a', encoding='utf-8') as lbl_file:
+        lbl_file.write(f'al {nmi_work_end:06X} .NmiWorkEnd\n')
+        lbl_file.write(f'al {nmi_rti:06X} .NmiRti\n')
     # RNG moved to Bank 6 (NmiRng6); $C18E-$C19C holds MaskWrite (HBlank-aligned $2001 write when != $FE).
     overlay.prg(7, 0xC182,
-        bytes.fromhex('20 4c d2 20 ca c2')
-        + b'\x20' + swap_b6.to_bytes(2, 'little')
-        + b'\x4c' + nmi_rng6.to_bytes(2, 'little')
-        + bytes.fromhex('ea ea 48 a9 7f 4a d0 fd 68 8d 01 20 4c 1a c1')
-        + b'\x20' + swap_b6.to_bytes(2, 'little')
-        + b'\x20' + copy_oam6.to_bytes(2, 'little')
-        + bytes.fromhex('20 c5 ff ea ea ea ea ea a5 ff 09 80 85 ff 8d 00 20 68 40'),
+        nmi_tail_bytes,
         bytes.fromhex('ee 12 00 a2 00 a0 09 ad 1a 05 29 02 85 00 ad 1b 05 29 02 45 00 18 f0 01 38 7e 1a 05'
                       'e8 88 d0 f9 20 50 d2 20 ca c2 ad 02 20 a5 ff 09 80 85 ff 8d 00 20 68 40'),
         'NMI RNG -> Bank 6, MaskWrite ($C18E), and OAM shadow copy tail')
@@ -311,7 +419,7 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
     overlay.prg(0, 0x9D54, bytes.fromhex('4c 75 9d'), bytes.fromhex('a0 50 88'), 'Skip Level-Up/Pause Sprite-0 wait ($9D54)')
     overlay.prg(0, 0x9DB0, bytes.fromhex('4c cc 9d'), bytes.fromhex('2c 02 20'), 'Skip Pause Sprite-0 wait ($9DB0)')
     overlay.prg(0, 0xA7B1, bytes.fromhex('4c cd a7'), bytes.fromhex('2c 02 20'), 'Skip Castle Sprite-0 wait ($A7B1)')
-    overlay.prg(3, 0xB08F, bytes.fromhex('4c ab b0'), bytes.fromhex('2c 02 20'), 'Skip Town Sprite-0 wait ($B08F)')
+    overlay.prg(3, 0xB089, bytes.fromhex('4c ab b0'), bytes.fromhex('a0 f0 ea'), 'Skip Town Sprite-0 delay and wait ($B089)')
     # Offscreen-column mask ($F27D, called for every drawn object): the native
     # 4-pass loop costs ~300 cycles/call (a third of the enemy pass in busy rooms).
     # Same $C8,y/$CC,y/A/Y/flags from one 16-bit subtraction (~60 cycles): with
@@ -352,14 +460,23 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
     ), b'\xff' * 28, 'Rock-tossing Lizalfos fireball check')
     overlay.prg(2, 0x977C, bytes.fromhex('4c 85 9f ea ea ea ea'),
                 bytes.fromhex('20 11 ef b5 af 29 03'), 'Rock-tossing Lizalfos fireball hook')
-    hook(3, 0xB5F8, 'TownDialog', 0x4C, '0a a8 ad 07 07', 2)
+    hook(3, 0xB5F8, 'TownDialog', 0x4C, '0a a8 ad 07 07', 2, group='town_chaos')
     if waldo_portal:
-        hook(3, 0xB480, 'WaldoDialogCheck', 0x4C, 'a9 00 85 05 8d 8c 04', 4)
+        hook(3, 0xB480, 'WaldoDialogCheck', 0x4C, 'a9 00 85 05 8d 8c 04', 4, group='crossover_portals')
         hat_hop = (output / 'barba-waldo-hat-1.bin').read_bytes()
-        overlay.prg(6, 0x8F66, hat_hop, b'\xff' * len(hat_hop), 'Bank 6 Waldo hat CHR far-call hop')
-    hook(3, 0xB0D2, 'DlgDrawRows', 0x4C, 'ad 25 05')
-    hook(3, 0xB183, 'DlgEraseRow', 0x4C, 'ce 25 05')
-    hook(3, 0xB350, 'DlgSaveAttr', 0x4C, 'ad 2c 07')
+        overlay.prg(6, 0x8F66, hat_hop, b'\xff' * len(hat_hop), 'Bank 6 Waldo hat CHR far-call hop', group='crossover_portals')
+        arcade_addr = labels['BarbaArcadeArea']
+        overlay.prg(3, 0x855B, arcade_addr.to_bytes(2, 'little'), b'\xc2\x9c',
+                    "Barba's Arcade room $1C area pointer", group='crossover_portals')
+        overlay.prg(3, 0x881C, b'\x70', b'\x71',
+                    "Rauru $01 page 1 enters Barba's Arcade page 0", group='crossover_portals')
+        overlay.prg(3, 0x878B, b'\x05', b'\x00',
+                    "Barba's Arcade page 0 left exit returns to Rauru $01", group='crossover_portals')
+        overlay.prg(3, 0x878E, b'\x05', b'\x09',
+                    "Barba's Arcade page 3 right exit returns to Rauru $01", group='crossover_portals')
+    hook(3, 0xB0D2, 'DlgDrawRows', 0x4C, 'ad 25 05', group='town_chaos')
+    hook(3, 0xB183, 'DlgEraseRow', 0x4C, 'ce 25 05', group='town_chaos')
+    hook(3, 0xB350, 'DlgSaveAttr', 0x4C, 'ad 2c 07', group='town_chaos')
     overlay.prg(3, 0xB706, b'\x68', b'\x88', 'Dialog text base X offset (4 tiles wider)')
     overlay.prg(3, 0xB725, b'\xa0', b'\xe0', 'Dialog text base Y offset (2 tiles higher)')
     overlay.prg(3, 0xB615, b'\x0a', b'\x2a', 'Standardized dialogue initial delay (10f)')
@@ -400,8 +517,7 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
         (0xA656, 'Saria mirror lady', 'OH! YOU\nFOUND MY\nMIRROR!\nFOLLOW ME.',
          'OH MY GOD!\nMY MIRROR!\nFOLLOW ME.'),
         (0xA7FE, 'Saria bridge guard', 'ONLY TOWN\nFOLK MAY\nCROSS THIS\nRIVER!',
-         'QUICKSAND!\nLOCALS\nONLY.'),
-        (0xA71D, 'Saria sign', 'WATER TOWN\n    OF\n  SARIA', 'SAND TOWN\n    OF\n  SARIA'),
+         'FOUL WATER!\nLOCALS\nONLY.'),
         (0xA9C4, 'Bagu note', 'BAGU IS MY\nNAME. SHOW\nMY NOTE TO\nRIVER MAN.',
          'BAGU IS MY\nNAME. SHOW\nMY NOTE TO\nTHE GUARD.'),
         (0xA9F7, 'Bagu location', 'LET ME BE!\nMASTER IS\nIN WOODS\nN OF RIVER',
@@ -414,9 +530,11 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
                 or any(len(line) > 14 for line in lines)):
             raise ValueError(f'{name} exceeds its dialogue space')
         overlay.prg(3, address, replacement.ljust(len(expected), b'\xff'), expected, name + ' dialogue')
+    overlay.prg(3, 0xAFF8, labels['SariaSignText'].to_bytes(2, 'little'), b'\x1d\xa7',
+                'Saria sign dialogue pointer')
     # These runs are the connected water tiles through Saria, rows $58-$60.
-    # West uses the animated lava palette for terrain $0A. Its terrain lookup
-    # returns unwalkable water for that ID, keeping the town crossing required.
+    # West Hyrule renders terrain $0A with green palette 0 (via OwTerrainPal0)
+    # and reports unwalkable water, keeping the town crossing required.
     for address, runs in (
         (0x92D4, '7c'), (0x92E0, '7c'), (0x92E3, 'fc 0c'), (0x92EE, 'fc bc'),
         (0x92F9, '3c'), (0x92FB, 'fc'), (0x9305, 'bc'), (0x930E, 'ac'),
@@ -424,17 +542,19 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
     ):
         expected = bytes.fromhex(runs)
         overlay.prg(1, address, bytes((run & 0xF0) | 0x0A for run in expected), expected,
-                    'West Hyrule map: Saria quicksand river')
-    hook(1, 0x83FE, 'WestQuicksandTerrain1', 0x4C, 'b0 08 c8 4c eb 83', 3)
+                    'West Hyrule map: Saria foul water river')
+    hook(1, 0x83FE, 'WestFoulWaterTerrain1', 0x4C, 'b0 08 c8 4c eb 83', 3)
+    for address in (0x8AA8, 0x8AB1, 0x8ABA, 0x8AC3, 0x8BB3, 0x8BBC, 0x8BC6, 0x8BCF):
+        hook(0, address, 'OwTerrainPal0', 0x20, 'bd e3 87')
     # Town liquid uses a palette-1 alias of $92. Keep the native streaming
     # renderer and collision path in agreement, including the initial draw.
     town_palette1 = prg_offset(3, 0x86A2)
     palette1_tiles = source[town_palette1:town_palette1+0xFC]
     overlay.prg(3, 0x9300, palette1_tiles + bytes.fromhex('98 99 98 99'), b'\xff' * 256,
-                'Town palette-1 metatile table with quicksand at $7F')
+                'Town palette-1 metatile table with foul water at $7F')
     overlay.prg(3, 0x8502, b'\x00\x93', b'\xa2\x86', 'Town palette-1 metatile table pointer')
     for address in (0x832A, 0x8363, 0x8520):
-        overlay.prg(3, address, b'\x7f', b'\x92', 'Town quicksand metatile')
+        overlay.prg(3, address, b'\x7f', b'\x92', 'Town foul water metatile')
     # East message 36 is five mid-height dots (tile $32), which is now shout glyph D's
     # upper half. Draw them with the period glyph instead.
     overlay.prg(3, 0xAE19, b'\xcf' * 5, b'\x32' * 5, 'Vanilla dialogue ellipsis uses periods')
@@ -626,6 +746,25 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
         original = source[offset:offset + 16]
         overlay.put(offset, compile_title_shore(tile, original, title_water), original,
                     f'CHR 01: title forest tile {tile:02X}')
+    # Top lava-line row ($2A00..$2A1B): use dedicated wave tiles $5A-$5D (variants of $68/$69)
+    # so only row 5 (scanline 144) gets a subtle 1px undulating wave, and extend the lava
+    # across cols 26-27 (under the trimmed cliff columns X=214/222) while keeping the cliff
+    # below ($2A5A-$2A5B) and the remaining right cliff column (X=224+).
+    overlay.prg(5, 0xB04D, b'\x5a\x5b' * 6 + b'\x5c\x5d' * 4 + b'\x5a\x5b' * 3 + b'\x5c\x5d',
+                b'\x68' * 12 + b'\x69' * 8 + b'\x68' * 6 + b'\x71\x7a',
+                'Title lava top-row wave tiles')
+    overlay.prg(5, 0xB08A, b'\x6a\x68', b'\x77\x76', 'Title lava row 17 cols 26-27 under trimmed cliff')
+    overlay.prg(5, 0xB21A, b'\x7a', b'\x76', 'Title lava attribute for rows 16-17 cols 26-27')
+    for tid, base_tid in ((0x5A, 0x68), (0x5B, 0x68), (0x5C, 0x69), (0x5D, 0x69)):
+        offset = title_r0_off + tid * 16
+        original = source[offset:offset + 16]
+        if hashlib.sha256(original).hexdigest()[:16] != TITLE_TILE_SHA256[tid]:
+            raise ValueError(f'Title wave tile {tid:02X} is not the audited logo tile')
+        base_bytes = bytearray(source[title_r0_off + base_tid * 16:title_r0_off + base_tid * 16 + 16])
+        mask = 0xFC if (tid & 1) == 0 else 0x7F
+        base_bytes[5] &= mask
+        base_bytes[13] &= mask
+        overlay.put(offset, bytes(base_bytes), original, f'CHR 01: title wave tile {tid:02X}')
 
     # Restore the three original head columns. Inset the cliff's outer edge
     # by one tile so all five cliff and three head sprites fit on the same line.
@@ -635,6 +774,12 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
     # Both now start below the cliff's upper rows and the title split.
     overlay.prg(5, 0xA7E5, bytes.fromhex('9f3e0294'), bytes.fromhex('6fee01d0'), 'Title Barba outer torso')
     overlay.prg(5, 0xA805, bytes.fromhex('9f44029c'), bytes.fromhex('7ff001d0'), 'Title Barba near tip')
+    # Trim the two inner cliff columns at Y=$6F/$7F (X=214, X=222) so scanlines 128-143
+    # have 6 static sprites (3 Barba head + 3 cliff) and 2 free slots for lava particles.
+    overlay.prg(5, 0xA7E9, b'\xf8', b'\x6f', 'Hide title cliff col X=214 (Y=$6F)')
+    overlay.prg(5, 0xA7ED, b'\xf8', b'\x6f', 'Hide title cliff col X=222 (Y=$6F)')
+    overlay.prg(5, 0xA809, b'\xf8', b'\x7f', 'Hide title cliff col X=214 (Y=$7F)')
+    overlay.prg(5, 0xA80D, b'\xf8', b'\x7f', 'Hide title cliff col X=222 (Y=$7F)')
     overlay.prg(5, 0xA819, bytes.fromhex('8f0802849f14028c9f34027c9f360284'), bytes.fromhex('8fea02788fec02809fea02789fec0280'), 'Title Barba neck, elbow and near torso')
     # The vanilla sword glint (OAM $F8, Y $78 X $95) now floats in the sky beside Barba's head and
     # reads as a star. Draw it behind the background like the other stars so the story text covers
@@ -656,8 +801,8 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
         'a5 ff 29 fc 05 36 8d ff 00 '     # $FF nametable bits for the NMI tail (native)
         'a5 27 8d 06 20 '                 # t: nametable and coarse Y bits 3-4
         '4a 6a 6a 29 c0 09 05 8d 05 20 '  # t: coarse Y 0/16, fine Y 5
-        '8c 05 20 '                       # t: coarse X 0, fine X 0
-        'a0 4d 88 d0 fd '                 # 384-cycle trim (77 loops)
+        + ('20 de a5 ' if title_roar_wav else '8c 05 20 ') +
+        ('a0 4a 88 d0 fd ' if title_roar_wav else 'a0 4d 88 d0 fd ') +
         '8c 06 20')                       # v = t during HBlank
     native_split = bytes.fromhex(
         'a0 00 88 d0 fd a0 4a 88 d0 fd a5 ff 29 fc 05 36 85 ff 8d 00 20'
@@ -672,17 +817,17 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
     roar_update = 0xA5AE
     sampled_title_code = None
     alternate_laugh_data = None
-    if waldo_portal or not title_roar_wav:
+    if game_over_laughs and (waldo_portal or not title_roar_wav):
         # The combined ROM has two copies of the fixed bank. Keep the roar in
         # pages 30/31 and put all five laughs in the alternate pages 14/15.
         laugh_overlay = Overlay(source) if title_roar_wav else overlay
         laughs = game_over_audio.compile_laughs(source)
         for number, (entry, (address, raised, expected)) in enumerate(zip(game_over_audio.LAUGH_ENTRIES, laughs), 1):
-            laugh_overlay.prg(7, address, raised, expected, f'Game Over octave-up laugh {number}')
+            laugh_overlay.prg(7, address, raised, expected, f'Game Over octave-up laugh {number}', group='game_over_laughs')
             table_address = 0x917B + entry*2
             offset = prg_offset(6, table_address)
             overlay.prg(6, table_address, bytes([(address-0xC000)//64, (len(raised)-1)//16]),
-                        source[offset:offset+2], f'Game Over shortened laugh {number} pointer/length')
+                        source[offset:offset+2], f'Game Over shortened laugh {number} pointer/length', group='game_over_laughs')
         if title_roar_wav:
             start = prg_offset(7, roar_sample.SAMPLE_ADDRESS)
             alternate_laugh_data = bytes(laugh_overlay.target[start:start+roar_sample.SAMPLE_CAPACITY])
@@ -690,12 +835,13 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
                 'waveforms': [{'address': a, 'bytes': len(d)} for a, d, _ in laughs],
                 'rate': 15, 'spacing_frames': 23, 'initial_delay_frames': 36}
     if title_roar_wav:
-        sampled_title_code, roar_update, roar_jaw = roar_sample.title_code(sample, roar_info)
-        for filename, bank, address in [('sampled-roar', 6, 0x8C00),
-                                         ('item-roar', 6, 0x8A00),
-                                         ('laugh-delay', 6, 0x8F70)]:
-            data = (output/f'barba-{filename}.bin').read_bytes()
-            overlay.prg(bank, address, data, b'\xff'*len(data), f'Sampled roar {filename} helpers')
+        with overlay.group('sampled_roar'):
+            sampled_title_code, roar_update, roar_jaw = roar_sample.title_code(sample, roar_info)
+            for filename, bank, address in [('sampled-roar', 6, 0x8C00),
+                                             ('item-roar', 6, 0x8A00),
+                                             ('laugh-delay', 6, 0x8F70)]:
+                data = (output/f'barba-{filename}.bin').read_bytes()
+                overlay.prg(bank, address, data, b'\xff'*len(data), f'Sampled roar {filename} helpers')
         # The sampled driver consumes the shaft cue. Retire the native sweep
         # and its continuation while retaining the shifts for the other effects.
         overlay.prg(6, 0x940F, b'\xea\xea\x4a\xea\xea', bytes.fromhex('b0 d4 4a b0 e5'),
@@ -714,7 +860,7 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
             '78d8a2008e0020e8ad022010fbcaf0f89a8e00808e00a08e00c08e00e0'
             'a90f209dbf20b1bfa90720ccbf4c00c0'
         )
-        overlay.prg(0, 0xBF70, item_hold, expected_stub[:len(item_hold)], 'Item celebration pickup and input helpers')
+        overlay.prg(0, 0xBF76, item_hold, expected_stub[6:6+len(item_hold)], 'Item celebration pickup and input helpers')
         overlay.prg(7, 0xE547, b'\x20' + labels['FarCall0'].to_bytes(2, 'little')
                     + labels['ItemHoldPickup'].to_bytes(2, 'little') + b'\x60\xea\xea',
                     bytes.fromhex('b5 af 29 7f 8d 9d 04 60'), 'Start the key item hold at pickup')
@@ -756,7 +902,7 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
             raise ValueError('Original laugh sample allocation differs')
         overlay.prg(7, roar_sample.SAMPLE_ADDRESS, sample, expected[:len(sample)],
                     'Famicom roar in reclaimed native laugh sample data')
-        if not waldo_portal:
+        if not waldo_portal and game_over_laughs:
             laughs = game_over_audio.compact_laughs(source, len(sample))
             for number, (address, data, original) in enumerate(laughs, 1):
                 shared = max(0, game_over_audio.SAMPLE_ADDRESS + len(sample) - address)
@@ -768,20 +914,21 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
                         raise ValueError('Compact laughs disagree on their shared silent byte')
                     end -= 1  # The next guarded write owns the shared byte.
                 overlay.prg(7, address+shared, data[shared:end], original[shared:end],
-                            f'Compact octave-up Ganon laugh waveform {number}')
+                            f'Compact octave-up Ganon laugh waveform {number}', group='game_over_laughs')
             for number, entry in enumerate(game_over_audio.LAUGH_ENTRIES):
                 laugh_address, _, _ = laughs[game_over_audio.SHARED_LAUGH_INDICES[number]]
                 table_address = 0x917B + entry*2
                 offset = prg_offset(6, table_address)
                 overlay.prg(6, table_address,
                             bytes([(laugh_address-0xC000)//64, (game_over_audio.SHARED_LAUGH_LENGTHS[number]-1)//16]),
-                            source[offset:offset+2], f'Game Over compact laugh pointer/length {entry}')
+                            source[offset:offset+2], f'Game Over compact laugh pointer/length {entry}', group='game_over_laughs')
             roar_info['game_over_shared_laugh'] = {
                 'waveforms': [{'address': a, 'bytes': len(d)} for a, d, _ in laughs],
                 'rates': list(game_over_audio.SHARED_LAUGH_RATES), 'spacing_frames': 23,
                 'initial_delay_frames': 36}
-        overlay.prg(6, 0x925A, b'\x20' + labels['RoarNativeRate'].to_bytes(2, 'little') + b'\xea\xea',
-                    bytes.fromhex('a9 0f 8d 10 40'), 'Configure native DMC playback for the Game Over laugh')
+        if game_over_laughs:
+            overlay.prg(6, 0x925A, b'\x20' + labels['RoarNativeRate'].to_bytes(2, 'little') + b'\xea\xea',
+                        bytes.fromhex('a9 0f 8d 10 40'), 'Configure native DMC playback for the Game Over laugh', group='game_over_laughs')
         # Title-only music driver normally disables DMC every frame. Preserve
         # it while the one-shot timer is live, without retriggering a completed
         # sample. Leaving title mode clears the timer and disables DMC even if
@@ -829,7 +976,7 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
             '20 9e a5 ea ea ea '
             'a2 02 d0 06 a2 01 d0 02 a2 00 '
             'bd 95 a5 8d 1d 02 bd 98 a5 8d 21 02 bd 9b a5 8d 3d 02 '
-            'a2 6b a5 12 4c d3 a8 '
+            'a2 6b a5 12 4c 05 87 '
         ) + title_jaws)
     if sampled_title_code is not None:
         title_animation[7:11] = b'\x20' + roar_jaw.to_bytes(2, 'little') + b'\xea'
@@ -839,6 +986,23 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
         b'\xff' * len(title_animation),
         'Title Barba mouth animation',
     )
+    # Title Barba body/tail roar wiggle and 2nd-roar shake (Bank 5 $FF pads).
+    # Keeps $A588 (ldx #$6B / lda $12) at its audited address and jumps here from $A58C.
+    roar_target = 'e0 bf'
+    for addr, hex_bytes, desc in [
+        (0x8705, 'ad 1c 02 c9 7f d0 08 a9 9f 8d 44 02 20 e0 84 a2 6b a5 12 4c d3 a8',
+         'Title Barba body anim entry + tail reset + exit'),
+        (0x84E0, 'a9 06 8d 41 02 a9 08 8d 59 02 ad f0 05 4c f4 84',
+         'Title Barba body anim neck reset + roar load'),
+        (0x84F4, f'f0 03 4c {roar_target} 8d fa 64 60',
+         'Title Barba body anim roar/shake dispatch'),
+        (0xBFE0, 'ad fa 05 c9 02 d0 07 a5 12 29 02 8d fa 64 a5 12 29 08 d0 01 60 4c 91 88',
+         'Title Barba 2nd-roar shake + roar wiggle gate'),
+        (0x8891, 'ce 44 02 a2 10 8e 41 02 e8 e8 8e 59 02 60',
+         'Title Barba tail wag + neck swap'),
+    ]:
+        data = bytes.fromhex(hex_bytes)
+        overlay.prg(5, addr, data, b'\xff' * len(data), desc)
     # Title roar. $05FA (DRAW_FRAME) is renderer scratch, written before it is read in gameplay, so the title
     # can use it as a jaw-opening counter. $05F0 is ROAR_TIMER (no original references).
     title_roar = bytes.fromhex(
@@ -854,24 +1018,30 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
     )
     assert len(title_roar) == 0xA5E8 - 0xA59E
     if sampled_title_code is not None:
-        title_roar = sampled_title_code
+        assert sampled_title_code[0x40:] == b'\xea' * 10
+        # $A5DE TitleShakeX5 (7 B): write LAIR_SHAKE_X ($64FA) to $2005 via X (preserves A=$FC and Y=0)
+        title_roar = sampled_title_code[:0x40] + bytes.fromhex('ae fa 64 8e 05 20 60 ea ea ea')
+        overlay.prg(5, 0xA66D, bytes.fromhex('20 de a5'), bytes.fromhex('8c 05 20'),
+                    'Title NMI top X scroll shake')
     overlay.prg(5, 0xA59E, title_roar, b'\xff' * len(title_roar), 'Title Barba roar')
-    # Game Over screen: replace "RETURN OF GANON" ($8010, 15 bytes) with "LINK KEEPS LAVA".
-    overlay.prg(
-        0, 0x8010,
-        bytes(0xF4 if ch == ' ' else 0xDA + ord(ch) - ord('A') for ch in 'LINK KEEPS LAVA'),
-        bytes.fromhex('ebdeedeeebe7f4e8dff4e0dae7e8e7'),
-        'Game Over Barba subtitle',
-    )
-    game_over_tiles, game_over_map = compile_game_over_link(source)
-    map_offset = prg_offset(0, GAME_OVER_MAP_START)
-    overlay.prg(0, GAME_OVER_MAP_START, game_over_map,
-                source[map_offset:map_offset+len(game_over_map)],
-                'Game Over black Link nametable')
-    for tile, data in game_over_tiles.items():
-        offset = CHR_OFFSET + GAME_OVER_CHR_BANK*4096 + tile*16
-        overlay.put(offset, data, source[offset:offset+16],
-                    f'Game Over black Link tile {tile:02X}')
+    if game_over_portrait:
+        with overlay.group('game_over_portrait'):
+            # Game Over screen: replace "RETURN OF GANON" ($8010, 15 bytes) with "LINK KEEPS LAVA".
+            overlay.prg(
+                0, 0x8010,
+                bytes(0xF4 if ch == ' ' else 0xDA + ord(ch) - ord('A') for ch in 'LINK KEEPS LAVA'),
+                bytes.fromhex('ebdeedeeebe7f4e8dff4e0dae7e8e7'),
+                'Game Over Barba subtitle',
+            )
+            game_over_tiles, game_over_map = compile_game_over_link(source)
+            map_offset = prg_offset(0, GAME_OVER_MAP_START)
+            overlay.prg(0, GAME_OVER_MAP_START, game_over_map,
+                        source[map_offset:map_offset+len(game_over_map)],
+                        'Game Over black Link nametable')
+            for tile, data in game_over_tiles.items():
+                offset = CHR_OFFSET + GAME_OVER_CHR_BANK*4096 + tile*16
+                overlay.put(offset, data, source[offset:offset+16],
+                            f'Game Over black Link tile {tile:02X}')
     story_lines = [
         'AFTER BARBA WOKE UP FROM A  ',
         'LONG NAP, HE FOUND LINK     ',
@@ -966,8 +1136,72 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
         '........', '........', '........', '........',
         '........', '........', '........', '........',
     ])
+    # Additional overworld ambience particles ($D4-$DF):
+    # $D4/$D6: Water sun-glint crest (Palette 2: o=white $30, #=black $0F shadow).
+    # $D8/$DA: Swamp marsh bubble (Palette 0: +=gold $27, #=white $30).
+    # $DC/$DE: Mountain/rock/lava rising ember (Palette 0: +=gold $27, o=red $16).
+    if world[0xD4*16:0xE0*16] != b'\x00'*192:
+        raise ValueError('Overworld ambience sprite slots $D4-$DF are not empty')
+    world[0xD4*16:0xD6*16] = _chr_8x16([
+        '........', '.o......', '.#......', '........',
+        '........', '........', '........', '........',
+        '........', '........', '........', '........',
+        '........', '........', '........', '........',
+    ])
+    world[0xD6*16:0xD8*16] = _chr_8x16([
+        '........', 'ooo.....', '.##.....', '........',
+        '........', '........', '........', '........',
+        '........', '........', '........', '........',
+        '........', '........', '........', '........',
+    ])
+    world[0xD8*16:0xDA*16] = _chr_8x16([
+        '........', '.+......', '........', '........',
+        '........', '........', '........', '........',
+        '........', '........', '........', '........',
+        '........', '........', '........', '........',
+    ])
+    world[0xDA*16:0xDC*16] = _chr_8x16([
+        '.#+.....', '.++.....', '........', '........',
+        '........', '........', '........', '........',
+        '........', '........', '........', '........',
+        '........', '........', '........', '........',
+    ])
+    world[0xDC*16:0xDE*16] = _chr_8x16([
+        '........', '.+......', '........', '........',
+        '........', '........', '........', '........',
+        '........', '........', '........', '........',
+        '........', '........', '........', '........',
+    ])
+    world[0xDE*16:0xE0*16] = _chr_8x16([
+        '........', '.o......', '........', '........',
+        '........', '........', '........', '........',
+        '........', '........', '........', '........',
+        '........', '........', '........', '........',
+    ])
+    # $E0/$E2: Graveyard cross wisp (Palette 0: +=gold $27, #=white $30).
+    if world[0xE0*16:0xE4*16] != b'\x00'*64:
+        raise ValueError('Overworld graveyard wisp sprite slots $E0-$E3 are not empty')
+    world[0xE0*16:0xE2*16] = _chr_8x16([
+        '........', '.+......', '........', '........',
+        '........', '........', '........', '........',
+        '........', '........', '........', '........',
+        '........', '........', '........', '........',
+    ])
+    world[0xE2*16:0xE4*16] = _chr_8x16([
+        '..#.....', '.+......', '........', '........',
+        '........', '........', '........', '........',
+        '........', '........', '........', '........',
+        '........', '........', '........', '........',
+    ])
     offset = CHR_OFFSET+30*4096
-    overlay.put(offset, world, b'\xFF'*8192, 'Dedicated overworld graphics')
+    pre_foliage = 4096 + 0x9E * 16
+    post_foliage = 4096 + 0xB0 * 16
+    if world[pre_foliage:post_foliage] != b'\x00' * (post_foliage - pre_foliage):
+        raise ValueError('Overworld R1 foliage slots $9E-$AF are not empty')
+    overlay.put(offset, world[:pre_foliage], b'\xFF' * pre_foliage,
+                'Dedicated overworld graphics (CHR 30 + CHR 31 up to $9D)')
+    overlay.put(offset + post_foliage, world[post_foliage:], b'\xFF' * (8192 - post_foliage),
+                'Dedicated overworld graphics (CHR 31 $B0-$FF)')
 
     old_palette, new_palette = bytes.fromhex('18 36 2a'), bytes.fromhex('16 27 30')
     palette_offsets = [i for i in range(16, CHR_OFFSET-2) if source[i:i+3] == old_palette]
@@ -1361,39 +1595,106 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
             ext_chr[ext_off:ext_off + 2048] = _ripple_r1(base_r1, v)
 
     # R1 banks 146, 148, 150, 152 (2 KB each): all three Saria street rooms
-    # use 4 KB town CHR bank 7 R1 and shimmer with town BG palette 1
-    # ($22 sky, $37 warm sand [color 1 #], $2A green [unused], $0F shadow [color 3 O]).
-    saria6_r1 = bytearray(overlay.target[CHR_OFFSET + 7 * 4096 + 2048:CHR_OFFSET + 7 * 4096 + 4096])
-    saria6_r1[0x18 * 16:0x19 * 16] = _encode_2bpp((
-        '..#OO#..',
-        '#####O##',
-        '###O####',
-        '#O###O##',
-        '####O###',
-        '##O###O#',
-        '#O##O###',
-        '####O###',
-    ))
-    saria6_r1[0x19 * 16:0x1A * 16] = _encode_2bpp((
-        '##O###O#',
-        '#O######',
-        '####O###',
-        'O#####O#',
-        '##O##O##',
-        '####O###',
-        '#O####O#',
-        '########',
-    ))
+    # use 4 KB town CHR bank 7 R1 and bubble with town BG palette 1
+    # ($22 sky, $37 pale highlight [#], $2A green [*], $0F dark murky base [O]).
+    saria6_base = overlay.target[CHR_OFFSET + 7 * 4096 + 2048:CHR_OFFSET + 7 * 4096 + 4096]
+    foul_surface_frames = (
+        (
+            '........',
+            '........',
+            '..*O..O.',
+            'OO#*OOOO',
+            'OOOOO*#O',
+            'O*#OOOOO',
+            'OOOO*OOO',
+            'OO*#OOOO',
+        ),
+        (
+            '........',
+            '...#....',
+            '.O*#O*O.',
+            'OOOO*#OO',
+            'O*#OOOOO',
+            'OOOO*#OO',
+            'OO*OOOO*',
+            'OOOO*#OO',
+        ),
+        (
+            '........',
+            '.....*..',
+            'O*O*#*OO',
+            'O*#OOOOO',
+            'OOOO*#OO',
+            'OO*#OOOO',
+            'O*OOO*#O',
+            'OOOO*OOO',
+        ),
+        (
+            '........',
+            '........',
+            'O*OO*O*O',
+            'OOOOO*#O',
+            'OO*#OOOO',
+            'O*OOOO*O',
+            'OOO*#OOO',
+            'O*#OOOOO',
+        ),
+    )
+    foul_body_frames = (
+        (
+            'OO*#OOOO',
+            'OOOOO*#O',
+            'O*OOOOOO',
+            'OOO*#OOO',
+            'OOOOOO*O',
+            'O*#OOOOO',
+            'OOOO*#OO',
+            'OO*OOOOO',
+        ),
+        (
+            'O*OOOO*O',
+            'OOO*#OOO',
+            'O*#OOOOO',
+            'OOOOO*#O',
+            'OO*OOOOO',
+            'OOOO*#OO',
+            'O*#OOOOO',
+            'OOOO*OOO',
+        ),
+        (
+            'OOOO*#OO',
+            'O*#OOOOO',
+            'OOOOO*#O',
+            'OO*OOOOO',
+            'O*#OOOOO',
+            'OOOOOO*O',
+            'OOO*#OOO',
+            'O*OOOO*O',
+        ),
+        (
+            'OOO*#OOO',
+            'OO*OOOOO',
+            'O*#OOOOO',
+            'OOOO*#OO',
+            'OOOOO*#O',
+            'OO*OOOOO',
+            'O*OOOO*O',
+            'OO*#OOOO',
+        ),
+    )
     for v, bank_1kb in enumerate((146, 148, 150, 152)):
+        variant = bytearray(saria6_base)
+        variant[0x18 * 16:0x19 * 16] = _encode_2bpp(foul_surface_frames[v])
+        variant[0x19 * 16:0x1A * 16] = _encode_2bpp(foul_body_frames[v])
         ext_off = (bank_1kb - 128) * 1024
-        ext_chr[ext_off:ext_off + 2048] = _ripple_r1(saria6_r1, v)
+        ext_chr[ext_off:ext_off + 2048] = variant
 
-    # R5 bank 154 ($1C00-$1FFF, tiles $C0-$DF): Palace 6 Lava Link + crystal sprites
-    # kept on A12=1 so they never trigger extra MMC3 scanline IRQ clocks.
+    # R5 bank 174 ($1C00-$1FFF, tiles $C0-$DF): Palace 6 Lava Link + crystal sprites
+    # kept on A12=1 so they never trigger extra MMC3 scanline IRQ clocks (bank 154 holds title_r5).
     lava_link_pairs = compile_lava_link(source)
     crystal_off = CHR_OFFSET + 25 * 4096 + 0x3C * 16
     lava_link_pairs[0x3C] = source[crystal_off:crystal_off + 32]
-    lava_link_off = (154 - 128) * 1024
+    lava_link_off = (174 - 128) * 1024
     for slot, src_pair in enumerate((0x14, 0x16, 0x18, 0x1A, 0x1C, 0x22, 0x24, 0x26, 0x28, 0x2A, 0x2C, 0x2E, 0xA0, 0xA2, 0x52, 0x3C)):
         pair_off = lava_link_off + slot * 32
         ext_chr[pair_off:pair_off + 32] = lava_link_pairs[src_pair]
@@ -1433,6 +1734,29 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
                     raise ValueError('East grass wind phase clips the tip tile')
                 variant[offset] = shifted
         ext_off = (246 - 128) * 1024 + phase * 2048
+        ext_chr[ext_off:ext_off + 2048] = variant
+
+    # R0 banks 170, 172 (2 KB each): town bush ($45: tiles $4C/$4E top,
+    # $4D/$4F bottom) wind-sway variants from 4 KB CHR bank 7 (1 KB bank 28).
+    # Gentle ±1 px lean on the upper 10 rows (y=192..201), keeping the lower
+    # belly and tapering base (y=202..207) rooted.
+    town_r0_off = CHR_OFFSET + 7 * 4096
+    town_r0 = overlay.target[town_r0_off:town_r0_off + 2048]
+    for bank_id, shift in ((170, -1), (172, 1)):
+        variant = bytearray(town_r0)
+        def _shift_bush_row(left_tile: int, right_tile: int, row: int, s: int) -> None:
+            for plane in (0, 8):
+                lo = left_tile * 16 + plane + row
+                hi = right_tile * 16 + plane + row
+                wide = (variant[lo] << 8) | variant[hi]
+                shifted = (wide >> s) if s > 0 else ((wide << -s) & 0xFFFF)
+                variant[lo] = (shifted >> 8) & 0xFF
+                variant[hi] = shifted & 0xFF
+        for r in range(8):
+            _shift_bush_row(0x4C, 0x4E, r, shift)
+        for r in range(2):
+            _shift_bush_row(0x4D, 0x4F, r, shift)
+        ext_off = (bank_id - 128) * 1024
         ext_chr[ext_off:ext_off + 2048] = variant
 
     # R3 banks 214..227 are shimmer variants of the candle flame ($52/$53):
@@ -1504,26 +1828,114 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
     town_r4_off = CHR_OFFSET + 6 * 4096 + 0x800
     ext_chr[town_cloud_bank_off:town_cloud_bank_off + 1024] = overlay.target[town_r4_off:town_r4_off + 1024]
     ext_chr[town_cloud_bank_off + 0x08 * 16:town_cloud_bank_off + 0x0E * 16] = cloud_tiles
+    # Smoke puff 8x16 sprite pairs ($8E/$8F, $90/$91, $92/$93) in R4 bank 229.
+    smoke_puffs = (
+        (
+            ('........', '........', '........', '........', '...OO...', '..OOOO..', '..#OO#..', '...##...'),
+            ('..####..', '.######.', '..####..', '........', '........', '........', '........', '........'),
+        ),
+        (
+            ('........', '...OO...', '..OOOO..', '.OOOO#..', '..#OO#..', '..###...', '...##...', '........'),
+            ('..###...', '.###OO..', '..####..', '...##...', '........', '........', '........', '........'),
+        ),
+        (
+            ('...O....', '..OO#...', '...##...', '..#.....', '...#....', '........', '........', '........'),
+            ('........', '..##....', '...#....', '........', '........', '........', '........', '........'),
+        ),
+    )
+    for idx, (top_rows, bot_rows) in enumerate(smoke_puffs):
+        pair_off = town_cloud_bank_off + (0x0E + idx * 2) * 16
+        ext_chr[pair_off:pair_off + 16] = _encode_2bpp(top_rows)
+        ext_chr[pair_off + 16:pair_off + 32] = _encode_2bpp(bot_rows)
 
-    # R0 banks 230, 232, 234, 236 (2 KB each): overworld water/lava tile $6E
-    # counter-phase ripple variants from 4 KB CHR bank 17 (1 KB banks 68/69).
-    ow_r0_off = CHR_OFFSET + 17 * 4096
+    # R0 banks 230, 232, 234, 236 (2 KB each): overworld water/lava ($6E) and swamp ($6F).
+    # Grass ($6D) and forest ($68/$6A) animate asynchronously per-tile via CHR 31 R1 ($9E..$AF).
+    ow_r0_off = CHR_OFFSET + 31 * 4096
     ow_r0 = overlay.target[ow_r0_off:ow_r0_off + 2048]
     for slot, (top_shift, bot_shift) in enumerate((
         (1, -1), (2, -2), (-1, 1), (-2, 2)
     )):
         variant = bytearray(ow_r0)
-        t_off = 0x6E * 16
-        for row in range(8):
-            shift = top_shift if row < 4 else bot_shift
-            variant[t_off + row] = _ror8(variant[t_off + row], shift)
-            variant[t_off + 8 + row] = _ror8(variant[t_off + 8 + row], shift)
+        # Water/lava ($6E) and swamp ($6F): 8-step counter-phase ripple (+/-2 px).
+        for tile_id in (0x6E, 0x6F):
+            t_off = tile_id * 16
+            for row in range(8):
+                shift = top_shift if row < 4 else bot_shift
+                variant[t_off + row] = _ror8(variant[t_off + row], shift)
+                variant[t_off + 8 + row] = _ror8(variant[t_off + 8 + row], shift)
         ext_off = (230 + slot * 2 - 128) * 1024
         ext_chr[ext_off:ext_off + 2048] = variant
 
+    # CHR 31 R1 ($0800-$0FFF, tiles $9E..$AF): independent grass ($6D) and forest
+    # ($68 TL / $6A TR) sway/rustle variants written into the dedicated overworld R1 bank.
+    ow_r1_off = ow_r0_off + 2048
+    def _shift_ow_tile(src_tile: int, row_shifts: dict[int, int], *, wrap: bool) -> bytes:
+        buf = bytearray(overlay.target[ow_r0_off + src_tile * 16:ow_r0_off + (src_tile + 1) * 16])
+        for row, shift in row_shifts.items():
+            for plane in (0, 8):
+                val = buf[plane + row]
+                if wrap:
+                    buf[plane + row] = _ror8(val, shift)
+                else:
+                    buf[plane + row] = ((val >> shift) if shift > 0 else (val << -shift)) & 0xFF
+        return bytes(buf)
+
+    grass_variants = (
+        {0: 1, 1: 1},                  # $9E: top tuft leans right
+        {0: -1, 1: -1},                # $9F: top tuft leans left
+        {5: 1, 6: 1},                  # $A0: lower tuft rustles right
+        {5: -1, 6: -1},                # $A1: lower tuft rustles left
+        {0: 1, 1: 1, 2: 1, 5: 1, 6: 1},  # $A2: full breeze right
+        {0: 1, 1: 1, 5: -1, 6: -1},    # $A3: cross breeze
+    )
+    for idx, rs in enumerate(grass_variants):
+        tid = 0x9E + idx
+        overlay.put(ow_r1_off + (tid - 0x80) * 16, _shift_ow_tile(0x6D, rs, wrap=True),
+                    b'\xFF' * 16, f'Overworld grass R1 variant ${tid:02X}')
+
+    forest_tl_variants = (
+        {0: 1, 1: 1},          # $A4: upper crown shifts right
+        {1: -1, 2: -1},        # $A5: upper canopy shifts left
+        {4: -1, 6: -1},        # $A6: mid/lower leaves shift left
+        {4: 1, 6: 1},          # $A7: mid/lower leaves shift right
+        {0: 1, 1: 1, 4: 1},    # $A8: upper-mid breeze right
+        {2: -1, 3: -1, 6: -1}, # $A9: canopy breeze left
+    )
+    for idx, rs in enumerate(forest_tl_variants):
+        tid = 0xA4 + idx
+        overlay.put(ow_r1_off + (tid - 0x80) * 16, _shift_ow_tile(0x68, rs, wrap=False),
+                    b'\xFF' * 16, f'Overworld forest-TL R1 variant ${tid:02X}')
+
+    def _forest_tr_tile(overrides: dict[int, str], shift_rows: dict[int, int]) -> bytes:
+        base = bytearray(overlay.target[ow_r0_off + 0x6A * 16:ow_r0_off + 0x6B * 16])
+        for row, shift in shift_rows.items():
+            for plane in (0, 8):
+                val = base[plane + row]
+                base[plane + row] = ((val >> shift) if shift > 0 else (val << -shift)) & 0xFF
+        for row, pat in overrides.items():
+            enc = _encode_2bpp((pat,) + ('........',) * 7)
+            base[row] = enc[0]
+            base[8 + row] = enc[8]
+        return bytes(base)
+
+    forest_tr_variants = (
+        ({1: 'O..*OOO*', 2: 'OO.*OOO*'}, {}),       # $AA: upper canopy rustle
+        ({3: 'OO..OOO.'}, {4: 1}),                 # $AB: mid-crown leaf shift
+        ({}, {4: 1, 5: -1}),                       # $AC: counter-sway middle leaves
+        ({6: 'OO.OO*O*', 7: 'O..OOO.*'}, {}),      # $AD: lower canopy rustle
+        ({1: 'O..*OOO*', 3: 'OO..OOO.'}, {4: 1}),  # $AE: upper+mid breeze
+        ({2: 'OO.*OOO*', 7: 'O..OOO.*'}, {5: -1}), # $AF: cross-canopy twitch
+    )
+    for idx, (overrides, rs) in enumerate(forest_tr_variants):
+        tid = 0xAA + idx
+        overlay.put(ow_r1_off + (tid - 0x80) * 16, _forest_tr_tile(overrides, rs),
+                    b'\xFF' * 16, f'Overworld forest-TR R1 variant ${tid:02X}')
+
     # R0 banks 238, 240, 242, 244 (2 KB each): ripple the open lava and carry
     # the same texture through the original water masks in the forest edge.
+    # Also build the 1px undulating surface wave on row 5 of tiles $5A-$5D.
     title_r0 = overlay.target[title_r0_off:title_r0_off + 2048]
+    wave_masks = (0xFC7F, 0xFE3F, 0xFF1F, 0xFE3F)
     for v in range(4):
         variant = bytearray(title_r0)
         for t_idx, t_phase in zip(TITLE_LAVA_TILES, (0, 2, 1)):
@@ -1533,6 +1945,15 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
                 shift = (0, 1, 2, 1)[phase]
                 variant[t_off + row] = _ror8(variant[t_off + row], shift)
                 variant[t_off + 8 + row] = _ror8(variant[t_off + 8 + row], shift)
+        m_hi = (wave_masks[v] >> 8) & 0xFF
+        m_lo = wave_masks[v] & 0xFF
+        for left_tid, right_tid, base_tid in ((0x5A, 0x5B, 0x68), (0x5C, 0x5D, 0x69)):
+            base_slice = variant[base_tid * 16:base_tid * 16 + 16]
+            for tid, m in ((left_tid, m_hi), (right_tid, m_lo)):
+                t_off = tid * 16
+                variant[t_off:t_off + 16] = base_slice
+                variant[t_off + 5] &= m
+                variant[t_off + 13] &= m
         for tile in TITLE_FOREST_EDGE_TILES:
             offset = tile * 16
             forest = source[title_r0_off + offset:title_r0_off + offset + 16]
@@ -1540,7 +1961,57 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
         ext_off = (238 + v * 2 - 128) * 1024
         ext_chr[ext_off:ext_off + 2048] = variant
 
-    # R2 banks 155 (side-view) and 156 (overworld): Waldo-hat variants of Barba's head tiles.
+    # R5 bank 154 (1 KB): title sprite bank 3 with tiny lava-bubble and ember pairs ($C0-$C6).
+    title_r5 = bytearray(overlay.target[CHR_OFFSET + 3 * 1024:CHR_OFFSET + 4 * 1024])
+    title_bubble_tiles = {
+        0xC0: [
+            '00000000',
+            '00000000',
+            '00000000',
+            '00032000',
+            '00000000',
+            '00000000',
+            '00000000',
+            '00000000',
+        ],
+        0xC2: [
+            '00000000',
+            '00030000',
+            '00202000',
+            '00020000',
+            '00000000',
+            '00000000',
+            '00000000',
+            '00000000',
+        ],
+        0xC4: [
+            '00000000',
+            '00203000',
+            '00000000',
+            '00020000',
+            '00000000',
+            '00000000',
+            '00000000',
+            '00000000',
+        ],
+        0xC6: [
+            '00000000',
+            '00000000',
+            '00000000',
+            '00020000',
+            '00000000',
+            '00000000',
+            '00000000',
+            '00000000',
+        ],
+    }
+    for pair_id, rows in title_bubble_tiles.items():
+        p_off = (pair_id - 0xC0) * 16
+        title_r5[p_off:p_off + 16] = encode_tile(rows)
+        title_r5[p_off + 16:p_off + 32] = b'\x00' * 16
+    ext_chr[(154 - 128) * 1024:(155 - 128) * 1024] = title_r5
+
+    # R2 bank 155 (side-view): Waldo-hat variants of Barba's head tiles.
     def _overlay_hat_8x16(r2: bytearray, pairs: tuple[int, ...], x0: int, y0: int,
                           hat_rows: tuple[str, ...]) -> None:
         width = len(pairs) * 8
@@ -1567,33 +2038,84 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
             r2[base + 16:base + 32] = encode_tile(bot_rows)
 
     sv_hat = (
-        '....33....',
-        '..111111..',
-        '.11111111.',
+        '..11111111',
+        '.111111111',
         '3333333333',
         '3333333333',
+    )
+    sv_glasses = (
+        '111111..',
+        '13333111',
+        '131331..',
+        '133331..',
+        '111111..',
     )
     sv_r2 = bytearray(overlay.target[CHR_OFFSET:CHR_OFFSET + 1024])
     _overlay_hat_8x16(sv_r2, (0x02, 0x04), 3, 0, sv_hat)
-    _overlay_hat_8x16(sv_r2, (0x1C,), 3, 0, tuple(r[:5] for r in sv_hat))
     _overlay_hat_8x16(sv_r2, (0x20,), 3, 0, tuple(r[:5] for r in sv_hat))
     _overlay_hat_8x16(sv_r2, (0x3A, 0x3C), 4, 5, sv_hat)
-    ext_chr[(155 - 128) * 1024:(156 - 128) * 1024] = sv_r2
-
-    ow_hat = (
-        '..3333..',
-        '.111111.',
+    _overlay_hat_8x16(sv_r2, (0x02, 0x04), 3, 4, sv_glasses)
+    _overlay_hat_8x16(sv_r2, (0x20,), 3, 4, tuple(r[:5] for r in sv_glasses))
+    _overlay_hat_8x16(sv_r2, (0x3A, 0x3C), 4, 9, sv_glasses)
+    sv_hat_front_rows = (
+        '00011133',
+        '03311133',
+        '33333113',
+        '33333313',
+        '11113331',
         '11111111',
-        '33333333',
+        '11111111',
+        '00000000',
+        '00000000',
+        '00000000',
+        '00000000',
+        '00000000',
+        '00000000',
+        '00000000',
+        '00000000',
+        '00000000',
     )
-    ow_r2 = bytearray(overlay.target[CHR_OFFSET + 30 * 4096:CHR_OFFSET + 30 * 4096 + 1024])
-    _overlay_hat_8x16(ow_r2, (0x00, 0x02), 5, 0, ow_hat)
-    _overlay_hat_8x16(ow_r2, (0x04, 0x06), 5, 1, ow_hat)
-    _overlay_hat_8x16(ow_r2, (0x08, 0x0A), 3, 0, ow_hat)
-    _overlay_hat_8x16(ow_r2, (0x0C, 0x0E), 3, 1, ow_hat)
-    for base_pair in (0x10, 0x14, 0x18, 0x1C):
-        _overlay_hat_8x16(ow_r2, (base_pair, base_pair + 2), 4, 0, ow_hat)
-    ext_chr[(156 - 128) * 1024:(157 - 128) * 1024] = ow_r2
+    sv_r2[0x1C * 16:0x1E * 16] = encode_tile(sv_hat_front_rows[:8]) + encode_tile(sv_hat_front_rows[8:])
+    ext_chr[(155 - 128) * 1024:(156 - 128) * 1024] = sv_r2
+    if boss_meter == 'souls':
+        ext_chr[(156 - 128) * 1024:(158 - 128) * 1024] = compile_souls_bar_chr()
+        # R5 banks 175-178: odd-bank ($076E+1) sprite pairs ($08..$2E -> $C1..$E7, plus Gooma $9E..$A2 -> $E9..$ED)
+        # so MMC3 scanline IRQs never see A12=0 sprite fetches during boss fights.
+        for r5_bank, gfx_id in ((175, 0x08), (176, 0x0A), (177, 0x14), (178, 0x16)):
+            r5_buf = bytearray(1024)
+            src_spr = CHR_OFFSET + (gfx_id + 1) * 4096
+            for pair in range(0x08, 0x30, 2):
+                dst_off = (pair + 0xB9 - 0xC1) * 16
+                r5_buf[dst_off:dst_off + 32] = source[src_spr + pair * 16:src_spr + pair * 16 + 32]
+            if gfx_id == 0x16:
+                for pair in (0x9E, 0xA0, 0xA2):
+                    dst_off = (pair + 0x4B - 0xC1) * 16
+                    r5_buf[dst_off:dst_off + 32] = source[src_spr + pair * 16:src_spr + pair * 16 + 32]
+            ext_chr[(r5_bank - 128) * 1024:(r5_bank - 127) * 1024] = r5_buf
+    if waldo_portal:
+        sv_hat_tall_rows = (
+            '33100000',
+            '33113000',
+            '13113300',
+            '13133110',
+            '31100110',
+            '11301111',
+            '00001111',
+            '00000110',
+            '00000000',
+            '00000000',
+            '00000000',
+            '00000000',
+            '00000000',
+            '00000000',
+            '00000000',
+            '00000000',
+        )
+        sv_hat_tall = encode_tile(sv_hat_tall_rows[:8]) + encode_tile(sv_hat_tall_rows[8:])
+        for bank in (0, 2, 4, 6, 8, 10, 12, 16, 18, 20, 22, 24):
+            hat_off = CHR_OFFSET + bank * 4096 + 0x5E * 16
+            overlay.put(hat_off, sv_hat_tall, source[hat_off:hat_off + 32],
+                        f'CHR {bank:02X}: tall Waldo hat + puffball at $5E')
 
     target = bytes(overlay.target) + bytes(ext_chr)
     for bank, expected in enumerate(fingerprints):
@@ -1611,9 +2133,12 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
                 if lo <= t <= hi:
                     found.append((a, t))
         return found
+    nmi_tail = 0xC19F if boss_meter == 'souls' else 0xC19D
+    stray = [x for x in nmi_branches(target, nmi_tail + 1, 0xC1B5)
+             if not (boss_meter == 'souls' and x == (0xC196, 0xC1B3))]
     if [a for a, _ in nmi_branches(source, 0xC1A8, 0xC1A8)] != [0xC155, 0xC162, 0xC167] \
-            or nmi_branches(target, 0xC19E, 0xC1B5) \
-            or [t for _, t in nmi_branches(target, 0xC19D, 0xC19D)] != [0xC19D] * 3:
+            or stray \
+            or [t for _, t in nmi_branches(target, nmi_tail, nmi_tail)] != [nmi_tail] * 3:
         raise ValueError('NMI tail branch retargeting incomplete (LateSplit)')
     # The FF byte at FF4B is the high operand of a live JMP, not filler.
     # Keep its whole instruction untouched beside the new terrain allocation.
@@ -1648,15 +2173,27 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
         import build_waldo
         import f13_build
         import pack_waldo
+        import portal_pool
         waldo_bytes = build_waldo.build().read_bytes()
         f13_bytes = f13_build.build().read_bytes() if f13_build.SOURCE_ROM.is_file() else None
-        target = pack_waldo.pack_combined(target, labels['BarbaWaldoRestore6'], waldo_bytes,
-                                          alternate_laugh_data, f13=f13_bytes)
-        chr_base = CHR_OFFSET + target[4] * 16384 - 128 * 1024
+        assignments = portal_pool.build_portal_assignments(
+            include_f13=(f13_bytes is not None),
+            roms_dir=ROOT / 'roms',
+        )
+        target_buf = bytearray(target)
+        portal_pool.patch_portal_tables(target_buf, labels, assignments, prg_offset)
+        portal_pool.write_portal_manifest(output / 'portal-manifest.json', assignments)
+        target = pack_waldo.pack_combined(bytes(target_buf), labels['BarbaWaldoRestore6'], waldo_bytes,
+                                          alternate_laugh_data, f13=f13_bytes,
+                                          extra_ids=[a.subgame.id for a in assignments],
+                                          roms_dir=ROOT / 'roms')
+        prg_16k = ((target[9] & 0x0F) << 8) | target[4]
+        chr_base = CHR_OFFSET + prg_16k * 16384 - 128 * 1024
     patch = encode(source, target, 'Zelda II - Barba Edition | development alpha',
                    [(chr_base+30*4096+len(ow), CHR_OFFSET+16*4096+len(ow), 0x60*16-len(ow)),
                     (chr_base+30*4096+0x64*16, CHR_OFFSET+16*4096+0x64*16, (0xD0-0x64)*16),
-                    (chr_base+30*4096+0xD4*16, CHR_OFFSET+16*4096+0xD4*16, 8192-0xD4*16)])
+                    (chr_base+30*4096+0xE4*16, CHR_OFFSET+16*4096+0xE4*16, (0x19E-0xE4)*16),
+                    (chr_base+30*4096+0x1B0*16, CHR_OFFSET+16*4096+0x1B0*16, 8192-0x1B0*16)])
     if apply(source, patch) != target:
         raise ValueError('BPS patch round-trip failed')
     # Independent post-application source check protects the original file.
@@ -1670,10 +2207,17 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
         (play_dir/'barba.nes').write_bytes(target)
         (play_dir/'barba.bps').write_bytes(patch)
     changed_bytes = sum(a != b for a, b in zip(source, target)) + max(0, len(target) - len(source))
+    patch_groups: dict[str, dict[str, int]] = {}
+    for entry in overlay.ranges:
+        grp = entry.get('group', 'barba_core')
+        bucket = patch_groups.setdefault(grp, {'count': 0, 'bytes': 0})
+        bucket['count'] += 1
+        bucket['bytes'] += entry['length']
     report = {'stage': 'development alpha', 'source_sha256': SOURCE_SHA256,
               'output_sha256': hashlib.sha256(target).hexdigest(),
               'size': len(target), 'changed_bytes': changed_bytes,
-              'labels': labels, 'patches': sorted(overlay.ranges, key=lambda r: r['offset'])}
+              'labels': labels, 'patch_groups': patch_groups,
+              'patches': sorted(overlay.ranges, key=lambda r: r['offset'])}
     if roar_info:
         report['title_roar_prototype'] = roar_info
     output_dir = output.resolve()
@@ -1684,6 +2228,9 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'r
         'bps_sha256': hashlib.sha256(patch).hexdigest(),
         'audio': 'sampled' if title_roar_wav else 'native',
         'waldo_portal': waldo_portal,
+        'boss_meter': boss_meter,
+        'game_over_portrait': game_over_portrait,
+        'game_over_laughs': game_over_laughs,
         'git_commit': git_commit,
         'git_dirty': git_dirty,
         'release': release,
@@ -1695,15 +2242,28 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--rom', type=Path, default=ROOT/'roms/z2.nes')
     parser.add_argument('--out', type=Path, default=ROOT/'build')
-    parser.add_argument('--title-roar-wav', type=Path, default=ROOT/'roms/roar.wav',
-                        help='Local PCM roar WAV (default: roms/roar.wav)')
+    parser.add_argument('--title-roar-wav', type=Path, default=ROOT/'assets/roar.wav',
+                        help='Local PCM roar WAV (default: assets/roar.wav)')
     parser.add_argument('--native-audio', action='store_true',
                         help='Build the legacy noise roar and five distinct Game Over laughs')
+    parser.add_argument('--no-portals', dest='waldo_portal', action='store_false',
+                        help='Build without crossover subgame portals (smaller shareable patch)')
+    parser.add_argument('--no-waldo', dest='waldo_portal', action='store_false',
+                        help=argparse.SUPPRESS)
+    parser.add_argument('--boss-meter', choices=('vanilla', 'souls'), default='souls',
+                        help='Boss health meter style: vanilla (8 left pips) or souls (bottom bar, default)')
+    parser.add_argument('--no-game-over-portrait', dest='game_over_portrait', action='store_false',
+                        help='Keep vanilla Ganon Game Over silhouette and subtitle')
+    parser.add_argument('--no-game-over-laughs', dest='game_over_laughs', action='store_false',
+                        help='Keep vanilla Game Over DPCM laugh cues')
     parser.add_argument('--release', metavar='VERSION',
                         help='Associate a release version with this build in the local history')
     args = parser.parse_args()
     try:
         report = build(args.rom, args.out, None if args.native_audio else args.title_roar_wav,
+                       waldo_portal=args.waldo_portal, boss_meter=args.boss_meter,
+                       game_over_portrait=args.game_over_portrait,
+                       game_over_laughs=args.game_over_laughs,
                        release=args.release)
     except (ValueError, OSError, sqlite3.Error, subprocess.CalledProcessError) as error:
         parser.exit(1, f'Build failed: {error}\n')

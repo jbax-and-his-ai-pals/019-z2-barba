@@ -93,7 +93,7 @@ if PACK_SCENES then
         local spec=recipe
         scenes[#scenes+1]={id=spec.id,name=spec.name,frames=spec.frames or 150,setup=function()
             for address,value in pairs(spec.writes) do w(address,value) end
-        end,capture=function()return r(0x736)==(spec.mode or 11) and (spec.mode==5 or r(0xB5)==1) end}
+        end,capture=function()return r(0x736)==(spec.mode or 11) and (spec.mode==5 and r(0x726)==0 or (spec.mode~=5 and r(0xB5)==1)) end}
     end
 end
 local function finish()

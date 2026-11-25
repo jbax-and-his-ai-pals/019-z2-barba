@@ -22,10 +22,10 @@
   },
   "sets": {
     "saria": [
-      {"id":"saria-sandbar","name":"Saria quicksand river on the overworld","profile":"ruto","world":0,"region":0,"number":0,"room":0,"page":0,"mode":5,"frames":90,"entry":{"115":88,"116":8,"1801":1,"1802":0,"1846":0,"1897":1},"instructions":"Look for the rippling quicksand through Saria. Press Down to enter town."},
-      {"id":"saria-guard","name":"Saria bridge guard before Bagu","profile":"ruto","world":1,"region":0,"number":2,"room":30,"page":1,"position":{"x":320,"y":176},"town":true,"instructions":"Press Up beside the bridge guard to read his quicksand warning."},
-      {"id":"saria-entrance","name":"North Saria entrance","profile":"ruto","world":1,"region":0,"number":2,"room":8,"page":3,"position":{"x":944,"y":176},"town":true,"instructions":"Walk left past the entrance sign to see the first quicksand bridge."},
-      {"id":"saria-graveyard-bridge","name":"Saria graveyard bridge","profile":"ruto","world":1,"region":0,"number":2,"room":7,"page":2,"position":{"x":552,"y":176},"town":true,"instructions":"Cross the bridge in either direction. Watch the quicksand and passing villagers' shouts."}
+      {"id":"saria-sandbar","name":"Saria foul water river on the overworld","profile":"ruto","world":0,"region":0,"number":0,"room":0,"page":0,"mode":5,"frames":90,"entry":{"115":88,"116":8,"1801":1,"1802":0,"1846":0,"1897":1},"instructions":"Look for the rippling green foul water through Saria. Press Down to enter town."},
+      {"id":"saria-guard","name":"Saria bridge guard before Bagu","profile":"ruto","world":1,"region":0,"number":2,"room":30,"page":1,"position":{"x":320,"y":176},"town":true,"instructions":"Press Up beside the bridge guard to read his foul water warning."},
+      {"id":"saria-entrance","name":"North Saria entrance","profile":"ruto","world":1,"region":0,"number":2,"room":8,"page":3,"position":{"x":944,"y":176},"town":true,"instructions":"Walk left past the entrance sign to see the first foul water bridge."},
+      {"id":"saria-graveyard-bridge","name":"Saria graveyard bridge","profile":"ruto","world":1,"region":0,"number":2,"room":7,"page":2,"position":{"x":552,"y":176},"town":true,"instructions":"Cross the bridge in either direction. Watch the foul water and passing villagers' shouts."}
     ],
     "items": [
       {"id":"candle-pickup","name":"Palace 1 Candle pickup","profile":"p1","world":3,"region":0,"number":1,"room":8,"page":0,"position":{"x":180,"y":160},"instructions":"Walk left to pick up the Candle. Listen for the roar after the fanfare and watch Barba tilt his head up."},

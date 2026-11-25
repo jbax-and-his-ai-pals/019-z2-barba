@@ -45,7 +45,7 @@ combined build. See [current verification and open issues](docs/STATUS.md).
 ## Build and playtest
 
 Place the source ROMs in `roms/z2.nes` and `roms/waldo.nes`, and the local
-roar sample in `roms/roar.wav`. The source files are read locally. The
+roar sample in `assets/roar.wav`. The source files are read locally. The
 [build guide](docs/BUILD.md) lists input checksums, audio options, and outputs.
 
 ```powershell

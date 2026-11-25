@@ -29,7 +29,7 @@ SLOTS = [
 def create(force: bool = False) -> dict:
     if not ROM_PATH.is_file():
         import build
-        build.build(ROOT / 'roms/z2.nes', ROOT / 'build', ROOT / 'roms/roar.wav')
+        build.build(ROOT / 'roms/z2.nes', ROOT / 'build', ROOT / 'assets/roar.wav')
 
     digest = hashlib.sha256(ROM_PATH.read_bytes()).hexdigest()
     manifest_path = PACK_DIR / 'manifest.json'

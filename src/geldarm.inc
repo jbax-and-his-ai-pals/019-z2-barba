@@ -63,9 +63,9 @@ GeldarmHits:
     rts
 
 ; Carry from the native RLE run comparison. Keep the run available via
-; ($0E),Y, but report unwalkable terrain for West Hyrule's quicksand.
-.export WestQuicksandTerrain1
-WestQuicksandTerrain1:
+; ($0E),Y, but report unwalkable water for West Hyrule's Saria foul river.
+.export WestFoulWaterTerrain1
+WestFoulWaterTerrain1:
     bcc @next_run
     lda $02
     cmp #$0A

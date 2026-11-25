@@ -24,7 +24,9 @@ local waldoStart = 0
 local inp = {}
 local stage = 'intro'
 local sf = 0
-local jumped = false
+local jumpedSubway = false
+local subwayFrames = 0
+local jumpToCastle = false
 local waitFrames = 0
 local aTimer = 0
 local slotPhase = 'wait_hand'
@@ -40,19 +42,39 @@ emu.addMemoryCallback(function()
 end, emu.callbackType.exec, 0x8000, 0xFFFF)
 
 emu.addMemoryCallback(function()
-    if phase == 'waldo' and not jumped then
-        jumped = true
+    if phase == 'waldo' and not jumpedSubway then
+        jumpedSubway = true
         w(0x0601, 5)
-        emu.setState({['cpu.pc'] = 0xE193})
+        w(0x0603, 0)
+        w(0x12, 0xA0)
+        w(0x13, 0x8C)
+        emu.setState({['cpu.pc'] = 0xE185})
     end
 end, emu.callbackType.exec, 0xE145)
+
+emu.addMemoryCallback(function()
+    if phase == 'waldo' and jumpToCastle and r(0x0705) == 0x78 and r(0x0709) == 0x79 then
+        jumpToCastle = false
+        w(0x0601, 5)
+        w(0x12, 0xA0)
+        w(0x13, 0x8C)
+        emu.setState({['cpu.pc'] = 0xE193})
+    end
+end, emu.callbackType.exec, 0xA073)
 
 emu.addEventCallback(function()
     if phase == 'setup' then
         if frame < 1000 then
             emu.setInput(newGameInput(frame), 0)
-        elseif frame >= 1100 and (r(0x3B) < 1 or r(0x4D) < 0x26) then
-            emu.setInput({right = true}, 0)
+        elseif frame >= 1060 and r(0x726) == 0 and r(0x736) == 11 then
+            local curPage, curX = r(0x3B), r(0x4D)
+            if curPage > 0 or curX > 0x54 then
+                emu.setInput({left = true}, 0)
+            elseif curX < 0x4C then
+                emu.setInput({right = true}, 0)
+            else
+                emu.setInput({}, 0)
+            end
         else
             emu.setInput({}, 0)
         end
@@ -73,13 +95,13 @@ emu.addEventCallback(function()
     frame = frame + 1
     if phase == 'setup' then
         if frame == 1000 then
-            w(0x707, 1); w(0x706, 0); w(0x70A, 0); w(0x769, 3); w(0x561, 1)
+            w(0x707, 1); w(0x706, 0); w(0x056B, 0); w(0x70A, 0); w(0x769, 3); w(0x561, 0x1C)
             w(0x73, 54); w(0x74, 46); w(0x748, 0x2C)
             w(0x701, 0); w(0x75C, 0); w(0x704, 0); w(0x736, 0)
             w(0x73D, 0); w(0x726, 1)
-        elseif frame > 1100 and r(0x3B) == 1 and r(0x4D) >= 0x26 then
+        elseif frame >= 1060 and r(0x726) == 0 and r(0x736) == 11 and r(0x3B) == 0 and r(0x4D) >= 0x4C and r(0x4D) <= 0x54 then
             for slot = 0, 5 do w(0xB6 + slot, 0) end
-            w(0x4D, 40); w(0x70, 0)
+            w(0x4D, 0x50); w(0x70, 0)
             phase = 'enter'
             enterStart = frame
         end
@@ -112,21 +134,37 @@ emu.addEventCallback(function()
         elseif stage == 'find_train' then
             sf = sf + 1
             local cx, cy = r(0x703), r(0x700)
-            local scrollX = r(0x03) + (r(0x00) % 2) * 256
+            local scrollX = r(0x04) + (r(0x00) % 2) * 256
             local step = math.floor(sf / 12)
             local tx = r(0x718B) * 8 + 8 - scrollX + ((step % 3) - 1) * 4
             local ty = r(0x718C) * 8 + 32 + ((math.floor(step / 3) % 3) - 1) * 4
             if tx > 224 then tx = 224 elseif tx < 16 then tx = 16 end
-            if cx < tx - 1 then inp.right = true elseif cx > tx + 1 then inp.left = true end
-            if cy < ty - 1 then inp.down = true elseif cy > ty + 1 then inp.up = true end
+            if ty > 191 then ty = 191 elseif ty < 16 then ty = 16 end
+            if cx < tx - 4 then inp.right = true elseif cx > tx + 4 then inp.left = true end
+            if cy < ty - 4 then inp.down = true elseif cy > ty + 4 then inp.up = true end
             if not inp.right and not inp.left and not inp.down and not inp.up and (sf % 6 == 0) then
                 inp.a = true
             end
-            if jumped then
-                stage = 'wait_castle'
+            if jumpedSubway then
+                stage = 'wait_subway'
                 sf = 0
             elseif sf > 500 then
-                error('Train station find timeout')
+                error(string.format('Train station find timeout cx=%d cy=%d scrollX=%d tx=%d ty=%d b=(%d,%d)',
+                    cx, cy, scrollX, tx, ty, r(0x718B), r(0x718C)))
+            end
+        elseif stage == 'wait_subway' then
+            sf = sf + 1
+            if sf == 540 then
+                pendingCapture = 'before-subway'
+            elseif sf > 540 and r(0x0705) == 0x78 and r(0x0709) == 0x79 and r(0x00) == 0x88 then
+                subwayFrames = subwayFrames + 1
+                if subwayFrames == 30 then
+                    jumpToCastle = true
+                    stage = 'wait_castle'
+                    sf = 0
+                end
+            elseif sf > 900 then
+                error('Timed out waiting to enter Subway level')
             end
         elseif stage == 'wait_castle' then
             sf = sf + 1
@@ -138,13 +176,14 @@ emu.addEventCallback(function()
         elseif stage == 'solve_castle' then
             sf = sf + 1
             local cx, cy = r(0x703), r(0x700)
-            local scrollX = r(0x03) + (r(0x00) % 2) * 256
+            local scrollX = r(0x04) + (r(0x00) % 2) * 256
             local step = math.floor(sf / 12)
             local tx = r(0x718B) * 8 + 8 - scrollX + ((step % 3) - 1) * 4
             local ty = r(0x718C) * 8 + 32 + ((math.floor(step / 3) % 3) - 1) * 4
             if tx > 224 then tx = 224 elseif tx < 16 then tx = 16 end
-            if cx < tx - 1 then inp.right = true elseif cx > tx + 1 then inp.left = true end
-            if cy < ty - 1 then inp.down = true elseif cy > ty + 1 then inp.up = true end
+            if ty > 191 then ty = 191 elseif ty < 16 then ty = 16 end
+            if cx < tx - 4 then inp.right = true elseif cx > tx + 4 then inp.left = true end
+            if cy < ty - 4 then inp.down = true elseif cy > ty + 4 then inp.up = true end
             if not inp.right and not inp.left and not inp.down and not inp.up and (sf % 6 == 0) then
                 inp.a = true
             end
@@ -157,9 +196,7 @@ emu.addEventCallback(function()
             end
         elseif stage == 'wait_slots' then
             sf = sf + 1
-            if sf == 735 then
-                pendingCapture = 'slots-ready'
-            elseif sf == 740 then
+            if sf == 740 then
                 stage = 'play_slots'
                 sf = 0
                 aTimer = 4

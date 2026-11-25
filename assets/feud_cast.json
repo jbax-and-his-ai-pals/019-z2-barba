@@ -1,0 +1,551 @@
+{
+  "version": 1,
+  "barba_palettes": {
+    "1": [
+      [
+        55,
+        38
+      ],
+      [
+        54,
+        39
+      ],
+      [
+        55,
+        23
+      ],
+      [
+        54,
+        6
+      ]
+    ],
+    "2": [
+      [
+        48,
+        18
+      ],
+      [
+        55,
+        0
+      ],
+      [
+        49,
+        2
+      ],
+      [
+        54,
+        19
+      ]
+    ],
+    "3": [
+      [
+        55,
+        26
+      ],
+      [
+        54,
+        42
+      ],
+      [
+        56,
+        41
+      ],
+      [
+        55,
+        40
+      ]
+    ]
+  },
+  "z2_palettes": {
+    "1": [
+      [
+        55,
+        38
+      ],
+      [
+        54,
+        39
+      ],
+      [
+        48,
+        38
+      ],
+      [
+        54,
+        23
+      ]
+    ],
+    "2": [
+      [
+        48,
+        18
+      ],
+      [
+        48,
+        33
+      ],
+      [
+        48,
+        0
+      ],
+      [
+        55,
+        19
+      ]
+    ],
+    "3": [
+      [
+        54,
+        42
+      ],
+      [
+        54,
+        26
+      ],
+      [
+        55,
+        42
+      ],
+      [
+        54,
+        40
+      ]
+    ]
+  },
+  "characters": [
+    {
+      "id": "barba_std",
+      "pool": "barba",
+      "label": "Barba",
+      "included": true,
+      "pal_slot": 1,
+      "sprite_type": "full"
+    },
+    {
+      "id": "barba_tall",
+      "pool": "barba",
+      "label": "Tall Barba",
+      "included": true,
+      "pal_slot": 1,
+      "sprite_type": "full"
+    },
+    {
+      "id": "barba_crouch",
+      "pool": "barba",
+      "label": "Crouch Barba",
+      "included": true,
+      "pal_slot": 1,
+      "sprite_type": "full"
+    },
+    {
+      "id": "barba_up",
+      "pool": "barba",
+      "label": "Sky Barba",
+      "included": true,
+      "pal_slot": 1,
+      "sprite_type": "full"
+    },
+    {
+      "id": "barba_dark",
+      "pool": "barba",
+      "label": "Dark Barba",
+      "included": true,
+      "pal_slot": 2,
+      "sprite_type": "full"
+    },
+    {
+      "id": "barba_tux",
+      "pool": "barba",
+      "label": "Tux Barba",
+      "included": true,
+      "pal_slot": 1,
+      "sprite_type": "full"
+    },
+    {
+      "id": "barba_waldo",
+      "pool": "barba",
+      "label": "Waldo Barba",
+      "included": true,
+      "pal_slot": 1,
+      "sprite_type": "full"
+    },
+    {
+      "id": "barba_jason",
+      "pool": "barba",
+      "label": "F13 Barba",
+      "included": true,
+      "pal_slot": 2,
+      "sprite_type": "full"
+    },
+    {
+      "id": "barba_moon",
+      "pool": "barba",
+      "label": "Moon Barba",
+      "included": true,
+      "pal_slot": 2,
+      "sprite_type": "full"
+    },
+    {
+      "id": "barba_wyrmling",
+      "pool": "barba",
+      "label": "Wyrmling",
+      "included": true,
+      "pal_slot": 3,
+      "sprite_type": "full"
+    },
+    {
+      "id": "barba_shades",
+      "pool": "barba",
+      "label": "Cool Barba",
+      "included": true,
+      "pal_slot": 2,
+      "sprite_type": "full"
+    },
+    {
+      "id": "barba_king",
+      "pool": "barba",
+      "label": "King Barba",
+      "included": true,
+      "pal_slot": 3,
+      "sprite_type": "full"
+    },
+    {
+      "id": "barba_berba",
+      "pool": "barba",
+      "label": "Spiked Berba",
+      "included": true,
+      "pal_slot": 3,
+      "sprite_type": "full"
+    },
+    {
+      "id": "z2_link",
+      "pool": "z2",
+      "label": "Link",
+      "included": true,
+      "pal_slot": 3,
+      "mapping": "312",
+      "outline": true,
+      "sprite_type": "top_half"
+    },
+    {
+      "id": "z2_lavalink",
+      "pool": "z2",
+      "label": "Lava Link",
+      "included": true,
+      "pal_slot": 3,
+      "mapping": "312",
+      "outline": true,
+      "sprite_type": "full"
+    },
+    {
+      "id": "z2_error",
+      "pool": "z2",
+      "label": "Error",
+      "included": true,
+      "pal_slot": 2,
+      "mapping": "312",
+      "outline": true,
+      "sprite_type": "top_half"
+    },
+    {
+      "id": "z2_bagu",
+      "pool": "z2",
+      "label": "Sage",
+      "included": true,
+      "pal_slot": 1,
+      "mapping": "211",
+      "outline": true,
+      "sprite_type": "top_half"
+    },
+    {
+      "id": "z2_healer",
+      "pool": "z2",
+      "label": "Town Healer",
+      "included": true,
+      "pal_slot": 1,
+      "mapping": "321",
+      "outline": true,
+      "sprite_type": "top_half"
+    },
+    {
+      "id": "z2_oldwoman",
+      "pool": "z2",
+      "label": "Old Woman",
+      "included": true,
+      "pal_slot": 2,
+      "mapping": "321",
+      "outline": true,
+      "sprite_type": "top_half"
+    },
+    {
+      "id": "z2_guard",
+      "pool": "z2",
+      "label": "Town Guard",
+      "included": true,
+      "pal_slot": 1,
+      "mapping": "312",
+      "outline": true,
+      "sprite_type": "top_half"
+    },
+    {
+      "id": "z2_bot",
+      "pool": "z2",
+      "label": "Bot Slime",
+      "included": true,
+      "pal_slot": 2,
+      "mapping": "321",
+      "outline": true,
+      "sprite_type": "full"
+    },
+    {
+      "id": "z2_lad",
+      "pool": "z2",
+      "label": "Young Lad",
+      "included": true,
+      "pal_slot": 3,
+      "mapping": "312",
+      "outline": true,
+      "sprite_type": "top_half"
+    },
+    {
+      "id": "z2_kid",
+      "pool": "z2",
+      "label": "Little Kid",
+      "included": true,
+      "pal_slot": 3,
+      "mapping": "312",
+      "outline": true,
+      "sprite_type": "full"
+    },
+    {
+      "id": "z2_fatwoman",
+      "pool": "z2",
+      "label": "Townswoman",
+      "included": true,
+      "pal_slot": 1,
+      "mapping": "321",
+      "outline": true,
+      "sprite_type": "top_half"
+    },
+    {
+      "id": "z2_moblin",
+      "pool": "z2",
+      "label": "Moblin",
+      "included": false,
+      "pal_slot": 1,
+      "mapping": "213",
+      "outline": true,
+      "sprite_type": "top_half"
+    },
+    {
+      "id": "z2_daira",
+      "pool": "z2",
+      "label": "Daira",
+      "included": true,
+      "pal_slot": 1,
+      "mapping": "321",
+      "outline": true,
+      "sprite_type": "top_half"
+    },
+    {
+      "id": "z2_ironknuckle",
+      "pool": "z2",
+      "label": "Ironknuckle",
+      "included": true,
+      "pal_slot": 2,
+      "mapping": "211",
+      "outline": true,
+      "sprite_type": "top_half"
+    },
+    {
+      "id": "z2_stalfos",
+      "pool": "z2",
+      "label": "Stalfos",
+      "included": true,
+      "pal_slot": 2,
+      "mapping": "321",
+      "outline": true,
+      "sprite_type": "top_half"
+    },
+    {
+      "id": "z2_mago",
+      "pool": "z2",
+      "label": "Mago",
+      "included": true,
+      "pal_slot": 2,
+      "mapping": "312",
+      "outline": true,
+      "sprite_type": "top_half"
+    },
+    {
+      "id": "z2_fokka",
+      "pool": "z2",
+      "label": "Fokka",
+      "included": true,
+      "pal_slot": 1,
+      "mapping": "213",
+      "outline": true,
+      "sprite_type": "top_half"
+    },
+    {
+      "id": "z2_horsehead",
+      "pool": "z2",
+      "label": "Horsehead",
+      "included": true,
+      "pal_slot": 1,
+      "mapping": "211",
+      "outline": true,
+      "sprite_type": "full"
+    },
+    {
+      "id": "z2_helmethead",
+      "pool": "z2",
+      "label": "Helmethead",
+      "included": true,
+      "pal_slot": 1,
+      "mapping": "211",
+      "outline": true,
+      "sprite_type": "top_half"
+    },
+    {
+      "id": "z2_rebonack",
+      "pool": "z2",
+      "label": "Rebonack",
+      "included": false,
+      "pal_slot": 2,
+      "mapping": "213",
+      "outline": true,
+      "sprite_type": "full"
+    },
+    {
+      "id": "z2_carock",
+      "pool": "z2",
+      "label": "Carock",
+      "included": true,
+      "pal_slot": 2,
+      "mapping": "321",
+      "outline": true,
+      "sprite_type": "full"
+    },
+    {
+      "id": "z2_gooma",
+      "pool": "z2",
+      "label": "Gooma",
+      "included": true,
+      "pal_slot": 1,
+      "mapping": "321",
+      "outline": true,
+      "sprite_type": "top_half"
+    },
+    {
+      "id": "z2_thunderbird",
+      "pool": "z2",
+      "label": "Thunderbird",
+      "included": true,
+      "pal_slot": 1,
+      "mapping": "213",
+      "outline": true,
+      "sprite_type": "top_half"
+    },
+    {
+      "id": "z2_darklink",
+      "pool": "z2",
+      "label": "Dark Link",
+      "included": true,
+      "pal_slot": 3,
+      "mapping": "333",
+      "outline": false,
+      "sprite_type": "top_half"
+    },
+    {
+      "id": "z2_bowllady",
+      "pool": "z2",
+      "label": "Bowl Lady",
+      "included": true,
+      "pal_slot": 1,
+      "mapping": "321",
+      "outline": true,
+      "sprite_type": "top_half"
+    },
+    {
+      "id": "z2_wiseman",
+      "pool": "z2",
+      "label": "Wise Man",
+      "included": true,
+      "pal_slot": 2,
+      "mapping": "312",
+      "outline": true,
+      "sprite_type": "top_half"
+    },
+    {
+      "id": "z2_zelda",
+      "pool": "z2",
+      "label": "Zelda",
+      "included": true,
+      "pal_slot": 1,
+      "mapping": "321",
+      "outline": true,
+      "sprite_type": "top_half"
+    },
+    {
+      "id": "z2_fairy",
+      "pool": "z2",
+      "label": "Fairy",
+      "included": true,
+      "pal_slot": 1,
+      "mapping": "321",
+      "outline": true,
+      "sprite_type": "full"
+    },
+    {
+      "id": "z2_lizalfos",
+      "pool": "z2",
+      "label": "Wosu",
+      "included": true,
+      "pal_slot": 1,
+      "mapping": "321",
+      "outline": true,
+      "sprite_type": "full"
+    },
+    {
+      "id": "z2_fokkeru",
+      "pool": "z2",
+      "label": "Impa",
+      "included": true,
+      "pal_slot": 1,
+      "mapping": "321",
+      "outline": true,
+      "sprite_type": "top_half"
+    },
+    {
+      "id": "z2_acheman",
+      "pool": "z2",
+      "label": "Acheman",
+      "included": true,
+      "pal_slot": 1,
+      "mapping": "321",
+      "outline": true,
+      "sprite_type": "top_half"
+    },
+    {
+      "id": "z2_octorok",
+      "pool": "z2",
+      "label": "Octorok",
+      "included": true,
+      "pal_slot": 1,
+      "mapping": "321",
+      "outline": true,
+      "sprite_type": "full"
+    },
+    {
+      "id": "z2_ache",
+      "pool": "z2",
+      "label": "Ache",
+      "included": true,
+      "pal_slot": 2,
+      "mapping": "321",
+      "outline": true,
+      "sprite_type": "full"
+    }
+  ]
+}

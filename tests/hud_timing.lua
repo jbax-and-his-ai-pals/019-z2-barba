@@ -37,13 +37,14 @@ emu.addMemoryCallback(function()
     local s=stamp('nmi-entry',0xC07B)
     nmiStart={cycle=s['cpu.cycleCount'],phase=phase()}
 end,emu.callbackType.exec,0xC07B)
+local nmiRti=(LABELS and LABELS.NmiRti) or 0xC1B2
 emu.addMemoryCallback(function()
     if not nmiStart then return end
-    local s=stamp('nmi-return',0xC1B5)
+    local s=stamp('nmi-return',nmiRti)
     local p=stats[nmiStart.phase]
     p.maxNmi=math.max(p.maxNmi,s['cpu.cycleCount']-nmiStart.cycle)
     nmiStart=nil
-end,emu.callbackType.exec,0xC1B5)
+end,emu.callbackType.exec,nmiRti)
 -- MMC3 scanline IRQ HUD split: STA $2000 at $D4C0 when IRQ_STAGE ($64D6) == 0.
 emu.addMemoryCallback(function()
     if not active() or r(0x64D6)~=0 then return end

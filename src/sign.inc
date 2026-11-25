@@ -6,7 +6,7 @@
 ; ring) and resets when the room reloads, just like the char tiles.
 ; $04A0,x: 0 = intact sign, 1..SIGN_LINES = next burned line to show.
 .segment "BANK3_SIGN"
-.export SignUpdate, SignDialog
+.export SignUpdate, SignDialog, SariaSignText
 
 ; Routine pointer for actors $21 and $22 (both were $9ABD, the native
 ; talk/offscreen routine). A 2026-11-16 census of world-1 town rooms found every
@@ -153,3 +153,10 @@ ErrorAshCheck:
 ErrorAshText:
     TownLine "I AM", $FD
     TownLine "ASH PILE.", $FF
+
+.segment "BANK3_PAD"
+SariaSignText:
+    TownLine "WELCOME TO", $FD
+    TownLine "SARIA.", $FD
+    TownLine "DON'T DRINK", $FD
+    TownLine "THE WATER.", $FF

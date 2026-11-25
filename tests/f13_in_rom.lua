@@ -96,7 +96,7 @@ emu.addEventCallback(function()
     if phase == 'setup' then
         if frame == 1000 then
             check(read(0x736) == 0x0B, 'New game reaches side-view play')
-            write(0x707, 1); write(0x706, 0); write(0x769, 3); write(0x561, 5)
+            write(0x707, 1); write(0x706, 0); write(0x056B, 1); write(0x769, 3); write(0x561, 5)
             write(0x701, 0); write(0x75C, 0); write(0x704, 0); write(0x736, 0)
             write(0x73D, 0); write(0x726, 1)
         elseif frame > 1100 and read(0x3B) == 0 and read(0x4D) >= 0x94 then

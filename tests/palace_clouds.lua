@@ -12,7 +12,7 @@ local function check(ok,msg)
 end
 
 local cases={
-    {name='p1-entrance',world=3,region=0,num=1,code=0,room=0,expectClouds=true,walk=120},
+    {name='p1-entrance',world=3,region=0,num=1,code=0,room=0,expectClouds=true,walk=120,busy=180},
     {name='p2-entrance',world=3,region=0,num=2,code=1,room=0x0E,expectClouds=true},
     {name='p3-entrance',world=4,region=0,num=3,code=2,room=0,expectClouds=true},
     {name='p4-entrance',world=4,region=1,num=4,code=0,room=0x0F,expectClouds=true,east=true},
@@ -31,7 +31,8 @@ local cases={
 
 local frame,idx,age,base,done=0,0,0,nil,false
 local startDriftX,startCloudX,walkStartCam,walkStartCloudX,walkStartDriftX
-local holdRight,holdJump=false,false
+local holdRight,holdJump,holdFire=false,false,false
+local busyClips=0
 
 local function countCloudSprites(c)
     local n,badAttr,firstX=0,0,nil
@@ -79,7 +80,7 @@ local expectedPattern
 
 emu.addEventCallback(function()
     if frame<1050 then emu.setInput(newGameInput(frame),0)
-    else emu.setInput({right=holdRight,a=holdJump},0) end
+    else emu.setInput({right=holdRight,a=holdJump,b=holdFire},0) end
 end,emu.eventType.inputPolled)
 
 emu.addMemoryCallback(function()
@@ -95,7 +96,7 @@ emu.addMemoryCallback(function()
         return
     end
     assert(emu.loadSavestate(base))
-    holdRight=false; holdJump=false
+    holdRight=false; holdJump=false; holdFire=false; busyClips=0
     w(0x707,c.world); w(0x706,c.region); w(0x769,c.town and 3 or (c.world==5 and 5 or 4))
     w(0x561,c.room); w(0x568,c.num-1); w(0x56B,c.num); w(0x56C,c.code)
     w(0x701,0); w(0x75C,c.town and 1 or 0); w(0x704,0); w(0x736,0); w(0x73D,0); w(0x726,1); w(0x748,0x34+c.code)
@@ -178,6 +179,31 @@ emu.addEventCallback(function()
         local png=emu.takeScreenshot()
         local f=assert(io.open(OUTPUT_DIR..'/palace-clouds-p1-walk.png','wb'))
         f:write(png); f:close()
+        if not c.busy then age=0 end
+    elseif c.busy and age>130+c.walk and age<130+c.walk+c.busy then
+        holdRight=(age%90)<60
+        holdJump=(age%36)<20
+        holdFire=(age%8)<2
+        local t0=c.town and 0x89 or 0xC1
+        local t1,t2=t0+2,t0+4
+        for o=0x68,0xFC,4 do
+            local y=r(0x6500+o)
+            local t=r(0x6501+o)
+            if y<0xF0 and (t==t0 or t==t1 or t==t2) then
+                for dy=0,15 do
+                    local sl=y+1+dy
+                    local earlier=0
+                    for p=0,o-4,4 do
+                        local oy=r(0x6500+p)
+                        if oy<0xF0 and sl>=oy+1 and sl<=oy+16 then earlier=earlier+1 end
+                    end
+                    if earlier>=8 then busyClips=busyClips+1 end
+                end
+            end
+        end
+    elseif c.busy and age==130+c.walk+c.busy then
+        holdRight=false; holdJump=false; holdFire=false
+        check(busyClips==0,string.format('%s had zero cloud scanline clips during busy jumps/fireballs (clips=%d)',c.name,busyClips))
         age=0
     end
 end,emu.eventType.endFrame)

@@ -21,16 +21,6 @@ ComboReset:
     sta COMBO_SLAM
     rts
 
-ComboHide:
-    ldx #COMBO_OAM_COUNT-1
-    lda #$F8
-@loop:
-    ldy ComboOam,x
-    sta $0200,y
-    dex
-    bpl @loop
-    rts
-
 ; Called each frame in normal town play ($0707 = 1 or 2).
 ; Returns carry set if a combo banner is active (caller should skip ShoutWord).
 ComboTick:
@@ -136,20 +126,10 @@ ComboDraw:
     cpx #$01
     bcc @no_shake
     cpx #$03
-    bcs @hard_shake
+    bcs @shake
     lda COMBO_SLAM
     beq @no_shake
-@soft_shake:
-    lda $12
-    and #$03
-    tay
-    lda ComboShake1,y
-    clc
-    adc $00
-    sta $00
-    lda ComboShake1+1,y
-    jmp @have_xshake
-@hard_shake:
+@shake:
     lda $12
     and #$03
     tay
@@ -237,28 +217,14 @@ ComboDraw:
     lda #$64
 @draw_flames:
     sta $05
-    lda $00
-    sta $0200,y
-    lda #$84
-    sta $0201,y
-    lda $02
-    sta $0202,y
     lda #$4F
-    clc
-    adc $07
-    sta $0203,y
+    jsr @one_flame
     ldy $05
-    lda $00
-    sta $0200,y
-    lda #$84
-    sta $0201,y
     lda $02
     eor #$40
-    sta $0202,y
+    sta $02
     lda #$A9
-    clc
-    adc $07
-    sta $0203,y
+    jsr @one_flame
     inc $04
     inc $04
     lda $00
@@ -267,7 +233,8 @@ ComboDraw:
     sta $00
 @draw_counter:
     lda #COMBO_COUNTER_SLOT
-    jsr @hide_rest              ; clear the unused title slots before drawing digits
+    ldx $04
+    jsr ComboHideRest           ; clear the unused title slots before drawing digits
     stx $04
     ; Convert COMBO_PTS (1..255) to decimal: $09 = hundreds, $0A = tens, $05 = ones.
     lda COMBO_PTS
@@ -323,23 +290,23 @@ ComboDraw:
     lda ComboDigits,x
     jsr @emit_sprite
     lda #COMBO_OAM_COUNT
-@hide_rest:
-    sta $06
     ldx $04
-    lda #$F8
-@hide_loop:
-    cpx $06
-    bcs @done
-    ldy ComboOam,x
+    jmp ComboHideRest
+@one_flame:
+    clc
+    adc $07
+    sta $0203,y
+    lda $00
     sta $0200,y
-    inx
-    bne @hide_loop
-@done:
+    lda #$84
+    sta $0201,y
+    lda $02
+    sta $0202,y
     rts
 @draw_line:
     ldx $05
     lda ComboRow1Tiles,x
-    beq @done
+    beq @draw_line_done
     ldx $04
     ldy ComboOam,x
     sta $0201,y
@@ -355,6 +322,8 @@ ComboDraw:
     inc $04
     inc $05
     bne @draw_line
+@draw_line_done:
+    rts
 @emit_sprite:
     ldx $04
     ldy ComboOam,x
@@ -369,6 +338,21 @@ ComboDraw:
     adc #$08
     sta $01
     inc $04
+    rts
+ComboHide:
+    ldx #$00
+    lda #COMBO_OAM_COUNT
+ComboHideRest:
+    sta $06
+    lda #$F8
+@hide_loop:
+    cpx $06
+    bcs @done
+    ldy ComboOam,x
+    sta $0200,y
+    inx
+    bne @hide_loop
+@done:
     rts
 
 ComboOam:

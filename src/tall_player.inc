@@ -1,4 +1,4 @@
-.export BarbaSetThrusts, BarbaFallDraw, BarbaBossShadow
+.export BarbaDisplay, BarbaDisplayBody, BarbaSetThrusts, BarbaFallDraw, BarbaBossShadow
 ; The native actor keeps its proven 32px collision body. Extra head sprites
 ; fold into that body under stone; crouching occupies the native 16px lane.
 GEO_CACHE_TILES = $6458 ; 4 bytes: $04..$07
@@ -369,14 +369,14 @@ BarbaDisplay:
     cpx #6*9
     beq @crouch_bend
     cpx #7*9
-    bne @clear_body
+    bne BarbaDisplayBody
 @crouch_bend:
     lda $17
     ora $0479
-    bne @clear_body
+    bne BarbaDisplayBody
     lda $29
     cmp #$30
-    bcc @clear_body
+    bcc BarbaDisplayBody
     ; Start the full 16px head at the original crouch horns. The cropped
     ; curve starts 16px later and ends at the original crouch feet.
     sbc #$08
@@ -384,10 +384,10 @@ BarbaDisplay:
     cpx #6*9
     beq @closed_head
     ldx #BarbaCorridorAttack-BarbaTallTiles
-    bne @clear_body
+    bne BarbaDisplayBody
 @closed_head:
     ldx #BarbaCorridorCrouch-BarbaTallTiles
-@clear_body:
+BarbaDisplayBody:
     lda #$F8
     sta $0208
     sta $020C
@@ -843,8 +843,7 @@ DrawDownstabTail3:
     lda $01
     sta $6503,x
 @tail_ret:
-    lda #$06
-    jmp $FFCC
+    jmp HopTownSmoke2
 
 @next_free:
     txa
@@ -855,22 +854,87 @@ DrawDownstabTail3:
 @find_free:
     lda $6500,x
     cmp #$F0
-    bcs @found
-    txa
-    sec
-    sbc #$04
-    bcs @find_free_next
+    bcc @next_free
+    clc
+    rts
 @none:
     sec
     rts
-@find_free_next:
-    tax
-    bcs @find_free
-@found:
-    clc
-    rts
+
+.segment "BANK3_DLG"
+TRAIL_HISTORY = $6481       ; six lower-body Y samples, oldest overwritten next
+TRAIL_INDEX   = $6487       ; 1..6, 0 means refill on the next visible frame
+EncounterTorsoFrom6:
+    lda $0726
+    bne @reset
+    lda $074C
+    cmp #$03
+    bcs @reset
+    lda $0736
+    cmp #$0B
+    bne :+
+    jmp EncounterDarkCheck3
+:   cmp #$07                  ; lives-remaining -> gameplay transition frame
+    beq @go_player
+    sec
+    sbc #$11                  ; $11 (lives) and $12 (lives -> North Palace)
+    cmp #$02
+    bcc @go_player
+    ldx $076C
+    cpx #$06
+    beq @go_player
+    cpx #$02
+    bne @reset
+    jmp DeathTrailPrep3
+@go_player:
+    jmp EncounterPlayerTrail3
+@reset:
+    jmp EncounterTrailReset3
+.segment "BANK3_SIGN"
+DeathTrailPrep3:
+    lda #$00
+    sta $048D
+    sta $0752
+    sta $0754
+    sta LAVA_CONTACT
+    sta $13
+    beq EncounterPlayerTrail3
+EncounterPlayerTrail3:
+    lda #>(DrawPlayerTrailReturn6-1)
+    pha
+    lda #<(DrawPlayerTrailReturn6-1)
+    pha
+    jmp $FFC5
+EncounterDarkCheck3:
+    lda $0561
+    cmp #$36
+    bne EncounterPlayerTrail3
+    lda #>(DrawDarkTrail4-1)
+    pha
+    lda #<(DrawDarkTrail4-1)
+    pha
+    lda #$04
+    jmp $FFCC
+.segment "TOWN"
+EncounterTrailReset3:
+    lda #$00
+    sta TRAIL_INDEX
+    jmp SwapToBank6
 
 .segment "BANK0"
+BarbaYInRange:
+    cmp #$20
+    bcc @out
+    cmp #$F0
+    bcs @out
+    sta $00
+    ldy DRAW_ATTR
+    clc
+    rts
+@out:
+    sec
+    rts
+
 BarbaDisplayRight:
     lda GEOMETRY
     and #$02
@@ -882,12 +946,8 @@ BarbaDisplayRight:
     adc #$10
     bcs @r_mid
 :
-    cmp #$20
-    bcc @r_mid
-    cmp #$F0
+    jsr BarbaYInRange
     bcs @r_mid
-    sta $00
-    ldy DRAW_ATTR
         TALL_SPRITE 2, $0204, 0
     TALL_SPRITE 1, $024C, 8
     TALL_SPRITE 0, $02C4, 16
@@ -898,12 +958,8 @@ BarbaDisplayRight:
     clc
     adc #$10
     bcs @r_bot
-    cmp #$20
-    bcc @r_bot
-    cmp #$F0
+    jsr BarbaYInRange
     bcs @r_bot
-    sta $00
-    ldy DRAW_ATTR
     TALL_SPRITE 5, $0208, 0
     TALL_SPRITE 4, $020C, 8
     TALL_SPRITE 3, $0210, 16
@@ -915,44 +971,16 @@ BarbaDisplayRight:
     clc
     adc #$20
     bcs @r_done
-    cmp #$20
-    bcc @r_done
-    cmp #$F0
+    jsr BarbaYInRange
     bcs @r_done
-    sta $00
-    ldy DRAW_ATTR
     TALL_SPRITE 8, $0214, 0
     TALL_SPRITE 7, $0218, 8
     TALL_SPRITE 6, $021C, 16
 @r_done:
     jmp BarbaDisplayDone
 
-; Called from the Bank 6 NMI tail after all regular OAM has been copied.
+; Called from the Bank 3 hop after EncounterTorsoFrom6.
 ; Return through the fixed mapper routine to restore Bank 6.
-TRAIL_HISTORY = $6481       ; six lower-body Y samples, oldest overwritten next
-TRAIL_INDEX   = $6487       ; 1..6, 0 means refill on the next visible frame
-EncounterTorsoFrom6:
-    lda $0736
-    cmp #$0B
-    bne @reset
-    lda $0726
-    bne @reset
-    lda $074C
-    cmp #$03
-    bcc @check_dark
-@reset:
-    jsr ResetEncounterTrail
-    beq EncounterTorsoReturn6
-@check_dark:
-    lda $0561
-    cmp #$36
-    bne DrawPlayerTrailReturn6
-    lda #>(DrawDarkTrail4-1)
-    pha
-    lda #<(DrawDarkTrail4-1)
-    pha
-    lda #$04
-    jmp $FFCC
 DrawPlayerTrailReturn6:
     jsr DrawEncounterTorso
 EncounterTorsoReturn6:
@@ -1121,6 +1149,7 @@ BarbaBossShadow:
     adc $03
     tay
     lda BarbaTallTiles,y
+    ldy @bs_oam_off,x
     cmp #$F5
     beq @bs_skip
     sta $05
@@ -1131,24 +1160,18 @@ BarbaBossShadow:
     bcc @bs_skip
     cmp #$F0
     bcs @bs_skip
-    sta $06
+    sta $0200,y
     lda $CD
     clc
     adc @bs_col_x,x
     bcs @bs_skip
-    sta $07
-    ldy @bs_oam_off,x
-    lda $06
-    sta $0200,y
+    sta $0203,y
     lda $05
     sta $0201,y
     lda $02
     sta $0202,y
-    lda $07
-    sta $0203,y
-    jmp @bs_next
+    bne @bs_next
 @bs_skip:
-    ldy @bs_oam_off,x
     lda #$F8
     sta $0200,y
 @bs_next:
@@ -1177,6 +1200,7 @@ BarbaSetThrusts:
     clc
     adc #$1C
     bcs @no_melee
+@center_y:
     sta $0480
 @center:
     lda $CC
@@ -1199,8 +1223,7 @@ BarbaSetThrusts:
     sec
     sbc #$08 ; native head top minus reach, not tall art top
     bcc @no_melee
-    sta $0480
-    jmp @center
+    jmp @center_y
 @no_melee:
     lda #$F8
     sta $0480

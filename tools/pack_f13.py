@@ -51,11 +51,128 @@ class Asm6502:
 
 
 # Fixed entry points in WRAM bank 3 ($7800-$7BFF)
-F13_CHR_SWITCH = 0x7800
-F13_NMI_HOOK   = 0x7840
-F13_WIPE_IN    = 0x7860
-F13_RETURN     = 0x7960
-F13_BOOT       = 0x7AE0
+F13_CHR_SWITCH   = 0x7800
+F13_NMI_HOOK     = 0x7840
+F13_WIPE_IN      = 0x7860
+F13_SEED_RNG     = 0x7950
+F13_RETURN       = 0x7960
+F13_BOOT         = 0x7AD0
+F13_RELOC_E5B4   = 0x7B12
+F13_BARBA_DRAW   = 0x7B2A
+F13_BARBA_BREATH = 0x7B3E
+F13_BARBA_RESET  = 0x7B53
+F13_ATK_GATE     = 0x7B60
+F13_SAVE_OAM_PTR = 0x7B6B
+F13_SFX_CALL     = 0x7B8C
+F13_SET_R6       = 0x7B9E
+F13_NMI_WRAP     = 0x7BB3
+F13_WR_SEL       = 0x7BF4
+
+F13_MMC3_SEL     = 0x7BFB  # shadow of $8000 bank-select register
+F13_CUR_R6       = 0x7BFC  # shadow of current R6 PRG bank
+
+
+def make_barba_trampolines() -> bytes:
+    """Assemble WRAM bank-1 trampolines ($7B38-$7BFA) shared by standalone and Z2 F13."""
+    out = bytearray(b'\xFF' * (0x7BFE - F13_BARBA_DRAW))
+
+    def place_t(addr: int, data: bytes, limit: int) -> None:
+        off = addr - F13_BARBA_DRAW
+        assert off + len(data) <= limit - F13_BARBA_DRAW, f'Trampoline overflow at ${addr:04X}'
+        out[off : off + len(data)] = data
+
+    def bank_call(entry_addr: int, pre_call: tuple[int, ...] = (), save_x: bool = False) -> bytes:
+        a = Asm6502(entry_addr)  # base unused; no branches
+        for b in pre_call:
+            a.emit(b)
+        if save_x:
+            a.emit(0x8A, 0x48)                                # TXA; PHA
+        a.emit(0xA9, 0x01, 0x20, F13_SET_R6 & 0xFF, F13_SET_R6 >> 8)
+        a.emit(0x20, entry_addr & 0xFF, entry_addr >> 8)
+        if save_x:
+            a.emit(0xA9, 0x04, 0x20, F13_SET_R6 & 0xFF, F13_SET_R6 >> 8)
+            a.emit(0x68, 0xAA, 0x60)                          # PLA; TAX; RTS
+        else:
+            a.emit(0xA9, 0x04, 0x4C, F13_SET_R6 & 0xFF, F13_SET_R6 >> 8)
+        return a.finish()
+
+    # CallF13BarbaDraw (calls $8000; preserves X for $AEC8 JSR $AAE6)
+    place_t(F13_BARBA_DRAW, bank_call(0x8000, save_x=True), F13_BARBA_BREATH)
+    # CallF13BarbaBreath (calls $DBD8 first, then $8003; preserves X for $AEBF)
+    place_t(F13_BARBA_BREATH, bank_call(0x8003, pre_call=(0x20, 0xD8, 0xDB), save_x=True), F13_BARBA_RESET)
+    # CallF13BarbaReset (calls $8006)
+    place_t(F13_BARBA_RESET, bank_call(0x8006), F13_ATK_GATE)
+    # F13AttackGate (Barba -> A=0; Laura/Debbie -> $B271)
+    a = Asm6502(F13_ATK_GATE)
+    a.emit(0x20, 0x4B, 0xBB)                                  # JSR IsFemaleHuman
+    a.emit(0xB0, 0x03)                                        # BCS human
+    a.emit(0x4C, 0x80, 0xB2)                                  # JMP $B280 (return A=0)
+    a.emit(0x4C, 0x71, 0xB2)                                  # JMP $B271 (vanilla check)
+    place_t(F13_ATK_GATE, a.finish(), F13_SAVE_OAM_PTR)
+    # Keep $05BF in [$30, $E0] and $056D >= $30 (protects Sprite 0 + HUD from $A84B)
+    a = Asm6502(F13_SAVE_OAM_PTR)
+    a.emit(0xAD, 0x6F, 0x05, 0xC9, 0x30, 0xB0, 0x02, 0xA9, 0x30)
+    a.emit(0xC9, 0xE1, 0x90, 0x02, 0xA9, 0xE0, 0x8D, 0xBF, 0x05)
+    a.emit(0xAD, 0x6D, 0x05, 0xC9, 0x30, 0xB0, 0x05, 0xA9, 0x30, 0x8D, 0x6D, 0x05)
+    a.emit(0x60)
+    place_t(F13_SAVE_OAM_PTR, a.finish(), F13_SFX_CALL)
+    # Call $8F00+A in F13 bank 4 ($8000-$9FFF), then restore bank 1
+    a = Asm6502(F13_SFX_CALL)
+    a.emit(0x8D, (F13_SFX_CALL + 9) & 0xFF, (F13_SFX_CALL + 9) >> 8)  # STA low byte of JSR $8Fxx
+    a.emit(0xA9, 0x04, 0x20, F13_SET_R6 & 0xFF, F13_SET_R6 >> 8)
+    a.emit(0x20, 0x6C, 0x8F)                                  # offset +8..+10 (low byte at +9)
+    a.emit(0xA9, 0x01, 0x4C, F13_SET_R6 & 0xFF, F13_SET_R6 >> 8)
+    place_t(F13_SFX_CALL, a.finish(), F13_SET_R6)
+    # SetR6: A = bank offset (1 or 4). Updates F13_MMC3_SEL, F13_CUR_R6, and MMC3 R6. Clobbers X.
+    a = Asm6502(F13_SET_R6)
+    a.emit(0x18, 0x6D, 0xFF, 0x7B)                            # CLC; ADC $7BFF (F13_PRG_BASE)
+    a.emit(0xA2, 0x06)                                        # LDX #$06
+    a.emit(0x8E, F13_MMC3_SEL & 0xFF, F13_MMC3_SEL >> 8)      # STX F13_MMC3_SEL
+    a.emit(0x8E, 0x00, 0x80)                                  # STX $8000
+    a.emit(0x8D, F13_CUR_R6 & 0xFF, F13_CUR_R6 >> 8)          # STA F13_CUR_R6
+    a.emit(0x8D, 0x01, 0x80)                                  # STA $8001
+    a.emit(0x60)                                              # RTS
+    place_t(F13_SET_R6, a.finish(), F13_NMI_WRAP)
+    # F13NmiWrap: safely switch R6 to F13 bank 4 for $80B7 NMI, then restore R6 and $8000 select
+    a = Asm6502(F13_NMI_WRAP)
+    a.emit(0x48)                                              # PHA
+    a.emit(0xAD, F13_MMC3_SEL & 0xFF, F13_MMC3_SEL >> 8, 0x48)  # LDA F13_MMC3_SEL; PHA
+    a.emit(0xAD, F13_CUR_R6 & 0xFF, F13_CUR_R6 >> 8, 0x48)    # LDA F13_CUR_R6; PHA
+    a.emit(0xA9, 0x06)
+    a.emit(0x8D, F13_MMC3_SEL & 0xFF, F13_MMC3_SEL >> 8, 0x8D, 0x00, 0x80)
+    a.emit(0xA9, 0x04, 0x18, 0x6D, 0xFF, 0x7B)                # LDA #$04; CLC; ADC $7BFF
+    a.emit(0x8D, F13_CUR_R6 & 0xFF, F13_CUR_R6 >> 8, 0x8D, 0x01, 0x80)
+    a.lda_hi('nmi_ret'); a.emit(0x48)
+    a.lda_lo('nmi_ret'); a.emit(0x48)
+    a.emit(0x08)                                              # PHP
+    a.emit(0x4C, 0xB7, 0x80)                                  # JMP $80B7 (RTIs to nmi_ret)
+    a.label('nmi_ret')
+    a.emit(0xA9, 0x06, 0x8D, 0x00, 0x80)
+    a.emit(0x68, 0x8D, F13_CUR_R6 & 0xFF, F13_CUR_R6 >> 8, 0x8D, 0x01, 0x80)
+    a.emit(0x68, 0x8D, F13_MMC3_SEL & 0xFF, F13_MMC3_SEL >> 8, 0x8D, 0x00, 0x80)
+    a.emit(0x68, 0x40)                                        # PLA; RTI
+    place_t(F13_NMI_WRAP, a.finish(), F13_WR_SEL)
+    # F13WrSel: STY F13_MMC3_SEL; STY $8000; RTS (preserves A, X, Y, P)
+    a = Asm6502(F13_WR_SEL)
+    a.emit(0x8C, F13_MMC3_SEL & 0xFF, F13_MMC3_SEL >> 8)
+    a.emit(0x8C, 0x00, 0x80, 0x60)
+    place_t(F13_WR_SEL, a.finish(), F13_MMC3_SEL)
+    return bytes(out)
+
+
+def make_reloc_e5b4() -> bytes:
+    """Relocated 19-byte version of F13's $E5B4 wait loop (frees $E5B7-$E5C3 in fixed bank)."""
+    a = Asm6502(F13_RELOC_E5B4)
+    a.label('loop')
+    a.emit(0x20, 0xEA, 0x81)                                  # JSR $81EA
+    a.emit(0xAD, 0x74, 0x05, 0x29, 0x08)                      # LDA $0574; AND #$08
+    a.branch(0xD0, 'exit_e5c4')                               # BNE exit_e5c4
+    a.emit(0x88)                                              # DEY
+    a.branch(0xD0, 'loop')                                    # BNE loop
+    a.emit(0xA9, 0xFF, 0x60)                                  # LDA #$FF; RTS
+    a.label('exit_e5c4')
+    a.emit(0x4C, 0xC4, 0xE5)                                  # JMP $E5C4
+    return a.finish()
 
 
 def make_f13_wram_code(restore_addr: int) -> bytes:
@@ -71,18 +188,25 @@ def make_f13_wram_code(restore_addr: int) -> bytes:
     a = Asm6502(F13_CHR_SWITCH)
     a.emit(0x08, 0x78, 0x48, 0x8A, 0x48, 0x98, 0x48)          # PHP; SEI; PHA; TXA; PHA; TYA; PHA
     a.emit(0x98, 0x0A, 0x0A, 0x0A, 0x09, 0x80, 0xAA)          # TYA; ASL*3; ORA #$80; TAX
-    a.emit(0xA9, 0x00, 0x8D, 0x00, 0x80, 0x8E, 0x01, 0x80)    # R0 = X
-    a.emit(0xE8, 0xE8)                                        # INX; INX
-    a.emit(0xA9, 0x01, 0x8D, 0x00, 0x80, 0x8E, 0x01, 0x80)    # R1 = X
-    a.emit(0xE8, 0xE8, 0xA0, 0x02)                            # INX; INX; LDY #2
+    a.emit(0xC0, 0x02)                                        # CPY #$02
+    a.branch(0xB0, 'norm_r0')
+    a.emit(0xB9, 0x0B, 0x7C)                                  # LDA $7C0B,Y (BARBA_R0_0/1)
+    a.branch(0xD0, 'set_r0')
+    a.label('norm_r0')
+    a.emit(0x8A)                                              # TXA
+    a.label('set_r0')
+    a.emit(0xA0, 0x00, 0x20, F13_WR_SEL & 0xFF, F13_WR_SEL >> 8, 0x8D, 0x01, 0x80)  # R0 = A
+    a.emit(0xE8, 0xE8, 0xC8)                                  # INX; INX; INY (Y=1)
+    a.emit(0x20, F13_WR_SEL & 0xFF, F13_WR_SEL >> 8, 0x8E, 0x01, 0x80)              # R1 = X
+    a.emit(0xE8, 0xE8, 0xC8)                                  # INX; INX; INY (Y=2)
     a.label('chr_loop')
-    a.emit(0x8C, 0x00, 0x80, 0x8E, 0x01, 0x80)                # STY $8000; STX $8001
+    a.emit(0x20, F13_WR_SEL & 0xFF, F13_WR_SEL >> 8, 0x8E, 0x01, 0x80)              # STY $8000; STX $8001
     a.emit(0xE8, 0xC8, 0xC0, 0x06)                            # INX; INY; CPY #6
     a.branch(0x90, 'chr_loop')                                # BCC @chr_loop
     a.emit(0x68, 0xA8, 0x68, 0xAA, 0x68, 0x28, 0x60)          # PLA; TAY; PLA; TAX; PLA; PLP; RTS
     place(F13_CHR_SWITCH, a.finish(), F13_NMI_HOOK)
 
-    # 2. F13NmiHook ($7830): 60-frame guard, then Select+Start -> F13Return
+    # 2. F13NmiHook ($7840): 60-frame guard, then Select+Start -> F13Return
     a = Asm6502(F13_NMI_HOOK)
     a.emit(0x48, 0xAD, 0xFF, 0x7F, 0xC9, 0x3C)                # PHA; LDA $7FFF; CMP #$3C
     a.branch(0xB0, 'check_pad')
@@ -92,7 +216,7 @@ def make_f13_wram_code(restore_addr: int) -> bytes:
     a.emit(0xA5, 0x2D, 0x29, 0x0C, 0xC9, 0x0C)                # LDA $2D; AND #$0C; CMP #$0C
     a.branch(0xF0, 'do_return')
     a.label('normal_nmi')
-    a.emit(0x68, 0x4C, 0xB7, 0x80)                            # PLA; JMP $80B7
+    a.emit(0x68, 0x4C, F13_NMI_WRAP & 0xFF, F13_NMI_WRAP >> 8)  # PLA; JMP F13NmiWrap
     a.label('do_return')
     a.emit(0x68, 0x4C, F13_RETURN & 0xFF, F13_RETURN >> 8)    # PLA; JMP F13Return
     place(F13_NMI_HOOK, a.finish(), F13_WIPE_IN)
@@ -307,10 +431,29 @@ def make_f13_wram_code(restore_addr: int) -> bytes:
     a.emit(0xA9, 0x00, 0x8D, 0x00, 0xA0)                      # Vertical mirroring
     a.emit(0xA9, 0x06, 0x8D, 0x00, 0x80, 0xA9, 28, 0x8D, 0x01, 0x80)    # R6 = 28 ($8000)
     a.emit(0xA9, 0x07, 0x8D, 0x00, 0x80, 0xA9, 29, 0x8D, 0x01, 0x80)    # R7 = 29 ($A000)
+    a.emit(0xA9, 24, 0x8D, 0xFF, 0x7B)                        # $7BFF = 24 (PRG base)
+    a.emit(0xA9, 28, 0x8D, F13_CUR_R6 & 0xFF, F13_CUR_R6 >> 8)  # F13_CUR_R6 = 28
+    a.emit(0xA9, 0x80, 0x8D, 0xFE, 0x7B)                      # $7BFE = $80 (CHR base)
+    a.emit(0x20, F13_BARBA_RESET & 0xFF, F13_BARBA_RESET >> 8)
     a.emit(0xA0, 0x00, 0x20, F13_CHR_SWITCH & 0xFF, F13_CHR_SWITCH >> 8)  # CHR bank 0
     a.emit(0xA9, 0x00, 0x8D, 0xFF, 0x7F, 0x8D, 0xFE, 0x7F)    # Clear $7FFF and $7FFE
     a.emit(0x4C, 0x00, 0x80)                                  # JMP $8000 (F13 Reset)
-    place(F13_BOOT, a.finish(), 0x7C00)
+    place(F13_BOOT, a.finish(), F13_RELOC_E5B4)
+
+    # 5b. F13SeedRng ($7950): seed $31 from Barba's $7FF0 if non-zero, then TXS and JMP $8035
+    a = Asm6502(F13_SEED_RNG)
+    a.emit(0xAD, 0xF0, 0x7F)                                  # LDA $7FF0
+    a.branch(0xF0, 'use_x')                                   # BEQ use_x
+    a.emit(0xAA)                                              # TAX
+    a.label('use_x')
+    a.emit(0x86, 0x31)                                        # STX $31
+    a.emit(0xA2, 0xFF, 0x9A)                                  # LDX #$FF; TXS
+    a.emit(0x4C, 0x35, 0x80)                                  # JMP $8035
+    place(F13_SEED_RNG, a.finish(), F13_RETURN)
+
+    # 6. Relocated $E5B4 ($7B20) + Barba trampolines ($7B38-$7BFD)
+    place(F13_RELOC_E5B4, make_reloc_e5b4(), F13_BARBA_DRAW)
+    place(F13_BARBA_DRAW, make_barba_trampolines(), 0x7BFE)
 
     return bytes(out)
 
@@ -337,25 +480,31 @@ def make_f13_bank0(restore_addr: int) -> bytes:
     return bytes(bank0)
 
 
-def patch_f13(f13: bytes) -> tuple[bytes, bytes]:
-    """Verify and patch Friday the 13th PRG (32KB) and return (prg32k, chr32k)."""
-    assert f13[:4] == b'NES\x1a' and f13[4] == 2 and f13[5] == 4
-    prg = bytearray(f13[16 : 16 + 32768])
-    chr_data = f13[16 + 32768 : 16 + 32768 + 32768]
+def patch_f13(f13: bytes) -> tuple[bytes, bytes, bytes]:
+    """Verify and patch Friday the 13th PRG (MMC3 64KB) and return (prg_extra24k, prg32k, chr_bytes)."""
+    assert f13[:4] == b'NES\x1a' and f13[4] == 4 and f13[5] in (4, 8)
+    prg_extra = f13[16 + 8192 : 16 + 32768]
+    prg = bytearray(f13[16 + 32768 : 16 + 65536])
+    chr_len = f13[5] * 8192
+    chr_data = f13[16 + 65536 : 16 + 65536 + chr_len]
 
     def patch(addr: int, new: bytes, expected: bytes) -> None:
         off = addr - 0x8000
         assert bytes(prg[off : off + len(expected)]) == expected, f'Unexpected F13 bytes at ${addr:04X}'
         prg[off : off + len(new)] = new
 
-    # 1. CNROM CHR bankswitch ($81A6) -> JMP F13ChrSwitch ($7800)
-    patch(0x81A6, bytes([0x4C, F13_CHR_SWITCH & 0xFF, F13_CHR_SWITCH >> 8]), bytes.fromhex('b9 ad 81'))
-    # 2. NMI vector ($FFFA) -> F13NmiHook ($7830)
-    patch(0xFFFA, bytes([F13_NMI_HOOK & 0xFF, F13_NMI_HOOK >> 8]), bytes.fromhex('b7 80'))
+    # 1. Verify CHR bankswitch ($81A6) already jumps to F13ChrSwitch ($7800)
+    patch(0x81A6, bytes([0x4C, F13_CHR_SWITCH & 0xFF, F13_CHR_SWITCH >> 8]),
+          bytes([0x4C, F13_CHR_SWITCH & 0xFF, F13_CHR_SWITCH >> 8]))
+    # 2. NMI vector ($FFFA) -> F13NmiHook ($7848)
+    patch(0xFFFA, bytes([F13_NMI_HOOK & 0xFF, F13_NMI_HOOK >> 8]), bytes([F13_NMI_WRAP & 0xFF, F13_NMI_WRAP >> 8]))
     # 3. Title screen: keep $2A=0 at $8D22, wipe-in at $E489 (after $E486 flushes F13 palette/NT)
     patch(0x8D22, bytes.fromhex('68 ea ea'), bytes.fromhex('20 ba 82'))
     patch(0xE489, bytes([0x20, F13_WIPE_IN & 0xFF, F13_WIPE_IN >> 8]), bytes.fromhex('20 ba 82'))
-    # 4. Beat Day 3 ($8E4A) -> JMP F13Return ($7920)
+    # 4. Beat Day 3 ($8E4A) -> JMP F13Return ($7960)
     patch(0x8E4A, bytes([0x4C, F13_RETURN & 0xFF, F13_RETURN >> 8]), bytes.fromhex('4c f0 8c'))
+    # 5. Boot RNG seed ($8030) -> JMP F13SeedRng ($7950)
+    patch(0x8030, bytes([0x4C, F13_SEED_RNG & 0xFF, F13_SEED_RNG >> 8, 0xEA, 0xEA]),
+          bytes.fromhex('86 31 a2 ff 9a'))
 
-    return bytes(prg), chr_data
+    return prg_extra, bytes(prg), chr_data

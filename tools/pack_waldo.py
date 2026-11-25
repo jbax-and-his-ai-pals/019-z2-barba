@@ -46,6 +46,28 @@ def make_waldo_win_hook() -> bytes:
     return bytes.fromhex('a9 a0 8d 01 a0 a9 57 8d 8b 64 a9 a2 8d 01 a0 4c a4 f9')
 
 
+def make_waldo_seed_rng() -> bytes:
+    """Assemble Waldo's $F632 boot RNG seeder (reads Barba's $7FF0-$7FF2 seed if non-zero)."""
+    # AD F0 7F    LDA $7FF0
+    # F0 0E       BEQ @keep_hash
+    # 8D 00 02    STA $0200
+    # AD F1 7F    LDA $7FF1
+    # 8D 01 02    STA $0201
+    # AD F2 7F    LDA $7FF2
+    # 8D 02 02    STA $0202
+    # 60          RTS
+    # @keep_hash:
+    # AD 00 07    LDA $0700
+    # 8D 00 02    STA $0200
+    # AD 01 07    LDA $0701
+    # 8D 01 02    STA $0201
+    # 60          RTS
+    return bytes.fromhex(
+        'ad f0 7f f0 0e 8d 00 02 ad f1 7f 8d 01 02 ad f2 7f 8d 02 02 60 '
+        'ad 00 07 8d 00 02 ad 01 07 8d 01 02 60'
+    )
+
+
 def make_waldo_melt_out() -> bytes:
     """Assemble Waldo's 30-frame bottom-up wavy melt-out at $CB10 (Bank 16)."""
     # Uses ZP $08=frame, $09=wipe, $0A=band, $0B=nt; reads wave table at $CB00.
@@ -149,9 +171,11 @@ def make_waldo_melt_out() -> bytes:
 
 def pack_combined(barba: bytes, restore_addr: int, waldo: bytes,
                   alternate_laugh_data: bytes | None = None,
-                  f13: bytes | None = None) -> bytes:
+                  f13: bytes | None = None,
+                  extra_ids: list[str] | None = None,
+                  roms_dir: Path | None = None) -> bytes:
     """Combine a waldo_portal-enabled Barba ROM and modded Waldo ROM into Mapper 176."""
-    assert waldo[:4] == b'NES\x1a' and waldo[4] in (8, 16) and waldo[5] == 0x10
+    assert waldo[:4] == b'NES\x1a' and waldo[4] in (8, 16) and waldo[5] in (0x10, 0x20)
     w_prg_size = waldo[4] * 16384
 
     b_prg = bytearray(barba[16 : 16 + 128 * 1024])
@@ -174,6 +198,15 @@ def pack_combined(barba: bytes, restore_addr: int, waldo: bytes,
     assert w_prg[e000_off + 0x00E9 : e000_off + 0x00EC] == bytes.fromhex('20 45 a0')
     w_prg[e000_off + 0x00E9 : e000_off + 0x00EC] = bytes.fromhex('ea ea ea')
 
+    # Skip Waldo's difficulty selection screen ($E114: JSR $AB85 -> JSR $F65B)
+    # and explicitly set $0600 = 0 (Easy) and $0603 = 0 (normal game) since
+    # Waldo's RESET only clears $0000-$05FF (leaving Zelda II WRAM at $0600 stale).
+    assert w_prg[e000_off + 0x0114 : e000_off + 0x0117] == bytes.fromhex('20 85 ab')
+    w_prg[e000_off + 0x0114 : e000_off + 0x0117] = bytes.fromhex('20 5b f6')
+    diff_init = bytes.fromhex('a9 00 8d 00 06 8d 03 06 18 60')
+    assert all(x == 0 for x in w_prg[e000_off + 0x165B : e000_off + 0x165B + len(diff_init)])
+    w_prg[e000_off + 0x165B : e000_off + 0x165B + len(diff_init)] = diff_init
+
     # Replace Title Screen's JSR $E79C at $A025 (Bank 3) with JSR $C9FC (Bank 16, already mapped at $C000)
     assert w_prg[0x06025:0x06028] == bytes.fromhex('20 9c e7')
     w_prg[0x06025:0x06028] = bytes.fromhex('20 fc c9')
@@ -181,12 +214,18 @@ def pack_combined(barba: bytes, restore_addr: int, waldo: bytes,
     # Patch Waldo's NMI hook at $F603-$F653 (free 0x00 region) + vector $FFFA
     hook = make_waldo_nmi_hook()
     win_hook = make_waldo_win_hook()
-    assert len(hook) <= 0x1D and len(win_hook) <= 81 - 0x1D
-    assert all(x == 0 for x in w_prg[e000_off + 0x1603 : e000_off + 0x1620 + len(win_hook)])
+    seed_hook = make_waldo_seed_rng()
+    assert len(hook) <= 0x1D and len(win_hook) <= 0x12 and len(seed_hook) <= 0x22
+    assert all(x == 0 for x in w_prg[e000_off + 0x1603 : e000_off + 0x1632 + len(seed_hook)])
     w_prg[e000_off + 0x1603 : e000_off + 0x1603 + len(hook)] = hook
     w_prg[e000_off + 0x1620 : e000_off + 0x1620 + len(win_hook)] = win_hook
+    w_prg[e000_off + 0x1632 : e000_off + 0x1632 + len(seed_hook)] = seed_hook
     assert w_prg[e000_off + 0x1FFA : e000_off + 0x1FFC] == bytes.fromhex('37 e2')
     w_prg[e000_off + 0x1FFA : e000_off + 0x1FFC] = bytes.fromhex('03 f6')
+
+    # Seed Waldo's RNG ($0200-$0202) from Barba's $7FF0-$7FF2 at boot ($E09A)
+    assert w_prg[e000_off + 0x009A : e000_off + 0x00A6] == bytes.fromhex('ad 00 07 8d 00 02 ad 01 07 8d 01 02')
+    w_prg[e000_off + 0x009A : e000_off + 0x00A6] = bytes.fromhex('20 32 f6') + b'\xEA' * 9
 
     # Hook end of Moon Ending ($A1B3 in Bank 0: JMP $E4EC -> JMP $F620) so it sets WALDO_HAT and waves out to Barba
     assert w_prg[0x01B3:0x01B6] == bytes.fromhex('4c ec e4')
@@ -306,41 +345,151 @@ def pack_combined(barba: bytes, restore_addr: int, waldo: bytes,
     # 512KB CHR: 0..256KB Barba, 256..384KB Waldo, 384..416KB F13 (if provided), 416..512KB free
     chr512 = bytearray(b'\xFF' * (512 * 1024))
     chr512[0 : 256 * 1024] = b_chr
-    chr512[256 * 1024 : 384 * 1024] = w_chr
+    chr512[256 * 1024 : 384 * 1024] = w_chr[: 128 * 1024]
+    if len(w_chr) > 128 * 1024:
+        # 4KB Bank 48 ($C0..$C3) -> 1KB banks 448..451 (448KB..452KB), above 64KB f13_chr (384..448KB)
+        chr512[448 * 1024 : 452 * 1024] = w_chr[48 * 4096 : 49 * 4096]
+        # 1KB Bank 196 ($C4) -> 1KB bank 452 (452KB..453KB) for search-level Barba & fireballs
+        chr512[452 * 1024 : 453 * 1024] = w_chr[196 * 1024 : 197 * 1024]
+        # 1KB Bank 198 ($C6) -> 1KB bank 454 (454KB..455KB) for Title Screen Stamp Barba sprite overlay
+        chr512[454 * 1024 : 455 * 1024] = w_chr[198 * 1024 : 199 * 1024]
 
-    if f13 is not None:
+    extras = [
+        sid for sid in (extra_ids or ())
+        if sid in ('feud', 'dk', 'smb', 'duck', 'mm2', 'wheel', 'zelda', 'mtpo')
+    ]
+    has_chr_ram = any(sid in extras for sid in ('feud', 'mm2', 'wheel', 'zelda'))
+
+    if extras:
+        assert roms_dir is not None, 'roms_dir is required when packing extra subgames'
+        prg4096 = bytearray(b'\xFF' * (4096 * 1024))
+        prg4096[0 : 512 * 1024] = prg512
+        chr2048 = bytearray(b'\xFF' * (2048 * 1024))
+        chr2048[0 : 512 * 1024] = chr512
+        if f13 is not None:
+            import pack_f13
+            f13_extra, f13_prg, f13_chr = pack_f13.patch_f13(f13)
+            f13_bank0 = pack_f13.make_f13_bank0(restore_addr)
+            prg4096[512 * 1024 : 520 * 1024] = f13_bank0
+            prg4096[712 * 1024 : 736 * 1024] = f13_extra
+            prg4096[736 * 1024 : 768 * 1024] = f13_prg
+            assert 384 * 1024 + len(f13_chr) <= 448 * 1024
+            chr2048[384 * 1024 : 384 * 1024 + len(f13_chr)] = f13_chr
+        z2_orig = (roms_dir / 'z2.nes').read_bytes()
+        if 'dk' in extras:
+            import pack_dk
+            dk_prg, dk_chr = pack_dk.patch_dk_for_combined(
+                (roms_dir / 'dk.nes').read_bytes(), z2_orig, restore_addr, reward_addr=0x63B3,
+            )
+            base = 7 * 256 * 1024
+            prg4096[base : base + len(dk_prg)] = dk_prg
+            chr2048[512 * 1024 : 512 * 1024 + len(dk_chr)] = dk_chr
+        if 'smb' in extras:
+            import pack_smb
+            smb_prg, smb_chr = pack_smb.patch_smb_for_combined(
+                (roms_dir / 'smb.nes').read_bytes(), z2_orig, restore_addr, reward_addr=0x63B4,
+            )
+            base = 6 * 256 * 1024
+            prg4096[base : base + len(smb_prg)] = smb_prg
+            chr2048[640 * 1024 : 640 * 1024 + len(smb_chr)] = smb_chr
+        if 'duck' in extras:
+            import pack_duck
+            duck_prg, duck_chr = pack_duck.patch_duck_for_combined(
+                (roms_dir / 'duck.nes').read_bytes(), z2_orig, restore_addr, reward_addr=0x63B5,
+            )
+            base = 12 * 256 * 1024
+            prg4096[base : base + len(duck_prg)] = duck_prg
+            chr2048[768 * 1024 : 768 * 1024 + len(duck_chr)] = duck_chr
+        if 'mm2' in extras:
+            import pack_mm2
+            mm2_prg = pack_mm2.patch_mm2(
+                (roms_dir / 'mm2.nes').read_bytes(), restore_addr, reward_addr=0x63B7, z2_bytes=z2_orig,
+            )
+            base = 3 * 256 * 1024
+            prg4096[base : base + 256 * 1024] = mm2_prg
+        if 'wheel' in extras:
+            import pack_wheel
+            wheel_prg = pack_wheel.patch_wheel_for_combined(
+                (roms_dir / 'wheel.nes').read_bytes(),
+                restore_addr,
+                base_5ff0=0x29,
+                base_5ff1=0x00,
+                reward_addr=0x63B8,
+            )
+            base = 8 * 256 * 1024
+            prg4096[base : base + 1024 * 1024] = wheel_prg
+        if 'feud' in extras:
+            import pack_feud
+            feud_prg, feud_roar, feud_chr = pack_feud.patch_feud_for_combined(
+                (roms_dir / 'feud.nes').read_bytes(),
+                (roms_dir / 'z2.nes').read_bytes(),
+                restore_addr,
+                base_5ff1=0x40,
+                roar_5ff1=0x50,
+                base_5ff2=0x80,
+                reward_addr=0x63B2,
+            )
+            prg4096[4 * 256 * 1024 : 5 * 256 * 1024] = feud_prg
+            prg4096[5 * 256 * 1024 : 6 * 256 * 1024] = feud_roar
+            chr2048[1024 * 1024 : 1024 * 1024 + len(feud_chr)] = feud_chr
+        if 'zelda' in extras:
+            import pack_zelda
+            z1_prg = pack_zelda.patch_zelda((roms_dir / 'zelda.nes').read_bytes(), restore_addr, reward_addr=0x63B9)
+            prg4096[14 * 256 * 1024 : 14 * 256 * 1024 + len(z1_prg)] = z1_prg
+        if 'mtpo' in extras:
+            import pack_mtpo
+            mtpo_prg, mtpo_chr = pack_mtpo.patch_mtpo((roms_dir / 'mtpo.nes').read_bytes(), restore_addr, reward_addr=0x63BA)
+            prg4096[15 * 256 * 1024 : 15 * 256 * 1024 + len(mtpo_prg)] = mtpo_prg
+            chr2048[1152 * 1024 : 1152 * 1024 + len(mtpo_chr)] = mtpo_chr
+        prg_out = bytes(prg4096)
+        chr_out = bytes(chr2048)
+        prg_16k_count = 0x00   # 256 * 16KB = 4096KB (with hdr[9] bit 0 = 1)
+        chr_8k_count = 0x00    # 256 * 8KB  = 2048KB (with hdr[9] bit 4 = 1)
+        size_msb = 0x11
+    elif f13 is not None:
         import pack_f13
-        f13_prg, f13_chr = pack_f13.patch_f13(f13)
+        f13_extra, f13_prg, f13_chr = pack_f13.patch_f13(f13)
         f13_bank0 = pack_f13.make_f13_bank0(restore_addr)
         prg1024 = bytearray(b'\xFF' * (1024 * 1024))
         prg1024[0 : 512 * 1024] = prg512
         prg1024[512 * 1024 : 520 * 1024] = f13_bank0
+        prg1024[712 * 1024 : 736 * 1024] = f13_extra
         prg1024[736 * 1024 : 768 * 1024] = f13_prg
         prg1024[1008 * 1024 : 1024 * 1024] = prg512[496 * 1024 : 512 * 1024]
-        chr512[384 * 1024 : 416 * 1024] = f13_chr
+        assert 384 * 1024 + len(f13_chr) <= 512 * 1024
+        chr512[384 * 1024 : 384 * 1024 + len(f13_chr)] = f13_chr
         prg_out = bytes(prg1024)
+        chr_out = bytes(chr512)
         prg_16k_count = 64
+        chr_8k_count = 64
+        size_msb = 0x00
     else:
         prg_out = bytes(prg512)
+        chr_out = bytes(chr512)
         prg_16k_count = 32
+        chr_8k_count = 64
+        size_msb = 0x00
 
-    # NES 2.0 Mapper 176 (FK23C), 512KB/1024KB PRG, 512KB CHR, 32KB battery WRAM
+    # NES 2.0 Mapper 176 (FK23C), up to 4MB PRG, 2MB CHR, 32KB battery WRAM (+32KB CHR-RAM)
     hdr = bytearray(16)
     hdr[0:4] = b'NES\x1a'
     hdr[4] = prg_16k_count
-    hdr[5] = 64
+    hdr[5] = chr_8k_count
     hdr[6] = 0x02
     hdr[7] = 0xB8
+    hdr[9] = size_msb
     hdr[10] = 0x90
+    if has_chr_ram:
+        hdr[11] = 0x09
 
-    return bytes(hdr) + prg_out + bytes(chr512)
+    return bytes(hdr) + prg_out + chr_out
 
 
 def pack() -> Path:
     """Build the combined Barba + Waldo ROM as build/barba.nes and play/barba.nes."""
     from build import ROOT, build
 
-    build(ROOT / 'roms/z2.nes', ROOT / 'build', ROOT / 'roms/roar.wav', waldo_portal=True)
+    build(ROOT / 'roms/z2.nes', ROOT / 'build', ROOT / 'assets/roar.wav', waldo_portal=True)
     return ROOT / 'play/barba.nes'
 
 

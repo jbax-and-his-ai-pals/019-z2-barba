@@ -29,8 +29,9 @@ action rechecks eligibility in `src/town.inc`.
   `$ADBF`) and the native unlock and dialogue timing.
 - The Saria mirror lady's post-mirror line (`$A656`) is patched in place to
   “OH MY GOD! / MY MIRROR! / FOLLOW ME.”
-- Saria Town's bridge rooms (`$0707=1`, `$056B=2`, `$0561=$06/$07`) have shimmering quicksand. `TownQuicksandChr6` cycles R1 through `146, 148, 150, 152` in room `$06` and `128, 130, 132, 254` in room `$07`. In room `$06` it sets all four attribute bytes at `$27F8-$27FB` to `$05`, giving the full pit the same beige `$37` sand and `$0F` shadows. Other town rooms restore base R1. Touching the quicksand is lethal to Barba (`LavaSurfaceBody` in `src/farcall.inc`). Load Towns and World F3 and walk right until both halves of the quicksand are visible. `tests/saria_quicksand.lua` checks color across the full width after scrolling.
-- The bridge guard in Saria's house (room `$1E`) says "QUICKSAND! / LOCALS / ONLY." before Bagu's note. The note still selects the crossing dialogue and sets the bridge flag. Two tan sand tiles extend west of Saria's north entrance, with blue water between the two sides of town. Open **Test Barba - Saria Quicksand.cmd**. **F1** starts on the map just above the sandbar. Walk down to enter town. **F2** starts beside the guard. Press Up to talk.
+- Outdoor town rooms (`$0707=1,2`, matching `IsSpriteCloudRoom6`) sway the `$45` green bushes (`$4C-$4F` in 4KB CHR bank 7) on R0 during VBlank via `UpdateGrassPhase6` (`WindBank6` cycling `28, 28, 172, 172, 28, 28, 170, 170` with a 32-frame hold per pose). Only the upper 10 rows (`y=192..201`) lean gently `±1px`, leaving the lower belly and tapering base (`y=202..207`), signs, houses, and ground stationary across all West and East Hyrule villages (`tests/town_bush_sway.lua`).
+- Saria Town's street rooms (`$0707=1`, `$056B=2`, `$0561=$06/$07/$08`) have rippling green foul water. `TownFoulWaterChr6` cycles R1 through `146, 148, 150, 152` across all three street rooms using BG palette 1 (`$22` sky, `$37` pale scum, `$2A` foul green, `$0F` shadow). Other town rooms restore base R1. Touching the foul water is lethal to Barba (`LavaSurfaceBody` in `src/farcall.inc`). `tests/saria_quicksand.lua` checks the green/scum/shadow palette across the full width after scrolling, all four ripple phases, lethal contact, and restoration of base R1 in Rauru.
+- The bridge guard in Saria's house (room `$1E`) says "FOUL WATER! / LOCALS / ONLY." before Bagu's note, and the town sign reads "WELCOME TO / SARIA. / DON'T DRINK / THE WATER.". The note still selects the crossing dialogue and sets the bridge flag. On the West Hyrule overworld, `OwTerrainPal0` (`src/barba.asm`) renders Saria's terrain `$0A` river channel with green palette `0` (animated via `$6E`, distinct from ordinary blue water `$0C`), `OwSpkKind4` (`src/ow_sparkle.inc`) emits foul-water bubbles instead of lava embers, and `WestFoulWaterTerrain1` (`src/geldarm.inc`) keeps it unwalkable. Open **Test Barba - Saria Quicksand.cmd** (or `--set saria`). **F1** starts on the overworld beside the green foul-water river; **F2** starts beside the guard; **F3**/**F4** show the town bridges.
 - Wanderers panic within 72 pixels, or 96 during an attack, on the same floor.
   `TownPickEscapeDir` picks the direction away from Barba toward the nearest
   doorway (`$8B` / `$91`) or room edge (`$69C4` / `$69C7+1`). They flee at
@@ -363,3 +364,19 @@ protected-NPC delays, and unchanged caller indexes/carry/accumulator behavior.
   Setting `$048C = 1` in `SageDialogCheck` keeps the custom boxes from
   re-triggering the Wise Man's spell-learn fanfare/menu. Verified by
   `tests/sage_basement.lua`.
+
+## Chimney smoke (`src/town_smoke.inc`)
+
+- Outdoor town rooms (`$0707 = 1, 2`; `$0561 < $19` or `$3C`) lazily scan
+  `$6000-$633F` on room change for 2-wide chimney metatiles (`$59`/`$5A`) with
+  sky (`$40`) directly above (East Hyrule towns: Nabooru, Darunia, New/Old
+  Kasuto).
+- `DrawTownSmoke2` (`BANK2_SMOKE` `$A933`, hopped via `HopTownSmoke2` from
+  `DrawDownstabTail3`'s `@tail_ret`) draws up to 2 staggered behind-BG (`$21`)
+  rising 8x16 puffs per chimney (`$8F`, `$91`, `$93` in `R4` bank `229`) into
+  the tail of `$6500..$65FF` (`$65FC` down to `$6568`), so Barba, fireballs,
+  combo banners, villagers, and shouts always keep OAM priority.
+- To prevent crowding or flicker during busy moments, puffs yield when
+  `COMBO_TIER != 0` near the banner (`Y < $48`) or when 5+ foreground sprites
+  in `$6500..$6564` already overlap the puff's 16-scanline band. Verified by
+  `tests/town_smoke.lua` on Darunia (`world/barba-test.nes`).

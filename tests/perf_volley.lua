@@ -23,11 +23,12 @@ end
 local cur={nmis=0,nmi=0,proj=0,extra=0,coll=0,native=0,blocks=0}
 local function cycles()return emu.getState()['cpu.cycleCount']end
 local nmiStart,projStart,extraStart
+local L=LABELS or {}
+local nmiRti=L.NmiRti or 0xC1B2
 emu.addMemoryCallback(function()nmiStart=cycles();cur.nmis=cur.nmis+1 end,emu.callbackType.exec,0xC07B)
 emu.addMemoryCallback(function()
     if nmiStart then cur.nmi=cur.nmi+cycles()-nmiStart;nmiStart=nil end
-end,emu.callbackType.exec,0xC1B5)
-local L=LABELS or {}
+end,emu.callbackType.exec,nmiRti)
 -- Final RTS of each routine is the byte before the next exported label.
 local function span(entry,exitLabel,key)
     if not(L[entry] and L[exitLabel])then return end

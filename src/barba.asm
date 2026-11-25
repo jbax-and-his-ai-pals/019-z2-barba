@@ -1,6 +1,7 @@
 ; Original Barba Edition routines. CPU addresses refer to the guarded source ROM.
 .setcpu "6502"
 .export BarbaOverworld, BarbaOverworldA, BarbaDisplay, BarbaUpdate, BarbaInferno, ThunderHit
+.export OwTerrainPal0
 .export LavaSurface, LavaLinkPlayerUpdate
 .export EnemyFireGateway, ShieldFireGateway, LagNmiInBank6
 
@@ -23,7 +24,8 @@ LAIR_SHAKE_X = $64FA   ; signed display scroll offset during the Lava Link entra
 ; Replaces the overworld renderer's LDX #$0E / LDY #$00 pair.
 ; Two even-numbered 8x16 tiles use the dedicated sprite pattern bank.
 BarbaOverworld:
-    ldx $0562
+    lda $0562
+    jsr @dir_idx
     lda OverworldBase,x
     pha
     lda $07A9
@@ -42,9 +44,9 @@ BarbaOverworld:
     sta $0201
     adc #$02
     sta $0205
-    lda #$00
-    sta $0202
-    sta $0206
+    ldy #$00
+    sty $0202
+    sty $0206
     lda OW_FIRE_TIMER
     beq @ow_done
     dec OW_FIRE_TIMER
@@ -53,7 +55,8 @@ BarbaOverworld:
     sta $02FC
     bne @ow_done
 @draw_flame:
-    ldx OW_FIRE_DIR
+    lda OW_FIRE_DIR
+    jsr @dir_idx
     lda OwFlameY,x
     sta $02FC
     lda OwFlameX,x
@@ -63,18 +66,36 @@ BarbaOverworld:
     lsr
     ora #$60
     sta $02FD
-    lda #$00            ; overworld Sprite Palette 0 ($16/$27/$30 fiery red/orange/white)
-    sta $02FE
+    sty $02FE           ; overworld Sprite Palette 0 ($16/$27/$30 fiery red/orange/white)
 @ow_done:
     ldx #$0E
-    ldy #$00
+    rts
+@dir_idx:
+    ldx #$FF
+:
+    inx
+    lsr
+    bne :-
     rts
 OverworldBase:
-    .byte 0, 0, 8, 0, 16, 0, 0, 0, 24
+    .byte 0, 8, 16, 24
 OwFlameX:
-    .byte $84, $94, $74, $84, $84, $84, $84, $84, $84
+    .byte $94, $74, $84, $84
 OwFlameY:
-    .byte $6D, $6D, $6D, $6D, $7D, $6D, $6D, $6D, $5D
+    .byte $6D, $6D, $7D, $5D
+
+; Replaces LDA $87E3,X in bank 0's overworld attribute builders.
+; West Hyrule ($0706=0) renders terrain $0A (Saria's foul river) with
+; green palette 0 instead of East Hyrule's lava palette 1.
+OwTerrainPal0:
+    lda $87E3,x
+    cpx #$0A
+    bne @done
+    ldx $0706
+    bne @done
+    txa                 ; A = 0 (green palette 0)
+@done:
+    rts
 
 ; Overworld B-button handler at $8518 (entered after $8512 verifies $F5 & $40 != 0):
 ; - B button: Dragon fire on Forest ($06), Town ($00), Palace ($02), or when no Flute ($0789==0);
@@ -82,10 +103,9 @@ OwFlameY:
 BarbaOverworldA:
 BarbaOverworldB:
     lda $0563
+    beq @fire_react     ; Town ($00)
     cmp #$06            ; Forest
     beq @fire_forest
-    cmp #$00            ; Town
-    beq @fire_react
     cmp #$02            ; Palace
     beq @fire_react
     lda $0789           ; Have Flute?
@@ -412,6 +432,9 @@ RoarPitch:
 .include "town.inc"
 .include "sign.inc"
 .include "sage_basement.inc"
+.include "town_smoke.inc"
+.include "title_lava.inc"
+.include "ow_foliage.inc"
 .include "scales.inc"
 .include "farcall.inc"
 .include "scanline_irq.inc"
@@ -419,6 +442,9 @@ RoarPitch:
 .include "ending_fire.inc"
 .include "palace_roar.inc"
 .include "boss_meter.inc"
+.ifdef SOULS_BOSS_METER
+.include "souls_boss_bar.inc"
+.endif
 .include "ow_sparkle.inc"
 .ifdef SAMPLED_ROAR
 .include "sampled_roar.inc"

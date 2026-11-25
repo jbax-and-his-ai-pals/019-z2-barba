@@ -67,11 +67,12 @@ emu.addEventCallback(function()
         for x=208,215 do
             if lava[pix(px,x,143)] then seamLava=seamLava+1;break end
         end
-        -- Title hold (scroll $60): the sky between Barba and the cliff on line 143.
+        -- Title hold (scroll $60): the sky seam at col 26 (x=208..215, between
+        -- the particle zones x=142..207 and x=217+) stays solid black on line 143.
         if mode==3 and r(0xFC)==0x60 then
             holdFrames=holdFrames+1
             local s={}
-            for x=144,215 do s[#s+1]=pix(px,x,143) end
+            for x=208,215 do s[#s+1]=pix(px,x,143) end
             local key=table.concat(s,',')
             if holdLine and key~=holdLine then holdChanged=holdChanged+1 end
             holdLine=key

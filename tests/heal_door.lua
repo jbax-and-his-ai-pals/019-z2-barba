@@ -25,7 +25,7 @@ emu.addEventCallback(function()
     if frame>=1000 then
         b={start=false,select=false,a=false,b=false,up=false,down=false,left=false,right=false}
         if r(0x74C)~=0 then
-            if (frame%16)<3 then b.b=true end
+            if r(0x524)>=6 and r(0x524)<=9 and (frame%16)<3 then b.b=true end
         elseif frame>=1150 and r(0x736)==11 and r(0x726)==0 then
             if not healerSlot then
                 b.right=true
@@ -44,7 +44,7 @@ emu.addEventCallback(function()
                 local page=math.floor((doorColAddr-0x6000)/(13*16))
                 local rem=(doorColAddr-0x6000)%(13*16)
                 local col=rem%16
-                local doorX=page*256+col*16
+                local doorX=page*256+col*16-4
                 local dx=doorX-playerWorldX()
                 if dx>2 then b.right=true
                 elseif dx<-2 then b.left=true

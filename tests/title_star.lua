@@ -22,7 +22,7 @@ emu.addEventCallback(function()
         local a=r(0x65FA)
         attrs[a]=true
         if (a&0x20)==0 then starFront=starFront+1 end
-        for s=0x68,0xD0,4 do
+        for s=0x6C,0xD0,4 do
             if r(0x6500+s)<0xEF and (r(0x6502+s)&0x20)==0 then starsFront=starsFront+1 end
         end
         for s=0xD4,0xFC,4 do

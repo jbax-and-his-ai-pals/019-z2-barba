@@ -23,7 +23,7 @@ ad8c0fbcf092bf84b48e69fd3964eea4ed91bfe62abc352943d537979782680c
 
 The build verifies the dump and opens it read-only. The combined build also
 requires a clean USA *Where's Waldo?* ROM at `roms/waldo.nes` (headerless CRC32
-`C3463A3D`). The default sampled voice requires local PCM `roms/roar.wav` (reference
+`C3463A3D`). The default sampled voice requires local PCM `assets/roar.wav` (reference
 SHA-256 `9e5edb33f09969fe4603c8f4bbdb5311cb7396b4803ac5485f9ad8e65f11394f`).
 Recordings and generated DPCM stay ignored. Use `--native-audio` to give
 Zelda II its legacy noise roar. The crossover can still use the supplied WAV
@@ -195,13 +195,13 @@ open the existing default artifact in Mesen.
 
 ### Sampled roar audio
 
-`python tools/build.py` uses local uncompressed PCM `roms/roar.wav` by default;
+`python tools/build.py` uses local uncompressed PCM `assets/roar.wav` by default;
 `--title-roar-wav PATH` overrides it. `--native-audio` restores the legacy
 noise-roar/five-distinct-laugh build. `tools/roar_sample.py` trims boundary
 silence, removes DC, chooses the highest NTSC DMC rate that fits without
 changing duration, and emits `roar-reference.wav`, `roar-dpcm-preview.wav` and
 `roar.dmc` beside the ROM. Only the conversion recipe is tracked;
-keep recordings under ignored `roms/` and generated assets under `build/`.
+keep the local recording at ignored `assets/roar.wav` and generated assets under `build/`.
 
 The roar occupies `$F400-$FC80` (2,177 bytes) in the normal fixed PRG pages
 30/31. The combined Mapper 176 build stores the five distinct Game Over laughs
@@ -256,7 +256,7 @@ file select with DMC stopped. Converter unit tests exercise LSB-first delta
 encoding, DAC settling, hardware length alignment, capacity and rate selection.
 
 Producer recording (2026-11-17): `roar.mp3`, Game Over from the Famicom soundtrack,
-copied locally into ignored `roms/roar.mp3` and decoded to `roms/roar.wav` using
+decoded to ignored `assets/roar.wav` using
 FFmpeg from a local `imageio-ffmpeg` install under `build/audio-tools`. The
 trimmed whole roar occupies 2,177 bytes at DMC rate 9 (11,186 Hz), 1.557 seconds,
 with a 97-frame timer. No pitch/time change. Production ROM SHA-256 is
@@ -280,7 +280,7 @@ wobble/rasp, intelligibility against music, volume and clicks; press Start
 during a roar to check its cutoff. Standalone DPCM previews are
 decoded samples without the NES mixer/filters. Fidelity approval is a human
 listening task. The normal gameplay pack is generated and installed using
-`python tools/prepare_test_player.py`; use `play/Test Barba.cmd`.
+`python tools/prepare_test_player.py`; use `play/zelda2-tests/Test Core.cmd`.
 F2 tests quiet attacks/hurt, F6 Lava
 Link's original hurt sound, F9 the boss followed by gem completion. The optional
 `--rom` is also supported by `create_test_pack.py`; manifests remain keyed by

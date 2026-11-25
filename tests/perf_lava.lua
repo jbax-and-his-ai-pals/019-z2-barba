@@ -10,8 +10,9 @@ local function w(a,v)emu.write(a,v,mem)end
 local report=assert(io.open(OUTPUT_DIR..'/perf-lava.txt','w'))
 local function cycles()return emu.getState()['cpu.cycleCount']end
 local nmiStart,nmiCycles,nmis,lavaCalls=nil,0,0,0
+local nmiRti=(LABELS and LABELS.NmiRti) or 0xC1B2
 emu.addMemoryCallback(function()nmiStart=cycles();nmis=nmis+1 end,emu.callbackType.exec,0xC07B)
-emu.addMemoryCallback(function()if nmiStart then nmiCycles=nmiCycles+cycles()-nmiStart;nmiStart=nil end end,emu.callbackType.exec,0xC1B5)
+emu.addMemoryCallback(function()if nmiStart then nmiCycles=nmiCycles+cycles()-nmiStart;nmiStart=nil end end,emu.callbackType.exec,nmiRti)
 emu.addMemoryCallback(function()lavaCalls=lavaCalls+1 end,emu.callbackType.exec,0xE0A4)
 local st={floor={n=0,sum=0,max=0,lag=0,calls=0},lava={n=0,sum=0,max=0,lag=0,calls=0}}
 emu.addEventCallback(function()

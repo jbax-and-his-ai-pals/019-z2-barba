@@ -20,7 +20,7 @@ emu.addMemoryCallback(function()
 end,emu.callbackType.exec,0xE0A4)
 emu.addEventCallback(function()
     local buttons=newGameInput(frame)
-    buttons.right=(frame>=1100 and not settledAt)
+    buttons.right=(frame>=1100 and frame<1160)
     buttons.down=(settledAt~=nil and frame>=settledAt+40 and frame<settledAt+44)
     emu.setInput(buttons,0)
 end,emu.eventType.inputPolled)
@@ -65,7 +65,7 @@ emu.addEventCallback(function()
         end
     end
     if frame==2500 then
-        check(false,'timed out waiting for water hazard contact')
+        check(false,string.format('timed out waiting for water hazard contact (contacts=%d x=%03X y=%02X air=%d mode=%02X)',contacts,r(0x3B)*256+r(0x4D),r(0x29),r(0x479),r(0x736)))
         report:write('RESULT FAIL\n');report:close();stopScenario(1)
     end
 end,emu.eventType.endFrame)

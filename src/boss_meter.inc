@@ -2,10 +2,104 @@
 ; third head column at $02C4 and the enemies' rotating sprite assignments.
 .segment "PALACE_ROAR"
 DrawBossMeter4:
+.ifdef SOULS_BOSS_METER
+    jsr FindBossForSouls4
+    pha
+    lda #>(SoulsBossBar1-1)
+    pha
+    lda #<(SoulsBossBar1-1)
+    pha
+    lda #$01
+    jmp $FFCC
+.else
     jsr DrawBossPips
     lda #$06
     jmp $FFCC
+.endif
 
+.ifdef SOULS_BOSS_METER
+; Returns A = boss HP (0 if dead, $FF if no active boss fight), Y = boss index (0..7).
+FindBossForSouls4:
+    lda $0736
+    cmp #$0B
+    bne @none
+    lda $056B
+    sec
+    sbc #1
+    cmp #7
+    bcs @none
+    tay
+    lda $0561
+    cmp BossMeterRoom,y
+    beq @room
+    cmp #$36
+    bne @none
+    cpy #6
+    bne @none
+    lda $63
+    cmp #3
+    bne @none
+    lda $0505
+    bne @none
+    iny
+@room:
+    lda $0707
+    cmp BossMeterWorld,y
+    bne @none
+    cpy #5
+    bne :+
+    jsr RemapLavaLinkOam4
+:
+    cpy #4
+    bne :+
+    jsr PrioritizeGoomaWeapon
+:
+    ldx #5
+@enemy:
+    lda $B6,x
+    cmp #1
+    bne @next
+    lda $A1,x
+    cmp BossMeterEnemy,y
+    bne @other
+    cpy #2
+    bne @found
+    lda $81,x
+    beq @found
+    bne @next
+@other:
+    cpy #2
+    bne @next
+    cmp #$0A
+    beq @found
+@next:
+    dex
+    bpl @enemy
+@none:
+    lda #$FF
+    rts
+@found:
+    cpy #5
+    bne :+
+    lda $AF,x
+    bpl @none
+:
+    cpy #6
+    bne :+
+    lda $0504,x
+    bne @none
+:
+    lda $C2,x
+    beq @dead
+    cmp BossMeterMaxHP,y
+    bcc @ok
+    bne @dead
+@ok:
+    rts
+@dead:
+    lda #$00
+    rts
+.else
 DrawBossPips:
     lda $0736
     cmp #$0B                 ; side-view gameplay
@@ -127,6 +221,7 @@ DrawBossPips:
     inx
     bne @slot
     rts
+.endif
 
 BossMeterRoom:     .byte $0D, $22, $0E, $1C, $29, $3A, $35, $36
 BossMeterWorld:    .byte    3,   3,   4,   4,   3,   4,   5,   5
@@ -152,7 +247,7 @@ PrioritizeGoomaWeapon:
 @done:
     rts
 
-; Move Lava Link's sprites from BG bank 25 ($0000) to R5 bank 154 ($1000) so
+; Move Lava Link's sprites from BG bank 25 ($0000) to R5 bank 174 ($1000) so
 ; sprite fetches stay on A12=1 and never clock the MMC3 scanline counter early.
 RemapLavaLinkOam4:
     tya
@@ -160,7 +255,7 @@ RemapLavaLinkOam4:
     lda #$05
     sta $64D5
     sta $8000
-    lda #154
+    lda #174
     sta $8001
     ldx #$00
 @oam:

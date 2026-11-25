@@ -28,9 +28,9 @@ local function checkSandPalette()
                           and emu.read(0x27A0+col,ppu)==0x99
         matched=matched and palette==1
     end
-    check(complete,'Saria room 6 has scrolled in all sixteen quicksand tile columns')
-    check(matched and emu.read(0x3F05,ppu)==0x37 and emu.read(0x3F07,ppu)==0x0F,
-        'Both halves of the quicksand use warm sand and shadow with no palette seam')
+    check(complete,'Saria room 6 has scrolled in all sixteen foul water tile columns')
+    check(matched and emu.read(0x3F05,ppu)==0x37 and emu.read(0x3F06,ppu)==0x2A and emu.read(0x3F07,ppu)==0x0F,
+        'Both halves of the foul water use green/scum/shadow palette 1 with no palette seam')
 end
 
 local function checkStreamedSand(room)
@@ -110,7 +110,7 @@ emu.addEventCallback(function()
         local house=readTile(0x84)
         if not staticTile then staticTile=house
         elseif house~=staticTile then staticChanged=true end
-        if frame>=settled+24 then
+        if frame>=settled+36 then
             local bankCount,sandCount=0,0
             for b in pairs(seenBanks) do
                 if b==146 or b==148 or b==150 or b==152 then bankCount=bankCount+1 end
@@ -163,7 +163,7 @@ emu.addEventCallback(function()
                 if dropped and tile<=0x27 then villagerDropped=true end
             end
         end
-        if frame==readyAt+26 then
+        if frame==readyAt+36 then
             local count=0
             for _ in pairs(seenSand) do count=count+1 end
             check(count==4,string.format('Room %d animates all four quicksand patterns',room))

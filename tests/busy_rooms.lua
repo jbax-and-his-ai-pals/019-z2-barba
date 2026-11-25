@@ -50,11 +50,13 @@ profile('enemyShot',0xD5D1,0xD5D4)
 profile('update',0xD50D,0xD510)
 profile('playerDraw',0xD52D,0xD530)
 profile('copy',LABELS.CopyOamShadow6,LABELS.PrioritizeRoomOam6)
+local nmiWorkEnd=LABELS.NmiWorkEnd or 0xC1A2
+local nmiRti=LABELS.NmiRti or 0xC1B2
 emu.addMemoryCallback(function()
     if nmiStart and nmiSideView and cur and age>20 and gateOn() then
         cur.workMax=math.max(cur.workMax,cycles()-nmiStart)
     end
-end,emu.callbackType.exec,0xC1A3)
+end,emu.callbackType.exec,nmiWorkEnd)
 emu.addMemoryCallback(function()
     if not(nmiStart and cur and age>20)then nmiStart=nil;return end
     local n=cycles()-nmiStart;nmiStart=nil
@@ -66,7 +68,7 @@ emu.addMemoryCallback(function()
     else
         cur.otherNmiMax=math.max(cur.otherNmiMax,n)
     end
-end,emu.callbackType.exec,0xC1B5)
+end,emu.callbackType.exec,nmiRti)
 if LABELS.VblankOverrun6 then
     emu.addMemoryCallback(function()
         if cur and age>20 and nmiSideView and gateOn() and r(0x8506)==0 then cur.late=cur.late+1 end

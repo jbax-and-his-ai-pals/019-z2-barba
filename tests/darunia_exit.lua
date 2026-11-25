@@ -48,10 +48,10 @@ emu.addEventCallback(function()
         buttons.left=true
     elseif phase=='crossing' then
         buttons.right=true
-        if visit==2 and not jumpAt and playerX()>=0x3A3 then jumpAt=frame end
-        if jumpAt then
-            buttons.a=frame-jumpAt<7
-            buttons.down=frame-jumpAt>=7
+        if visit==2 and not jumpAt and playerX()>=0x3A3 and r(0x479)==0 then jumpAt=frame end
+        if jumpAt and (frame-jumpAt<14 or r(0x479)~=0) then
+            buttons.a=frame-jumpAt<10
+            buttons.down=frame-jumpAt>=10
         elseif stuck>18 then
             buttons.a=stuck%32<12
         end
@@ -82,12 +82,15 @@ emu.addEventCallback(function()
     elseif phase=='crossing' then
         if visit==2 and mode==0x0B then
             if r(0x80)==9 then sawDownstab=true end
+            if jumpAt and frame-jumpAt>=14 and r(0x479)==0 and not sawDownstab and x<0x3D5 then
+                jumpAt=nil
+            end
             for slot=0,5 do
                 if r(0xB6+slot)==1 and r(0xA1+slot)==0x0B then sawGenerator=true end
             end
         end
         if mode==5 then
-            if x<0x3F0 or r(0x74)~=0x0A or r(0x73)~=0x24 or r(0x700)~=3 then
+            if x<0x3EF or r(0x74)~=0x0A or r(0x73)~=0x24 or r(0x700)~=3 then
                 finish(false,'expected a live return through the right exit')
                 return
             end

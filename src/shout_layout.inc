@@ -26,7 +26,7 @@ ShoutTile_P = $BF
 ; Even bytes: town sprite bank 6 ($0000 table), unused Link-only pairs. Bank 7
 ; has no free pairs left: $00-$27 are villager sprites (Fat Woman $11-$1F etc.).
 ; The counter draws digit 0 with ShoutTile_O to save a pair.
-ShoutTile_Ba = $AE
+ShoutTile_B = $AE
 ShoutTile_H = $7C
 ShoutTile_X = $6C
 ShoutTile_1 = $78

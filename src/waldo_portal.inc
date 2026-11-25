@@ -16,6 +16,8 @@ MELT_DIR         = $6480
 PORTAL_GAME      = $648A
 WALDO_HAT        = $648B
 WALDO_HAT_MAGIC  = $57
+SUBGAME_REWARDS  = $63B0   ; 16 bytes ($63B0-$63BF): per-slot completion flags
+ARCADE_DLG_BUF   = $63C0   ; 64 bytes ($63C0-$63FF): dynamic booth enter dialogue
 
 .macro WaldoLine text, terminator
     .assert .strlen(text) <= 14, error, "Waldo dialogue line is too wide"
@@ -32,6 +34,8 @@ WALDO_HAT_MAGIC  = $57
             .byte $35
         .elseif .strat(text, character) >= 'A' .and .strat(text, character) <= 'Z'
             .byte .strat(text, character) - 'A' + $DA
+        .elseif .strat(text, character) >= '0' .and .strat(text, character) <= '9'
+            .byte .strat(text, character) - '0' + $D0
         .else
             .error "Unsupported Waldo dialogue character"
         .endif
@@ -39,16 +43,30 @@ WALDO_HAT_MAGIC  = $57
     .byte terminator
 .endmacro
 
-.segment "ITEM_ROAR"
+.segment "BANK6"
 .export BarbaWaldoPortal6, UpdateWaldoHatChr6
 
 BarbaWaldoPortal6:
     lda $0707
     cmp #$01
-    bne @clear_all
+    bne @clear_quick
     lda $0736
     cmp #$0B
-    bne @clear_all
+    bne @clear_quick
+    lda #>(BarbaWaldoPortal2 - 1)
+    pha
+    lda #<(BarbaWaldoPortal2 - 1)
+    pha
+    lda #$02
+    jmp $FFCC
+@clear_quick:
+    lda #$00
+    sta WALDO_ENTER_MSG
+    sta PORTAL_DEBOUNCE
+    rts
+
+.segment "BANK2_SMOKE"
+BarbaWaldoPortal2:
 @in_rauru:
     lda WALDO_ENTER_MSG
     bne @wait_enter_msg
@@ -57,14 +75,14 @@ BarbaWaldoPortal6:
     lda $29
     cmp #$B0
     bne @clear_deb
-    jsr CheckPortalDoor6
-    bcs @on_door
-    bcc @clear_deb
+    jsr CheckPortalDoor2
+    lda WALDO_ENTER_MSG
+    beq @clear_deb
+    jsr PollUpKey2
+    beq @clear_enter_flag
 @on_door:
     lda PORTAL_DEBOUNCE
-    bne @done
-    lda #$01
-    sta WALDO_ENTER_MSG
+    bne @clear_enter_flag
     lda #$02
     sta $074C               ; Dialog Type = Talking
     sta $DE                 ; Freeze player/actors
@@ -92,24 +110,32 @@ BarbaWaldoPortal6:
     ldx #$05
 @set_slot:
     stx $048B
-    rts
+    jmp @done
 
 @wait_enter_msg:
     lda $074C
     bne @done
     lda #$00
     sta WALDO_ENTER_MSG
-    jmp BarbaWaldoEnter6
+    lda #>(BarbaWaldoEnter6 - 1)
+    pha
+    lda #<(BarbaWaldoEnter6 - 1)
+    pha
+    lda #$06
+    jmp $FFCC
 
-@clear_all:
-    lda #$00
-    sta WALDO_ENTER_MSG
 @clear_deb:
     lda #$00
     sta PORTAL_DEBOUNCE
 @done:
-    rts
+    lda #$06
+    jmp $FFCC
+@clear_enter_flag:
+    lda #$00
+    sta WALDO_ENTER_MSG
+    beq @done
 
+.segment "BANK6"
 ; Swap MMC3 R2 ($1000-$13FF) to the Waldo-hat Barba CHR bank once Waldo is beaten.
 UpdateWaldoHatChr6:
     lda WALDO_HAT
@@ -131,13 +157,9 @@ WaldoHatHop6:
 .segment "BANK3_PAD"
 UpdateWaldoHatChr3:
     lda $0736
-    cmp #$05
+    cmp #$06
     bcc @ret
-    beq @ow
     lda #155
-    .byte $2C
-@ow:
-    lda #156
     ldx #$02
     stx $64D5
     stx $8000
@@ -145,6 +167,183 @@ UpdateWaldoHatChr3:
 @ret:
     lda #$06
     jmp $FFCC
+
+.segment "ITEM_ROAR"
+; Draw the tall animated Waldo hat + puffball sprite above Barba's head in side-view ($6500 OAM shadow).
+DrawWaldoHat6:
+    lda WALDO_HAT
+    cmp #WALDO_HAT_MAGIC
+    bne @done
+    lda $0736
+    cmp #$0B
+    bne @done
+    lda $076C
+    cmp #$04                  ; ending cutscene uses $5E for ash in CHR 0E
+    beq @done
+    ldx #$02
+@next_slot:
+    ldy @head_slots,x
+    lda $6500,y
+    cmp #$F0
+    bcs @skip_slot
+    lda $6501,y
+    cmp #$03                  ; normal head
+    beq @have_head
+    cmp #$1D                  ; windup / hurt
+    beq @have_head
+    cmp #$21                  ; attack
+    beq @have_head
+    cmp #$3B                  ; looking up
+    beq @have_head
+@skip_slot:
+    dex
+    bpl @next_slot
+@done:
+    rts
+@head_slots:
+    .byte $0C, $00, $4C
+@have_head:
+    cmp #$1D                  ; remap windup/hurt head to $03 so $1C/$1D holds the hat front
+    bne :+
+    lda #$03
+    sta $6501,y
+:
+    sta $03                   ; save head tile ($03/$21/$3B)
+    lda $6500,y
+    sec
+    sbc #$05                  ; 5px above head top (2-sprite floppy cornucopia + red puffball)
+    bcc @done
+    sta $00
+    lda $03
+    cmp #$3B                  ; looking up: head sits 5px lower in $3A/$3C
+    bne @not_up_y
+    lda $00
+    clc
+    adc #$05
+    bcs @done
+    sta $00
+@not_up_y:
+    lda $0479                 ; airborne: press down while rising, float up while falling
+    beq @chk_hud
+    lda $057D
+    beq @chk_hud
+    bmi @air_rise
+    dec $00
+    bne @chk_hud
+@air_rise:
+    inc $00
+@chk_hud:
+    lda $00
+    cmp #$20                  ; keep below HUD split
+    bcc @done
+    cmp #$F0
+    bcs @done
+    lda #$04                  ; base X offset for front half ($1D) of 2-sprite hat
+    ldx $03
+    cpx #$3B                  ; looking up: lean 1px back
+    beq @lean_back
+    ldx $0479                 ; rising jump: press back 1px
+    beq @chk_frame_x
+    ldx $057D
+    bmi @lean_back
+@chk_frame_x:
+    ldx DRAW_FRAME
+    cpx #$24                  ; windup: lean 1px back
+    beq @lean_back
+    cpx #$09                  ; walk1: front +1px back (B1)
+    beq @lean_back
+    cpx #$2D                  ; attack: lunge 1px forward
+    bne @apply_x
+    lda #$03
+    .byte $2C
+@lean_back:
+    lda #$05
+@apply_x:
+    sta $03
+    jmp DrawWaldoHatWrite6
+
+.segment "BANK6"
+DrawWaldoHatWrite6:
+    lda $6502,y               ; inherit head attr (H-flip, palette, hurt flash, priority)
+    sta $02
+    lda $6503,y
+    bit $02
+    bvs @facing_right
+    clc
+    adc $03
+    bcs @ret_done
+    sta $01                   ; front_X
+    clc
+    adc #$07                  ; back rest = front_X + 7 (1px overlap with B1)
+    bcc @both
+    lda #$FF
+    bne @both
+@facing_right:
+    sec
+    sbc $03
+    bcc @ret_done
+    sta $01                   ; front_X
+    sec
+    sbc #$07
+    bcs @both
+    lda #$FF
+@both:
+    pha                       ; save back_X
+    ldx #$20                  ; high-priority OAM slot ahead of shouts/villagers/smoke
+    lda #$1D                  ; front half ($1C ^ $01)
+    jsr @place_sprite
+    pla
+    cmp #$FF
+    beq @ret_done
+    sta $01
+    lda DRAW_FRAME
+    cmp #$09                  ; walk1: back +1px more (+2 total)
+    beq @shift_back
+    cmp #$12                  ; walk2: back +1px + droop 1px
+    beq @droop
+    cmp #$36                  ; crouch: back +1px + droop 1px
+    bne @draw_back
+@droop:
+    inc $00
+@shift_back:
+    bit $02
+    bvs @sub_back
+    inc $01
+    beq @ret_done             ; wrapped past 255 -> offscreen
+    bne @draw_back
+@sub_back:
+    lda $01
+    beq @ret_done             ; would wrap below 0 -> offscreen
+    dec $01
+@draw_back:
+    lda #$5F                  ; back half + puffball ($5E ^ $01)
+@place_sprite:
+    sta $03
+@find_free:
+    lda $6500,x
+    cmp #$F0
+    bcs @write_oam
+    inx
+    inx
+    inx
+    inx
+    bne @find_free
+@ret_done:
+    rts
+@write_oam:
+    lda $00
+    sta $6500,x
+    lda $03
+    sta $6501,x
+    lda $02
+    sta $6502,x
+    lda $01
+    sta $6503,x
+    inx
+    inx
+    inx
+    inx
+    rts
 
 .segment "BANK6"
 .export BarbaWaldoRestore6
@@ -161,6 +360,15 @@ BarbaWaldoEnter6:
     sta $2000
     sta $2001
 
+    lda #>(BarbaWaldoSaveAndLaunch2 - 1)
+    pha
+    lda #<(BarbaWaldoSaveAndLaunch2 - 1)
+    pha
+    lda #$02
+    jmp $FFCC
+
+.segment "BANK2_SMOKE"
+BarbaWaldoSaveAndLaunch2:
     ldy PORTAL_GAME
     lda #$A1
     sta $A001
@@ -234,18 +442,8 @@ BarbaWaldoEnter6:
     dex
     bne @clear_nt
 
-    ; Clear Waldo portal state in WRAM bank 2
-    lda #$A2
-    sta $A001
-    lda #$00
-    sta $7FFF
-
-    lda #>(PortalTramp3 - 1)
-    pha
-    lda #<(PortalTramp3 - 1)
-    pha
-    lda #$03
-    jmp $FFCC
+    ; Clear portal state ($7FFF) in target WRAM bank happens in PortalTramp2
+    jmp PortalTramp2
 
 @save_nt_1k:
     sta $2006
@@ -266,23 +464,78 @@ BarbaWaldoEnter6:
     bne @nt_read
     rts
 
-CheckPortalDoor6:
-    jmp CheckPortalDoorBody6
+.segment "BANK2_SMOKE"
+.export PortalCount, PortalTblTown, PortalTblRoom, PortalTblPage, PortalTblXlo, PortalTblXhi
+MAX_PORTAL_SLOTS = 16
+PortalCount:     .byte $02
+PortalTblTown:   .res MAX_PORTAL_SLOTS, $00
+PortalTblRoom:   .res MAX_PORTAL_SLOTS, $00
+PortalTblPage:   .res MAX_PORTAL_SLOTS, $00
+PortalTblXlo:    .res MAX_PORTAL_SLOTS, $00
+PortalTblXhi:    .res MAX_PORTAL_SLOTS, $00
 
-PortalTblRoom: .byte $01, $05
-PortalTblPage: .byte $01, $00
-PortalTblXlo:  .byte $20, $90
-PortalTblXhi:  .byte $30, $A0
-PortalDoorHit:
+CheckPortalDoor2:
+    lda #$00
+    sta WALDO_ENTER_MSG
+    ldx PortalCount
+    beq @done
+    dex
+@chk:
+    lda $056B
+    cmp PortalTblTown,x
+    bne @next
+    lda $0561
+    cmp PortalTblRoom,x
+    bne @next
+    lda $3B
+    cmp PortalTblPage,x
+    bne @next
+    lda $4D
+    cmp PortalTblXlo,x
+    bcc @next
+    cmp PortalTblXhi,x
+    bcs @next
     stx PORTAL_GAME
-    jsr PollUpKey6
-    beq @no_up
-    sec
-    rts
-@no_up:
-    clc
+    lda PortalTblNameLo,x
+    sta $00
+    lda PortalTblNameHi,x
+    sta $01
+    ldy #$00
+@copy_name:
+    lda ($00),y
+    sta ARCADE_DLG_BUF,y
+    cmp #$FF
+    beq @copied
+    iny
+    cpy #$3F
+    bcc @copy_name
+    lda #$FF
+    sta ARCADE_DLG_BUF,y
+@copied:
+    lda #$01
+    sta WALDO_ENTER_MSG
+    bne @done
+@next:
+    dex
+    bpl @chk
+@done:
     rts
 
+PollUpKey2:
+    lda #$01
+    sta $4016
+    lsr a
+    sta $4016
+    ldx #$04
+@up_skip:
+    bit $4016
+    dex
+    bne @up_skip
+    lda $4016
+    and #$01
+    rts
+
+.segment "BANK6"
 PollUpKey6:
     lda #$01
     sta $4016
@@ -297,72 +550,127 @@ PollUpKey6:
     and #$01
     rts
 
-.segment "ITEM_ROAR"
-CheckPortalDoorBody6:
-    ldx #$01
-@chk:
-    lda $0561
-    cmp PortalTblRoom,x
-    bne @next
-    lda $3B
-    cmp PortalTblPage,x
-    bne @next
-    lda $4D
-    cmp PortalTblXlo,x
-    bcc @next
-    cmp PortalTblXhi,x
-    bcs @next
-    jmp PortalDoorHit
-@next:
-    dex
-    bpl @chk
-    clc
-    rts
+.segment "BANK2_SMOKE"
+.export PortalTblWram, PortalTbl5FF0, PortalTbl5FF1, PortalTbl5FF2, PortalTblR6
+.export PortalTblBootLo, PortalTblBootHi, PortalTblNameLo, PortalTblNameHi
+.export ArcadeName00, ArcadeName01, ArcadeName02, ArcadeName03
+.export ArcadeName04, ArcadeName05, ArcadeName07
+.export ArcadeName08, ArcadeName09, ArcadeName10
+PortalTblWram:   .res MAX_PORTAL_SLOTS, $A3
+PortalTbl5FF0:   .res MAX_PORTAL_SLOTS, $00
+PortalTbl5FF1:   .res MAX_PORTAL_SLOTS, $00
+PortalTbl5FF2:   .res MAX_PORTAL_SLOTS, $00
+PortalTblR6:     .res MAX_PORTAL_SLOTS, $00
+PortalTblBootLo: .res MAX_PORTAL_SLOTS, $00
+PortalTblBootHi: .res MAX_PORTAL_SLOTS, $00
+PortalTblNameLo: .byte <ArcadeName00, <ArcadeName01, <ArcadeName02, <ArcadeName03
+                 .byte <ArcadeName04, <ArcadeName05, <ArcadeNameDefault, <ArcadeName07
+                 .byte <ArcadeName08, <ArcadeName09, <ArcadeName10, <ArcadeNameDefault
+                 .byte <ArcadeNameDefault, <ArcadeNameDefault, <ArcadeNameDefault, <ArcadeNameDefault
+PortalTblNameHi: .byte >ArcadeName00, >ArcadeName01, >ArcadeName02, >ArcadeName03
+                 .byte >ArcadeName04, >ArcadeName05, >ArcadeNameDefault, >ArcadeName07
+                 .byte >ArcadeName08, >ArcadeName09, >ArcadeName10, >ArcadeNameDefault
+                 .byte >ArcadeNameDefault, >ArcadeNameDefault, >ArcadeNameDefault, >ArcadeNameDefault
 
-.segment "BANK3_PAD"
-PortalTramp3:
-    ldx #(PortalTrampEnd - PortalTramp - 1)
-@copy_tramp:
-    lda PortalTramp,x
-    sta $0300,x
-    dex
-    bpl @copy_tramp
+ArcadeName00:
+    WaldoLine "INSERT COIN!", $FD
+    WaldoLine "WHERES BARBA?", $FF
+ArcadeName01:
+    WaldoLine "INSERT COIN!", $FD
+    WaldoLine "FRIDAY 13TH", $FF
+ArcadeName02:
+    WaldoLine "INSERT COIN!", $FD
+    WaldoLine "BARBA'S BEEF", $FF
+ArcadeName03:
+    WaldoLine "INSERT COIN!", $FD
+    WaldoLine "BARBA KONG", $FF
+ArcadeName04:
+    WaldoLine "INSERT COIN!", $FD
+    WaldoLine "SUPER BARBA", $FF
+ArcadeName05:
+    WaldoLine "INSERT COIN!", $FD
+    WaldoLine "MONSTER HUNT", $FF
+ArcadeName07:
+    WaldoLine "INSERT COIN!", $FD
+    WaldoLine "BARBA MAN 2", $FF
+ArcadeName08:
+    WaldoLine "INSERT COIN!", $FD
+    WaldoLine "WHEEL OF", $FD
+    WaldoLine "BARBA", $FF
+ArcadeName09:
+    WaldoLine "INSERT COIN!", $FD
+    WaldoLine "LEGEND OF", $FD
+    WaldoLine "BARBA", $FF
+ArcadeName10:
+    WaldoLine "INSERT COIN!", $FD
+    WaldoLine "BARBA", $FD
+    WaldoLine "PUNCH OUT!!", $FF
+ArcadeNameDefault:
+    WaldoLine "SOMETHING'S", $FD
+    WaldoLine "NOT", $FD
+    WaldoLine "RIGHT...", $FF
+
+PortalTramp2:
     pla
-    beq @go
-    jmp PatchF13TrampA
-@go:
-    jmp $0300
-
-PatchF13TrampB:
-    lda #$30
-    sta $0310
-    lda #$80
-    sta $0320
+    tax                     ; X = portal slot index (0..MAX_PORTAL_SLOTS-1)
+    lda PortalTblWram,x
+    sta $A001
+    lda #$00
+    sta $7FFF
+    ; Seed guest WRAM $7FF0..$7FF7 from Zelda II's RNG ($051A..$0521) + frame counter ($12).
+    ldy #$07
+@seed_rng:
+    lda $051A,y
+    eor $12
+    sta $7FF0,y
+    dey
+    bpl @seed_rng
+    lda $7FF0
+    bne @seed_nz
+    lda $12
+    ora #$A5
+    sta $7FF0
+@seed_nz:
+    ldy #(PortalTrampEnd - PortalTramp - 1)
+@copy_tramp:
+    lda PortalTramp,y
+    sta $0300,y
+    dey
+    bpl @copy_tramp
+    lda PortalTbl5FF0,x
+    sta $0300 + (PortalTramp_5FF0 - PortalTramp) + 1
+    lda PortalTbl5FF1,x
+    sta $0300 + (PortalTramp_5FF1 - PortalTramp) + 1
+    lda PortalTbl5FF2,x
+    sta $0300 + (PortalTramp_5FF2 - PortalTramp) + 1
+    lda PortalTblR6,x
+    sta $0300 + (PortalTramp_R6 - PortalTramp) + 1
+    lda PortalTblBootLo,x
+    sta $0300 + (PortalTramp_Boot - PortalTramp) + 1
+    lda PortalTblBootHi,x
+    sta $0300 + (PortalTramp_Boot - PortalTramp) + 2
     jmp $0300
 
 PortalTramp:
     lda #$80
     sta $A001               ; unlock $5FF0-$5FF3
-    lda #$01                ; [$0306] $03 for F13
-    sta $5FF0               ; 256KB MMC3 mode
-    lda #$10                ; [$030B] $08 for F13
-    sta $5FF1               ; Waldo PRG (256..512KB)
-    lda #$20                ; [$0310] $30 for F13
-    sta $5FF2               ; Waldo CHR (256..512KB)
+PortalTramp_5FF0:
+    lda #$01
+    sta $5FF0
+PortalTramp_5FF1:
+    lda #$10
+    sta $5FF1
+PortalTramp_5FF2:
+    lda #$20
+    sta $5FF2
     lda #$06
     sta $8000
+PortalTramp_R6:
     lda #$00
-    sta $8001               ; Map bank 0 at $8000 for F13 (Waldo Reset in $E000-$FFFF)
-    jmp $E000               ; [$0320] $80 for F13
+    sta $8001
+PortalTramp_Boot:
+    jmp $E000
 PortalTrampEnd:
-
-.segment "BANK3_SIGN"
-PatchF13TrampA:
-    lda #$01
-    sta $0306
-    lda #$20
-    sta $030B
-    jmp PatchF13TrampB
 
 .segment "BANK6"
 
@@ -671,8 +979,8 @@ WaldoDialogCheck:
 @check_enter:
     lda WALDO_ENTER_MSG
     beq @native
-    lda #<WaldoEnterText
-    ldy #>WaldoEnterText
+    lda #<ARCADE_DLG_BUF
+    ldy #>ARCADE_DLG_BUF
     jmp TownSetNpcDialog
 @native:
     lda #$00
@@ -684,7 +992,17 @@ WaldoReturnText:
     TownLine "WELL THAT", $FD
     TownLine "WAS WEIRD.", $FF
 
-WaldoEnterText:
-    WaldoLine "SOMETHING'S", $FD
-    WaldoLine "NOT", $FD
-    WaldoLine "RIGHT...", $FF
+.segment "TOWN"
+.export BarbaArcadeArea
+; 4-page interior hall (Rauru room $1C) housing 11 arcade booths across pages 0..3.
+BarbaArcadeArea:
+    .byte @end - BarbaArcadeArea, $60, $18, $30
+    ; Page 0: left exit to Rauru ($F0 $00), ceiling ($F1 $3E), brick wall ($50 $8E), booths 0..2
+    .byte $F0, $00, $F1, $3E, $50, $8E, $84, $00, $84, $00, $84, $00
+    ; Page 1: jump page 1 ($E1 $00), ceiling ($F0 $3F), wall ($50 $8F), booths 3..5
+    .byte $E1, $00, $F0, $3F, $50, $8F, $82, $00, $85, $00, $85, $00
+    ; Page 2: jump page 2 ($E2 $00), ceiling ($F0 $3F), wall ($50 $8F), booths 6..8
+    .byte $E2, $00, $F0, $3F, $50, $8F, $82, $00, $85, $00, $85, $00
+    ; Page 3: jump page 3 ($E3 $00), ceiling ($F0 $3F), wall ($50 $8F), booths 9..10, right exit to Rauru
+    .byte $E3, $00, $F0, $3F, $50, $8F, $82, $00, $85, $00, $F6, $01
+@end:

@@ -1,6 +1,8 @@
 # User-supplied game data and generated builds never belong in Git.
 /roms/
+/assets/roar.wav
 /build/
+/web/previews/
 /.build-history.sqlite3*
 /dist/
 /.tools/

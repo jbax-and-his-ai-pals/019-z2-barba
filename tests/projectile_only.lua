@@ -73,7 +73,7 @@ assert(LABELS and LABELS.BarbaVolleyPlaced,'build must export BarbaVolleyPlaced'
 emu.addMemoryCallback(function()
     if index==0 or not cases[index]then return end
     local s=emu.getState()
-    if (s['mapper.prgReg'] or ((s['mapper.registers6'] or -1)//2))~=0 then return end
+    if (s['mapper.prgReg'] or ((s['mapper.mmc3Registers6'] or -1)//2))~=0 then return end
     local slot=s['cpu.x']
     if slot>1 then return end
     local c=cases[index]
@@ -90,7 +90,7 @@ end,emu.callbackType.exec,LABELS.BarbaVolleyPlaced)
 emu.addMemoryCallback(function()
     if index==0 or not cases[index]then return end
     local s=emu.getState()
-    if (s['mapper.prgReg'] or ((s['mapper.registers6'] or -1)//2))~=0 then return end
+    if (s['mapper.prgReg'] or ((s['mapper.mmc3Registers6'] or -1)//2))~=0 then return end
     local slot=s['cpu.x'];if slot>1 then return end
     local active=r(0x8D+slot)>0 and r(0x8D+slot)<0x80
     if not active then tracked[slot]=nil;return end

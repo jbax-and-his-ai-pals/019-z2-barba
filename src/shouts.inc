@@ -73,10 +73,8 @@ BarbaShouts6:
     jsr ScalesTick      ; SCALES cast/hit feedback (bank 6, src/scales.inc)
     jsr DarkLinkFireCheck
     lda SHOUT_READY
-    cmp #$01
-    beq @scene
-    lda #$01
-    sta SHOUT_READY
+    bne @scene
+    inc SHOUT_READY
     jsr @reset
 @scene:
     lda $0707
@@ -386,7 +384,7 @@ ShoutOam:
 ShoutTopLength:
     .byte 2, 2, 0, 2, 2, 0, 4, 0, 0
 ShoutBottomInset:
-    .byte 12, 12, 8, 4, 8, 12, 4, 4, 8
+    .byte 12, 12, 8, 4, 8, 12, 4, 4, 4
 
 .segment "BANK6"
 ; A split phrase lists its top row first. $00 ends the phrase.
@@ -417,7 +415,7 @@ ShoutSaveMe:
 ShoutNo:
     .byte ShoutTile_N, ShoutTile_O, ShoutTile_Bang, $00
 ShoutBarba:
-    .byte ShoutTile_Ba, ShoutTile_R, ShoutTile_Ba, ShoutTile_Bang, $00
+    .byte ShoutTile_B, ShoutTile_A, ShoutTile_R, ShoutTile_B, ShoutTile_A, ShoutTile_Bang, $00
 ; 10: North Palace "OOPS..." (CHR bank 3 odd 8x16 sprite tiles, offset 72).
 CastleShoutTiles:
     .byte $5F, $5F, $61, $63, $65, $00

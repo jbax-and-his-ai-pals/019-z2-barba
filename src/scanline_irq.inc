@@ -45,11 +45,15 @@ NmiVblankSetup6:
     iny
     lda #$00
     cpx #$02
+    beq @dec_macro
+    sta OW_FOL_SKIP
     bne @done_macro
 @dec_macro:
     dec $0725
 @clear_buf:
     ldx @table0,y
+    lda $0302,x
+    sta OW_FOL_SKIP
     lda #$00
     sta $0301,x
     lda #$FF
@@ -72,6 +76,10 @@ NmiVblankSetup6:
 .ifdef WALDO_PORTAL
     jsr BarbaWaldoPortal6
 .endif
+    lda OW_FOL_RUN
+    beq :+
+    jsr OwFoliageHop6
+:
     jmp $FFC5           ; SwapToPRG0
 @table0:
     .byte $00, $61, $A2
@@ -101,7 +109,11 @@ NmiRng6:
     bpl @exit_nmi
     jsr VblankOverrun6
 @exit_nmi:
+.ifdef SOULS_BOSS_METER
+    jmp $C1A5
+.else
     jmp $C1A3
+.endif
 .segment "LAUGH_DELAY"
 VblankOverrun6:
     lda IRQ_COUNT
@@ -160,7 +172,8 @@ EncounterTorsoHop6:
     pha
     lda #<(EncounterTorsoFrom6-1)
     pha
-    jmp $FFC5
+    lda #$03
+    jmp $FFCC
 @done:
     rts
 
@@ -179,32 +192,31 @@ FinishSceneOam6:
     jmp FinishBossOam6
 
 DrawDownstabTailHop6:
+    lda $0736
+    cmp #$05
+    beq @hop
+    lda DRAW_FRAME
+    cmp #$51
+    bne @done
+@hop:
     lda #>(DrawDownstabTail3-1)
     pha
     lda #<(DrawDownstabTail3-1)
     pha
     lda #$03
     jmp $FFCC
+@done:
+    rts
 
 .segment "BANK6"
 TitleEndNmi6:
-    jsr CopyTitleOam6
-    jsr IrqSetup6
-    bit $2002
-    tsx
-    lda $0103,x         ; clear I flag in saved NMI status byte for title letterbox
-    and #$FB
-    sta $0103,x
-    cli
-    lda #$05
-    jmp $FFCC           ; restore Bank 5 before returning to $A696
-
-CopyTitleOam6:
     jsr CopyOamShadow6
     lda $6560
     cmp #$9F
-    bne @done
+    bne @irq
+    ; Mirror the near tail tip's Y ($6544: $9F rest, $9D wag) onto the far tip ($6568).
     ; The table sentinel leaves $68 free, immediately before the stars.
+    lda $6544
     sta $6568
     lda #TRAIL_TIP_FAR
     sta $6569
@@ -212,8 +224,21 @@ CopyTitleOam6:
     sta $656A
     lda #$A4
     sta $656B
-@done:
-    rts
+@irq:
+    jsr ShakeLavaOam6
+    jsr IrqSetup6
+    bit $2002
+    tsx
+    lda $0103,x         ; clear I flag in saved NMI status byte for title letterbox
+    and #$FB
+    sta $0103,x
+    cli
+    lda #>(TitleLavaParticles2 - 1)
+    pha
+    lda #<(TitleLavaParticles2 - 1)
+    pha
+    lda #$02
+    jmp $FFCC           ; update title lava particles, then restore Bank 5
 
 .segment "PALACE_SHAKE"
 CopySceneOam6:
@@ -254,8 +279,10 @@ CopySceneOam6:
 @done:
     rts
 
+.segment "LAIR_HUD_SHAKE"
 EndingTrailTiles:
     .byte TRAIL_TORSO_LEFT, TRAIL_TORSO_RIGHT, TRAIL_TIP, TRAIL_TIP_FAR
+.segment "PALACE_SHAKE"
 EndingTrailX:
     .byte $58, $50, $48, $40
 
@@ -326,22 +353,6 @@ IrqSetup6:
     bne @disarm
     lda $0726
     bne @disarm
-    jmp @arm_letterbox_only
-
-@check_title:
-    lda $0726
-    bne @disarm
-    lda ROAR_TIMER
-    bne @arm_letterbox_only
-.ifdef SAMPLED_ROAR
-    lda ROAR_REQUEST
-    bmi @arm_letterbox_only
-.endif
-    rts
-
-@disarm:
-    rts
-
 @arm_letterbox_only:
     lda #215
     sta IRQ_LINES
@@ -353,6 +364,18 @@ IrqSetup6:
     lda #$01
     sta IRQ_COUNT
     jmp ArmStage0_6
+
+@check_title:
+    lda $0726
+    bne @disarm
+    lda ROAR_TIMER
+    bne @arm_letterbox_only
+.ifdef SAMPLED_ROAR
+    lda ROAR_REQUEST
+    bmi @arm_letterbox_only
+.endif
+@disarm:
+    rts
 
 @check_sideview:
     cmp #$0B
@@ -381,8 +404,7 @@ IrqSetup6:
     lda $0707
     beq @encounter_setup
     cmp #$03
-    bcc @single_hud_split
-    jmp @palace_setup
+    bcs @palace_setup
 
 @single_hud_split:
     ; Towns ($0707 = 1, 2): single HUD split + idle cloud drift in outdoor rooms.
@@ -413,7 +435,7 @@ IrqSetup6:
     lda $FE
     sta IRQ_MASK,y
 @encounter_ground:
-    jsr @full_camx
+    jsr FullCamx6
     jmp FinishSetup6
 
 ; Palaces ($0707 >= 3):
@@ -425,11 +447,11 @@ IrqSetup6:
     jsr AdvanceCloudDrift6
 :
     jsr UpdateLavaRoomFlag6
-    jsr @full_camx
+    jsr FullCamx6
     jsr ShakeLavaCamera6
     jmp LavaHazeSetup6
 
-@full_camx:
+FullCamx6:
     lda $FD
     sta IRQ_X,y
     lda $0746
@@ -441,6 +463,20 @@ IrqSetup6:
 CheckDarkBarbaLetterbox6:
     lda $0707
     cmp #$05
+.ifdef SOULS_BOSS_METER
+    bne @souls_check
+    lda $B6
+    cmp #$01
+    bne @souls_check
+    lda $A1
+    cmp #$23
+    bne @souls_check
+    lda $0505           ; Dark Barba entrance pause timer
+    bne @add_letterbox
+    lda $63             ; Dark Barba phase < 3 (emergence)
+    cmp #$03
+    bcs @souls_check
+.else
     bne FinishSetup6
     lda $B6
     cmp #$01
@@ -453,17 +489,18 @@ CheckDarkBarbaLetterbox6:
     lda $63             ; Dark Barba phase < 3 (emergence)
     cmp #$03
     bcs FinishSetup6
+.endif
 @add_letterbox:
-    lda #215
+    lda #212
     jsr SetDeltaLine6
-    lda $FD
-    sta IRQ_X,y
-    lda $0746
-    and #$01
-    sta IRQ_CTRL,y
+    jsr FullCamx6
     lda #$00
-    sta IRQ_MASK,y
-    iny
+    sta IRQ_MASK-1,y
+.ifdef SOULS_BOSS_METER
+    jmp FinishSetup6
+@souls_check:
+    jmp CheckSoulsBossIrq6
+.endif
 
 FinishSetup6:
     sty IRQ_COUNT
@@ -547,6 +584,7 @@ SetupEncounterScenery6:
     lda #$00
     sta OW_PARALLAX_LINE
     sta OW_HAS_GRASS
+    sta OW_FOL_ACTIVE
     sta CLOUD_DRIFT_SUB
     sta CLOUD_DRIFT_X
     sta CLOUD_DRIFT_NT
@@ -981,7 +1019,12 @@ DrawPalaceClouds6:
     ldx #$21                    ; town: behind BG + palette 1
     ldy #$89                    ; town: left=$89, mid=$8B, right=$8D ($89 ^ $04 == $8D)
 :
-    stx CLOUD_ATTR
+    txa
+    ldx $0706
+    beq :+
+    ora #$40                    ; + H-flip ($40) on eastern continent
+:
+    sta CLOUD_ATTR
     sty CLOUD_TILE
 
     jsr ComputeHalfCamx6        ; IRQ_TMP1 = scrollX_lo, IRQ_TMP2 = scrollX_hi (0..1)
@@ -1055,11 +1098,7 @@ DrawPalaceClouds6:
     eor #$04                    ; swap left/right puff when H-flipped
 @write_tile:
     sta $6501,y
-    lda CLOUD_ATTR              ; behind background ($20) + palette (3 palace / 1 town)
-    ldx $0706
-    beq :+
-    ora #$40                    ; + H-flip ($40) on eastern continent
-:
+    lda CLOUD_ATTR              ; behind background ($20) + palette + H-flip ($40) on east
     sta $6502,y
     lda IRQ_TMP0
     sta $6503,y
@@ -1088,11 +1127,10 @@ DrawPalaceClouds6:
 @done:
     rts
 @clouds:
-    .byte 73,  24, 0, 4         ; (X=24,  Y=74,  32px)
-    .byte 87, 112, 0, 3         ; (X=112, Y=88,  24px)
-    .byte 111, 224, 0, 4        ; (X=224, Y=112, 32px)
-    .byte 75,  80, 1, 3         ; (X=336, Y=76,  24px)
-    .byte 95, 176, 1, 4         ; (X=432, Y=96,  32px)
+    .byte 56,  24, 0, 3         ; (X=24,  Y=57,  24px)
+    .byte 39, 128, 0, 3         ; (X=128, Y=40,  24px)
+    .byte 89, 224, 0, 3         ; (X=224, Y=90,  24px)
+    .byte 72,  80, 1, 3         ; (X=336, Y=73,  24px)
     .byte 0
 
 ; Encounter water and palace lava share surface patterns $98/$99. Swap R1
@@ -1126,17 +1164,21 @@ UpdateSceneryChr6:
     ldx #$04
     lda #229                ; town outdoor cloud sprites ($88-$8D) in R4 (bank 6 $80-$BF)
 @set_cloud_chr:
-    stx $64D5
-    stx $8000
-    sta $8001
+    jsr WriteChrReg6
+    cpx #$04
+    bne :+
+    lda #$10
+    jsr UpdateGrassPhase6
 :
     lda $0707
     cmp #$03
     bcs :+
-    jmp TownQuicksandChr6
+    jmp TownFoulWaterChr6
 :
     lda $076E
     and #$FE
+    cmp #$08
+    beq SceneryChrBase6
     cmp #$0A
     bcc SceneryChrDone6
     cmp #$1A
@@ -1180,15 +1222,13 @@ SceneryChrBase6:
     ora #$06
 SceneryChrWrite6:
     ldx #$01
-    stx $64D5
-    stx $8000
-    sta $8001
+    jsr WriteChrReg6
     sta LAVA_CHR_BANK       ; expose active R1 bank for test verification
 SceneryChrDone6:
     rts
 SceneryLavaVOff6:
     .byte $00, $00, $02, $04
-QuicksandBanks6:
+FoulWaterBanks6:
     .byte 146, 148, 150, 152
 
 ; Select a pre-bent tip tile during VBlank. The rest of R0, including the
@@ -1196,34 +1236,36 @@ QuicksandBanks6:
 ; West Hyrule clouds drift right-to-left (lead left); East Hyrule drifts left-to-right (lead right).
 UpdateGrassChr6:
     lda OW_HAS_GRASS
-    beq @done
+    beq DoneGrassChr6
+    lda $076E
+    and #$FE
+    cmp #$02
+    beq @west
+    cmp #$04
+    bne DoneGrassChr6
+    lda #$08
+    bne UpdateGrassPhase6
+@west:
+    lda #$00
+UpdateGrassPhase6:
+    sta IRQ_TMP0
     lda $12
     lsr
     lsr
     lsr
     lsr
     and #$07
+    ora IRQ_TMP0
     tax
-    lda $076E
-    and #$FE
-    cmp #$02
-    beq @write_grass
-    cmp #$04
-    bne @done
-    txa
-    ora #$08
-    tax
-@write_grass:
-    lda @wind_bank,x
+    lda WindBank6,x
     ldx #$00
-    stx $64D5
-    stx $8000
-    sta $8001
-@done:
+    jmp WriteChrReg6
+DoneGrassChr6:
     rts
-@wind_bank:
+WindBank6:
     .byte 12, 210, 212, 210, 12, 206, 208, 206
     .byte 20, 246, 248, 246, 20, 250, 252, 250
+    .byte 28, 28, 172, 172, 28, 28, 170, 170
 
 .segment "BANK6"
 ; Shimmer $52/$53 flame sprites in R3 during VBlank across North Palace
@@ -1269,9 +1311,7 @@ UpdateCastleFlameChr6:
     lda @base_bank,y
 @write:
     ldx #$03
-    stx $64D5
-    stx $8000
-    sta $8001
+    jmp WriteChrReg6
 @done:
     rts
 @base_bank:
@@ -1279,8 +1319,18 @@ UpdateCastleFlameChr6:
 @var_base:
     .byte 213, 220
 
+.segment "BANK6_OAM"
+OwFoliageHop6:
+    lda #>(OwFoliageTick2 - 1)
+    pha
+    lda #<(OwFoliageTick2 - 1)
+    pha
+    lda #$02
+    jmp $FFCC
+
+.segment "BANK6"
 ; Gently ripple overworld water/lava tile $6E on R0 during VBlank ($0736 = 5).
-; Base R0 is 1KB banks 68/69 (4KB bank 17); variants live in 230/232/234/236.
+; Base R0 is 1KB banks 124/125 (4KB bank 31); variants live in 230/232/234/236.
 UpdateOverworldWaterChr6:
     lda $12
     lsr
@@ -1289,59 +1339,30 @@ UpdateOverworldWaterChr6:
     lsr
     and #$07
     tax
-    lda @water_bank,x
+    lda WaterBank6,x
     ldx #$00
+    jsr WriteChrReg6
+    jmp OwFoliageHop6
+WriteChrReg6:
     stx $64D5
     stx $8000
     sta $8001
     rts
-@water_bank:
-    .byte 68, 230, 232, 230, 68, 234, 236, 234
 
 .segment "BANK6_HAZE"
+WaterBank6:
+    .byte 124, 230, 232, 230, 124, 234, 236, 234
 
-; Title lava shimmer: swap R0 (BG tiles $00-$7F) between four rippled copies of
-; 1 KB banks 4/5. Lava tiles $68-$6A and the lava behind forest tiles $6D-$70
-; animate together. Entered from the bank-5
-; title NMI stub at $A5EE (hooked at $A682, before the sound driver) so the write
-; lands in VBlank. Title only ($0100 bit 6 clear). Once Start is pressed the
-; next NMI restores base R0 bank 4 for the file select screen.
-TITLE_LAVA_DIRTY = $6477
+; Title lava shimmer: trampoline to Bank 2 (TitleLavaChr2) in VBlank so R0
+; cycles across banks 238/240/242/244 and R5 maps bank 154 for tiny lava bubbles.
 .export TitleLavaChr6
 TitleLavaChr6:
-    bit $0100
-    bvs @done
-    lda $0726
-    bne @restore
-    lda $0736
-    cmp #$03
-    bcc @restore
-    lda $12
-    lsr
-    lsr
-    lsr
-    and #$03
-    tax
-    lda @lava_bank,x
-    ldx #$01
-    stx TITLE_LAVA_DIRTY
-@write:
-    ldx #$00
-    stx $64D5
-    stx $8000
-    sta $8001
-@done:
-    lda #$05
+    lda #>(TitleLavaChr2 - 1)
+    pha
+    lda #<(TitleLavaChr2 - 1)
+    pha
+    lda #$02
     jmp $FFCC
-@restore:
-    lda TITLE_LAVA_DIRTY
-    beq @done
-    lda #$00
-    sta TITLE_LAVA_DIRTY
-    lda #$04
-    bne @write
-@lava_bank:
-    .byte 238, 240, 242, 244
 
 .segment "BANK6"
 ; Warm red emphasis ($2001 bit 5) over the bottom lava rows (scanline 207+)
@@ -1364,7 +1385,7 @@ LavaHazeSetup6:
 .segment "BANK6_PAD"
 ; All three Saria street rooms use the same native town graphics ($076E=$06).
 ; The $7F liquid metatile picks palette 1 as each nametable column is drawn.
-TownQuicksandChr6:
+TownFoulWaterChr6:
     lda $0707
     cmp #$01
     bne @not_saria
@@ -1379,16 +1400,17 @@ TownQuicksandChr6:
     lda $12
     lsr
     lsr
+    lsr
     and #$03
     tax
-    lda QuicksandBanks6,x
+    lda FoulWaterBanks6,x
     jmp SceneryChrWrite6
 @not_saria:
     jmp SceneryChrBase6
 
 ; In the Saria streets, put the last two tail sprites behind the villagers.
 ; The head, main body, and shout slots keep their existing priority.
-.segment "BANK6_OAM"
+.segment "BANK6"
 SariaTipPriority6:
     lda $0707
     cmp #$01
@@ -1441,6 +1463,9 @@ CheckP6Room3A_6:
 
 .segment "BANK6"
 FinishBossOam6:
+.ifdef WALDO_PORTAL
+    jsr DrawWaldoHat6
+.endif
     lda $0728
     bne RunBossMeter4From6
     jmp CheckP6GemOam6
@@ -1453,6 +1478,29 @@ RunBossMeter4From6:
     pha
     lda #$04
     jmp $FFCC
+.ifdef SOULS_BOSS_METER
+.segment "BANK6_HAZE"
+CheckSoulsBossIrq6:
+    lda $0728
+    beq @clear
+    lda SOULS_ACTIVE
+    beq @done
+    lda #212
+    jsr SetDeltaLine6
+    lda #$00
+    sta IRQ_X,y
+    lda #$01
+    sta IRQ_CTRL,y
+    lda #$0F            ; bit 0 sentinel -> SoulsIrqSplit ($2001=$0E + R1=156 + $2400)
+    sta IRQ_MASK,y
+    iny
+    bne @done
+@clear:
+    sta SOULS_ACTIVE
+    sta SOULS_PHASE
+@done:
+    jmp FinishSetup6
+.endif
 .segment "BANK5"
 .export TitleEndHook5
 TitleEndHook5:

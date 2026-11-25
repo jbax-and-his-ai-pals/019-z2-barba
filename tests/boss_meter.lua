@@ -11,7 +11,9 @@ local function readFile(path)
     return data
 end
 
-local digest=assert(readFile(OUTPUT_DIR..'/build-report.json'):match('"output_sha256"%s*:%s*"(%x+)"'))
+local buildReport=readFile(OUTPUT_DIR..'/build-report.json')
+local digest=assert(buildReport:match('"output_sha256"%s*:%s*"(%x+)"'))
+local bossMeter=buildReport:match('"boss_meter"%s*:%s*"([^"]+)"') or 'souls'
 local pack=OUTPUT_DIR..'/test-pack/'..digest:sub(1,12)..'/bosses/'
 local cases={
     {name='horsehead',id=0x20,hp=32,target=390},
@@ -49,6 +51,13 @@ end
 emu.addMemoryCallback(function()
     if not pending then return end
     pending=false
+    if bossMeter=='souls' then
+        report:write('PASS vanilla 8-pip meter skipped on --boss-meter souls (covered by souls_boss_bar.lua)\n')
+        report:write('RESULT PASS\n')
+        report:close()
+        stopScenario(0)
+        return
+    end
     index=index+1
     local case=cases[index]
     if not case then

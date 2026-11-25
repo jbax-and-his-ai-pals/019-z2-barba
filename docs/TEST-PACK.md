@@ -9,31 +9,26 @@ message with **B**. Play through the Moon landing or press **Start + Select**
 (Enter and Space) to wave out of Waldo and wave back into Rauru. Barba resumes
 at the same position and scroll. Press **B** to dismiss the return message.
 
-**play/Test Barba - Waldo Portal.cmd** launches the two-ROM prototype in a
-separate Mesen profile.
-`python tools/waldo_portal.py --smoke` exercises the native door, starts Waldo's
-first level, and verifies the shortcut return, including with Up held. The
-report and Waldo screenshot are in `build/waldo-portal.txt` and `.png`.
-
 For a 10-slot F1–F10 save-state pack **inside Waldo inside Zelda II** on the
-combined `barba.nes`, double-click **play/Test Barba - Waldo States.cmd**
+combined `barba.nes`, double-click **play/arcade-tests/Test Wheres Barba in Z2.cmd**
 (or run `python tools/create_waldo_z2_pack.py --force`): F1–F8 cover Title Screen,
-Moon Ticket, Overworld Map, Train Station, The Castle, and the three Slots stages;
+Moon Ticket, Overworld Map, Train Station, **Before Level 5: The Subway** (**F5**),
+The Castle, and the two Slots stages (`slots-two-barbas` and `slots-jackpot`);
 **F9** (`moon-ending`, ~27 s before return) and **F10** (`moon-return`, ~1 s
 before return) let you test the automatic wavy transition back to Rauru in Zelda II.
 **Start + Select** works from any slot. Try **F4** (Train Station), watch the
 station wave out and Rauru wave in, then dismiss the return message with **B**.
 
-For the default Barba silhouette, launch **Play Barba.cmd** and look at the
+For the default Barba silhouette, launch **play/Play Barba.cmd** and look at the
 dragon on the title cliff. Start a file to see the same elbow, horizontal
-torso and flicking tail in North Palace, or use **Test Barba.cmd**, **F1**.
-In **Test Barba - Tricky Movement.cmd**, load **F7** and walk right into
+torso and flicking tail in North Palace, or use **play/zelda2-tests/Test Core.cmd**, **F1**.
+In **play/zelda2-tests/Test Tricky Movement.cmd**, load **F7** and walk right into
 the Palace 6 shaft. Watch for three inverted torso sections and a tapered
 tip above the downward-facing head as Barba and his shadow fall. Listen for
 the music to cut as the shaft animation starts. Barba roars once, and the
 palace theme starts in the lower room.
 
-For the palace victory roar, double-click **play/Test Barba - Gem Celebration.cmd**
+For the palace victory roar, double-click **play/zelda2-tests/Test Gem Celebration.cmd**
 and press **F1**. Barba starts beside the Palace 6 crystal statue, past the boss,
 with the final gem still unplaced. Walk right: the native gem sequence plays its
 fanfare, immediately followed by the roar with Barba looking up. Watch the
@@ -44,7 +39,7 @@ isolated `gem` profile and leaves Core F9 intact.
 fanfare, exactly one roar, raised head during playback and automatic pose release.
 Prepare without opening Mesen: `./tools/launch.ps1 -TestPack -CheckpointSet gem -PrepareOnly`.
 
-To playtest the Lava Link entrance, load **Test Barba - Bosses F6** or **Core F9**
+To playtest the Lava Link entrance, load **Test Bosses F6** or **Test Core F9**
 and jump right off the lava. Keep holding Right when the camera locks. Barba
 stops horizontally at the center of the middle stone platform, a little to the
 right of screen center. The jump continues vertically at its usual speed.
@@ -56,7 +51,7 @@ regular attack cycle.
 `tests/link_boss.lua` checks the entrance and `tests/palace_roar.lua` checks the
 floor pulse in all six crystal rooms.
 
-For game-over checks, double-click **play/Test Barba - Edge Scenarios.cmd**.
+For game-over checks, double-click **play/zelda2-tests/Test Edge Scenarios.cmd**.
 It rebuilds the ROM as needed and installs a separate `edges` test profile:
 
 | Key | Checkpoint | What to test |
@@ -71,7 +66,7 @@ isolated. Generated files are in `build/test-pack/<ROM hash>/edges/`.
 To prepare without opening an emulator:
 `powershell -File tools/launch.ps1 -TestPack -CheckpointSet edges -PrepareOnly`.
 
-On Windows, double-click **play/Test Barba.cmd**, or run:
+On Windows, double-click **play/zelda2-tests/Test Core.cmd**, or run:
 
 ```powershell
 ./tools/launch.ps1 -TestPack
@@ -139,7 +134,7 @@ retain fake door tiles made by the retired villager animation.
 
 ## Busy Areas checkpoints
 
-Open **Test Barba - Busy Areas.cmd** and press F1–F10 in Mesen. The set
+Open **play/zelda2-tests/Test Busy Areas.cmd** and press F1–F10 in Mesen. The set
 combines rooms with high frame cost or heavy sprite overlap in the busy-room
 probe with three Palace 5 Mago rooms for the red-duplicate playtest.
 
@@ -172,9 +167,10 @@ handled by odd-frame OAM priority rotation. For historical profiling logs, see
 
 ## Playthrough checkpoint sets
 
-Core remains the default. Use **Test Barba - Palaces.cmd**, **- Endgame.cmd**, **- Bosses.cmd**,
-**- Towns and World.cmd**, or **- Tricky Movement.cmd** in play/ (all beside
-Test Barba.cmd). Each opens its own isolated local profile and maps that set to F1-F10.
+Core remains the default. Use **Test Palaces.cmd**, **Test Endgame.cmd**, **Test Bosses.cmd**,
+**Test Towns and World.cmd**, or **Test Tricky Movement.cmd** in `play/zelda2-tests/` (all beside
+`Test Core.cmd`), or the arcade/standalone launchers in `play/arcade-tests/` and `play/standalone/`.
+Each opens its own isolated local profile and maps that set to F1-F10.
 Unused F-keys do not point at another set's states. Script equivalent:
 
 ```powershell

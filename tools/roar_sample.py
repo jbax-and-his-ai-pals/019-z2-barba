@@ -1,7 +1,7 @@
 """Convert a local PCM WAV into Barba's one-shot NES DMC voice.
 
 Only the conversion recipe belongs in Git; recordings and encoded samples stay
-under roms/ or build/. No third-party Python packages are needed.
+under assets/roar.wav or build/. No third-party Python packages are needed.
 """
 from __future__ import annotations
 
@@ -111,6 +111,57 @@ def convert(path: Path, output: Path) -> tuple[bytes, dict]:
         'hurt_prefix_seconds': hurt_bytes*8/rate,
         'hurt_duration_seconds': len(hurt_preview)/rate,
         'hurt_tail_rate_index': max(0, rate_index-4),
+    }
+
+
+def convert_soft(
+    path: Path,
+    output: Path | None = None,
+    *,
+    rate_index: int = 9,
+    max_bytes: int = 897,
+    amplitude: int = 24,
+) -> tuple[bytes, dict]:
+    """Encode a quieter, bounded-length ambient roar starting and ending at DAC midpoint 64."""
+    values, source_rate = read_wav(path)
+    peak = max(abs(v) for v in values)
+    if peak < 0.0001:
+        raise ValueError('Roar recording is silent')
+    threshold = peak * 0.008
+    start = next(i for i, v in enumerate(values) if abs(v) > threshold)
+    end = len(values) - next(i for i, v in enumerate(reversed(values)) if abs(v) > threshold)
+    values = values[max(0, start - source_rate // 200):min(len(values), end + source_rate // 100)]
+    rate = CPU_HZ / PERIODS[rate_index]
+    byte_count = ((min(max_bytes, math.ceil(len(values) / source_rate * rate / 8)) - 1) // 16) * 16 + 1
+    byte_count = max(17, min(max_bytes, byte_count))
+    mean = sum(values) / len(values)
+    peak = max(abs(v - mean) for v in values)
+    level, encoded = 64, bytearray(byte_count)
+    total_bits = byte_count * 8
+    for bit in range(total_bits):
+        position = bit * source_rate / rate
+        a = int(position)
+        b = min(len(values), max(a + 1, int((bit + 1) * source_rate / rate)))
+        value = sum(values[a:b]) / (b - a) if a < len(values) else mean
+        fade_in = min(1.0, bit / max(1.0, rate * 0.008))
+        fade_out = min(1.0, max(0, total_bits - 1 - bit) / max(1.0, rate * 0.06))
+        target = 64 + (value - mean) / peak * amplitude * fade_in * fade_out
+        up = target >= level
+        if up:
+            encoded[bit // 8] |= 1 << (bit % 8)
+        level = min(126, level + 2) if up else max(0, level - 2)
+    if output is not None:
+        output.mkdir(parents=True, exist_ok=True)
+        (output / 'roar-soft.dmc').write_bytes(encoded)
+    return bytes(encoded), {
+        'rate_index': rate_index,
+        'rate_hz': rate,
+        'bytes': byte_count,
+        'length_reg': (byte_count - 1) // 16,
+        'duration_seconds': total_bits / rate,
+        'timer_frames': math.ceil(total_bits / rate * 60.099) + 2,
+        'dac_amplitude': amplitude,
+        'end_level': level,
     }
 
 

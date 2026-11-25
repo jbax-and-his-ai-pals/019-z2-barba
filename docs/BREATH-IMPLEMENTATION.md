@@ -265,13 +265,16 @@ contact between torso and tip rose from 1,533 to 1,554 frames. High
 Profile also passed the unmodified geometry regression and checkpoint
 reload validation.
 
-The fatal-hit transition calls `BarbaDeathDisplay` in bank 3 through the
-guarded driver at `$C9EE-$C9F7`. It lifts the compact death head by 16px
-and fills that row's former space with the full `$06/$08` torso in OAM
-`$20/$24`. The original lower torso stays at the feet, yielding one head
-row and two full torso rows. The new row inherits native facing, palette
-and per-column clipping. The helper restores bank 0 for the native palette
-flash. `death_continue` checks the three rows in both directions.
+The fatal-hit transition (`$C9EE`) switches to Bank 0 and calls `BarbaDisplay`
+directly with `$80 = #$0A`, drawing the full 24x48 hurt pose across the
+flashing background (`$076C == $02, $0736 == $03`). During NMI,
+`EncounterTorsoFrom6` (`BANK3_DLG`) dispatches `$076C == #$02` through
+`DeathTrailPrep3` (`BANK3_SIGN`), clearing `$048D`, `$0752`, `$0754`,
+`LAVA_CONTACT`, and `$13` so `BarbaDisplay` and `DrawEncounterTorso` keep the
+full black silhouette with its curved elbow (`$35/$37`) and horizontal tail
+(`$15/$3F/$45/$31`) intact even if Barba died while flashing, crouched, or
+submerged. `death_continue` verifies the 24x48 hurt pose and shadow-OAM
+elbow/trail across both facings on every `$076C == $02, $0736 == $03` frame.
 
 Drop-shaft falling (`Game Mode $0F`, bank 0 `$8FB7`) patches `$8FC9` to pose
 `$09` and replaces both `$EC02` display calls (`$8FE3` for Barba's black shadow

@@ -12,18 +12,18 @@ from emulator_test import run
 from prepare_player import apply_play_defaults
 
 ROOT = Path(__file__).resolve().parents[1]
-ROM_PATH = ROOT / 'play/wheres-barba.nes'
+ROM_PATH = ROOT / 'play/standalone/waldo-barba.nes'
 PACK_DIR = ROOT / 'build/waldo-pack'
 PROFILE_DIR = ROOT / 'build/mesen-scenarios/wheres-barba'
 
 SLOTS = [
     ('title', "Title Screen (WHERE'S BARBA?)", 'Postcard title screen with Barba stamp portrait.'),
     ('skill-select', 'Skill Select (Wyrmling Cursor)', '16x16 animated Wyrmling cursor on the Skill Select screen.'),
-    ('moon-ticket', 'One Ticket to the Moon', 'Peeking Barba head above the Moon ticket.'),
+    ('moon-ticket', 'One Ticket to the Lava', 'Peeking Barba head above the Lava ticket.'),
     ('overworld-map', 'Overworld Map (Walking Barba)', '48x48 full-body Barba walking across the Overworld Map to Train Station.'),
     ('train-station', 'Level 1: Train Station', 'Search the Train Station for hidden 16x16 Barba.'),
+    ('before-subway', 'Before Level 5: The Subway', 'Walking to the Subway on the Overworld Map right before the level starts. Collect Barba and the Flame while dodging Link!'),
     ('castle', 'Level 6: The Castle', 'Search the Castle courtyard for hidden 16x16 Barba right before Launch Pad.'),
-    ('slots-ready', 'Slots: Ready to Spin', 'Press A on the green button to spin all three reels.'),
     ('slots-two-barbas', 'Slots: 2 Barbas Locked', 'Reels 2 and 3 are locked on Barba. Time A on Reel 1 for the 3-Barba Moon launch!'),
     ('slots-jackpot', 'Slots: 3-Barba Jackpot', 'All three Barbas matched! Watch the rocket launch to the Moon.'),
     ('moon-ending', 'Moon Ending', 'Barba on the Moon ending sequence.'),
@@ -47,7 +47,7 @@ def create(force: bool = False) -> dict:
     scenario = ROOT / 'build/generate-waldo-states.lua'
     prefix = f'PACK_DIR = {json.dumps(PACK_DIR.as_posix())}\n'
     scenario.write_text(prefix + (ROOT / 'tools/waldo_scenarios.lua').read_text(encoding='utf-8'), encoding='utf-8')
-    if run(scenario, ROM_PATH, 60):
+    if run(scenario, ROM_PATH, 90):
         raise SystemExit('Where\'s Barba state generation failed; see build/generate-waldo-states-error.txt')
 
     states = []

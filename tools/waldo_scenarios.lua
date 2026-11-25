@@ -19,6 +19,8 @@ end
 local f = 0
 local stage = 'intro'
 local sf = 0
+local jumpToSubway = false
+local subwayFrames = 0
 local jumpToCastle = false
 local inp = {}
 local waitFrames = 0
@@ -26,16 +28,28 @@ local aTimer = 0
 local slotPhase = 'wait_hand'
 
 emu.addMemoryCallback(function()
-    if jumpToCastle then
-        jumpToCastle = false
+    if jumpToSubway then
+        jumpToSubway = false
+        w(0x7F00, 0)
+        w(0x7F02, 0)
+        w(0x7F90, 0)
         w(0x0601, 5)
-        emu.setState({['cpu.pc'] = 0xE193})
+        w(0x0603, 0)
+        emu.setState({['cpu.pc'] = 0xE185})
     elseif pendingCapture then
         local id = pendingCapture
         pendingCapture = nil
         saveStateAndShot(id)
     end
 end, emu.callbackType.exec, 0x8000, 0xFFFF)
+
+emu.addMemoryCallback(function()
+    if jumpToCastle and r(0x0705) == 0x78 and r(0x0709) == 0x79 then
+        jumpToCastle = false
+        w(0x0601, 5)
+        emu.setState({['cpu.pc'] = 0xE193})
+    end
+end, emu.callbackType.exec, 0xA073)
 
 emu.addEventCallback(function()
     emu.setInput(inp, 0)
@@ -59,9 +73,23 @@ emu.addEventCallback(function()
         elseif f == 1450 then
             pendingCapture = 'train-station'
         elseif f == 1460 then
-            jumpToCastle = true
-            stage = 'wait_castle'
+            jumpToSubway = true
+            stage = 'wait_subway'
             sf = 0
+        end
+    elseif stage == 'wait_subway' then
+        sf = sf + 1
+        if sf == 540 then
+            pendingCapture = 'before-subway'
+        elseif sf > 540 and r(0x0705) == 0x78 and r(0x0709) == 0x79 and r(0x00) == 0x88 then
+            subwayFrames = subwayFrames + 1
+            if subwayFrames == 30 then
+                jumpToCastle = true
+                stage = 'wait_castle'
+                sf = 0
+            end
+        elseif sf > 900 then
+            error('Timed out waiting to enter Subway level')
         end
     elseif stage == 'wait_castle' then
         sf = sf + 1
@@ -92,8 +120,7 @@ emu.addEventCallback(function()
         end
     elseif stage == 'wait_slots' then
         sf = sf + 1
-        if sf == 735 then
-            pendingCapture = 'slots-ready'
+        if sf == 740 then
             stage = 'slots'
             sf = 0
         end

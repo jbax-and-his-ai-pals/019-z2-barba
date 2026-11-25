@@ -1,4 +1,4 @@
-"""Create a save-state pack for standalone Friday the 13th: Barba Edition (play/f13-barba.nes)."""
+"""Create a save-state pack for standalone Friday the 13th: Barba Edition (play/standalone/f13-barba.nes)."""
 from __future__ import annotations
 
 import argparse
@@ -12,7 +12,7 @@ from emulator_test import run
 from prepare_player import apply_play_defaults
 
 ROOT = Path(__file__).resolve().parents[1]
-ROM_PATH = ROOT / 'play/f13-barba.nes'
+ROM_PATH = ROOT / 'play/standalone/f13-barba.nes'
 PACK_DIR = ROOT / 'build/f13-pack'
 PROFILE_DIR = ROOT / 'build/mesen-scenarios/f13'
 

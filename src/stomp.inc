@@ -8,11 +8,11 @@
 BarbaPickup:
     ldx #$05
 @item_loop:
-    lda $B6,x
-    cmp #$01
+    ldy $B6,x
+    dey
     bne @item_next
-    lda $A1,x
-    cmp #$01
+    ldy $A1,x
+    dey
     bne @item_next
     lda $AF,x
     and #$7F
@@ -20,9 +20,8 @@ BarbaPickup:
     bcc @item_next
     cmp #$0E
     bcc @check_box
+    and #$FE                  ; $10 or $11 (P-bag / 1-Up)
     cmp #$10
-    beq @check_box
-    cmp #$11
     bne @item_next
 @check_box:
     lda $2A,x
@@ -52,8 +51,8 @@ BarbaStomp:
     lda $0736
     cmp #$0B
     bne StompRet
-    lda $B5
-    cmp #$01
+    ldy $B5
+    dey
     bne StompRet
     ldy $0707
     dey
@@ -71,8 +70,8 @@ BarbaStomp:
     bmi StompRet
     ldx #$05
 @loop:
-    lda $B6,x
-    cmp #$01
+    ldy $B6,x
+    dey
     bne @next
     lda $040E,x
     bne @next

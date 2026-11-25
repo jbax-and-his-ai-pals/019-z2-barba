@@ -18,11 +18,11 @@ PROFILE_DIR = ROOT / 'build/mesen-scenarios/waldo-z2'
 
 SLOTS = [
     ('title', "Title Screen (WHERE'S BARBA?)", 'Inside Waldo from Rauru door. Press Start to advance, or Start+Select anytime to return to Zelda II.'),
-    ('moon-ticket', 'One Ticket to the Moon', 'Peeking Barba head above the Moon ticket.'),
+    ('moon-ticket', 'One Ticket to the Lava', 'Peeking Barba head above the Lava ticket.'),
     ('overworld-map', 'Overworld Map (Walking Barba)', '16x48 Barba walking across the Overworld Map to Train Station.'),
     ('train-station', 'Level 1: Train Station', 'Search the Train Station for hidden 16x16 Barba.'),
+    ('before-subway', 'Before Level 5: The Subway', 'Walking to the Subway on the Overworld Map right before the level starts. Collect Barba and the Flame while dodging Link!'),
     ('castle', 'Level 6: The Castle', 'Search the Castle courtyard for hidden 16x16 Barba right before Launch Pad.'),
-    ('slots-ready', 'Slots: Ready to Spin', 'Press A on the green button to spin all three reels.'),
     ('slots-two-barbas', 'Slots: 2 Barbas Locked', 'Reels 2 and 3 are locked on Barba. Time A on Reel 1 for the 3-Barba Moon launch!'),
     ('slots-jackpot', 'Slots: 3-Barba Jackpot', 'All three Barbas matched! Watch the rocket launch to the Moon.'),
     ('moon-ending', 'Moon Ending (Rocket Landing)', 'Barba on the Moon; watch the full Moon landing, then the wavy transition back to Rauru in Zelda II.'),
@@ -33,7 +33,7 @@ SLOTS = [
 def create(force: bool = False) -> dict:
     if not ROM_PATH.is_file():
         import build
-        build.build(ROOT / 'roms/z2.nes', ROOT / 'build', ROOT / 'roms/roar.wav')
+        build.build(ROOT / 'roms/z2.nes', ROOT / 'build', ROOT / 'assets/roar.wav')
 
     digest = hashlib.sha256(ROM_PATH.read_bytes()).hexdigest()
     manifest_path = PACK_DIR / 'manifest.json'

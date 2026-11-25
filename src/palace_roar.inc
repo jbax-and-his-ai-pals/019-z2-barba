@@ -320,6 +320,8 @@ LairOuter:
 ; Only the Palace 6 Lava Link intro sets this offset. The entrance lock
 ; also drops if the player leaves the scene before the boss rises.
 LavaShakeOffset6:
+    bit $0100
+    bvc @read
     lda $0728
     cmp #LAIR_CONTROL_LOCK
     beq @read

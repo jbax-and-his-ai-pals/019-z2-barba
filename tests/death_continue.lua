@@ -6,6 +6,7 @@
 -- waves frozen at death resume for <1 s in the respawn room.
 dofile(TEST_DIR..'/newgame.lua')
 local mem=emu.memType.nesMemory
+local ppu=emu.memType.nesPpuMemory
 local function r(a)return emu.read(a,mem)end
 local function w(a,v)emu.write(a,v,mem)end
 local report=assert(io.open(OUTPUT_DIR..'/death_continue.txt','w'))
@@ -15,7 +16,7 @@ local function check(ok,msg)
     if not ok then errors=errors+1 end
 end
 
-local barbaRanges={{0x81C1,0x81E4},{0x97F1,0x9814},{0x9847,0x9877},{0x9D0A,0x9DFF},{0x9EB9,0x9FFF},
+local barbaRanges={{0x81C1,0x81E4},{0x84C2,0x84FF},{0x97F1,0x9814},{0x9847,0x9877},{0x9D0A,0x9DFF},{0x9EB9,0x9FFF},
     {0xA765,0xA7CF},{0xA89E,0xA97D},{0xAA40,0xBFF9},{0xD39A,0xD3C9},{0xFEAA,0xFECF},{0xFF4C,0xFF6E},{0xFF81,0xFFF9}}
 local function isBarba(pc)
     if LABELS.RoarAudio and pc>=LABELS.RoarAudio and pc<0x8E00 then return true end
@@ -47,7 +48,10 @@ local leftSide=false
 local held={}
 local shotSeen=false
 local deathFrames=0
+local deathTrailFrames=0
 local deathPoseValid=true
+local livesFrames=0
+local livesPoseValid=true
 local cases={
     {name='Inferno firestorm',setup=function()
         w(0x0782,1);w(0x0749,7);w(0x074A,0);w(0x0773,0xFF)
@@ -81,19 +85,16 @@ emu.addMemoryCallback(function()
     if phase~='dead' or r(0x048D)~=0 then return end
     local y=r(0x29)
     local right=r(0x9F)==1
-    local column=right and 0x0208 or 0x020C
     deathFrames=deathFrames+1
-    for i=0,4,4 do
-        local head=column+i
-        local torso=0x0220+i
-        local tile=(right==(i==0)) and 0x08 or 0x06
-        deathPoseValid=deathPoseValid and r(head)==y-16 and r(head+12)==y+16
-            and r(torso)==y and r(torso+1)==tile
-            and r(torso+2)==r(head+2) and r(torso+3)==r(head+3)
-    end
-    local outerHead=right and 0x0210 or 0x0208
-    deathPoseValid=deathPoseValid and r(outerHead)==y-16
-        and r(0x0204)>=0xF0 and r(0x024C)>=0xF0 and r(0x02C4)>=0xF0
+    -- Full 24x48 hurt pose ($0A): head at y-16, mid torso at y, lower row at y+16.
+    local midCol=right and 0x0208 or 0x020C
+    local botCol=right and 0x0214 or 0x0218
+    deathPoseValid=deathPoseValid
+        and r(0x0204)==y-16 and r(0x024C)==y-16 and r(0x02C4)==y-16
+        and r(0x024D)==0x1C
+        and r(midCol)==y and r(midCol+4)==y
+        and r(botCol)==y+16 and r(botCol+4)==y+16
+        and r(0x0220)>=0xF0 and r(0x0224)>=0xF0
 end,emu.callbackType.exec,0xC9F8)
 
 emu.addEventCallback(function()
@@ -139,14 +140,32 @@ local function nextCase()
     end
     emu.loadSavestate(base)
     held={}; age=0; phase='act'; leftSide=false; shotSeen=false
-    deathFrames=0; deathPoseValid=true
+    deathFrames=0; deathTrailFrames=0; deathPoseValid=true
+    livesFrames=0; livesPoseValid=true
     c.setup()
 end
 
 emu.addEventCallback(function()
     frame=frame+1
     if not base then
+        if r(0x076C)==1 and r(0x0736)==0x11 and r(0x0726)==0 and r(0x024D)==0x02 then
+            livesFrames=livesFrames+1
+            local ntOk=livesFrames<5 or (
+                emu.read(0x2189,ppu)==0xDA and emu.read(0x218A,ppu)==0xF4
+                and emu.read(0x2196,ppu)==0xFC and emu.read(0x2197,ppu)==0xF4
+                and emu.read(0x2198,ppu)==0xD3)
+            livesPoseValid=livesPoseValid
+                and ntOk
+                and r(0x0204)==0x4C and r(0x024C)==0x4C and r(0x02C4)==0x4C
+                and r(0x0208)==0x5C and r(0x020C)==0x5C
+                and r(0x0214)==0x6C and r(0x0218)==0x6C
+                and r(0x6519)==0x35 and r(0x6515)==0x37
+                and r(0x6551)==0x15 and r(0x6555)==0x3F
+                and r(0x6559)==0x45 and r(0x655D)==0x31
+        end
         if not pendingSave and frame>=1000 and r(0x0736)==0x0B and r(0x074C)==0 then
+            check(livesFrames>0 and livesPoseValid,string.format(
+                'new-game lives screen: full 24x48 Barba and tail/elbow on %d frames',livesFrames))
             w(0x0774,0xFF);w(0x0784,4);w(0x0777,4)
             pendingSave=true
         end
@@ -163,10 +182,34 @@ emu.addEventCallback(function()
             phase='dead'; age=0
         end
     elseif phase=='dead' then
+        if r(0x076C)==2 and r(0x0736)==3 and r(0x048D)==0 and deathFrames>0 then
+            -- Verify NMI's DrawEncounterTorso added the elbow ($35/$37) and trail ($15/$3F/$45/$31).
+            local right=r(0x9F)==1
+            local bendBack=right and 0x6515 or 0x651D
+            deathTrailFrames=deathTrailFrames+1
+            deathPoseValid=deathPoseValid
+                and r(0x6519)==0x35 and r(bendBack)==0x37
+                and r(0x6551)==0x15 and r(0x6555)==0x3F
+                and r(0x6559)==0x45 and r(0x655D)==0x31
+        end
+        if r(0x076C)==6 and r(0x0726)==0 and r(0x024D)==0x02 then
+            livesFrames=livesFrames+1
+            livesPoseValid=livesPoseValid
+                and r(0x0204)==0x4C and r(0x024C)==0x4C and r(0x02C4)==0x4C
+                and r(0x0208)==0x5C and r(0x020C)==0x5C
+                and r(0x0214)==0x6C and r(0x0218)==0x6C
+                and r(0x6519)==0x35 and r(0x6515)==0x37
+                and r(0x6551)==0x15 and r(0x6555)==0x3F
+                and r(0x6559)==0x45 and r(0x655D)==0x31
+        end
         if r(0x0736)~=0x0B then leftSide=true end
         if leftSide and r(0x0736)==0x0B and r(0x074C)==0 and age>60 then
-            check(deathFrames>0 and deathPoseValid,string.format(
-                '%s: one head row and two full torso rows on %d death frames',c.name,deathFrames))
+            check(deathFrames>0 and deathTrailFrames>0 and deathPoseValid,string.format(
+                '%s: full 24x48 hurt body and tail/elbow on %d/%d death frames',c.name,deathTrailFrames,deathFrames))
+            if c.name~='game over mid-Inferno' then
+                check(livesFrames>0 and livesPoseValid,string.format(
+                    '%s: lives-remaining screen full 24x48 Barba and tail/elbow on %d frames',c.name,livesFrames))
+            end
             phase='settle'; age=0
         end
         if age>4000 then check(false,c.name..': never returned to side view after death'); pendingNext=true; phase='wait' end

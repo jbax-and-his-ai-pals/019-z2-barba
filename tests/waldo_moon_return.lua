@@ -11,6 +11,7 @@ local waldoStart = 0
 local returnStart = 0
 local triggeredMoon = false
 local sawHop = false
+local sawMoonOam = false
 local sawMeltOut = false
 local meltScrollX = {}
 local wipeScrollX = {}
@@ -41,6 +42,27 @@ emu.addMemoryCallback(function()
         check((frame - waldoStart) > 400, 'Moon ending did not cut off early at 360 frames')
     end
 end, emu.callbackType.exec, 0xA168)
+
+emu.addMemoryCallback(function()
+    if phase == 'waldo' and triggeredMoon and not sawMoonOam then
+        sawMoonOam = true
+        local bx, by = read(0x26), read(0x27)
+        local offs = {0xE0, 0xE4, 0xE8, 0xEC, 0xF0, 0xF4, 0xF8, 0xFC, 0x2C, 0x4C, 0x6C, 0x8C}
+        local dxs = {12, 20, 28, 36, 12, 20, 28, 36, 0, 8, 16, 24}
+        local dys = {0xE6, 0xE6, 0xE6, 0xE6, 0xF6, 0xF6, 0xF6, 0xF6, 0x06, 0x06, 0x06, 0x06}
+        local ok = true
+        for i = 1, 12 do
+            local o = offs[i]
+            local ey = (by + dys[i]) % 256
+            local ex = (bx + dxs[i]) % 256
+            local et = 0x81 + (i - 1) * 2
+            if read(0x0700 + o) ~= ey or read(0x0701 + o) ~= et or read(0x0702 + o) ~= 2 or read(0x0703 + o) ~= ex then
+                ok = false
+            end
+        end
+        check(ok, 'Moon ending 12-sprite Barba OAM matches ($26,$27) layout')
+    end
+end, emu.callbackType.exec, 0xC973)
 
 emu.addMemoryCallback(function()
     if phase == 'waldo' and triggeredMoon and not sawMeltOut then
@@ -109,10 +131,12 @@ emu.addEventCallback(function()
             local meltCount = 0
             for _ in pairs(meltScrollX) do meltCount = meltCount + 1 end
             check(sawMeltOut, 'WaldoMoonReturn ran WaldoMeltOut ($CB10) before restoring Barba')
+            check(sawMoonOam, 'Moon ending drew 12-sprite Barba OAM ($C973)')
             check(meltCount >= 5, 'Wave-out varied horizontal scroll across scanlines (' .. meltCount .. ' values)')
             phase = 'return'
             returnStart = frame
-        elseif wf > 2200 then
+        elseif wf > 2500 then
+            phase = 'done'
             check(false, 'Timed out waiting for Moon ending transition')
             report:write('RESULT FAIL\n'); report:close(); emu.stop(1)
         end

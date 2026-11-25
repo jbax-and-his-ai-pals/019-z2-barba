@@ -12,6 +12,7 @@ OW_SPK_ACTIVE = $643C ; 1 byte: nonzero once prev scroll initialized
 OW_SPK_DX     = $643D ; 1 byte: frame scroll delta X
 OW_SPK_DY     = $643E ; 1 byte: frame scroll delta Y
 OW_SPK_TMP    = $643F ; 1 byte: bit 7 = spawn tried this frame, bits 0..1 = slot
+OW_SPK_KIND   = $648C ; 3 bytes: 0 = desert/grass glint, 1 = water, 2 = swamp, 3 = mtn/lava, 4 = graveyard wisp
 
 .segment "BANK4_SPK"
 
@@ -58,6 +59,7 @@ OwSpkScroll4:
     sta OW_SPK_PREV_X
     lda OW_SPK_DX
     jsr OwSpkCheckDelta4
+@ow_spk_clear_bcs:
     bcs OwSpkClearRet4
 
     lda $FC
@@ -84,9 +86,7 @@ OwSpkScroll4:
 @dy_ok:
     lda OW_SPK_DY
     jsr OwSpkCheckDelta4
-    bcc :+
-    jmp OwSpkClearRet4
-:
+    bcs @ow_spk_clear_bcs
 
     lda #$00
     sta OW_SPK_TMP        ; bit 7 = already attempted a spawn this frame
@@ -131,35 +131,69 @@ OwSpkTrySpawn4:
     ; Spawn succeeded: fall through to draw on the first frame.
     jmp OwSpkActive4
 
+.segment "BANK4_SPK"
+; Render slot Y by OW_SPK_KIND,y into OAM slot X (runs in BANK4_SPK).
+OwSpkDrawKind4:
+    txa
+    pha                 ; stack: oam_x
+    lda OW_SPK_KIND,y
+    cmp #$02
+    bcc OwSpkNoRise4
+    beq OwSpkSwampRise4
+    cmp #$04
+    bne @mtn_rise
+    jmp OwSpkGraveMove4
+@mtn_rise:
+    lda #$03
+    .byte $2C           ; BIT abs skips lda #$07
+OwSpkSwampRise4:
+    lda #$07
+    and OW_SPK_TIMER,y
+    bne OwSpkNoRise4
+    lda OW_SPK_Y,y
+    sec
+    sbc #$01
+    sta OW_SPK_Y,y
+OwSpkNoRise4:
+    ldx OW_SPK_KIND,y
+    lda OW_SPK_TIMER,y
+    cmp OwKindHi,x
+    bcs @ph0
+    cmp OwKindLo,x
+    bcs @ph1
+    lda OwKindTile2,x
+    bne @put
+@ph0:
+    lda OwKindTile0,x
+    bne @put
+@ph1:
+    lda OwKindTile1,x
+@put:
+    jmp OwSpkWriteOam4
+
 .segment "BANK4_SPK2"
 OwSpkActive4:
     lda OW_SPK_DX
     beq @no_dx
     bpl @dx_pos
     eor #$FF
-    clc
-    adc #$01
-    clc
+    sec
     adc OW_SPK_X,y
-    bcc :+
-    jmp @kill
-:   sta OW_SPK_X,y
+    bcs @kill
+    sta OW_SPK_X,y
     bcc @no_dx
 @dx_pos:
     lda OW_SPK_X,y
     sec
     sbc OW_SPK_DX
-    bcs :+
-    jmp @kill
-:   sta OW_SPK_X,y
+    bcc @kill
+    sta OW_SPK_X,y
 @no_dx:
     lda OW_SPK_DY
     beq @no_dy
     bpl @dy_pos
     eor #$FF
-    clc
-    adc #$01
-    clc
+    sec
     adc OW_SPK_Y,y
     bcs @kill
     sta OW_SPK_Y,y
@@ -195,32 +229,21 @@ OwSpkActive4:
     bcs @find_oam
     jmp OwSpkNext4
 @got_oam:
-    lda OW_SPK_Y,y
-    sta $6500,x
-    lda OW_SPK_TIMER,y
-    cmp #9
-    bcc @dim
-    cmp #21
-    bcs @dim
-    lda #$D3            ; 3x3 pure white ($30) '+' twinkle
-    bne @put_tile
-@dim:
-    lda #$D1            ; 1x1 pure white ($30) dot
-@put_tile:
-    sta $6501,x
-    lda #$00            ; overworld Sprite Palette 0 ($16/$27/$30)
-    sta $6502,x
-    lda OW_SPK_X,y
-    sta $6503,x
-    jmp OwSpkNext4
+    jmp OwSpkDrawKind4
 
 @finish_sparkle:
 @kill:
-    ; Staggered cooldown: -48..-17 frames ($D0..$EF).
+    ; Staggered cooldown: -48..-17 ($D0..$EF), or -112..-81 ($90..$AF) for graveyard.
     lda $051E
     eor OW_SPK_X,y
     and #$1F
+    ldx OW_SPK_KIND,y
+    cpx #$04
+    beq @grave_cd
     ora #$D0
+    .byte $2C
+@grave_cd:
+    ora #$90
     sta OW_SPK_TIMER,y
     jmp OwSpkNext4
 
@@ -254,7 +277,8 @@ OwSpkDistCheck4:
 @dist_next:
     dex
     bpl @dist_loop
-    lda #28
+    ldx OW_SPK_KIND,y
+    lda OwKindDur,x
     sta OW_SPK_TIMER,y
     clc
     rts
@@ -264,10 +288,34 @@ OwSpkDistCheck4:
     sec
     rts
 
-OwSpkOffX:
-    .byte 5, 9, 6, 10, 4, 8, 2, 12
-OwSpkOffY:
-    .byte 0, 1, 11, 12, 6, 7, 4, 14
+OwSpkWriteOam4:
+    pha                 ; stack: tile, oam_x
+    tsx
+    lda $0102,x
+    tax                 ; X = oam_x
+    lda OW_SPK_Y,y
+    sta $6500,x
+    pla                 ; A = tile
+    sta $6501,x
+    pla                 ; drop oam_x
+    lda OW_SPK_KIND,y
+    cmp #$01
+    beq @attr2
+    lda #$00
+    .byte $2C
+@attr2:
+    lda #$02
+    sta $6502,x
+    lda OW_SPK_X,y
+    sta $6503,x
+    jmp OwSpkNext4
+
+OwKindTile0:
+    .byte $D1, $D5, $D9, $D1, $E1
+OwKindTile1:
+    .byte $D3, $D7, $DB, $DD, $E3
+OwKindTile2:
+    .byte $D1, $D5, $D3, $DF, $E1
 
 .segment "BANK4_SPK3"
 ; Pick a random visible tile around Link; if Desert ($04), populate slot Y
@@ -350,9 +398,9 @@ OwSparkleSpawn4:
     sta $0E
     txa
     tay                 ; restore Y = slot (0..2)
-    lda OW_SPK_X,y
-    cmp #$04            ; Desert / Sand?
-    beq @is_sand
+    ldx OW_SPK_X,y
+    lda OwTerrainKind,x
+    bpl @has_kind
 @not_sand:
     pla                 ; drop dy+5
 @fail_dx:
@@ -365,9 +413,9 @@ OwSparkleSpawn4:
     pla                 ; drop dy+5
     jmp @fail_dx
 
-@is_sand:
-    ; Pick one of 8 existing pale pixels in the 16x16 Desert ($6C) metatile,
-    ; centering the (1,1) sparkle pixel on it ($1E = $20 - 1 OAM - 1 center).
+@has_kind:
+    jsr OwSpkKind4
+    ; Pick one of 8 offsets in the 16x16 metatile.
     lda $051C
     eor $051D
     and #$07
@@ -396,3 +444,50 @@ OwSparkleSpawn4:
     sta OW_SPK_X,y
 
     jmp OwSpkDistCheck4
+
+OwSpkOffX:
+    .byte 5, 9, 6, 10, 4, 8, 2, 12
+OwSpkOffY:
+    .byte 0, 1, 11, 12, 6, 7, 4, 14
+OwKindHi:
+    .byte 21, 17, 30, 27, 36
+OwKindLo:
+    .byte 9, 7, 9, 13, 14
+
+; Terrain ID (0..15) -> particle kind (0=glint, 1=water, 2=swamp, 3=ember, 4=graveyard, $FF=none).
+OwTerrainKind:
+    .byte $FF, $FF, $FF, $FF, $00, $FF, $FF, $02
+    .byte $04, $FF, $03, $03, $01, $01, $03, $FF
+
+.segment "BANK4_SPK4"
+OwSpkGraveMove4:
+    lda OW_SPK_TIMER,y
+    and #$0F
+    bne @grave_rise
+    ldx #$01
+    lda OW_SPK_TIMER,y
+    and #$10
+    beq @add
+    ldx #$FF
+@add:
+    txa
+    clc
+    adc OW_SPK_X,y
+    sta OW_SPK_X,y
+@grave_rise:
+    jmp OwSpkSwampRise4
+
+.segment "BANK4_SPK"
+OwKindDur:
+    .byte 28, 24, 44, 40, 48
+
+.segment "PALACE_ROAR"
+OwSpkKind4:
+    cpx #$0A
+    bne :+
+    ldx $0706
+    bne :+
+    lda #$02            ; West Hyrule Saria river: foul water bubbles, not lava embers
+:
+    sta OW_SPK_KIND,y
+    rts
