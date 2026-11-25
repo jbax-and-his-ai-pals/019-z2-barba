@@ -139,3 +139,38 @@ class PackDuckTests(unittest.TestCase):
         for bank_kb in (14, 16):
             base = bank_kb * 1024 + 0x70 * 16
             self.assertEqual(chr_data[base : base + 0x100], orig_f0_ff)
+
+    @unittest.skipUnless(DUCK_ROM.is_file() and Z2_ROM.is_file(), 'ROMs required for Z2 XP bag test')
+    def test_barba_catch_trophy_is_z2_pbag(self) -> None:
+        from boss_art import source_pair
+        from nes import encode_tile
+
+        z2_bytes = Z2_ROM.read_bytes()
+        expected_rows = source_pair(z2_bytes, 0x72, 2)
+        expected = encode_tile(expected_rows[0:8]) + encode_tile(expected_rows[8:16])
+
+        _, chr_data = pack_duck.patch_duck_for_combined(
+            DUCK_ROM.read_bytes(),
+            z2_bytes,
+            0x9123,
+            reward_addr=0x63B5,
+        )
+        base = 14 * 1024 + 0x6E * 16
+        self.assertEqual(chr_data[base : base + 32], expected)
+
+    @unittest.skipUnless(DUCK_ROM.is_file() and Z2_ROM.is_file(), 'ROMs required for Round 2+ sky palette test')
+    def test_round2_sprite_palette_table_keeps_black_sky(self) -> None:
+        prg_256k, _ = pack_duck._build_villager_hunt_banks(
+            DUCK_ROM.read_bytes(),
+            Z2_ROM.read_bytes(),
+            pack_duck.STANDALONE_RESTORE_ADDR,
+            reward_addr=pack_duck.DUCK_REWARD_ADDR,
+            standalone_stub=True,
+        )
+        # $E724..$E73B holds 3 pairs of 8-byte sprite palettes; Round 2+ ($C1 != 1)
+        # unlocks $E766[4..7] which index the 3rd pair ($E734..$E73B).
+        # Color 0 of every entry mirrors to $3F00 (sky), so all 6 must be $0F (black).
+        off = 30 * 8192 + (0xE724 - 0xC000)
+        table = prg_256k[off : off + 24]
+        for pal_idx in range(6):
+            self.assertEqual(table[pal_idx * 4], 0x0F, f'palette {pal_idx} color 0 was ${table[pal_idx * 4]:02X}')

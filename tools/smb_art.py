@@ -156,41 +156,29 @@ def _make_barba_poses(z2: bytes, *, inferno: bool = False, roaring: bool = False
     """Build 24px-wide Full Body Barba poses + 16x16 bend, horizontal torso, tail tip, and crouch."""
     f24 = make_frames(z2, 24)
 
-    def adapt_32(pose_name: str, *, flame_crest: bool = False, leg_shift: int = 0) -> list[str]:
+    def adapt_32(pose_name: str, *, flame_crest: bool = False) -> list[str]:
         src = _flip_h(f24[pose_name])  # 24x48 RIGHT-facing (neck in cols 0..15, snout in cols 16..23)
-        head = src[0:14]
-        neck = _shrink_y(src[14:46], 16)
-        feet = src[46:48]
-        rows = head + neck + feet
+        rows = src[0:32]
         canvas = [list(r) for r in rows]
         if flame_crest:
             for y, x, c in ((0, 4, '3'), (0, 6, '2'), (1, 3, '2'), (1, 5, '3'), (2, 2, '3')):
                 if canvas[y][x] == '0':
                     canvas[y][x] = c
-        if leg_shift != 0:
-            for y in range(28, 32):
-                r = ''.join(canvas[y][:16])
-                if leg_shift > 0:
-                    shifted = ('0' * leg_shift + r)[:16]
-                else:
-                    s = -leg_shift
-                    shifted = (r[s:] + '0' * s)[:16]
-                canvas[y][:16] = list(shifted)
         return [''.join(r) for r in canvas]
 
     head_pose = 'attack' if roaring else ('windup' if inferno else 'idle')
     walk_head = 'attack' if roaring else ('windup' if inferno else 'walk0')
     poses = {
         'stand': adapt_32(head_pose, flame_crest=inferno),
-        'walk1': adapt_32(walk_head, flame_crest=inferno, leg_shift=-1),
-        'walk2': adapt_32('attack' if roaring else 'walk1', flame_crest=inferno, leg_shift=0),
-        'walk3': adapt_32('attack' if roaring else 'walk2', flame_crest=inferno, leg_shift=1),
+        'walk1': adapt_32(walk_head, flame_crest=inferno),
+        'walk2': adapt_32('attack' if roaring else 'walk1', flame_crest=inferno),
+        'walk3': adapt_32('attack' if roaring else 'walk2', flame_crest=inferno),
         'skid':  adapt_32('hurt' if roaring else 'windup', flame_crest=inferno),
-        'jump':  adapt_32('attack' if roaring else 'jump', flame_crest=inferno, leg_shift=-1),
+        'jump':  adapt_32('attack' if roaring else 'jump', flame_crest=inferno),
         'swim1': adapt_32(walk_head, flame_crest=inferno),
         'swim2': adapt_32('attack' if roaring else 'walk2', flame_crest=inferno),
         'climb1': adapt_32('up', flame_crest=inferno),
-        'climb2': adapt_32('attack' if roaring else 'up', flame_crest=inferno, leg_shift=1),
+        'climb2': adapt_32('attack' if roaring else 'up', flame_crest=inferno),
         'fire':  adapt_32('attack', flame_crest=True),
     }
 

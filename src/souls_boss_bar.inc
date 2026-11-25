@@ -12,6 +12,11 @@ SOULS_HOLD_TIMER  = $6357
 SOULS_DRAWN_RED   = $6358
 SOULS_DRAWN_WHT   = $6359
 SOULS_PREV_RED    = $635A
+SOULS_SAVED_BG    = $635B
+SOULS_BG_DIRTY    = $635C
+SOULS_BG_VALID    = $635D
+
+.export SOULS_SAVED_BG, SOULS_BG_DIRTY, SOULS_BG_VALID
 
 .segment "BANK1_SOULS"
 
@@ -24,15 +29,16 @@ SoulsBossBar1:
     lda #$00
     sta SOULS_ACTIVE
     sta SOULS_PHASE
+    sta SOULS_BG_VALID
     jmp @return6
 
 @active:
     sty SOULS_BOSS_IDX
     pha
     cpy #5
-    bcs :+
-    cpy #2
     beq :+
+    cpy #7
+    bcs :+
     jsr RemapBossSpr1
 :
     pla
@@ -95,6 +101,7 @@ SoulsBossBar1:
     lda #$00
     sta SOULS_ACTIVE
     sta SOULS_PHASE
+    sta SOULS_BG_VALID
 @return6:
     lda #$06
     jmp $FFCC
@@ -284,17 +291,20 @@ SoulsBossBar1:
     sta $0366,x
     dex
     bpl :-
-    ; Copy boss name at column 3 ($0366 + 3 = $0369).
+    ; Copy boss name at column 3 ($0366 + 3 = $0369), aligned with the bar's left endcap.
     ldy SOULS_BOSS_IDX
     lda SoulsNamePtrLo,y
     sta $00
     lda SoulsNamePtrHi,y
     sta $01
+    ldx #$03
+@name_copy:
     ldy #$00
 @name_loop:
     lda ($00),y
     beq @name_done
-    sta $0369,y
+    sta $0366,x
+    inx
     iny
     bne @name_loop
 @name_done:
@@ -466,43 +476,25 @@ ComputeSoulsSteps:
     adc $00
     rts
 @mul4_div3:
-    ; HP * 4 / 3 (HP <= 72, so HP*4 <= 288 -> 16-bit)
-    ldx #$00
-    stx $01
+    ; HP * 4 / 3 (HP <= 72 -> 2*HP <= 144, reuse SoulsMul2Div3Table)
     asl
-    rol $01
-    asl
-    rol $01
-    sta $00
-    jmp @div3_16
 @mul2_div3:
-    ; HP * 2 / 3 (HP <= 144, so HP*2 <= 288 -> 16-bit)
-    ldx #$00
-    stx $01
-    asl
-    rol $01
-    sta $00
-@div3_16:
-    ; Divide 16-bit ($01:$00) by 3, return quotient in A (clamped >= 1).
-    ldx #$00
-@div_loop:
-    lda $00
-    sec
-    sbc #$03
-    tay
-    lda $01
-    sbc #$00
-    bcc @div_done
-    sta $01
-    sty $00
-    inx
-    bne @div_loop
-@div_done:
-    txa
-    bne :+
-    lda #$01
-:
+    ; HP * 2 / 3 (HP <= 144)
+    tax
+    lda SoulsMul2Div3Table,x
     rts
+
+SoulsMul2Div3Table:
+    .byte   1,  1,  1,  2,  2,  3,  4,  4,  5,  6,  6,  7,  8,  8,  9, 10
+    .byte  10, 11, 12, 12, 13, 14, 14, 15, 16, 16, 17, 18, 18, 19, 20, 20
+    .byte  21, 22, 22, 23, 24, 24, 25, 26, 26, 27, 28, 28, 29, 30, 30, 31
+    .byte  32, 32, 33, 34, 34, 35, 36, 36, 37, 38, 38, 39, 40, 40, 41, 42
+    .byte  42, 43, 44, 44, 45, 46, 46, 47, 48, 48, 49, 50, 50, 51, 52, 52
+    .byte  53, 54, 54, 55, 56, 56, 57, 58, 58, 59, 60, 60, 61, 62, 62, 63
+    .byte  64, 64, 65, 66, 66, 67, 68, 68, 69, 70, 70, 71, 72, 72, 73, 74
+    .byte  74, 75, 76, 76, 77, 78, 78, 79, 80, 80, 81, 82, 82, 83, 84, 84
+    .byte  85, 86, 86, 87, 88, 88, 89, 90, 90, 91, 92, 92, 93, 94, 94, 95
+    .byte  96
 
 ; Font tile IDs ($81..$91): A B C D E G H I K L M N O R S T U
 .define SF_A $81
@@ -523,15 +515,23 @@ ComputeSoulsSteps:
 .define SF_T $90
 .define SF_U $91
 .define SF_SP $80
+.define SF_CM $A3
+.define SF_F $A4
+.define SF_P $A5
+.define SF_Q $A6
+.define SF_W $A7
+.define SF_X $A8
+.define SF_Y $A9
+.define SF_Z $AA
 
-SoulsName0: .byte SF_H,SF_O,SF_R,SF_S,SF_E,SF_H,SF_E,SF_A,SF_D,0
-SoulsName1: .byte SF_H,SF_E,SF_L,SF_M,SF_E,SF_T,SF_H,SF_E,SF_A,SF_D,0
-SoulsName2: .byte SF_R,SF_E,SF_B,SF_O,SF_N,SF_A,SF_C,SF_K,0
-SoulsName3: .byte SF_C,SF_A,SF_R,SF_O,SF_C,SF_K,0
-SoulsName4: .byte SF_G,SF_O,SF_O,SF_M,SF_A,0
-SoulsName5: .byte SF_B,SF_A,SF_R,SF_B,SF_A,0
-SoulsName6: .byte SF_T,SF_H,SF_U,SF_N,SF_D,SF_E,SF_R,SF_B,SF_I,SF_R,SF_D,0
-SoulsName7: .byte SF_D,SF_A,SF_R,SF_K,SF_SP,SF_B,SF_A,SF_R,SF_B,SF_A,0
+SoulsName0: .byte SF_H,SF_O,SF_R,SF_S,SF_E,SF_H,SF_E,SF_A,SF_D,SF_CM,SF_SP,SF_M,SF_A,SF_C,SF_E,SF_SP,SF_O,SF_F,SF_SP,SF_P,SF_A,SF_R,SF_A,SF_P,SF_A,0
+SoulsName1: .byte SF_H,SF_E,SF_L,SF_M,SF_E,SF_T,SF_H,SF_E,SF_A,SF_D,SF_CM,SF_SP,SF_S,SF_W,SF_A,SF_M,SF_P,SF_SP,SF_S,SF_E,SF_N,SF_T,SF_I,SF_N,SF_E,SF_L,0
+SoulsName2: .byte SF_R,SF_E,SF_B,SF_O,SF_N,SF_A,SF_C,SF_K,SF_CM,SF_SP,SF_I,SF_S,SF_L,SF_A,SF_N,SF_D,SF_SP,SF_L,SF_A,SF_N,SF_C,SF_E,SF_R,0
+SoulsName3: .byte SF_C,SF_A,SF_R,SF_O,SF_C,SF_K,SF_CM,SF_SP,SF_W,SF_I,SF_Z,SF_A,SF_R,SF_D,SF_SP,SF_O,SF_F,SF_SP,SF_T,SF_H,SF_E,SF_SP,SF_M,SF_A,SF_Z,SF_E,0
+SoulsName4: .byte SF_G,SF_O,SF_O,SF_M,SF_A,SF_CM,SF_SP,SF_T,SF_E,SF_R,SF_R,SF_O,SF_R,SF_SP,SF_O,SF_F,SF_SP,SF_T,SF_H,SF_E,SF_SP,SF_D,SF_E,SF_E,SF_P,0
+SoulsName5: .byte SF_L,SF_I,SF_N,SF_K,SF_CM,SF_SP,SF_T,SF_H,SF_E,SF_SP,SF_S,SF_Q,SF_U,SF_A,SF_T,SF_T,SF_E,SF_R,0
+SoulsName6: .byte SF_T,SF_H,SF_U,SF_N,SF_D,SF_E,SF_R,SF_B,SF_I,SF_R,SF_D,SF_CM,SF_SP,SF_A,SF_S,SF_H,SF_E,SF_N,SF_SP,SF_P,SF_H,SF_O,SF_E,SF_N,SF_I,SF_X,0
+SoulsName7: .byte SF_D,SF_A,SF_R,SF_K,SF_SP,SF_B,SF_A,SF_R,SF_B,SF_A,SF_CM,SF_SP,SF_T,SF_H,SF_E,SF_SP,SF_O,SF_B,SF_L,SF_I,SF_G,SF_A,SF_T,SF_O,SF_R,SF_Y,0
 
 SoulsNamePtrLo:
     .byte <SoulsName0,<SoulsName1,<SoulsName2,<SoulsName3
@@ -540,54 +540,89 @@ SoulsNamePtrHi:
     .byte >SoulsName0,>SoulsName1,>SoulsName2,>SoulsName3
     .byte >SoulsName4,>SoulsName5,>SoulsName6,>SoulsName7
 
-; Remap $0000 (even) boss sprites for Horsehead (0), Helmethead (1), Carock (3),
-; Gooma (4) to R5 extended banks 175..178 so all scanlines stay on A12=1.
+; Remap $0000 (even) boss sprites for Horsehead (0), Helmethead (1), Rebonack (2),
+; Carock (3), Gooma (4), Thunderbird (6) to R5 extended banks 175..180 so all
+; scanlines stay on A12=1.
 RemapBossSpr1:
     tya
     pha
     lda BossSprR5Bank,y
-    beq @done
+    bne :+
+    jmp @done
+:
     pha
     lda #$05
     sta $64D5
     sta $8000
     pla
     sta $8001
+    lda #$00
+    cpy #$01
+    bne :+
+    lda #$CF
+:
+    cpy #$03
+    bne :+
+    lda #$DD
+:
+    sta $00
     ldx #$00
 @loop:
-    lda $6500,x
+    .repeat 4, i
+    lda $6500 + i*4,x
     cmp #$F0
-    bcs @next
-    lda $6501,x
+    bcs :+++
+    lda $6501 + i*4,x
     lsr
-    bcs @next
-    asl
-    cmp #$08
-    bcc @next
+    bcs :++
+    tay
+    lda BossEvenRemapTbl,y
+    beq :+
+    sta $6501 + i*4,x
+    bne :+++
+:
+    tya
+    cmp #$28
+    bcc :++
     cmp #$30
-    bcs @gooma_hi
+    bcs :++
+    lda SOULS_BOSS_IDX
+    cmp #$02
+    bne :++
+    lda BossRebHiTbl-$28,y
+    sta $6501 + i*4,x
+    bne :++
+:
+    rol
+    cmp $00
+    bne :+
+    lda #$EF
+    sta $6501 + i*4,x
+:
+    .endrep
+    txa
     clc
-    adc #$B9
-    sta $6501,x
-    bne @next
-@gooma_hi:
-    cmp #$9E
-    bcc @next
-    cmp #$A4
-    bcs @next
-    clc
-    adc #$4B
-    sta $6501,x
-@next:
-    inx
-    inx
-    inx
-    inx
-    bne @loop
+    adc #$10
+    tax
+    beq @done
+    jmp @loop
 @done:
     pla
     tay
     rts
 
+; Indexed by (even_tile >> 1) for $00..$FE; 0 means unchanged (or Rebonack $50..$5E).
+BossEvenRemapTbl:
+    .byte $00,$00,$00,$00, $C1,$C3,$C5,$C7, $C9,$CB,$CD,$CF, $D1,$D3,$D5,$D7 ; $00..$1E
+    .byte $D9,$DB,$DD,$DF, $E1,$E3,$E5,$E7, $00,$00,$00,$00, $00,$00,$00,$ED ; $20..$3E
+    .byte $EF,$F1,$F3,$F5, $F7,$F9,$FB,$FD, $00,$00,$00,$00, $00,$00,$00,$00 ; $40..$5E
+    .byte $00,$00,$00,$00, $00,$00,$00,$00, $00,$00,$00,$00, $00,$00,$00,$00 ; $60..$7E
+    .byte $00,$00,$00,$00, $00,$00,$00,$00, $00,$00,$00,$00, $00,$00,$00,$E9 ; $80..$9E
+    .byte $EB,$ED,$00,$00, $00,$00,$00,$00, $00,$00,$00,$00, $00,$00,$00,$00 ; $A0..$BE
+    .byte $00,$00,$00,$00, $00,$00,$00,$00, $00,$00,$00,$00, $00,$00,$00,$00 ; $C0..$DE
+    .byte $00,$00,$00,$00, $00,$00,$00,$00, $00,$00,$00,$00, $00,$00,$00,$00 ; $E0..$FE
+BossRebHiTbl:
+    .byte $DB,$DD,$DF,$E1, $E3,$E5,$E7,$E9 ; $50..$5E + $8B
+
 BossSprR5Bank:
-    .byte 175, 176, 0, 177, 178
+    .byte 175, 176, 179, 177, 178, 0, 180

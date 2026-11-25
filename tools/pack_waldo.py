@@ -306,10 +306,12 @@ def pack_combined(barba: bytes, restore_addr: int, waldo: bytes,
         'a0 a0 88 d0 fd '                                                       # $CAB8: wait 8 scanlines
         'e6 0a a5 0a c9 1e b0 03 4c 69 ca '                                     # $CABD: band++; if < 30 JMP $CA69
         'c6 08 10 03 4c d2 ca 4c 1c ca '                                        # $CAC8 (@next_frame): frame--; if >= 0 JMP $CA1C
-        '2c 02 20 2c 02 20 10 fb '                                              # $CAD2 (@done): wait VBlank
-        'a9 00 8d 06 20 8d 06 20 8d 05 20 8d 05 20 '                            # $CADA: reset $2006/$2005
-        'a9 1e 85 01 a9 ff 85 30 a9 88 85 00 8d 00 20 58 60'                    # $CAE8: enable NMI/IRQ; CLI; RTS
+        '2c 02 20 10 fb '                                                       # $CAD2 (@done): wait VBlank
+        'a9 00 8d 03 20 8d 06 20 8d 06 20 8d 05 20 8d 05 20 '                   # $CAD7: OAMADDR=0; reset $2006/$2005
+        'a9 07 8d 14 40 '                                                       # $CAE8: OAM DMA $0700 (restores OAM[0..1] after mid-frame $2001=0)
+        'a9 1e 85 01 a9 ff 85 30 a9 88 85 00 8d 00 20 58 60'                    # $CAED: enable NMI/IRQ; CLI; RTS
     )
+    assert len(title_wipe) <= 0x100
     wave_tbl = bytes.fromhex('00 02 04 05 06 05 04 02 00 fe fc fb fa fb fc fe')
     assert all(x == 0xFF for x in prg512[384 * 1024 + 0x09FC : 384 * 1024 + 0x0A00])
     prg512[384 * 1024 + 0x09FC : 384 * 1024 + 0x0A00] = bytes.fromhex('86 1a 85 1b')

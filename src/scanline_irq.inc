@@ -6,6 +6,9 @@
 ;   4. Bottom cinematic letterbox bar on Title roar, Dark Barba entrance, and Ending.
 
 .export NmiVblankSetup6, CopyOamShadow6, CopySceneOam6, TitleEndNmi6, NmiRng6
+.ifdef SOULS_BOSS_METER
+.export LagSoulsBg6
+.endif
 
 IRQ_STAGE     = $64D6
 IRQ_COUNT     = $64D7
@@ -61,6 +64,9 @@ NmiVblankSetup6:
     lda $0725
 @done_macro:
     sta $0725
+.ifdef SOULS_BOSS_METER
+    jsr RestoreSoulsBg6 ; restore $3F00 if boss bar darkened it
+.endif
     jsr IrqSetup6       ; arm MMC3 IRQ during VBlank (before sound driver!)
 .ifdef WALDO_PORTAL
     jsr UpdateWaldoHatChr6
@@ -124,7 +130,11 @@ VblankOverrun6:
     lda $0736
     cmp #$0B
     bne @done
+.ifdef SOULS_BOSS_METER
+    jmp RestoreSoulsOverrun6
+.else
     jmp VblankHudReset6
+.endif
 @done:
     rts
 .segment "BANK6"
@@ -135,7 +145,7 @@ VblankOverrun6:
 CopyOamShadow6:
     ldx #$00
 @loop:
-    .repeat 4, i
+    .repeat 2, i
     lda $0200 + i*4,x
     sta $6500 + i*4,x
     cmp #$F0
@@ -157,11 +167,9 @@ CopyOamShadow6:
     .endrep
     txa
     clc
-    adc #$10
+    adc #$08
     tax
-    beq @done
-    jmp @loop
-@done:
+    bne @loop
     jmp PrioritizeRoomOam6
 
 ; Reuse the OAM copy caller's return address through the fixed mapper code.
@@ -282,9 +290,10 @@ CopySceneOam6:
 .segment "LAIR_HUD_SHAKE"
 EndingTrailTiles:
     .byte TRAIL_TORSO_LEFT, TRAIL_TORSO_RIGHT, TRAIL_TIP, TRAIL_TIP_FAR
-.segment "PALACE_SHAKE"
+.segment "BANK6_OAM"
 EndingTrailX:
     .byte $58, $50, $48, $40
+.segment "PALACE_SHAKE"
 
 DrawExtendedFall6:
     ; Finish Barba before the shadow starts at $3C so he wins overlaps.
@@ -1500,6 +1509,35 @@ CheckSoulsBossIrq6:
     sta SOULS_PHASE
 @done:
     jmp FinishSetup6
+.segment "BANK6"
+RestoreSoulsOverrun6:
+    jsr RestoreSoulsBg6
+    lda $0726
+    bne @hud
+    lda $FE
+    sta $2001
+    jsr UpdateSceneryChr6
+@hud:
+    jmp VblankHudReset6
+LagSoulsBg6:
+    sta $E000
+    jsr VblankOverrun6
+    jmp $9000
+RestoreSoulsBg6:
+    lda SOULS_BG_DIRTY
+    beq BgDone6
+    lda #$00
+    sta SOULS_BG_DIRTY
+    bit $2002
+    lda #$3F
+    sta $2006
+    lda #$00
+    sta $2006
+    lda SOULS_SAVED_BG
+    sta $2007
+    jmp VblankHudReset6
+BgDone6:
+    rts
 .endif
 .segment "BANK5"
 .export TitleEndHook5

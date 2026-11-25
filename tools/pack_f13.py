@@ -52,12 +52,12 @@ class Asm6502:
 
 # Fixed entry points in WRAM bank 3 ($7800-$7BFF)
 F13_CHR_SWITCH   = 0x7800
-F13_NMI_HOOK     = 0x7840
-F13_WIPE_IN      = 0x7860
-F13_SEED_RNG     = 0x7950
-F13_RETURN       = 0x7960
-F13_BOOT         = 0x7AD0
-F13_RELOC_E5B4   = 0x7B12
+F13_NMI_HOOK     = 0x7852
+F13_WIPE_IN      = 0x786F
+F13_SEED_RNG     = 0x795E
+F13_RETURN       = 0x796C
+F13_BOOT         = 0x7ADC
+F13_RELOC_E5B4   = 0x7B17
 F13_BARBA_DRAW   = 0x7B2A
 F13_BARBA_BREATH = 0x7B3E
 F13_BARBA_RESET  = 0x7B53
@@ -197,7 +197,17 @@ def make_f13_wram_code(restore_addr: int) -> bytes:
     a.label('set_r0')
     a.emit(0xA0, 0x00, 0x20, F13_WR_SEL & 0xFF, F13_WR_SEL >> 8, 0x8D, 0x01, 0x80)  # R0 = A
     a.emit(0xE8, 0xE8, 0xC8)                                  # INX; INX; INY (Y=1)
-    a.emit(0x20, F13_WR_SEL & 0xFF, F13_WR_SEL >> 8, 0x8E, 0x01, 0x80)              # R1 = X
+    a.emit(0x20, F13_WR_SEL & 0xFF, F13_WR_SEL >> 8)          # $8000 = 1 (R1)
+    a.emit(0xE0, 0x92)                                        # CPX #$92 (indoors?)
+    a.branch(0xD0, 'r1_norm')
+    a.emit(0xAD, 0x07, 0x05, 0x38, 0xE9, 0x03, 0xC9, 0x02)  # Laura (3) or Debbie (4)?
+    a.branch(0x90, 'r1_norm')
+    a.emit(0xA9, 0xB2)                                        # A = $B2 (2KB idx 25 Barba indoor R1)
+    a.branch(0xD0, 'r1_set')                                  # always taken
+    a.label('r1_norm')
+    a.emit(0x8A)                                              # TXA
+    a.label('r1_set')
+    a.emit(0x8D, 0x01, 0x80)                                  # R1 = A
     a.emit(0xE8, 0xE8, 0xC8)                                  # INX; INX; INY (Y=2)
     a.label('chr_loop')
     a.emit(0x20, F13_WR_SEL & 0xFF, F13_WR_SEL >> 8, 0x8E, 0x01, 0x80)              # STY $8000; STX $8001

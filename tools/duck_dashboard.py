@@ -321,32 +321,39 @@ def _build_all_z2_enemies(z2: bytes) -> list[dict]:
     add('horsehead', 'Horsehead (Palace 1)', 'z2_boss', 0, 'z2_bank_9', 16, 48,
         'Z2 Bank 9: $1B/$1D/$1F/$21/$13/$15', 'match', 'Ported -> DH #33 (Horsehead)',
         hh0, hh0, [0x1B, 0x1D, 0x1F, 0x21, 0x13, 0x15])
-    helm_body = _z2_16x32(z2, 8, 9, 0x41, 0x43, 0x45, 0x47)
-    def _helm_frame(tid: int, hy: int) -> list[str]:
-        canvas = [list('0' * 16) for _ in range(16)] + [list(r) for r in helm_body]
-        head = _pair(z2, 9, tid)
+    def _helm_frame(leg_l: int, leg_r: int) -> list[str]:
+        body = _z2_16x32(z2, 9, 9, 0x0F, 0x11, leg_l, leg_r)
+        canvas = [list('0' * 16) for _ in range(16)] + [list(r) for r in body]
+        head = _pair(z2, 9, 0x09)
         for y in range(16):
             for x in range(8):
                 if head[y][x] != '0':
-                    canvas[hy + y][4 + x] = head[y][x]
+                    canvas[4 + y][4 + x] = head[y][x]
         return _remap([''.join(r) for r in canvas], m_ident)
-    helm0, helm1 = _helm_frame(0x09, 6), _helm_frame(0x0B, 4)
+    helm0, helm1 = _helm_frame(0x13, 0x15), _helm_frame(0x17, 0x19)
     add('helmethead', 'Helmethead (Palace 2)', 'z2_boss', 2, 'z2_bank_9', 16, 48,
-        'Z2 Bank 9: $09/$0B (helmet) + $41/$43/$45/$47 (body)', 'z2_only', 'Not yet ported to DH',
-        helm0, helm1, [0x09, 0x0B, 0x41, 0x43, 0x45, 0x47])
-    reb0 = _remap(
-        [_z2_16x16(z2, 19, 19, 0x09, 0x0B)[y] + _z2_16x16(z2, 19, 19, 0x4D, 0x43)[y] for y in range(16)]
-        + [_z2_16x16(z2, 19, 19, 0x0D, 0x0F)[y] + _z2_16x16(z2, 19, 19, 0x11, 0x13)[y] for y in range(16)],
-        m_ident,
-    )
-    reb1 = _remap(
-        [_z2_16x16(z2, 19, 19, 0x09, 0x0B)[y] + _z2_16x16(z2, 19, 19, 0x4D, 0x43)[y] for y in range(16)]
-        + [_z2_16x16(z2, 19, 19, 0x0D, 0x0F)[y] + _z2_16x16(z2, 19, 19, 0x1F, 0x21)[y] for y in range(16)],
-        m_ident,
-    )
+        'Z2 Bank 9: $09 (helmet) + $0F/$11/$13/$15 (f0), $17/$19 (f1)', 'z2_only', 'Not yet ported to DH',
+        helm0, helm1, [0x09, 0x0F, 0x11, 0x13, 0x15, 0x17, 0x19])
+    reb_tl = _z2_16x16(z2, 19, 19, 0x09, 0x0B)
+    reb_tr = _z2_16x16(z2, 19, 19, 0x4D, 0x43)
+    reb_bl = _z2_16x16(z2, 19, 19, 0x0D, 0x0F)
+    reb_br = _z2_16x16(z2, 19, 19, 0x11, 0x13)
+    def _reb_frame(bob: int) -> list[str]:
+        canvas = [list(reb_bl[y - 16] + reb_br[y - 16]) if y >= 16 else list('0' * 32) for y in range(32)]
+        for y in range(16):
+            dy = y + bob
+            if dy < 16:
+                for x in range(16):
+                    if reb_tl[y][x] != '0':
+                        canvas[dy][x] = reb_tl[y][x]
+            for x in range(16):
+                if reb_tr[y][x] != '0':
+                    canvas[dy][16 + x] = reb_tr[y][x]
+        return _remap([''.join(r) for r in canvas], m_ident)
+    reb0, reb1 = _reb_frame(0), _reb_frame(1)
     add('rebonack', 'Rebonack (Palace 3)', 'z2_boss', 2, 'z2_bank_19', 32, 32,
-        'Z2 Bank 19: $09/$0B/$4D/$43 + $0D/$0F/$11/$13 (f0), $1F/$21 (f1) (32x32)', 'z2_only', 'Not yet ported to DH',
-        reb0, reb1, [0x09, 0x0B, 0x0D, 0x0F, 0x11, 0x13, 0x1F, 0x21, 0x43, 0x4D])
+        'Z2 Bank 19: $09/$0B/$4D/$43 (1px bob) + $0D/$0F/$11/$13 (32x32)', 'z2_only', 'Not yet ported to DH',
+        reb0, reb1, [0x09, 0x0B, 0x0D, 0x0F, 0x11, 0x13, 0x43, 0x4D])
     car0 = _remap(
         [_z2_16x16(z2, 21, 21, 0x09, 0x0B)[y] + _z2_16x16(z2, 21, 21, 0x11, 0x13)[y] for y in range(16)]
         + [_z2_16x16(z2, 21, 21, 0x0D, 0x0F)[y] + _z2_16x16(z2, 21, 21, 0x15, 0x17)[y] for y in range(16)],
@@ -442,11 +449,19 @@ def generate_duck_tiles_dashboard(
         },
         {
             'id': 'r0_villagers5',
-            'label': 'R0 Bank 4 (R0=28) — Great Palace & Bosses ($00–$7F)',
+            'label': 'R0 Bank 4 (R0=28) — Great Palace ($00–$7F)',
             'group': 'compiled',
             'base_tid': 0x00,
             'default_pal': 'spr0',
             'tiles': _encode_chr_bank(chr32[28 * 1024 : 30 * 1024]),
+        },
+        {
+            'id': 'r0_villagers6',
+            'label': 'R0 Bank 5 (R0=30) — Bosses ($00–$7F)',
+            'group': 'compiled',
+            'base_tid': 0x00,
+            'default_pal': 'spr0',
+            'tiles': _encode_chr_bank(chr32[30 * 1024 : 32 * 1024]),
         },
         {
             'id': 'r0_clay',
@@ -590,8 +605,13 @@ def generate_duck_tiles_dashboard(
         'fokkeru': 'Z2 Bank 12: $E0/$E2/$E4/$E6 (f0), $E8/$EA/$EC/$EE (f1)',
         'ra': 'Z2 Bank 13: $35/$37',
         'firerope': 'Z2 Bank 13: $0B/$0D',
+        'giant_bot': 'Z2 Bank 12: $F0/$F2/$F4/$F6/$F8/$FA (48x32 -> 16x32)',
         'horsehead': 'Z2 Bank 9: $1B/$1D/$1F/$21/$13/$15 (16x48 -> 16x32)',
+        'helmethead': 'Z2 Bank 9: $09 + $0F/$11/$13/$15 (f0), $17/$19 (f1) (16x48 -> 16x32)',
+        'rebonack': 'Z2 Bank 19: $09/$0B/$4D/$43 + $0D/$0F/$11/$13 (32x32 -> 16x32)',
+        'carock': 'Z2 Bank 21: $09..$17 (f0), $1F..$2D (f1) (32x32 -> 16x32)',
         'gooma': 'Z2 Bank 23: $09/$0B/$0D/$0F/$11/$13/$15/$17/$19 (24x48 -> 16x32)',
+        'thunderbird': 'Z2 Bank 13: $11/$13/$17/$29/$1D/$1F/$21/$23 (32x64 -> 16x32)',
     }
     clay_sources = {
         'octorok': 'Z2 Bank 8: $BA/$BC, m_octo',

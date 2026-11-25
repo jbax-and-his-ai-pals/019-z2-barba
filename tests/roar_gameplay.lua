@@ -14,7 +14,7 @@ local function add(name,bank,entry,setup,verify)
  cases[#cases+1]={name=name,bank=bank,entry=entry,setup=setup,verify=verify}
 end
 local function playing()return r(0x4015)&0x10~=0 end
--- RoarGemEnd keeps its floor-pulse timer in $04A0,x (0 = fanfare, 33 = pulse done).
+-- RoarGemEnd keeps its shake-table index in $04A0,x (0 = fanfare, >= 1 = roaring).
 local function gemTimer(v)for a=0x4A0,0x4A5 do w(a,v)end end
 local function gemBody()
  w(0x5EE,0x88);w(0x5FA,72);w(0x5F6,1);w(0x5F4,0x80);w(0x5F5,0x54);w(0x5FB,0)

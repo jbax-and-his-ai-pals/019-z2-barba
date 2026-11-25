@@ -876,9 +876,9 @@ def build_bank1(orig_prg: bytes) -> bytes:
     a.emit(0x60)
 
     a.label('TrailDxR')
-    a.emit((-12) & 0xFF, (-4) & 0xFF, (-28) & 0xFF, (-20) & 0xFF, (-44) & 0xFF, (-36) & 0xFF)
+    a.emit((-14) & 0xFF, (-6) & 0xFF, (-30) & 0xFF, (-22) & 0xFF, (-46) & 0xFF, (-38) & 0xFF)
     a.label('TrailDxL')
-    a.emit(20, 12, 36, 28, 52, 44)
+    a.emit(22, 14, 38, 30, 54, 46)
     a.label('TrailTileTop')
     a.emit(0x30, 0x31, 0x34, 0x35, 0x38, 0x39)
     a.label('TrailTileBot')

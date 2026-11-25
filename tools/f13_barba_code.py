@@ -177,6 +177,132 @@ def build_barba_chr_variants(z2_raw: bytes, f13_chr: bytes) -> tuple[bytes, dict
     write_2k_variant(20, 0, hurt_tiles)
     write_2k_variant(21, 2, hurt_tiles)
 
+    # 2KB bank 25 (R1 = 50 standalone / $B2 Z2): Barba indoor back-view sprites ($90-$BD, $BF, $CA)
+    # Copy 2KB bank 9 (4KB bank 4 upper half, tiles $80-$FF) so Jason/other indoor sprites stay intact.
+    indoor_dst = 25 * 2048
+    indoor_src = 4 * 4096 + 2048
+    chr64[indoor_dst : indoor_dst + 2048] = chr64[indoor_src : indoor_src + 2048]
+
+    def put_indoor(tid: int, rows: list[str]) -> None:
+        idx = tid - 0x80
+        chr64[indoor_dst + idx * 16 : indoor_dst + (idx + 1) * 16] = encode_tile(rows)
+
+    # 16x16 Barba back-view head (Pal 2: 1=primary scales, 2=crest/shading, 3=white horns/spines)
+    indoor_head_16 = [
+        "0330000000000330",
+        "0323000330003230",
+        "0123001221003210",
+        "0012112332112100",
+        "0011222332221100",
+        "0122221221222210",
+        "1232211331122321",
+        "1222112332112221",
+        "0111122332211110",
+        "0011221331221100",
+        "0001222222221000",
+        "0001122332211000",
+        "0000122332210000",
+        "0000112222110000",
+        "0000112222110000",
+        "0000112332110000",
+    ]
+    ih_tiles = _split_grid(indoor_head_16, 2, 2)
+    for tid, tile in zip((0x90, 0x91, 0xBF, 0xCA), ih_tiles):
+        put_indoor(tid, tile)
+
+    # 16x24 Barba back-view body (Pal 3: 1=primary scales, 2=ridge/accent, 3=black outline/shading)
+    indoor_body_stand = [
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0003333333333000",
+        "0031122332211300",
+        "0311211331121130",
+        "0312211221122130",
+        "3112113223112113",
+        "3131113223111313",
+        "3231111331111323",
+        "3303111221113033",
+        "0003113223113000",
+        "0003113223113000",
+        "0031113223111300",
+        "0031131221311300",
+        "0031131221311300",
+        "0031130330311300",
+        "0031130323311300",
+        "0032230030322300",
+        "0033330000333300",
+        "0321230000321230",
+        "0333330000333330",
+        "0000000000000000",
+    ]
+    indoor_body_walk1 = [
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0003333333333000",
+        "0031122332211300",
+        "0311211331121130",
+        "0312211221122130",
+        "3112113223112113",
+        "3131113223111313",
+        "3231111331111323",
+        "3303111221113033",
+        "0003113223113000",
+        "0003113223113000",
+        "0031113223111300",
+        "0031131221311300",
+        "0032231221311300",
+        "0033330330311300",
+        "0321230323311300",
+        "0333330030322300",
+        "0000000000333300",
+        "0000000000321230",
+        "0000000000333330",
+        "0000000000000000",
+    ]
+    indoor_body_walk2 = [row[::-1] for row in indoor_body_walk1]
+    indoor_body_atk = [
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000000",
+        "0000000000000033",
+        "0003333333333323",
+        "0031122332211113",
+        "0311211331121330",
+        "0312211221123000",
+        "3112113223113000",
+        "3131113223113000",
+        "3231111331113000",
+        "3303111221113000",
+        "0003113223113000",
+        "0003113223113000",
+        "0031113223111300",
+        "0031131221311300",
+        "0031131221311300",
+        "0031130330311300",
+        "0031130323311300",
+        "0032230030322300",
+        "0033330000333300",
+        "0321230000321230",
+        "0333330000333330",
+        "0000000000000000",
+    ]
+    for base_tid, grid in (
+        (0x92, indoor_body_stand),
+        (0x9A, indoor_body_walk1),
+        (0xA2, indoor_body_walk2),
+        (0xAA, indoor_body_atk),
+        (0xB0, indoor_body_atk),
+        (0xB8, indoor_body_stand),
+    ):
+        for i, tile in enumerate(_split_grid(grid, 2, 3)):
+            put_indoor(base_tid + i, tile)
+    for tid in (0x98, 0x99, 0xA0, 0xA1, 0xA8, 0xA9, 0xB6, 0xB7):
+        put_indoor(tid, ["00000000"] * 8)
+
     return bytes(chr64), base_tiles
 
 
@@ -220,6 +346,10 @@ def build_barba_bank1() -> bytes:
     # Falls back to $BB09 (vanilla draw) if $0308 >= 6 or $7FFD >= 2.
     # =========================================================================
     a.label("F13BarbaDraw")
+    a.emit(0xA5, 0x37, 0xC9, 0x02)               # $37 == 2 (indoors)?
+    a.branch(0xD0, "chk_ext_draw")
+    a.abs_ref(0x4C, "draw_indoor_head")
+    a.label("chk_ext_draw")
     a.emit(0xAD, 0x08, 0x03, 0xC9, 0x06)         # LDA $0308; CMP #$06
     a.branch(0x90, "draw_ok1")
     a.label("draw_fallback")
@@ -350,6 +480,27 @@ def build_barba_bank1() -> bytes:
     # Trail (torso + tip only; crouch bend already sits at feetY - 8)
     a.emit(0xA5, 0x02, 0x38, 0xE9, 16)
     a.abs_ref(0x4C, "DrawTrail")
+
+    # -------------------------------------------------------------------------
+    # draw_indoor_head: 16x16 Barba back-view head ($90,$91 / $BF,$CA, Pal 2)
+    # -------------------------------------------------------------------------
+    a.label("draw_indoor_head")
+    a.emit(0xA9, 0x00, 0x8D, BARBA_SKIP_BODY & 0xFF, BARBA_SKIP_BODY >> 8)
+    a.emit(0x8D, BARBA_R0_0 & 0xFF, BARBA_R0_0 >> 8)
+    a.emit(0x8D, BARBA_R0_1 & 0xFF, BARBA_R0_1 >> 8)
+    a.emit(0xAD, 0x68, 0x03, 0x0D, 0x78, 0x03)   # offscreen?
+    a.branch(0xF0, "in_onscreen")
+    a.emit(0x60)
+    a.label("in_onscreen")
+    a.emit(0xA9, 0x02, 0x85, 0x00)               # $00 = Pal 2, no H-flip
+    a.emit(0xAD, 0x60, 0x03, 0x38, 0xE9, 0x04, 0x85, 0x01)  # $01 = center X - 4 -> Draw2ColBodyRow emits X-8, X
+    a.emit(0xAD, 0x70, 0x03, 0x85, 0x02)         # $02 = feet Y
+    a.emit(0x38, 0xE9, 33, 0x85, 0x04)           # top row Y = feetY - 33
+    a.emit(0xA9, 0x90, 0x85, 0x05, 0xA9, 0x91, 0x85, 0x06)
+    a.abs_ref(0x20, "Draw2ColBodyRow")
+    a.emit(0xA5, 0x02, 0x38, 0xE9, 25, 0x85, 0x04)  # bottom row Y = feetY - 25
+    a.emit(0xA9, 0xBF, 0x85, 0x05, 0xA9, 0xCA, 0x85, 0x06)
+    a.abs_ref(0x4C, "Draw2ColBodyRow")
 
     # =========================================================================
     # Helpers for F13BarbaDraw

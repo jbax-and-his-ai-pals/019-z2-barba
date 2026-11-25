@@ -66,6 +66,15 @@ emu.addEventCallback(function()
             sawActive = true
             -- Verify left-cap $92 at $2423 and no left-side OAM pips at X=$10.
             check(emu.read(0x2423, ppu) == 0x92, c.name..' bottom bar left cap in $2423')
+            if c.name == 'dark-link' then
+                local row0Ok = emu.read(0x2400, ppu) == 0x80
+                    and emu.read(0x2402, ppu) == 0x80
+                    and emu.read(0x2403, ppu) == 0x84
+                    and emu.read(0x241C, ppu) == 0xA9
+                    and emu.read(0x241D, ppu) == 0x80
+                    and emu.read(0x241F, ppu) == 0x80
+                check(row0Ok, 'dark-link title aligned col 3..28 with blank margins')
+            end
         end
         if wht > red and not sawHit then
             sawHit = true

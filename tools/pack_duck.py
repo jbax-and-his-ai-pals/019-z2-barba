@@ -290,8 +290,11 @@ def _build_villager_hunt_banks(
     patch(0xC079, jsr_to('vh_frame_tick'), bytes.fromhex('20 1e c6'))
     patch(0xC16E, jmp_to('vh_title_input') + b'\xEA' * 5, bytes.fromhex('a5 16 29 30 c9 10 d0 13'))
     patch(0xC5C4, jsr_to('vh_setup_title_screen') + b'\xEA' * 4, bytes.fromhex('a2 04 a0 e4 20 17 c6'))
+    patch(0xC251, jsr_to('vh_get_pal_ptr') + b'\xEA' * 3, bytes.fromhex('b9 32 e5 be 33 e5'))
+    patch(0xCF49, jsr_to('vh_copy_e724_pal') + b'\xEA' * 3, bytes.fromhex('bd 24 e7 99 03 04'))
     patch(0xC839, jsr_to('vh_setup_game_ab_chr'), bytes.fromhex('20 d9 c5'))
     patch(0xC83C, jsr_to('vh_load_forest_bg') + b'\xEA' * 4, bytes.fromhex('a2 42 a0 e0 20 17 c6'))
+    patch(0xC854, jsr_to('vh_on_round_start') + b'\xEA' * 3, bytes.fromhex('20 d9 d4 20 a4 d2'))
     patch(0xD54B, jsr_to('vh_setup_game_c_chr'), bytes.fromhex('20 d9 c5'))
     patch(0xCA16, jmp_to('vh_on_villager_spawn'), bytes.fromhex('e6 31 60'))
     patch(0xD6D2, jmp_to('vh_on_clay_spawn'), bytes.fromhex('e6 31 60'))
@@ -372,8 +375,8 @@ def _build_villager_hunt_banks(
     )
     patch(
         0xE724,
-        bytes(game_ab_pals),
-        bytes.fromhex('21 30 0a 0f 21 30 26 0f 21 30 14 02 21 30 26 02'),
+        bytes(game_ab_pals) + bytes(game_ab_pals[:8]),
+        bytes.fromhex('21 30 0a 0f 21 30 26 0f 21 30 14 02 21 30 26 02 21 30 0f 05 21 30 26 05'),
     )
 
     # Assemble 256KB PRG (32 x 8KB banks)

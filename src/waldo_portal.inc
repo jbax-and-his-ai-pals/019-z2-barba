@@ -18,6 +18,8 @@ WALDO_HAT        = $648B
 WALDO_HAT_MAGIC  = $57
 SUBGAME_REWARDS  = $63B0   ; 16 bytes ($63B0-$63BF): per-slot completion flags
 ARCADE_DLG_BUF   = $63C0   ; 64 bytes ($63C0-$63FF): dynamic booth enter dialogue
+ARCADE_SIGN_LO   = $6360   ; 1 byte: arcade door marquee drawn bitmask (slots 0..7)
+ARCADE_SIGN_HI   = $6361   ; 1 byte: arcade door marquee drawn bitmask (slots 8..15)
 
 .macro WaldoLine text, terminator
     .assert .strlen(text) <= 14, error, "Waldo dialogue line is too wide"
@@ -43,6 +45,29 @@ ARCADE_DLG_BUF   = $63C0   ; 64 bytes ($63C0-$63FF): dynamic booth enter dialogu
     .byte terminator
 .endmacro
 
+.macro ArcadeSignLine text
+    .assert .strlen(text) = 7, error, "Arcade sign line must be 7 chars"
+    .repeat 7, character
+        .if .strat(text, character) = ' '
+            .byte $F4
+        .elseif .strat(text, character) = '.'
+            .byte $CF
+        .elseif .strat(text, character) = '!'
+            .byte $36
+        .elseif .strat(text, character) = $3F
+            .byte $34
+        .elseif .strat(text, character) = $27
+            .byte $35
+        .elseif .strat(text, character) >= 'A' .and .strat(text, character) <= 'Z'
+            .byte .strat(text, character) - 'A' + $DA
+        .elseif .strat(text, character) >= '0' .and .strat(text, character) <= '9'
+            .byte .strat(text, character) - '0' + $D0
+        .else
+            .error "Unsupported Arcade sign character"
+        .endif
+    .endrepeat
+.endmacro
+
 .segment "BANK6"
 .export BarbaWaldoPortal6, UpdateWaldoHatChr6
 
@@ -63,10 +88,14 @@ BarbaWaldoPortal6:
     lda #$00
     sta WALDO_ENTER_MSG
     sta PORTAL_DEBOUNCE
+    sta ARCADE_SIGN_LO
+    sta ARCADE_SIGN_HI
     rts
 
 .segment "BANK2_SMOKE"
 BarbaWaldoPortal2:
+    jsr ArcadeNpcTick2
+    jsr UpdateArcadeSigns2
 @in_rauru:
     lda WALDO_ENTER_MSG
     bne @wait_enter_msg
@@ -128,6 +157,7 @@ BarbaWaldoPortal2:
     lda #$00
     sta PORTAL_DEBOUNCE
 @done:
+    jsr ArcadeStageDlg2
     lda #$06
     jmp $FFCC
 @clear_enter_flag:
@@ -553,9 +583,13 @@ PollUpKey6:
 .segment "BANK2_SMOKE"
 .export PortalTblWram, PortalTbl5FF0, PortalTbl5FF1, PortalTbl5FF2, PortalTblR6
 .export PortalTblBootLo, PortalTblBootHi, PortalTblNameLo, PortalTblNameHi
+.export PortalTblSignLo, PortalTblSignHi
 .export ArcadeName00, ArcadeName01, ArcadeName02, ArcadeName03
 .export ArcadeName04, ArcadeName05, ArcadeName07
 .export ArcadeName08, ArcadeName09, ArcadeName10
+.export ArcadeSign00, ArcadeSign01, ArcadeSign02, ArcadeSign03
+.export ArcadeSign04, ArcadeSign05, ArcadeSign07
+.export ArcadeSign08, ArcadeSign09, ArcadeSign10
 PortalTblWram:   .res MAX_PORTAL_SLOTS, $A3
 PortalTbl5FF0:   .res MAX_PORTAL_SLOTS, $00
 PortalTbl5FF1:   .res MAX_PORTAL_SLOTS, $00
@@ -571,6 +605,218 @@ PortalTblNameHi: .byte >ArcadeName00, >ArcadeName01, >ArcadeName02, >ArcadeName0
                  .byte >ArcadeName04, >ArcadeName05, >ArcadeNameDefault, >ArcadeName07
                  .byte >ArcadeName08, >ArcadeName09, >ArcadeName10, >ArcadeNameDefault
                  .byte >ArcadeNameDefault, >ArcadeNameDefault, >ArcadeNameDefault, >ArcadeNameDefault
+PortalTblSignLo: .byte <ArcadeSign00, <ArcadeSign01, <ArcadeSign02, <ArcadeSign03
+                 .byte <ArcadeSign04, <ArcadeSign05, <ArcadeSignDefault, <ArcadeSign07
+                 .byte <ArcadeSign08, <ArcadeSign09, <ArcadeSign10, <ArcadeSignDefault
+                 .byte <ArcadeSignDefault, <ArcadeSignDefault, <ArcadeSignDefault, <ArcadeSignDefault
+PortalTblSignHi: .byte >ArcadeSign00, >ArcadeSign01, >ArcadeSign02, >ArcadeSign03
+                 .byte >ArcadeSign04, >ArcadeSign05, >ArcadeSignDefault, >ArcadeSign07
+                 .byte >ArcadeSign08, >ArcadeSign09, >ArcadeSign10, >ArcadeSignDefault
+                 .byte >ArcadeSignDefault, >ArcadeSignDefault, >ArcadeSignDefault, >ArcadeSignDefault
+
+ArcadeSign00:
+    ArcadeSignLine "WHERES "
+    ArcadeSignLine "BARBA? "
+ArcadeSign01:
+    ArcadeSignLine "FRIDAY "
+    ArcadeSignLine " 13TH  "
+ArcadeSign02:
+    ArcadeSignLine "BARBA'S"
+    ArcadeSignLine " BEEF  "
+ArcadeSign03:
+    ArcadeSignLine " BARBA "
+    ArcadeSignLine " KONG  "
+ArcadeSign04:
+    ArcadeSignLine " SUPER "
+    ArcadeSignLine " BARBA "
+ArcadeSign05:
+    ArcadeSignLine "MONSTER"
+    ArcadeSignLine " HUNT  "
+ArcadeSign07:
+    ArcadeSignLine " BARBA "
+    ArcadeSignLine " MAN 2 "
+ArcadeSign08:
+    ArcadeSignLine " WHEEL "
+    ArcadeSignLine " BARBA "
+ArcadeSign09:
+    ArcadeSignLine "LEGEND "
+    ArcadeSignLine " BARBA "
+ArcadeSign10:
+    ArcadeSignLine " PUNCH "
+    ArcadeSignLine " OUT!! "
+ArcadeSignDefault:
+    ArcadeSignLine "ARCADE "
+    ArcadeSignLine " BOOTH "
+
+SignBitMask:
+    .byte $01, $02, $04, $08, $10, $20, $40, $80
+
+UpdateArcadeSigns2:
+    lda $056B
+    bne @clear_all
+    lda $0561
+    cmp #$1C
+    beq @in_arcade
+@clear_all:
+    lda #$00
+    sta ARCADE_SIGN_LO
+    sta ARCADE_SIGN_HI
+    rts
+@in_arcade:
+    lda $074C
+    ora $0301
+    bne @early_done
+    ldx PortalCount
+    beq @early_done
+    dex
+@loop:
+    lda PortalTblTown,x
+    bne @next_hop
+    lda PortalTblRoom,x
+    cmp #$1C
+    beq @in_room
+@next_hop:
+    jmp @next
+@early_done:
+    rts
+@in_room:
+    lda PortalTblXlo,x
+    clc
+    adc #$08
+    and #$F0
+    lsr a
+    lsr a
+    lsr a
+    sec
+    sbc #$03
+    sta $02                 ; $02 = sign_col
+    lda PortalTblPage,x
+    sta $05
+    lda $02
+    asl a
+    asl a
+    asl a
+    sta $04                 ; $05:$04 = sign_left
+    clc
+    adc #55
+    sta $06
+    lda $05
+    adc #$00
+    sta $07                 ; $07:$06 = sign_right
+    lda $04
+    cmp $072C
+    lda $05
+    sbc $072A
+    bcs @check_right
+    lda $06
+    cmp $072C
+    lda $07
+    sbc $072A
+    bcs @next_hop
+    jsr @clear_bit
+    jmp @next
+@check_right:
+    lda $06
+    sec
+    sbc $072C
+    lda $07
+    sbc $072A
+    beq @ready
+    lda $072A
+    ora $072C
+    bne @check_far_right
+    lda PortalTblPage,x
+    cmp #$02
+    bcc @ready
+@check_far_right:
+    lda $04
+    sec
+    sbc $072C
+    lda $05
+    sbc $072A
+    beq @next_hop
+    jsr @clear_bit
+    jmp @next
+@ready:
+    txa
+    and #$07
+    tay
+    lda SignBitMask,y
+    cpx #$08
+    bcs @test_hi
+    and ARCADE_SIGN_LO
+    bne @next
+    lda SignBitMask,y
+    ora ARCADE_SIGN_LO
+    sta ARCADE_SIGN_LO
+    jmp @queue_sign
+@test_hi:
+    and ARCADE_SIGN_HI
+    bne @next
+    lda SignBitMask,y
+    ora ARCADE_SIGN_HI
+    sta ARCADE_SIGN_HI
+@queue_sign:
+    lda PortalTblPage,x
+    and #$01
+    asl a
+    asl a
+    ora #$22
+    sta $0302
+    sta $030C
+    lda $02
+    clc
+    adc #$20
+    sta $0303
+    clc
+    adc #$20
+    sta $030D
+    lda #$07
+    sta $0304
+    sta $030E
+    lda PortalTblSignLo,x
+    sta $00
+    lda PortalTblSignHi,x
+    sta $01
+    ldy #$06
+@copy_r1:
+    lda ($00),y
+    sta $0305,y
+    dey
+    bpl @copy_r1
+    ldy #$0D
+@copy_r2:
+    lda ($00),y
+    sta $0308,y
+    dey
+    cpy #$07
+    bcs @copy_r2
+    lda #$FF
+    sta $0316
+    lda #$14
+    sta $0301
+@done:
+    rts
+@next:
+    dex
+    bmi @done
+    jmp @loop
+
+@clear_bit:
+    txa
+    and #$07
+    tay
+    lda SignBitMask,y
+    eor #$FF
+    cpx #$08
+    bcs @clr_hi
+    and ARCADE_SIGN_LO
+    sta ARCADE_SIGN_LO
+    rts
+@clr_hi:
+    and ARCADE_SIGN_HI
+    sta ARCADE_SIGN_HI
+    rts
 
 ArcadeName00:
     WaldoLine "INSERT COIN!", $FD
@@ -978,7 +1224,17 @@ WaldoDialogCheck:
     jmp TownSetNpcDialog
 @check_enter:
     lda WALDO_ENTER_MSG
-    beq @native
+    beq @check_arcade
+    lda #<ARCADE_DLG_BUF
+    ldy #>ARCADE_DLG_BUF
+    jmp TownSetNpcDialog
+@check_arcade:
+    lda $0707
+    cmp #$01
+    bne @native
+    lda $0561
+    cmp #$1C
+    bne @native
     lda #<ARCADE_DLG_BUF
     ldy #>ARCADE_DLG_BUF
     jmp TownSetNpcDialog
@@ -987,6 +1243,181 @@ WaldoDialogCheck:
     sta $05
     sta $048C
     jmp $B487
+
+.segment "BANK2_SMOKE"
+BarbaArcadeEnemies:
+    .byte BarbaArcadeEnemiesEnd - BarbaArcadeEnemies
+    .byte $75, $1E            ; Page 0, X=$50, Red Young Lad - Walking
+    .byte $77, $40 | $1C      ; Page 1, X=$70, Blue Lady - Walking
+    .byte $75, $80 | $19      ; Page 2, X=$50, Blue Lumberjack - Walking
+    .byte $76, $C0 | $1B      ; Page 3, X=$60, Red Old Woman - Walking
+BarbaArcadeEnemiesEnd:
+
+ArcadeNpcTick2:
+    lda $0561
+    cmp #$1C
+    beq @in_arcade
+    ; Outside room $1C in Rauru/towns: stage BarbaArcadeEnemies in $73E0
+    ; so room $1C enemy pointer ($85D9 -> $73E0) is ready before room entry.
+    ldy #BarbaArcadeEnemiesEnd - BarbaArcadeEnemies - 1
+@copy_enemies:
+    lda BarbaArcadeEnemies,y
+    sta $73E0,y
+    dey
+    bpl @copy_enemies
+    rts
+@in_arcade:
+    lda $074C
+    bne @done
+    ldx #$05
+@slot_loop:
+    lda $B6,x
+    cmp #$01
+    bne @next_slot
+    lda $AF,x
+    ora $05C3,x
+    bne @next_slot
+    lda $A1,x
+    cmp #$19
+    bcc @next_slot
+    cmp #$21
+    bcs @next_slot
+    ; Ensure non-zero X velocity.
+    lda $71,x
+    bne @check_bounds
+    lda #$0C
+    sta $71,x
+    lda #$01
+    sta $60,x
+@check_bounds:
+    ; Pace between X=$30 and X=$C8 on the patron's page.
+    lda $4E,x
+    cmp #$30
+    bcs @check_right
+    lda $71,x
+    bpl @check_talk
+    eor #$FF
+    clc
+    adc #$01
+    sta $71,x
+    lda #$01
+    sta $60,x
+    bne @check_talk
+@check_right:
+    cmp #$C8
+    bcc @check_talk
+    lda $71,x
+    bmi @check_talk
+    eor #$FF
+    clc
+    adc #$01
+    sta $71,x
+    lda #$02
+    sta $60,x
+@check_talk:
+@next_slot:
+    dex
+    bpl @slot_loop
+@done:
+    rts
+
+ArcadeStageDlg2:
+    lda $0561
+    cmp #$1C
+    bne @dlg_done
+    lda $074C
+    ora WALDO_ENTER_MSG
+    bne @dlg_done
+    ldx #$05
+@dlg_slot_loop:
+    lda $B6,x
+    cmp #$01
+    bne @dlg_next_slot
+    lda $AF,x
+    ora $05C3,x
+    bne @dlg_next_slot
+    lda $A1,x
+    cmp #$19
+    bcc @dlg_next_slot
+    cmp #$21
+    bcs @dlg_next_slot
+    lda $4E,x
+    sec
+    sbc $4D
+    sta $00
+    lda $3C,x
+    sbc $3B
+    sta $01
+    lda $00
+    clc
+    adc #$20
+    sta $00
+    lda $01
+    adc #$00
+    bne @dlg_next_slot
+    lda $00
+    cmp #$40
+    bcc @stage_dlg
+@dlg_next_slot:
+    dex
+    bpl @dlg_slot_loop
+@dlg_done:
+    rts
+
+@stage_dlg:
+    lda $A1,x
+    cmp #$1E
+    bne @not_p0
+    lda #<ArcadeDlg0
+    ldy #>ArcadeDlg0
+    jmp @copy_dlg
+@not_p0:
+    cmp #$1C
+    bne @not_p1
+    lda #<ArcadeDlg1
+    ldy #>ArcadeDlg1
+    jmp @copy_dlg
+@not_p1:
+    cmp #$19
+    bne @not_p2
+    lda #<ArcadeDlg2
+    ldy #>ArcadeDlg2
+    jmp @copy_dlg
+@not_p2:
+    cmp #$1B
+    bne @dlg_done
+    lda #<ArcadeDlg3
+    ldy #>ArcadeDlg3
+@copy_dlg:
+    sta $00
+    sty $01
+    ldy #$00
+@copy_dlg_loop:
+    lda ($00),y
+    sta ARCADE_DLG_BUF,y
+    cmp #$FF
+    beq @dlg_done
+    iny
+    cpy #$3F
+    bcc @copy_dlg_loop
+    rts
+
+ArcadeDlg0:
+    WaldoLine "I LOVE THIS", $FD
+    WaldoLine "ARCADE! BEST", $FD
+    WaldoLine "SPOT IN RAURU!", $FF
+ArcadeDlg1:
+    WaldoLine "ONE MORE GAME", $FD
+    WaldoLine "AND I'LL BEAT", $FD
+    WaldoLine "BARBA'S SCORE!", $FF
+ArcadeDlg2:
+    WaldoLine "SO MANY GREAT", $FD
+    WaldoLine "CABINETS HERE!", $FD
+    WaldoLine "I'M HOOKED!", $FF
+ArcadeDlg3:
+    WaldoLine "I SPENT ALL", $FD
+    WaldoLine "MY RUPEES", $FD
+    WaldoLine "PLAYING HERE!", $FF
 
 WaldoReturnText:
     TownLine "WELL THAT", $FD

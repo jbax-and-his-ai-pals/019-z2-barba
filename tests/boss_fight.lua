@@ -18,7 +18,7 @@ function runBossFight(cfg)
     end
     local frame=0
     local fight={damage={},seen={},hits=0,fireHits=0,reflectHits=0,stabSeen=false,
-        sawBossShadow=false,bossShadowTall=true}
+        sawBossShadow=false,bossShadowTall=true,bossShadowTail=false}
     local target,defeatedAt,keyAt=nil,nil,nil
     local fcAtDefeat=nil
     local lastHp={}
@@ -28,9 +28,23 @@ function runBossFight(cfg)
             local p=r(0x80)
             if py>=0x30 and py<0xE0 and (p~=6 and p~=7 or r(0x0479)~=0) then
                 fight.sawBossShadow=true
-                if r(0x0270)~=(py-0x10) or r(0x0254)~=py or r(0x0260)~=(py+0x10)
+                if r(0x0270)~=(py-0x10) or r(0x0254)~=py or (r(0x0260)<0xF0 and r(0x0260)~=(py+0x10))
                     or (r(0x0256)&3)~=2 or (r(0x0272)&3)~=2 then
                     fight.bossShadowTall=false
+                end
+                local found={}
+                for _,off in ipairs({0x60,0x64}) do
+                    if r(0x0200+off)==(py+0x10) and (r(0x0202+off)&3)==2 then
+                        found[r(0x0201+off)]=true
+                    end
+                end
+                for off=0x78,0xFC,4 do
+                    if r(0x0200+off)==(py+0x10) and (r(0x0202+off)&3)==2 then
+                        found[r(0x0201+off)]=true
+                    end
+                end
+                if found[0x34] and found[0x14] and found[0x3E] and found[0x44] and found[0x30] then
+                    fight.bossShadowTail=true
                 end
             end
         end
@@ -149,8 +163,8 @@ function runBossFight(cfg)
             end
             check(defeatedAt~=nil,'boss defeated')
             check(fight.running==true,'game keeps running after the kill (no NMI hang)')
-            check(fight.sawBossShadow and fight.bossShadowTall,
-                'boss-defeat shadow renders 48px tall with two torso chunks and black palette 2')
+            check(fight.sawBossShadow and fight.bossShadowTall and fight.bossShadowTail,
+                'boss-defeat shadow renders 48px tall with bend, 4-sprite tail, and black palette 2')
             check(keyAt~=nil,'boss key collected; scroll lock released ($0728 = 0)')
             check(r(0x3B)>=cfg.exitPage,'walked through the locked door past the boss')
             report:write('RESULT '..(errors==0 and 'PASS' or 'FAIL')..string.char(10))

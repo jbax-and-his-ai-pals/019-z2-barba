@@ -40,6 +40,13 @@ local seenR4 = {}
 local sawFireballSprite = false
 local sawZeldaSprite = false
 local sawBarbaSprite = false
+local furySpinTileSeen = false
+local furyBackwardRight = 0
+local furyBackwardLeft = 0
+local furyUpSeen = false
+local furyFwdSeen = false
+local furyDownSeen = false
+local furyLeftShotSeen = false
 
 emu.addMemoryCallback(function(addr, val)
     if not inExitTrampoline and frame > 5 then
@@ -88,6 +95,13 @@ emu.addEventCallback(function()
         else
             emu.setInput({}, 0)
         end
+    elseif phase == 'fury_check' then
+        local pf = frame - phaseStart
+        if pf >= 150 and pf < 160 then
+            emu.setInput({left = true}, 0)
+        else
+            emu.setInput({}, 0)
+        end
     elseif phase == 'start_select' then
         emu.setInput({start = true, select = true}, 0)
     else
@@ -117,7 +131,7 @@ emu.addEventCallback(function()
         if frame == 65 then
             check(read(0x004E) == 0x01, 'Title mode active ($4E=$01)')
             check(read(0x7FFF) == 0x3C, 'Debounce reached $3C')
-            check(readPal(1) == 0x16 and readPal(2) == 0x27 and readPal(3) == 0x30,
+            check(readPal(1) == 0x2C and readPal(2) == 0x38 and readPal(3) == 0x12,
                 string.format('Title Barba Kong logo palette (%02X %02X %02X)', readPal(1), readPal(2), readPal(3)))
             check(readPal(0x11) == 0x16 and readPal(0x12) == 0x27 and readPal(0x13) == 0x30,
                 'Title fireball cursor SPR0 palette is Barba colors')
@@ -153,8 +167,8 @@ emu.addEventCallback(function()
                 string.format('Lil Barba SPR0 palette ($16 $27 $30, got %02X %02X %02X)', readPal(0x11), readPal(0x12), readPal(0x13)))
             check(readPal(0x15) == 0x25 and readPal(0x16) == 0x36 and readPal(0x17) == 0x27,
                 string.format('Princess Zelda SPR1 palette ($25 $36 $27, got %02X %02X %02X)', readPal(0x15), readPal(0x16), readPal(0x17)))
-            check(readPal(0x19) == 0x16 and readPal(0x1A) == 0x30 and readPal(0x1B) == 0x37,
-                string.format('Fireball/Hazard SPR2 palette ($16 $30 $37, got %02X %02X %02X)', readPal(0x19), readPal(0x1A), readPal(0x1B)))
+            check(readPal(0x19) == 0x12 and readPal(0x1A) == 0x21 and readPal(0x1B) == 0x30,
+                string.format('Zelda Blue Bomb/Hazard SPR2 palette ($12 $21 $30, got %02X %02X %02X)', readPal(0x19), readPal(0x1A), readPal(0x1B)))
         end
         -- Inspect active sprites on 25m
         if read(0x0200) < 0xEF and read(0x0201) <= 0x2F then
@@ -175,22 +189,62 @@ emu.addEventCallback(function()
             check(sawBarbaSprite, 'Lil Barba sprite active in OAM[0..3]')
             check(sawZeldaSprite, 'Princess Zelda sprite active at top ($D5 + $D7/$DB)')
             check(sawFireballSprite, 'Fireball/Bomb hazard active in OAM ($80-$97)')
-            -- Trigger Flame/Breath Fury state ($A0=1, $9F=1) and check R0 fury bank swap
+            -- Trigger Flame/Breath Fury state ($A0=1, $9F=1, $96=$0A) and check R0 fury bank swap
             write(0x00A0, 1)
             write(0x009F, 1)
+            write(0x0096, 0x0A)
             write(0x003F, 0x30)
+            write(0x7FE0, 0)
+            write(0x7FE5, 0)
+            write(0x7FEA, 0)
             phase = 'fury_check'
             phaseStart = frame
         end
 
     elseif phase == 'fury_check' then
-        if frame - phaseStart == 20 then
+        local pf = frame - phaseStart
+        -- Check Barba OAM[0..3] tiles never use back-facing climb tiles ($10..$1F) while holding Flame Fury
+        for s = 0, 3 do
+            local tid = read(0x0201 + s * 4)
+            if tid >= 0x10 and tid <= 0x1F then
+                furySpinTileSeen = true
+            end
+        end
+        -- Sample newly spawned fireball slots ($7FE0/$7FE5, timer == 0x19 right after step)
+        local facing = read(0x0057)
+        for _, base in ipairs({0x7FE0, 0x7FE5}) do
+            local timer = read(base)
+            if timer == 0x19 then
+                local vx = read(base + 3)
+                local vy = read(base + 4)
+                local sx = vx >= 128 and vx - 256 or vx
+                local sy = vy >= 128 and vy - 256 or vy
+                if pf < 150 and facing == 1 then
+                    if sx < 0 then furyBackwardRight = furyBackwardRight + 1 end
+                    if sy < 0 then furyUpSeen = true end
+                    if sy == 0 then furyFwdSeen = true end
+                    if sy > 0 then furyDownSeen = true end
+                elseif pf >= 165 and facing ~= 1 then
+                    if sx > 0 then furyBackwardLeft = furyBackwardLeft + 1 end
+                    if sx < 0 then furyLeftShotSeen = true end
+                end
+            end
+        end
+        if pf == 240 then
             local furyCount = 0
             for _ in pairs(seenR0Fury) do furyCount = furyCount + 1 end
             check(furyCount >= 1 and (seenR0Fury[4] or seenR0Fury[6]),
                 'Flame Fury switched MMC3 R0 to Wyrmling Fury banks (4/6)')
+            check(not furySpinTileSeen, 'Flame Fury kept Barba facing forward (no $10-$1F climb/spin tiles)')
+            check(furyBackwardRight == 0 and furyBackwardLeft == 0,
+                string.format('Flame Fury never fired backward (right_bad=%d, left_bad=%d)', furyBackwardRight, furyBackwardLeft))
+            check(furyUpSeen and furyFwdSeen and furyDownSeen,
+                string.format('Flame Fury covered 180-deg forward cone (up=%s fwd=%s down=%s)',
+                    tostring(furyUpSeen), tostring(furyFwdSeen), tostring(furyDownSeen)))
+            check(furyLeftShotSeen, 'Flame Fury fired left after turning left')
             write(0x00A0, 0)
             write(0x009F, 0)
+            write(0x0096, 0)
             -- Jump to 100m stage ($53=4) to inspect Big Bad Link, Zelda, Z2 Bubbles & Rivets
             write(0x0053, 4)
             write(0x0043, 0x76)
@@ -218,6 +272,13 @@ emu.addEventCallback(function()
             phaseStart = frame
         end
 
+    elseif phase == 'fury_check' then
+        local pf = frame - phaseStart
+        if pf >= 150 and pf < 160 then
+            emu.setInput({left = true}, 0)
+        else
+            emu.setInput({}, 0)
+        end
     elseif phase == 'start_select' then
         if restoreHits >= 1 then
             check(read(0x648F) ~= 0x44, 'Start+Select exited cleanly without setting reward')

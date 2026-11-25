@@ -313,13 +313,16 @@ Gameplay additions (`src/sampled_roar.inc`, default `SAMPLED_ROAR` assembly):
   Playback changes the request to `$88` and holds looking-up frame 8. When DMC
   reports no bytes remaining, `$98` holds the pose and ceremony for one more
   audio tick so the buffered bits can finish. The statue consumes `$10` once
-  the floor tiles have been restored and resumes at `$9B4C` to start the
-  native refill. Meter refill and XP share the
+  the roar finishes, clears `LAIR_SHAKE_X` and `ROAR_REQUEST`, and resumes at
+  `$9B4C` to start the native refill. Throughout the roar in all six palaces,
+  `RoarGemEnd` drives the standard `LairShakeOffsets` horizontal screen shake
+  (`LAIR_SHAKE_X` `$64FA`, shared with Lava Link's entrance via
+  `LavaShakeOffset6` when `$DE != 0`). Meter refill and XP share the
   same `$EF=$10` sound, so delaying refill also moves the first tally sound
   after the roar. The native XP stage then releases control, removes the
   crystal and updates its save flag. The ceremony now shares bank-4
   `PALACE_ROAR` at `$8EC3` with Lava Link's entrance. The native-audio build
-  uses the noise roar and the same tile choreography.
+  uses the noise roar and the same screen shake.
 - After Dark Barba's defeat, bank 5 `$9BAC` holds the Triforce scene until
   the victory fanfare ends (`$07FB` and `$EB` both zero). Barba stands during
   the fanfare, then uses the same raised-head roar as the gem ceremony.

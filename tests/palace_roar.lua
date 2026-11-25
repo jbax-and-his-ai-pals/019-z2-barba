@@ -1,5 +1,5 @@
--- Each statue places a crystal through gameplay. Check the three local tile
--- swaps, restoration, and Palace 6's extra lighting in actual PPU memory.
+-- Each statue places a crystal through gameplay. Check the standard screen
+-- shake, roar, trail alignment, and clean restore in all six palaces.
 dofile(TEST_DIR..'/newgame.lua')
 local mem,ppu=emu.memType.nesMemory,emu.memType.nesPpuMemory
 local function r(a)return emu.read(a,mem)end
@@ -11,8 +11,8 @@ local rooms={
     {4,1,0x1C,0}, {3,2,0x29,0}, {4,2,0x3A,1}
 }
 local frame,age,palace,errors=0,0,1,0
-local base,baseline,phase,firstLight,secondLight
-local align,unrelated,restored
+local base,baseline
+local sawRoar,sawPosShake,sawNegShake,sawOamShift,floorUntouched,shakeRestored
 local trailFrames,roundedTrail
 local sampled=LABELS.RoarAudio~=nil
 local function check(ok,message)
@@ -39,8 +39,8 @@ emu.addMemoryCallback(function()
         w(0x736,0);w(0x73D,0);w(0x726,1)
         w(0x794,7-palace)
         for flag=0x78D,0x792 do w(flag,0) end
-        phase,firstLight,secondLight=0,false,false
-        align,unrelated,restored=true,true,false
+        sawRoar,sawPosShake,sawNegShake,sawOamShift=false,false,false,false
+        floorUntouched,shakeRestored=true,false
         trailFrames,roundedTrail=0,true
     elseif age==80 then
         w(0x3B,3);w(0x4D,80);w(0x29,144);w(0x57D,0);w(0x479,0)
@@ -49,7 +49,24 @@ emu.addMemoryCallback(function()
         for address=0x2740,0x275F do baseline[address]=tile(address) end
         for address=0x27F2,0x27F5 do baseline[address]=tile(address) end
     elseif age>=120 then
-        if sampled and r(0x5EE)&0x88==0x88 and r(0x5FA)==72 and r(0x220)<0xF0 then
+        local roaring=sampled and (r(0x5EE)&0x88)==0x88 or (not sampled and r(0x5F0)>0)
+        if roaring then
+            sawRoar=true
+            local shake=r(0x64FA)
+            if shake==4 then sawPosShake=true end
+            if shake==0xFC then sawNegShake=true end
+            if shake~=0 and r(0x6504)<0xF0 and r(0x204)<0xF0 then
+                local expected=(r(0x207)-shake)&0xFF
+                if r(0x6507)==expected then sawOamShift=true end
+            end
+            for address,value in pairs(baseline) do
+                if tile(address)~=value then
+                    floorUntouched=false
+                end
+            end
+            if palace==6 and shake==4 then screenshot('palace-6-crystal-shake') end
+        end
+        if sampled and (r(0x5EE)&0x88)==0x88 and r(0x5FA)==72 and r(0x220)<0xF0 then
             local y=r(0x218)
             trailFrames=trailFrames+1
             roundedTrail=roundedTrail and r(0x6518)==y and r(0x6519)==0x35
@@ -57,40 +74,18 @@ emu.addMemoryCallback(function()
                 and r(0x6550)==y and r(0x6554)==y
                 and r(0x6558)==y and r(0x655C)==y
         end
-        local near=tile(0x274E)==0x9A and tile(0x2751)==0x9B
-        local middle=tile(0x274C)==0x9A and tile(0x2753)==0x9B
-        local outer=tile(0x274A)==0x9A and tile(0x2755)==0x9B
-        if near and phase==0 then
-            phase=1
-            align=not sampled or r(0x5EE)&0x88==0x88
-        elseif middle and phase==1 and not near then
-            phase=2
-            firstLight=tile(0x27F3)==0x6B
-        elseif outer and phase==2 and not middle then
-            phase=3
-            secondLight=tile(0x27F5)==0x6E
-            if palace==6 then screenshot('palace-6-crystal-pulse') end
-        elseif phase==3 and not outer and r(0xDE)~=0 then
-            -- Native cleanup can change the statue's attributes after unlock.
-            phase=4
-            restored=true
-            for address,value in pairs(baseline) do
-                if tile(address)~=value then
-                    restored=false
-                    report:write(string.format('tile %04X started %02X ended %02X\n',address,value,tile(address)))
-                end
-            end
+        if sawRoar and not roaring and r(0xDE)==0 and r(0x64FA)==0 then
+            shakeRestored=true
         end
-        unrelated=unrelated and tile(0x2749)==baseline[0x2749] and tile(0x2756)==baseline[0x2756]
         if age==700 then
             check(r(0x794)==6-palace,'places the gem')
-            check(phase>=3 and align,'floor pulses near, middle, then outer on the roar')
-            check(restored and unrelated,'restores the floor and preserves surrounding tiles')
+            check(sawRoar,'plays the crystal roar')
+            check(sawPosShake and sawNegShake and sawOamShift,'shakes camera and OAM with standard offsets')
+            check(shakeRestored,'restores LAIR_SHAKE_X to 0 and releases control')
+            check(floorUntouched,'leaves floor tiles and attributes untouched')
             if sampled then
                 check(trailFrames>0 and roundedTrail,'right-facing bend and tail stay at foot height during the roar')
             end
-            check(palace==6 and firstLight and secondLight or palace~=6 and not firstLight and not secondLight,
-                palace==6 and 'lights both pedestal sections' or 'uses the standard floor pulse')
             palace=palace+1;age=0
             if not rooms[palace] then
                 report:write('RESULT '..(errors==0 and 'PASS' or 'FAIL')..'\n')

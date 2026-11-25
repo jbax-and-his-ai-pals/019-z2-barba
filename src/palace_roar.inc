@@ -2,7 +2,6 @@
 .export RoarGemEnd, LavaLinkGate, LavaLinkIntro
 .segment "PALACE_ROAR"
 
-PALACE_EFFECT_END = 33
 LAIR_PAUSE_BASE = $40 ; $AF,x below this holds the roar's shake phase
 LAIR_PAUSE_FRAMES = 30
 LAIR_LANDING_READY = $60 ; $AF,x after the landing countdown, waiting to start the roar
@@ -14,20 +13,39 @@ LAIR_CENTERED = $7F   ; $AF,x while holding X and waiting to land
 RoarGemEnd:
     lda $04A0,x
     beq @fanfare
-    cmp #PALACE_EFFECT_END
-    beq @finish
-    jsr PalaceEffectTick
-    bcc @wait
-    inc $04A0,x
-@wait:
-    rts
-@finish:
 .ifdef SAMPLED_ROAR
     lda ROAR_REQUEST
     and #$18
     cmp #$10
-    bne @wait
+    beq @finish
+    and #$08
+    beq @fanfare           ; a competing hurt sound interrupted the roar
+    lda ROAR_REQUEST
+    bpl @wait              ; wait for DMC playback; bit 7 stays set through the drain
+.else
+    lda ROAR_TIMER
+    beq @finish
+.endif
+    tya
+    pha
+    ldy $04A0,x
+    iny
+    cpy #LairShakeEnd-LairShakeOffsets
+    bcc :+
+    ldy #LairShakeSustain-LairShakeOffsets
+:
+    tya
+    sta $04A0,x
+    lda LairShakeOffsets,y
+    sta LAIR_SHAKE_X
+    pla
+    tay
+@wait:
+    rts
+@finish:
     lda #0
+    sta LAIR_SHAKE_X
+.ifdef SAMPLED_ROAR
     sta ROAR_REQUEST
 .endif
     ldy #0
@@ -35,9 +53,12 @@ RoarGemEnd:
 @fanfare:
     lda $07FB
     bne @wait
+    lda #0
+    sta LAIR_SHAKE_X
     jsr PalaceStartRoar
     bcc @wait
-    inc $04A0,x
+    lda #1
+    sta $04A0,x
     rts
 
 ; Lava Link's palette/hurt wrapper tails here in place of the shared
@@ -196,143 +217,25 @@ PalaceStartRoar:
     rts
 .endif
 
-; A is the 1-based crystal effect timer.
-; Return carry set on advance. A full or reserved queue retries this stage.
-PalaceEffectTick:
-    sta $00
-.ifdef SAMPLED_ROAR
-    lda ROAR_REQUEST
-    and #$C8
-    cmp #$48               ; wait until the queued roar starts
-    beq @retry
-.endif
-    lda $00
-    sec
-    sbc #1
-    sta $00
-    and #7
-    bne @advance
-    lda $056B
-    cmp #6
-    lda #0
-    bcc @phase
-    lda #4
-@phase:
-    sta $01
-    lda $00
-    lsr
-    lsr
-    lsr
-    ora $01
-    tay
-    lda $0725
-    cmp #2
-    bcs @retry
-    lda $0362
-    cmp #$16               ; keep the total below 48 bytes including our packet
-    bcs @retry
-    txa
-    pha
-    ldx $0362
-    lda PalaceEffectPackets,y
-    tay
-@copy:
-    lda PalaceEffectData,y
-    sta $0363,x
-    cmp #$FF
-    beq @queued
-    iny
-    inx
-    bne @copy
-@queued:
-    stx $0362
-    lda #1
-    sta $0725
-    pla
-    tax
-@advance:
-    sec
-    rts
-@retry:
-    clc
-    rts
-
-.macro FloorTiles column, left, right
-    .byte $27, $40 + column, 2, left, right
-.endmacro
-.macro FloorColors first, second, third, fourth
-    .byte $27, $F2, 4, first, second, third, fourth
-.endmacro
-.macro NearFloor
-    .byte $27, $4E, 4, $9A,$9B,$9A,$9B
-.endmacro
-.macro MiddleFloor
-    .byte $27, $4E, 4, $64,$65,$64,$65
-    FloorTiles 12, $9A, $9B
-    FloorTiles 18, $9A, $9B
-.endmacro
-.macro OuterFloor
-    FloorTiles 12, $64, $65
-    FloorTiles 18, $64, $65
-    FloorTiles 10, $9A, $9B
-    FloorTiles 20, $9A, $9B
-.endmacro
-.macro RestoreFloor
-    FloorTiles 10, $64, $65
-    FloorTiles 20, $64, $65
-    FloorColors $5F, $5F, $5F, $5F
-    .byte $FF
-.endmacro
-
-PalaceEffectPackets:
-    .byte GemNear-PalaceEffectData, GemMiddle-PalaceEffectData
-    .byte GemOuter-PalaceEffectData, GemRestore-PalaceEffectData
-    .byte GemNear-PalaceEffectData, LairMiddle-PalaceEffectData
-    .byte LairOuter-PalaceEffectData, GemRestore-PalaceEffectData
-PalaceEffectData:
-; These six crystal screens all use the fourth world page and the same
-; checkerboard floor and palette quadrants. Palace 6 also lights its pedestal
-; stonework, first to the left of Barba and then toward the statue.
-GemNear:
-    NearFloor
-    FloorColors $5F, $9F, $6F, $5F
-    .byte $FF
-GemMiddle:
-    MiddleFloor
-    FloorColors $5F, $6F, $9F, $5F
-    .byte $FF
-GemOuter:
-    OuterFloor
-    FloorColors $9F, $5F, $5F, $6F
-    .byte $FF
-GemRestore:
-    RestoreFloor
-LairMiddle:
-    MiddleFloor
-    FloorColors $5F, $6B, $9F, $5F
-    .byte $FF
-LairOuter:
-    OuterFloor
-    FloorColors $9F, $5F, $5F, $6E
-    .byte $FF
-
-.segment "PALACE_SHAKE"
-; Only the Palace 6 Lava Link intro sets this offset. The entrance lock
-; also drops if the player leaves the scene before the boss rises.
+.segment "BANK6"
+; Allowed on the title screen, during the Palace 6 Lava Link entrance
+; ($0728 = LAIR_CONTROL_LOCK), and during the crystal ceremony ($DE != 0).
 LavaShakeOffset6:
     bit $0100
     bvc @read
     lda $0728
     cmp #LAIR_CONTROL_LOCK
     beq @read
+    lda $DE
+    bne @read
     lda #0
     rts
 @read:
     lda LAIR_SHAKE_X
     rts
 
-; Shift the HUD and both IRQ bands together, preserving the native scroll.
-; At a page edge, flip each band's original horizontal nametable bit.
+.segment "PALACE_SHAKE"
+; Shift the room IRQ bands by LAIR_SHAKE_X, keeping the HUD steady at X=0.
 ShakeLavaCamera6:
     ldx #0
     jsr LavaShakeOffset6
@@ -349,17 +252,22 @@ ShakeLavaCamera6:
     tax
     eor IRQ_CTRL
     sta IRQ_CTRL
+    lda $FF
+    and #$FC
+    bit LAIR_SHAKE_X
+    bpl :+
+    ora #$01
+:
+    sta $FF
     jmp ShakeLavaHud6
 @done:
     rts
 
 .segment "LAIR_HUD_SHAKE"
 ShakeLavaHud6:
-    txa
-    eor $FF
     sta $2000
     bit $2002
-    lda IRQ_X
+    lda LAIR_SHAKE_X
     sta $2005
     lda $FC
     sta $2005

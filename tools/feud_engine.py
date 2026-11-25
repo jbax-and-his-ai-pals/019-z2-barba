@@ -208,6 +208,28 @@ def _encode_chr0b_blue(text: str) -> bytes:
     return bytes(CHR0B_BLUE_MAP[ch] for ch in text)
 
 
+def _encode_chr0a_title(text: str) -> bytes:
+    """Encode uppercase ASCII/digits/spaces into Face-Off CHR bank 0A tiles ($8F66 map)."""
+    out = bytearray()
+    for ch in text:
+        if ch == ' ':
+            out.append(0x01)
+        elif '0' <= ch <= '9':
+            out.append(0x43 + (ord(ch) - 0x30))
+        elif 'A' <= ch <= 'Z':
+            out.append(0x29 + (ord(ch) - 0x41))
+        else:
+            raise ValueError(f'Unsupported Face-Off title char: {ch!r}')
+    out.append(0x00)
+    return bytes(out)
+
+
+ROUND_ORDINALS = (
+    'FIRST', 'SECOND', 'THIRD', 'FOURTH', 'FIFTH',
+    'SIXTH', 'SEVENTH', 'EIGHTH', 'NINTH', 'TENTH',
+)
+
+
 def _encode_names_blob() -> tuple[list[int], bytes]:
     offs: list[int] = []
     blob = bytearray()

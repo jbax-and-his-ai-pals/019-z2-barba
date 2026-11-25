@@ -407,6 +407,10 @@ def patch_portal_tables(
         name_addrs = [labels[a.subgame.name_label] for a in assignments]
         put_b2('PortalTblNameLo', bytes(addr & 0xFF for addr in name_addrs))
         put_b2('PortalTblNameHi', bytes((addr >> 8) & 0xFF for addr in name_addrs))
+    if 'PortalTblSignLo' in labels and 'PortalTblSignHi' in labels:
+        sign_addrs = [labels[a.subgame.name_label.replace('Name', 'Sign')] for a in assignments]
+        put_b2('PortalTblSignLo', bytes(addr & 0xFF for addr in sign_addrs))
+        put_b2('PortalTblSignHi', bytes((addr >> 8) & 0xFF for addr in sign_addrs))
 
 
 def write_portal_manifest(path: Path, assignments: list[PortalAssignment], *, seed: int | None = None) -> Path:

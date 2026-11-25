@@ -78,11 +78,14 @@ emu.addEventCallback(function()
             startWarp(PORTAL_SLOTS[idx])
         end
     elseif phase == 'load_room' then
+        if PORTAL_SLOTS[idx].room == 0x1C and frame - phaseStart <= 5 then
+            write(0x73E0, 1) -- Re-seed after $CDB8 town-bank copy into $7300-$73FF.
+        end
         if frame - phaseStart >= 90 and read(0x736) == 0x0B then
             phase = 'walk'
             phaseStart = frame
         elseif frame - phaseStart > 400 then
-            emu.stop(1)
+            error(string.format('load_room timeout on slot %s (frame=%d, $736=%02X)', PORTAL_SLOTS[idx].id, frame, read(0x736)))
         end
     elseif phase == 'walk' then
         local slot = PORTAL_SLOTS[idx]
@@ -95,7 +98,7 @@ emu.addEventCallback(function()
             phase = 'settle'
             phaseStart = frame
         elseif frame - phaseStart > 900 then
-            emu.stop(1)
+            error(string.format('walk timeout on slot %s (frame=%d, page=%d, x=%d)', slot.id, frame, curPage, curX))
         end
     elseif phase == 'settle' then
         for s = 0, 5 do write(0xB6 + s, 0) end

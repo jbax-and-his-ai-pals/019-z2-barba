@@ -1087,7 +1087,8 @@ BarbaFallDraw:
 
 ; Boss-defeat shadow (LDCF5 at $DD18): $EC02 draws the native 32px shadow at
 ; $0250..$0264. Redraw all 9 tall-dragon sprites into $026C..$0274 + $0250..$0264
-; with solid black palette 2 so the shadow beside Barba has two torso chunks.
+; with solid black palette 2, plus the lower-back bend and 4-sprite tail, so
+; the shadow beside Barba is his full body.
 BarbaBossShadow:
     stx $0753
     jsr $EC02
@@ -1097,6 +1098,8 @@ BarbaBossShadow:
     sta $0274
     lda $C9
     and #$F0
+    ora $13
+    ora $048D
     beq :+
     rts
 :
@@ -1177,6 +1180,12 @@ BarbaBossShadow:
 @bs_next:
     dex
     bpl @bs_loop
+    lda #>(BarbaBossShadowTail2-1)
+    pha
+    lda #<(BarbaBossShadowTail2-1)
+    pha
+    lda #$02
+    jmp $FFCC
 @bs_done:
     rts
 @bs_oam_off:
@@ -1187,6 +1196,223 @@ BarbaBossShadow:
     .byte $F0, $F0, $F0, $00, $00, $00, $10, $10, $10
 @bs_order_r:
     .byte $02, $01, $00, $05, $04, $03, $08, $07, $06
+
+.segment "BANK2_SMOKE"
+; Barba's bottom row + tail already uses 6 sprites on that scanline, leaving
+; only 2 hardware slots before the NES 8-sprite limit. Stage all 6 bottom-row
+; shadow sprites (bend_center, bend_back, and 4 tail pieces) and rotate which
+; pair takes $0260/$0264 each frame so the full tail renders without dropping.
+BarbaBossShadowTail2:
+    lda $00
+    cmp #$09
+    bne :+
+    jmp $FFC5
+:
+    lda $0260
+    cmp #$F0
+    bcc :+
+    jmp $FFC5
+:
+    sta $05                     ; bottom-row Y
+    lda $0263
+    sta $06                     ; center X
+    lda #$F8
+    sta $025C                   ; clear both back-bottom slots; re-placed below
+    sta $0264
+    ; Build 6-entry table in $07..$0C (X) and use @bs_all_tiles (tiles).
+    ; Entry 0: bend_center (or raw center tile if non-bend pose)
+    lda $0261
+    sta $0D                     ; entry 0 tile
+    lda $06
+    sta $07                     ; entry 0 X
+    ; Entry 1: bend_back (or raw back tile if non-bend pose)
+    lda #$F8
+    sta $08                     ; entry 1 X ($F8 = skip)
+    lda $00
+    cmp #$06
+    bcc @bs_bend
+    cmp #$0A
+    beq @bs_bend
+    cmp #$0C
+    bne @bs_raw_back
+@bs_bend:
+    lda #(TRAIL_BEND_CENTER ^ $01)
+    sta $0D
+    lda #(TRAIL_BEND_BACK ^ $01)
+    sta $0E
+    lda $06
+    bit $02
+    bvc @bs_bend_l
+    sec
+    sbc #$08
+    bcc @bs_tail_x
+    bcs @bs_set_back
+@bs_bend_l:
+    clc
+    adc #$08
+    bcs @bs_tail_x
+@bs_set_back:
+    sta $08
+    bcc @bs_tail_x
+    bcs @bs_tail_x
+@bs_raw_back:
+    ; Non-bend pose: keep raw back tile if any, or skip
+    lda #$F8
+    sta $08
+@bs_tail_x:
+    lda #$08
+    bit $02
+    bvc :+
+    lda #$F8
+:
+    sta $03                     ; step (+8 or -8)
+    lda $06
+    bvs @bs_tail_r
+    clc
+    adc #$10
+    bcc @bs_tail_fill
+    lda #$F8
+    bne @bs_tail_fill
+@bs_tail_r:
+    sec
+    sbc #$10
+    bcs @bs_tail_fill
+    lda #$F8
+@bs_tail_fill:
+    ldy #$00
+@bs_x_loop:
+    sta $09,y
+    cmp #$F8
+    beq @bs_x_next
+    clc
+    adc $03
+    bit $02
+    bvs @bs_x_chk_r
+    bcc @bs_x_next
+    lda #$F8
+    bne @bs_x_next
+@bs_x_chk_r:
+    bcs @bs_x_next
+    lda #$F8
+@bs_x_next:
+    iny
+    cpy #$04
+    bne @bs_x_loop
+    ; Rotate starting index by ($12 & 3) * 2 mod 6, or use a 4-phase pair table
+    lda $12
+    and #$03
+    asl
+    tax
+    lda @bs_rot_a,x
+    tay
+    jsr @bs_write_slot_60
+    inx
+    lda @bs_rot_a,x
+    tay
+    jsr @bs_write_slot_64
+    ; Write remaining 4 entries into free $0278..$02FC slots
+    lda $12
+    and #$03
+    asl
+    asl
+    sta $03
+    ldy #$00
+    ldx #$FC
+@bs_rem_loop:
+    sty $04
+    tya
+    clc
+    adc $03
+    tay
+    lda @bs_rem_tbl,y
+    tay
+    lda $07,y
+    cmp #$F8
+    beq @bs_rem_next
+    sta $0F
+@bs_find_free:
+    lda $0200,x
+    cmp #$F0
+    bcs @bs_got_free
+    dex
+    dex
+    dex
+    dex
+    cpx #$78
+    bcs @bs_find_free
+    jmp $FFC5
+@bs_got_free:
+    lda $05
+    sta $0200,x
+    jsr @bs_get_tile
+    sta $0201,x
+    lda $02
+    sta $0202,x
+    lda $0F
+    sta $0203,x
+    dex
+    dex
+    dex
+    dex
+@bs_rem_next:
+    ldy $04
+    iny
+    cpy #$04
+    bne @bs_rem_loop
+@bs_tail_done:
+    jmp $FFC5
+
+@bs_write_slot_60:
+    lda $07,y
+    cmp #$F8
+    bne :+
+    sta $0260
+    rts
+:
+    sta $0263
+    lda $05
+    sta $0260
+    jsr @bs_get_tile
+    sta $0261
+    lda $02
+    sta $0262
+    rts
+
+@bs_write_slot_64:
+    lda $07,y
+    cmp #$F8
+    bne :+
+    sta $0264
+    rts
+:
+    sta $0267
+    lda $05
+    sta $0264
+    jsr @bs_get_tile
+    sta $0265
+    lda $02
+    sta $0266
+    rts
+
+@bs_get_tile:
+    cpy #$02
+    bcs :+
+    lda $0D,y
+    rts
+:
+    lda @bs_trail_tiles-2,y
+    rts
+
+@bs_rot_a:
+    .byte 1, 5,  2, 3,  4, 5,  0, 1
+@bs_rem_tbl:
+    .byte 0, 2, 3, 4
+    .byte 0, 1, 4, 5
+    .byte 0, 1, 2, 3
+    .byte 2, 3, 4, 5
+@bs_trail_tiles:
+    .byte TRAIL_TORSO_LEFT ^ $01, TRAIL_TORSO_RIGHT ^ $01, TRAIL_TIP ^ $01, TRAIL_TIP_FAR ^ $01
+.segment "BANK0"
 
 ; No horizontal melee. Downstab sits under the feet; upward thrust uses the
 ; native head top, never the visually raised 48px head. Both are centered.

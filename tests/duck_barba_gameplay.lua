@@ -14,6 +14,7 @@ local VH_ROAR_TIMER   = 0x0629
 local VH_MMC3_MODE    = 0x062A
 local VH_CUR_R0       = 0x062B
 local VH_CUR_R1       = 0x062C
+local VH_CUR_BG       = 0x062D
 
 local report = assert(io.open(OUTPUT_DIR .. '/duck_barba_gameplay.txt', 'w'))
 local errors = 0
@@ -240,6 +241,17 @@ emu.addEventCallback(function()
                     check(read(0x00AA) >= 1, 'Villager hit incremented round score counter ($AA=' .. read(0x00AA) .. ')')
                     check(read(0x00BA) < prevAmmo, 'A-button shot consumed ammo')
                     check(read(VH_CUR_R1) == 14, 'Barba celebration uses R1=14')
+                    local aboveBad, belowBad = 0, 0
+                    for off = 0x60, 0x8C, 4 do
+                        local sy = emu.read(off, oam)
+                        if sy < 0xEF then
+                            local bgBit = emu.read(off + 2, oam) & 0x20
+                            if sy < 0x8F and bgBit ~= 0 then aboveBad = aboveBad + 1 end
+                            if sy >= 0x8F and bgBit == 0 then belowBad = belowBad + 1 end
+                        end
+                    end
+                    check(aboveBad == 0 and belowBad == 0,
+                        string.format('Barba/XP bag above bushes draws on top of trees (aboveBad=%d belowBad=%d)', aboveBad, belowBad))
                     saveShot('duck_barba_catch.png')
                     phase = 'miss_for_link'
                     phaseStart = frame
@@ -273,11 +285,45 @@ emu.addEventCallback(function()
             sawLinkLaugh = true
             check(true, 'Miss triggered Villainous Link laugh (R1=16)')
             saveShot('duck_link_laugh.png')
+            -- Advance Round 1 -> Round 2 (Overworld Grass)
+            write(0x00AA, 0x0A); write(0x00AB, 0x06); write(0x00BB, 0x0A); write(0x00BC, 0x00)
+            write(0x0300, 0x00); write(0x0350, 0x00); write(0x00A9, 0x01); write(0x002B, 0x00)
+            write(0x0025, 0x04)
+            phase = 'wait_grass_round'
+            phaseStart = frame
+        elseif dt > 640 then
+            check(false, 'Timed out waiting for Villainous Link laugh ($03A0=' .. read(0x03A0) .. ' st=' .. read(0x03A1) .. ' R1=' .. read(VH_CUR_R1) .. ')')
+            finish()
+        end
+
+    elseif phase == 'wait_grass_round' then
+        local dt = frame - phaseStart
+        if dt > 30 and read(0x0025) == 0x03 and read(0x0300) ~= 0 and read(0x0301) == 0x03 then
+            check(read(0x0636) == 1 and read(VH_CUR_BG) == 32,
+                string.format('Round 2 switched to Z2 Overworld Grass (scene=%d BG=%d)', read(0x0636), read(VH_CUR_BG)))
+            saveShot('duck_grass.png')
+            -- Advance Round 2 -> Round 3 (Desert)
+            write(0x00AA, 0x0A); write(0x00AB, 0x06); write(0x00BB, 0x0A); write(0x00BC, 0x00)
+            write(0x0300, 0x00); write(0x0350, 0x00); write(0x00A9, 0x01); write(0x002B, 0x00)
+            write(0x0025, 0x04)
+            phase = 'wait_desert_round'
+            phaseStart = frame
+        elseif dt > 800 then
+            check(false, string.format('Timed out waiting for Round 2 Grass ($25=%02X BG=%d)', read(0x0025), read(VH_CUR_BG)))
+            finish()
+        end
+
+    elseif phase == 'wait_desert_round' then
+        local dt = frame - phaseStart
+        if dt > 30 and read(0x0025) == 0x03 and read(0x0300) ~= 0 and read(0x0301) == 0x03 then
+            check(read(0x0636) == 2 and read(VH_CUR_BG) == 36,
+                string.format('Round 3 switched to Z2 Desert (scene=%d BG=%d)', read(0x0636), read(VH_CUR_BG)))
+            saveShot('duck_desert.png')
             phase = 'game_c_reset'
             phaseStart = frame
             emu.reset()
-        elseif dt > 640 then
-            check(false, 'Timed out waiting for Villainous Link laugh ($03A0=' .. read(0x03A0) .. ' st=' .. read(0x03A1) .. ' R1=' .. read(VH_CUR_R1) .. ')')
+        elseif dt > 800 then
+            check(false, string.format('Timed out waiting for Round 3 Desert ($25=%02X BG=%d)', read(0x0025), read(VH_CUR_BG)))
             finish()
         end
 
@@ -304,7 +350,7 @@ emu.addEventCallback(function()
                 phase = 'game_c_hit_wait'
                 phaseStart = frame
             end
-        elseif dt > 400 then
+        elseif dt > 450 then
             check(false, string.format('Timed out reaching Game C target ($25=%02X $0301=%02X)', read(0x0025), read(0x0301)))
             finish()
         end

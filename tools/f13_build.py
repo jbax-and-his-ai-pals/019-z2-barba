@@ -610,9 +610,18 @@ def build() -> Path:
     a.label("set_r0")
     a.emit(0xA0, 0x00, 0x8C, F13_MMC3_SEL & 0xFF, F13_MMC3_SEL >> 8)
     a.emit(0x8C, 0x00, 0x80, 0x8D, 0x01, 0x80)                # R0 = A
-    a.emit(0xE8, 0xE8)
+    a.emit(0xE8, 0xE8, 0x8A, 0x48)                            # X += 2; TXA; PHA (save normal R1)
+    a.emit(0xE0, 18)                                          # CPX #18 (Y == 2 indoors?)
+    a.branch(0xD0, "r1_norm")
+    a.emit(0xAD, 0x07, 0x05, 0xC9, 0x03)                      # Laura?
+    a.branch(0xF0, "r1_norm")
+    a.emit(0xC9, 0x04)                                        # Debbie?
+    a.branch(0xF0, "r1_norm")
+    a.emit(0xA2, 50)                                          # LDX #50 (2KB idx 25: Barba indoor R1)
+    a.label("r1_norm")
     a.emit(0xA9, 0x01, 0x8D, F13_MMC3_SEL & 0xFF, F13_MMC3_SEL >> 8)
     a.emit(0x8D, 0x00, 0x80, 0x8E, 0x01, 0x80)                # R1 = X
+    a.emit(0x68, 0xAA)                                        # PLA; TAX (restore normal R1)
     a.emit(0xE8, 0xE8, 0xA0, 0x02)
     a.label("chr_loop")
     a.emit(0x8C, F13_MMC3_SEL & 0xFF, F13_MMC3_SEL >> 8)

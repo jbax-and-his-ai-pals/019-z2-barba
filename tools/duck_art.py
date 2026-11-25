@@ -124,30 +124,6 @@ FIREBALL_FRAMES = (
     ),
 )
 
-# 8x16 squished vertical-rectangle "dead" enemy held in Barba's mouth (Pal 0: 1=white, 2=red, 3=black)
-DEAD_ENEMY_TILES = (
-    (
-        '02200220',
-        '02200220',
-        '01100110',
-        '01111110',
-        '11222211',
-        '12211221',
-        '12222221',
-        '11222211',
-    ),
-    (
-        '11311311',
-        '11111111',
-        '13111131',
-        '11311311',
-        '13111131',
-        '01133110',
-        '00111100',
-        '00000000',
-    ),
-)
-
 # 2 shatter/scorch ember tiles ($10..$11) + 2 ash mound tiles ($12..$13)
 EMBER_TILES = (
     (
@@ -390,10 +366,11 @@ def _build_barba_full_and_down(z2: bytes) -> tuple[dict[str, list[tuple[int, int
     vertical_tip = [''.join(col) for col in zip(*tip_rows)][::-1]
     tip_8x16 = resize_x(vertical_tip, 8)
 
-    # Flip horizontally so Barba faces RIGHT (matching Duck Hunt $34=0)
+    # Flip horizontally so Barba faces RIGHT (matching Duck Hunt $34=0);
+    # downstab torso chunks keep torso_left's horizontal orientation (mirrored vs head_down_right).
     bend_right = [r[::-1] for r in bend_left]
     trail_right = [r[::-1] for r in trail_left]
-    torso_down_right = [r[::-1] for r in torso_left][::-1]
+    torso_down_right = torso_left[::-1]
     tip_right = [r[::-1] for r in tip_8x16]
     head_down_right = [r[::-1] for r in raw['down'][16:48]]
 
@@ -534,6 +511,32 @@ def build_duck_chr_and_tables(duck_bytes: bytes, z2_bytes: bytes) -> dict:
         rows = _decode_tile(bytes(forest_bg[hud_tid * 16 : (hud_tid + 1) * 16]))
         remapped = [''.join('2' if c == 0 else str(c) for c in r) for r in rows]
         forest_bg[hud_tid * 16 : (hud_tid + 1) * 16] = encode_tile(remapped)
+
+    # 1c. Game A/B Overworld Grass Encounter BG (1KB banks 32..35)
+    grass_bg = bytearray(game_bg)
+    grass_tile_map = (
+        (0x60, 0xB3), (0x61, 0xB5), (0x62, 0xB7),                # Cloud top (L, M, R)
+        (0x63, 0xB4), (0x6A, 0xB6), (0x6B, 0xB8),                # Cloud bottom (L, M, R)
+        (0x64, 0x36), (0x65, 0x36), (0x66, 0x37), (0x67, 0x37),  # Overworld grass ground ($36/$37)
+        (0x68, 0x4E), (0x69, 0x4F),                              # Tall grass sprigs ($4E top, $4F bottom)
+        (0x6E, 0x4C), (0x6F, 0x4D),                              # Grass-area bushes ($4C top, $4D bottom)
+    )
+    for dst_tid, src_tid in grass_tile_map:
+        src_off = z2_chr_base + src_tid * 16
+        grass_bg[dst_tid * 16 : (dst_tid + 1) * 16] = z2_bytes[src_off : src_off + 16]
+
+    # 1d. Game A/B Desert Encounter BG (1KB banks 36..39)
+    desert_bg = bytearray(game_bg)
+    desert_tile_map = (
+        (0x60, 0xB3), (0x61, 0xB5), (0x62, 0xB7),                # Cloud top (L, M, R)
+        (0x63, 0xB4), (0x6A, 0xB6), (0x6B, 0xB8),                # Cloud bottom (L, M, R)
+        (0x64, 0x36), (0x65, 0x36), (0x66, 0x37), (0x67, 0x37),  # Desert sand ground ($36/$37)
+        (0x68, 0x3C), (0x69, 0x3D), (0x6C, 0x3E), (0x6D, 0x3F),  # Cacti ($3C top, $3D stem, $3E/$3F arm)
+        (0x6F, 0x35),                                            # Desert surface sand bump ($35)
+    )
+    for dst_tid, src_tid in desert_tile_map:
+        src_off = z2_chr_base + src_tid * 16
+        desert_bg[dst_tid * 16 : (dst_tid + 1) * 16] = z2_bytes[src_off : src_off + 16]
 
     # 2. Title BG (1KB banks 4..7): copy gameplay BG + custom rounded "BARBA'S" logo tiles ($C0..$CD)
     title_bg = bytearray(game_bg)
@@ -828,7 +831,7 @@ def build_duck_chr_and_tables(duck_bytes: bytes, z2_bytes: bytes) -> dict:
     ]
     r0_villagers4, v3_pals, v3_maps, v3_cnt = make_r0_bank(bank_palace_specs)
 
-    # --- R0 Bank 4 (1KB banks 28..29, R0=28): Great Palace & Bosses ---
+    # --- R0 Bank 4 (1KB banks 28..29, R0=28): Great Palace ---
     fokka_f0 = _remap(_z2_16x32(z2_bytes, 12, 13, 0x41, 0x43, 0x49, 0x4B), m_pal0)
     fokka_f1 = fokka_f0
     fokkeru_f0 = _remap(_z2_16x32(z2_bytes, 12, 13, 0xE0, 0xE2, 0xE4, 0xE6), m_pal0)
@@ -837,12 +840,79 @@ def build_duck_chr_and_tables(duck_bytes: bytes, z2_bytes: bytes) -> dict:
     ra_f1 = ra_f0
     firerope_f0 = _remap(_pad32(_z2_16x16(z2_bytes, 12, 13, 0x0B, 0x0D), 8), m_pal0)
     firerope_f1 = firerope_f0
+    gb0 = _pair(z2_bytes, 12, 0xF0)
+    gb2 = _pair(z2_bytes, 12, 0xF2)
+    gb4 = _pair(z2_bytes, 12, 0xF4)
+    gb6 = _pair(z2_bytes, 12, 0xF6)
+    gb8 = _pair(z2_bytes, 12, 0xF8)
+    gba = _pair(z2_bytes, 12, 0xFA)
+    gbot_48 = [
+        gb0[y] + gb2[y] + gb4[y] + gb4[y][::-1] + gb2[y][::-1] + gb0[y][::-1] for y in range(16)
+    ] + [
+        gb6[y] + gb8[y] + gba[y] + gba[y][::-1] + gb8[y][::-1] + gb6[y][::-1] for y in range(16)
+    ]
+    giant_bot_f0 = _remap(resize_x(gbot_48, 16), m_ident)
+    giant_bot_f1 = giant_bot_f0
+
+    bank_gp_specs = [
+        ('fokka',     0, fokka_f0,     fokka_f1),
+        ('fokkeru',   0, fokkeru_f0,   fokkeru_f1),
+        ('ra',        0, ra_f0,        ra_f1),
+        ('firerope',  0, firerope_f0,  firerope_f1),
+        ('giant_bot', 2, giant_bot_f0, giant_bot_f1),
+    ]
+    r0_villagers5, v4_pals, v4_maps, v4_cnt = make_r0_bank(bank_gp_specs)
+
+    # --- R0 Bank 5 (1KB banks 30..31, R0=30): Bosses ---
     hh_48 = (
         _z2_16x32(z2_bytes, 8, 9, 0x1B, 0x1D, 0x1F, 0x21)
         + _z2_16x16(z2_bytes, 8, 9, 0x13, 0x15)
     )
     horsehead_f0 = _remap(_shrink_y(hh_48, 32), m_pal0)
     horsehead_f1 = horsehead_f0
+
+    def _helm_48(leg_l: int, leg_r: int) -> list[str]:
+        body = _z2_16x32(z2_bytes, 9, 9, 0x0F, 0x11, leg_l, leg_r)
+        canvas = [list('0' * 16) for _ in range(16)] + [list(r) for r in body]
+        head = _pair(z2_bytes, 9, 0x09)
+        for y in range(16):
+            for x in range(8):
+                if head[y][x] != '0':
+                    canvas[4 + y][4 + x] = head[y][x]
+        return _shrink_y(_remap([''.join(r) for r in canvas], m_ident), 32)
+    helmethead_f0 = _helm_48(0x13, 0x15)
+    helmethead_f1 = _helm_48(0x17, 0x19)
+
+    reb_tl = _z2_16x16(z2_bytes, 19, 19, 0x09, 0x0B)
+    reb_tr = _z2_16x16(z2_bytes, 19, 19, 0x4D, 0x43)
+    reb_bl = _z2_16x16(z2_bytes, 19, 19, 0x0D, 0x0F)
+    reb_br = _z2_16x16(z2_bytes, 19, 19, 0x11, 0x13)
+    def _reb_16(bob: int) -> list[str]:
+        canvas = [list(reb_bl[y - 16] + reb_br[y - 16]) if y >= 16 else list('0' * 32) for y in range(32)]
+        for y in range(16):
+            dy = y + bob
+            if dy < 16:
+                for x in range(16):
+                    if reb_tl[y][x] != '0':
+                        canvas[dy][x] = reb_tl[y][x]
+            for x in range(16):
+                if reb_tr[y][x] != '0':
+                    canvas[dy][16 + x] = reb_tr[y][x]
+        return _remap(resize_x([''.join(r) for r in canvas], 16), m_ident)
+    rebonack_f0 = _reb_16(0)
+    rebonack_f1 = _reb_16(1)
+
+    car_32_f0 = (
+        [_z2_16x16(z2_bytes, 21, 21, 0x09, 0x0B)[y] + _z2_16x16(z2_bytes, 21, 21, 0x11, 0x13)[y] for y in range(16)]
+        + [_z2_16x16(z2_bytes, 21, 21, 0x0D, 0x0F)[y] + _z2_16x16(z2_bytes, 21, 21, 0x15, 0x17)[y] for y in range(16)]
+    )
+    car_32_f1 = (
+        [_z2_16x16(z2_bytes, 21, 21, 0x1F, 0x21)[y] + _z2_16x16(z2_bytes, 21, 21, 0x23, 0x25)[y] for y in range(16)]
+        + [_z2_16x16(z2_bytes, 21, 21, 0x27, 0x29)[y] + _z2_16x16(z2_bytes, 21, 21, 0x2B, 0x2D)[y] for y in range(16)]
+    )
+    carock_f0 = _remap(resize_x(car_32_f0, 16), m_ident)
+    carock_f1 = _remap(resize_x(car_32_f1, 16), m_ident)
+
     goo_48 = (
         [''.join(_pair(z2_bytes, 23, t)[y] for t in (0x09, 0x0B, 0x0D)) for y in range(16)]
         + [''.join(_pair(z2_bytes, 23, t)[y] for t in (0x0F, 0x11, 0x13)) for y in range(16)]
@@ -851,15 +921,23 @@ def build_duck_chr_and_tables(duck_bytes: bytes, z2_bytes: bytes) -> dict:
     gooma_f0 = _remap(_shrink_y(resize_x(goo_48, 16), 32), m_pal0)
     gooma_f1 = gooma_f0
 
-    bank_gp_specs = [
-        ('fokka',     0, fokka_f0,     fokka_f1),
-        ('fokkeru',   0, fokkeru_f0,   fokkeru_f1),
-        ('ra',        0, ra_f0,        ra_f1),
-        ('firerope',  0, firerope_f0,  firerope_f1),
-        ('horsehead', 0, horsehead_f0, horsehead_f1),
-        ('gooma',     0, gooma_f0,     gooma_f1),
+    def _tb_16(rows_tids: tuple[tuple[int, int], ...]) -> list[str]:
+        half: list[str] = []
+        for a, b in rows_tids:
+            half.extend(_z2_16x16(z2_bytes, 13, 13, a, b))
+        return _remap(_shrink_y(resize_x([r + r[::-1] for r in half], 16), 32), m_pal0)
+    thunderbird_f0 = _tb_16(((0x11, 0x13), (0x17, 0x29), (0x1D, 0x1F), (0x21, 0x23)))
+    thunderbird_f1 = _tb_16(((0x11, 0x13), (0x17, 0x2B), (0x1D, 0x1F), (0x25, 0x27)))
+
+    bank_boss_specs = [
+        ('horsehead',   0, horsehead_f0,   horsehead_f1),
+        ('helmethead',  2, helmethead_f0,  helmethead_f1),
+        ('rebonack',    2, rebonack_f0,    rebonack_f1),
+        ('carock',      2, carock_f0,      carock_f1),
+        ('gooma',       0, gooma_f0,       gooma_f1),
+        ('thunderbird', 0, thunderbird_f0, thunderbird_f1),
     ]
-    r0_villagers5, v4_pals, v4_maps, v4_cnt = make_r0_bank(bank_gp_specs)
+    r0_villagers6, v5_pals, v5_maps, v5_cnt = make_r0_bank(bank_boss_specs)
 
     # 4. R0 Bank 1 (1KB banks 10..11): Shared $00..$1F + Game C Octoroks / Moas / Palace Plates ($20..$7F)
     m_octo = {'0': '0', '1': '2', '2': '3', '3': '1'}
@@ -896,8 +974,10 @@ def build_duck_chr_and_tables(duck_bytes: bytes, z2_bytes: bytes) -> dict:
     r1_barba = bytearray(b'\x00' * 2048)
     for i, t in enumerate(b_tiles):
         r1_barba[i * 16 : (i + 1) * 16] = t
-    r1_barba[0x6E * 16 : 0x6F * 16] = encode_tile(list(DEAD_ENEMY_TILES[0]))
-    r1_barba[0x6F * 16 : 0x70 * 16] = encode_tile(list(DEAD_ENEMY_TILES[1]))
+    # Extract exact 8x16 XP bag (P-Bag) from Z2 CHR bank 2 ($72/$73) — Z2 Pal 1 ($16/$27/$30) matches Duck Hunt Pal 1
+    pbag_rows = source_pair(z2_bytes, 0x72, 2)
+    r1_barba[0x6E * 16 : 0x6F * 16] = encode_tile(pbag_rows[0:8])
+    r1_barba[0x6F * 16 : 0x70 * 16] = encode_tile(pbag_rows[8:16])
     r1_barba[0x70 * 16 : 0x80 * 16] = orig_spr[0xF0 * 16 : 0x100 * 16]
 
     # 7. R1 Bank 1 (1KB banks 16..17): Villainous Link ($80..$EF) + Score popups ($F0..$FF)
@@ -908,8 +988,8 @@ def build_duck_chr_and_tables(duck_bytes: bytes, z2_bytes: bytes) -> dict:
         r1_link[i * 16 : (i + 1) * 16] = t
     r1_link[0x70 * 16 : 0x80 * 16] = orig_spr[0xF0 * 16 : 0x100 * 16]
 
-    # 8. Assemble 32KB CHR-ROM (32 x 1KB banks, well under 128KB limit)
-    chr32 = bytearray(b'\x00' * (32 * 1024))
+    # 8. Assemble 64KB CHR-ROM (64 x 1KB banks, well under 128KB limit)
+    chr32 = bytearray(b'\x00' * (64 * 1024))
     chr32[0 * 1024 : 4 * 1024] = game_bg
     chr32[4 * 1024 : 8 * 1024] = title_bg
     chr32[8 * 1024 : 10 * 1024] = r0_villagers
@@ -922,13 +1002,17 @@ def build_duck_chr_and_tables(duck_bytes: bytes, z2_bytes: bytes) -> dict:
     chr32[24 * 1024 : 26 * 1024] = r0_villagers3
     chr32[26 * 1024 : 28 * 1024] = r0_villagers4
     chr32[28 * 1024 : 30 * 1024] = r0_villagers5
+    chr32[30 * 1024 : 32 * 1024] = r0_villagers6
+    chr32[32 * 1024 : 36 * 1024] = grass_bg
+    chr32[36 * 1024 : 40 * 1024] = desert_bg
 
     bank_defs = [
         (8,  'r0_villagers',  'Shared / Overworld', bank_shared_specs),
         (22, 'r0_villagers2', 'West Hyrule',        bank_west_specs),
         (24, 'r0_villagers3', 'East Hyrule',        bank_east_specs),
         (26, 'r0_villagers4', 'Palaces 1-6',        bank_palace_specs),
-        (28, 'r0_villagers5', 'Great Palace & Bosses', bank_gp_specs),
+        (28, 'r0_villagers5', 'Great Palace',       bank_gp_specs),
+        (30, 'r0_villagers6', 'Bosses',             bank_boss_specs),
     ]
     villager_r0_banks: list[int] = []
     villager_bank_idx: list[int] = []
@@ -944,8 +1028,8 @@ def build_duck_chr_and_tables(duck_bytes: bytes, z2_bytes: bytes) -> dict:
 
     return {
         'chr': bytes(chr32),
-        'villager_pals': v0_pals + v1_pals + v2_pals + v3_pals + v4_pals,
-        'villager_maps': v0_maps + v1_maps + v2_maps + v3_maps + v4_maps,
+        'villager_pals': v0_pals + v1_pals + v2_pals + v3_pals + v4_pals + v5_pals,
+        'villager_maps': v0_maps + v1_maps + v2_maps + v3_maps + v4_maps + v5_maps,
         'villager_r0_banks': villager_r0_banks,
         'villager_bank_idx': villager_bank_idx,
         'bank_starts': bank_starts,
@@ -960,6 +1044,7 @@ def build_duck_chr_and_tables(duck_bytes: bytes, z2_bytes: bytes) -> dict:
             'villagers3': v2_cnt,
             'villagers4': v3_cnt,
             'villagers5': v4_cnt,
+            'villagers6': v5_cnt,
             'clay': len(c_tiles),
             'barba': len(b_tiles),
             'link': len(l_tiles),
@@ -970,6 +1055,7 @@ def build_duck_chr_and_tables(duck_bytes: bytes, z2_bytes: bytes) -> dict:
             'villagers3': bank_east_specs,
             'villagers4': bank_palace_specs,
             'villagers5': bank_gp_specs,
+            'villagers6': bank_boss_specs,
             'villager_banks': bank_defs,
             'clay': [('octorok', 0, octo_f0, octo_f1), ('moa', 2, moa_f0, moa_f1)],
             'barba': [(n, 1, barba_previews[n]) for n in barba_order],

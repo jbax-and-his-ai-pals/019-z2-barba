@@ -27,6 +27,7 @@ VH_TMP4         = 0x0632
 VH_TMP5         = 0x0633
 VH_CLAY_SEQ     = 0x0634
 VH_SHAKE_TIMER  = 0x0635
+VH_SCENE_IDX    = 0x0636  # 0=Forest, 1=Overworld Grass, 2=Desert (cycles per Game A/B round)
 
 # Unused Zero Page ($96-$97, $CC-$CE — never referenced by Duck Hunt game or sound code)
 ZP_PTR0 = 0xCC  # $CC/$CD
@@ -198,8 +199,16 @@ def build_title_ppu_stream() -> bytes:
     return bytes(buf)
 
 
-def build_forest_ppu_stream() -> bytes:
-    """Build PPU nametable stream ($2000) for Zelda II Forest Encounter (Game A/B)."""
+def _build_encounter_ppu_stream(
+    sky_fn,
+    ground_r20: list[int],
+    ground_r21: list[int],
+    attrs: list[int],
+    *,
+    horizon_r18: list[int] | None = None,
+    horizon_r19: list[int] | None = None,
+) -> bytes:
+    """Build PPU nametable stream ($2000) for a Game A/B Z2 encounter scene."""
     buf = bytearray()
 
     def write_row(ppu_addr: int, tiles: list[int]) -> None:
@@ -218,30 +227,21 @@ def build_forest_ppu_stream() -> bytes:
     for r in range(24):
         repeat_row(0x2000 + r * 32, 32, 0x24)
 
-    # Canopy (rows 0..5): Z2 forest leaves ($68/$6A top, $69/$6B solid, $6C/$6D hanging)
-    write_row(0x2000, [0x68, 0x6A] * 16)
-    write_row(0x2020, [0x69, 0x6B] * 16)
-    write_row(0x2040, [0x68, 0x6A] * 16)
-    write_row(0x2060, [0x69, 0x6B] * 5 + [0x6C, 0x6D] * 6 + [0x69, 0x6B] * 5)
-    # Side canopy overhangs on rows 4..5 (leaving cols 10..21 open for ROUND/FLY AWAY box)
-    write_row(0x2080, [0x68, 0x6A] * 3)
-    write_row(0x20A0, [0x6C, 0x6D] * 3)
-    write_row(0x209A, [0x68, 0x6A] * 3)
-    write_row(0x20BA, [0x6C, 0x6D] * 3)
+    # Horizon/bushes (rows 18..19) for OAM $20 behind-bush masking
+    if horizon_r18 is None:
+        repeat_row(0x2240, 32, 0x6E)
+    else:
+        write_row(0x2240, horizon_r18)
+    if horizon_r19 is None:
+        repeat_row(0x2260, 32, 0x6F)
+    else:
+        write_row(0x2260, horizon_r19)
 
-    # Two tree trunks (cols 6..7 and cols 24..25, rows 4..17)
-    for r in range(4, 18):
-        tl, tr = (0x60, 0x62) if (r & 1) == 0 else (0x61, 0x63)
-        write_row(0x2000 + r * 32 + 6, [tl, tr])
-        write_row(0x2000 + r * 32 + 24, [tl, tr])
+    sky_fn(write_row)
 
-    # Bushes (rows 18..19) for OAM $20 behind-bush masking
-    repeat_row(0x2240, 32, 0x6E)
-    repeat_row(0x2260, 32, 0x6F)
-
-    # Forest ground (rows 20..21)
-    write_row(0x2280, [0x64, 0x66] * 16)
-    write_row(0x22A0, [0x65, 0x67] * 16)
+    # Ground (rows 20..21)
+    write_row(0x2280, ground_r20)
+    write_row(0x22A0, ground_r21)
 
     # Dirt & HUD (rows 22..29) matching Duck Hunt $E042 layout
     dirt_r22 = [0x50, 0x51, 0x50, 0x52] * 8
@@ -285,8 +285,32 @@ def build_forest_ppu_stream() -> bytes:
     ])
     repeat_row(0x23A0, 32, 0x50)
 
-    # Attribute table ($23C0..$23FF):
-    #   Pal 0: trunks, Pal 1: canopy/bushes/ground, Pal 2: dirt/HUD, Pal 3: HIT/SCORE/popups
+    # Split into two 32-byte writes (count=64 would set bit 6 RLE in $C617!)
+    write_row(0x23C0, attrs[:32])
+    write_row(0x23E0, attrs[32:])
+    buf.append(0x00)
+    return bytes(buf)
+
+
+def build_forest_ppu_stream() -> bytes:
+    """Build PPU nametable stream ($2000) for Zelda II Forest Encounter (Game A/B)."""
+    def sky(write_row):
+        # Canopy (rows 0..5): Z2 forest leaves ($68/$6A top, $69/$6B solid, $6C/$6D hanging)
+        write_row(0x2000, [0x68, 0x6A] * 16)
+        write_row(0x2020, [0x69, 0x6B] * 16)
+        write_row(0x2040, [0x68, 0x6A] * 16)
+        write_row(0x2060, [0x69, 0x6B] * 5 + [0x6C, 0x6D] * 6 + [0x69, 0x6B] * 5)
+        # Side canopy overhangs on rows 4..5 (leaving cols 10..21 open for ROUND/FLY AWAY box)
+        write_row(0x2080, [0x68, 0x6A] * 3)
+        write_row(0x20A0, [0x6C, 0x6D] * 3)
+        write_row(0x209A, [0x68, 0x6A] * 3)
+        write_row(0x20BA, [0x6C, 0x6D] * 3)
+        # Two tree trunks (cols 6..7 and cols 24..25, rows 4..17)
+        for r in range(4, 18):
+            tl, tr = (0x60, 0x62) if (r & 1) == 0 else (0x61, 0x63)
+            write_row(0x2000 + r * 32 + 6, [tl, tr])
+            write_row(0x2000 + r * 32 + 24, [tl, tr])
+
     attrs = [
         0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55,  # rows 0..3: canopy
         0x55, 0x11, 0x00, 0xF0, 0xF0, 0xF0, 0x44, 0x55,  # rows 4..7: overhangs, trunks, popup
@@ -297,11 +321,76 @@ def build_forest_ppu_stream() -> bytes:
         0xAA, 0xAA, 0xAA, 0xFA, 0xFA, 0xBA, 0xFA, 0xBA,  # rows 24..27: HUD
         0x0A, 0x0A, 0x0A, 0x0A, 0x0A, 0x0A, 0x0A, 0x0A,  # rows 28..29: HUD bottom
     ]
-    # Split into two 32-byte writes (count=64 would set bit 6 RLE in $C617!)
-    write_row(0x23C0, attrs[:32])
-    write_row(0x23E0, attrs[32:])
-    buf.append(0x00)
-    return bytes(buf)
+    return _build_encounter_ppu_stream(sky, [0x64, 0x66] * 16, [0x65, 0x67] * 16, attrs)
+
+
+def build_grass_ppu_stream() -> bytes:
+    """Build PPU nametable stream ($2000) for Zelda II Overworld Grass Encounter."""
+    def sky(write_row):
+        # Z2 clouds ($60/$61/$62 top, $63/$6A/$6B bottom): short cloud left, long cloud right
+        write_row(0x2000 + 3 * 32 + 4, [0x60, 0x62])
+        write_row(0x2000 + 4 * 32 + 4, [0x63, 0x6B])
+        write_row(0x2000 + 2 * 32 + 23, [0x60, 0x61, 0x62])
+        write_row(0x2000 + 3 * 32 + 23, [0x63, 0x6A, 0x6B])
+        # Tall grass sprigs ($68 top, $69 bottom) on rows 16..17 above the bushes
+        write_row(0x2000 + 16 * 32 + 1, [0x68] * 8)
+        write_row(0x2000 + 17 * 32 + 1, [0x69] * 8)
+        write_row(0x2000 + 16 * 32 + 24, [0x68, 0x68])
+        write_row(0x2000 + 17 * 32 + 24, [0x69, 0x69])
+        write_row(0x2000 + 16 * 32 + 30, [0x68, 0x68])
+        write_row(0x2000 + 17 * 32 + 30, [0x69, 0x69])
+
+    attrs = [
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  # rows 0..3: sky & clouds (Pal 0)
+        0x00, 0x00, 0x00, 0xF0, 0xF0, 0xF0, 0x00, 0x00,  # rows 4..7: sky & popup
+        0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x00, 0x00,  # rows 8..11: sky & popup
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  # rows 12..15: sky
+        0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55,  # rows 16..19: sprigs & bushes (Pal 1)
+        0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5,  # rows 20..23: grass top (Pal 1), dirt bottom (Pal 2)
+        0xAA, 0xAA, 0xAA, 0xFA, 0xFA, 0xBA, 0xFA, 0xBA,  # rows 24..27: HUD
+        0x0A, 0x0A, 0x0A, 0x0A, 0x0A, 0x0A, 0x0A, 0x0A,  # rows 28..29: HUD bottom
+    ]
+    return _build_encounter_ppu_stream(sky, [0x64, 0x66] * 16, [0x65, 0x67] * 16, attrs)
+
+
+def build_desert_ppu_stream() -> bytes:
+    """Build PPU nametable stream ($2000) for Zelda II Desert Encounter."""
+    def sky(write_row):
+        # Z2 clouds ($60/$61/$62 top, $63/$6A/$6B bottom): long cloud left, short cloud right
+        write_row(0x2000 + 2 * 32 + 3, [0x60, 0x61, 0x62])
+        write_row(0x2000 + 3 * 32 + 3, [0x63, 0x6A, 0x6B])
+        write_row(0x2000 + 4 * 32 + 25, [0x60, 0x62])
+        write_row(0x2000 + 5 * 32 + 25, [0x63, 0x6B])
+        # Armed cactus at cols 4..5 (rows 16..19)
+        write_row(0x2000 + 16 * 32 + 4, [0x68])
+        write_row(0x2000 + 17 * 32 + 4, [0x69, 0x6C])
+        write_row(0x2000 + 18 * 32 + 4, [0x69, 0x6D])
+        write_row(0x2000 + 19 * 32 + 4, [0x69])
+        # Tall cactus at col 26 (rows 17..19)
+        for r, tid in ((17, 0x68), (18, 0x69), (19, 0x69)):
+            write_row(0x2000 + r * 32 + 26, [tid])
+
+    attrs = [
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  # rows 0..3: open desert sky & clouds (Pal 0)
+        0x00, 0x00, 0x00, 0xF0, 0xF0, 0xF0, 0x00, 0x00,  # rows 4..7: sky & popup
+        0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x00, 0x00,  # rows 8..11: sky & popup
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  # rows 12..15: sky
+        0x00, 0x11, 0x00, 0x00, 0x00, 0x00, 0x44, 0x00,  # rows 16..19: cacti (Pal 1) & sand bumps (Pal 0)
+        0xA0, 0xA0, 0xA0, 0xA0, 0xA0, 0xA0, 0xA0, 0xA0,  # rows 20..23: sand top (Pal 0), dirt bottom (Pal 2)
+        0xAA, 0xAA, 0xAA, 0xFA, 0xFA, 0xBA, 0xFA, 0xBA,  # rows 24..27: HUD
+        0x0A, 0x0A, 0x0A, 0x0A, 0x0A, 0x0A, 0x0A, 0x0A,  # rows 28..29: HUD bottom
+    ]
+    horizon_r19 = [0x24, 0x6F] * 16
+    horizon_r19[5] = 0x24   # keep Pal 1 cactus block free of Pal 0 sand bumps
+    horizon_r19[27] = 0x24
+    return _build_encounter_ppu_stream(
+        sky,
+        [0x64, 0x66] * 16,
+        [0x65, 0x67] * 16,
+        attrs,
+        horizon_r18=[0x24] * 32,
+        horizon_r19=horizon_r19,
+    )
 
 
 def assemble_fixed_pad() -> tuple[bytes, dict[str, int]]:
@@ -421,6 +510,7 @@ def assemble_bank1(art: dict, roar_info: dict, *, is_pal: bool = False) -> tuple
     a.emit(0x8D, VH_CUR_R0 & 0xFF, VH_CUR_R0 >> 8)
     a.emit(0x8D, VH_CUR_R1 & 0xFF, VH_CUR_R1 >> 8)
     a.emit(0x8D, VH_CUR_BG & 0xFF, VH_CUR_BG >> 8)
+    a.emit(0x8D, VH_SCENE_IDX & 0xFF, VH_SCENE_IDX >> 8)
     a.abs_ref(0x20, 'vh_init_cursor')
     a.emit(0xA9, 4); a.abs_ref(0x20, 'vh_set_bg')
     a.emit(0xA9, 12); a.abs_ref(0x20, 'vh_set_r0')
@@ -429,23 +519,99 @@ def assemble_bank1(art: dict, roar_info: dict, *, is_pal: bool = False) -> tuple
     a.lda_hi('title_ppu_stream'); a.emit(0xA8)               # LDY #>title_ppu_stream
     a.emit(0x4C, 0x17, 0xC6)                                 # JMP $C617
 
-    # Replaces $C839 (JSR $C5D9)
+    # Replaces $C839 (JSR $C5D9): reset encounter scene to 0xFF (Round 1 -> 0 = Forest in vh_on_round_start)
     a.label('vh_setup_game_ab_chr')
     a.abs_ref(0x20, 'vh_init_cursor')
+    a.emit(0xA9, 0xFF, 0x8D, VH_SCENE_IDX & 0xFF, VH_SCENE_IDX >> 8)
     a.emit(0xA9, 18); a.abs_ref(0x20, 'vh_set_bg')
     a.emit(0xA9, 8); a.abs_ref(0x20, 'vh_set_r0')
     a.emit(0xA9, 14); a.abs_ref(0x20, 'vh_set_r1')
     a.emit(0x4C, 0xD9, 0xC5)                                 # JMP $C5D9
 
-    # Replaces $C83C (LDX #$42; LDY #$E0; JSR $C617)
+    # Replaces $C83C (LDX #$42; LDY #$E0; JSR $C617): Round 1 Forest BG
     a.label('vh_load_forest_bg')
     a.lda_lo('forest_ppu_stream'); a.emit(0xAA)              # LDX #<forest_ppu_stream
     a.lda_hi('forest_ppu_stream'); a.emit(0xA8)              # LDY #>forest_ppu_stream
     a.emit(0x4C, 0x17, 0xC6)                                 # JMP $C617
 
+    # Replaces $C854 (JSR $D4D9; JSR $D2A4): runs once at start of every Game A/B round
+    a.label('vh_on_round_start')
+    a.emit(0xEE, VH_SCENE_IDX & 0xFF, VH_SCENE_IDX >> 8)     # INC VH_SCENE_IDX (0xFF -> 0 on Round 1)
+    a.emit(0xAD, VH_SCENE_IDX & 0xFF, VH_SCENE_IDX >> 8)
+    a.branch(0xF0, 'vh_rs_done')                             # Round 1 already loaded Forest at $C839/$C83C
+    a.emit(0xC9, 0x03)
+    a.branch(0x90, 'vh_rs_load')
+    a.emit(0xA9, 0x00, 0x8D, VH_SCENE_IDX & 0xFF, VH_SCENE_IDX >> 8)
+    a.label('vh_rs_load')
+    a.emit(0x20, 0xE1, 0xC5)                                 # JSR $C5E1 (PPU off)
+    a.emit(0xAE, VH_SCENE_IDX & 0xFF, VH_SCENE_IDX >> 8)
+    a.abs_ref(0xBD, 'tbl_scene_bg_bank')
+    a.abs_ref(0x20, 'vh_set_bg')
+    a.emit(0xAD, VH_SCENE_IDX & 0xFF, VH_SCENE_IDX >> 8)
+    a.emit(0x0A, 0xA8)                                       # ASL A; TAY = scene * 2
+    a.abs_ref(0xB9, 'tbl_scene_ppu_ptrs')
+    a.emit(0xAA)
+    a.abs_ref_off(0xB9, 'tbl_scene_ppu_ptrs', 1)
+    a.emit(0xA8)
+    a.emit(0x20, 0x17, 0xC6)                                 # JSR $C617 (write nametable + attrs)
+    a.emit(0xA9, 0x02, 0x85, 0x23)                           # LDA #$02; STA $23 (load scene palette)
+    a.emit(0x20, 0xC1, 0xC3)                                 # JSR $C3C1
+    a.emit(0x20, 0xEE, 0xC5)                                 # JSR $C5EE (PPU on)
+    a.label('vh_rs_done')
+    a.emit(0x20, 0xD9, 0xD4)                                 # JSR $D4D9
+    a.emit(0x4C, 0xA4, 0xD2)                                 # JMP $D2A4
+
+    # Replaces $C251 (LDA $E532,Y; LDX $E533,Y) to serve scene-specific Game A/B palettes
+    a.label('vh_get_pal_ptr')
+    a.emit(0xAD, VH_SCENE_IDX & 0xFF, VH_SCENE_IDX >> 8)
+    a.emit(0xC9, 0x03)
+    a.branch(0xB0, 'vh_pal_orig')                            # $FF on title/game_c -> orig
+    a.emit(0x0A, 0xAA)                                       # TAX = scene * 2
+    a.emit(0xC0, 0x02)
+    a.branch(0xF0, 'vh_pal_full')
+    a.emit(0xC0, 0x0A)
+    a.branch(0xF0, 'vh_pal_bg')
+    a.emit(0xC0, 0x0C)
+    a.branch(0xF0, 'vh_pal_restore')
+    a.label('vh_pal_orig')
+    a.emit(0xB9, 0x32, 0xE5, 0xBE, 0x33, 0xE5, 0x60)         # LDA $E532,Y; LDX $E533,Y; RTS
+    a.label('vh_pal_full')
+    a.emit(0x8A, 0xA8)                                       # TXA; TAY = scene * 2
+    a.abs_ref(0xB9, 'tbl_scene_pal_full')
+    a.abs_ref_off(0xBE, 'tbl_scene_pal_full', 1)
+    a.emit(0x60)
+    a.label('vh_pal_bg')
+    a.emit(0x8A, 0xA8)                                       # TXA; TAY = scene * 2
+    a.abs_ref(0xB9, 'tbl_scene_pal_bg')
+    a.abs_ref_off(0xBE, 'tbl_scene_pal_bg', 1)
+    a.emit(0x60)
+    a.label('vh_pal_restore')
+    a.emit(0x8A, 0xA8)                                       # TXA; TAY = scene * 2
+    a.abs_ref(0xB9, 'tbl_scene_pal_restore')
+    a.abs_ref_off(0xBE, 'tbl_scene_pal_restore', 1)
+    a.emit(0x60)
+
+    # Replaces $CF49 (LDA $E724,X; STA $0403,Y) so backdrop color 0 matches active scene sky
+    a.label('vh_copy_e724_pal')
+    a.emit(0x8A, 0x29, 0x03)                                 # TXA; AND #$03
+    a.branch(0xD0, 'vh_e724_orig')
+    a.emit(0xAD, VH_SCENE_IDX & 0xFF, VH_SCENE_IDX >> 8)
+    a.emit(0xC9, 0x03)
+    a.branch(0xB0, 'vh_e724_orig')
+    a.emit(0x8E, VH_TMP0 & 0xFF, VH_TMP0 >> 8)
+    a.emit(0xAA)                                             # TAX = scene index
+    a.abs_ref(0xBD, 'tbl_scene_sky')
+    a.emit(0xAE, VH_TMP0 & 0xFF, VH_TMP0 >> 8)
+    a.branch(0x10, 'vh_e724_store')
+    a.label('vh_e724_orig')
+    a.emit(0xBD, 0x24, 0xE7)                                 # LDA $E724,X
+    a.label('vh_e724_store')
+    a.emit(0x99, 0x03, 0x04, 0x60)                           # STA $0403,Y; RTS
+
     # Replaces $D54B (JSR $C5D9)
     a.label('vh_setup_game_c_chr')
     a.abs_ref(0x20, 'vh_init_cursor')
+    a.emit(0xA9, 0xFF, 0x8D, VH_SCENE_IDX & 0xFF, VH_SCENE_IDX >> 8)
     a.emit(0xA9, 0); a.abs_ref(0x20, 'vh_set_bg')
     a.emit(0xA9, 10); a.abs_ref(0x20, 'vh_set_r0')
     a.emit(0xA9, 14); a.abs_ref(0x20, 'vh_set_r1')
@@ -1097,9 +1263,14 @@ def assemble_bank1(art: dict, roar_info: dict, *, is_pal: bool = False) -> tuple
     a.emit(0xC9, 0xEF)
     a.branch(0xB0, 'b_skip_next')                            # offscreen Y
     a.emit(0xA6, 0xB4)
-    a.emit(0x9D, 0x00, 0x02)                                 # Y
+    a.emit(0x9D, 0x00, 0x02)                                 # Y (A still holds OAM Y)
+    a.emit(0xC9, 0x8F)                                       # >= 143 (scanline 144+, bush top)?
+    a.emit(0xA9, 0x01)                                       # Pal 1, in front of BG (preserves C)
+    a.branch(0x90, 'b_attr_ok')                              # above bushes -> always in front of trees
+    a.emit(0xAD, VH_TMP3 & 0xFF, VH_TMP3 >> 8)
+    a.label('b_attr_ok')
+    a.emit(0x9D, 0x02, 0x02)                                 # attr
     a.emit(0xAD, VH_TMP0 & 0xFF, VH_TMP0 >> 8, 0x9D, 0x01, 0x02)  # tile
-    a.emit(0xAD, VH_TMP3 & 0xFF, VH_TMP3 >> 8, 0x9D, 0x02, 0x02)  # attr
     a.emit(0xAD, VH_TMP1 & 0xFF, VH_TMP1 >> 8, 0x9D, 0x03, 0x02)  # X
     a.emit(0x8A, 0x18, 0x69, 0x04, 0x85, 0xB4)
     a.emit(0xC8)
@@ -1110,12 +1281,10 @@ def assemble_bank1(art: dict, roar_info: dict, *, is_pal: bool = False) -> tuple
     a.emit(0xC8)
     a.branch(0xD0, 'b_loop')
     a.label('b_done')
-    # Catch celebration ($14 = 1 hit, $15 = 2 hits): draw squished dead enemy ($EE/$EF) in Barba's mouth
+    # Catch celebration ($14 = 1 hit, $15 = 2 hits): draw Z2 XP bag ($EE/$EF) in Barba's mouth (keeps Pal 1)
     a.emit(0xA5, 0x35)
     a.emit(0xC9, 0x14)
     a.branch(0x90, 'vh_clear_oam')
-    a.emit(0xAD, VH_TMP3 & 0xFF, VH_TMP3 >> 8, 0x29, 0x20)
-    a.emit(0x8D, VH_TMP3 & 0xFF, VH_TMP3 >> 8)
     a.emit(0xAD, VH_TMP5 & 0xFF, VH_TMP5 >> 8, 0x18, 0x69, 20)
     a.emit(0x8D, VH_TMP1 & 0xFF, VH_TMP1 >> 8)
     a.abs_ref(0x20, 'vh_draw_dead_pair')
@@ -1136,31 +1305,29 @@ def assemble_bank1(art: dict, roar_info: dict, *, is_pal: bool = False) -> tuple
     a.label('vh_clr_done')
     a.emit(0x60)
 
-    # Emit 8x16 squished dead enemy ($EE top, $EF bottom) at (VH_TMP1, VH_TMP4 + 4 / +12)
+    # Emit 8x16 Z2 XP bag ($EE top, $EF bottom) at (VH_TMP1, VH_TMP4 + 4 / +12)
     a.label('vh_draw_dead_pair')
+    a.emit(0xAD, VH_TMP4 & 0xFF, VH_TMP4 >> 8, 0x18, 0x69, 4)
+    a.emit(0xA0, 0xEE)
+    a.abs_ref(0x20, 'vh_emit_bag_tile')
+    a.emit(0xAD, VH_TMP4 & 0xFF, VH_TMP4 >> 8, 0x18, 0x69, 12)
+    a.emit(0xA0, 0xEF)
+    a.label('vh_emit_bag_tile')
+    a.emit(0xC9, 0xEF)
+    a.branch(0xB0, 'dead_rts')
     a.emit(0xA6, 0xB4)
     a.branch(0xF0, 'dead_rts')
     a.emit(0xE4, 0x37)
     a.branch(0xB0, 'dead_rts')
-    a.emit(0xAD, VH_TMP4 & 0xFF, VH_TMP4 >> 8, 0x18, 0x69, 4)
-    a.emit(0xC9, 0xEF)
-    a.branch(0xB0, 'dead_rts')
-    a.emit(0x9D, 0x00, 0x02)
-    a.emit(0xA9, 0xEE, 0x9D, 0x01, 0x02)
-    a.emit(0xAD, VH_TMP3 & 0xFF, VH_TMP3 >> 8, 0x9D, 0x02, 0x02)
-    a.emit(0xAD, VH_TMP1 & 0xFF, VH_TMP1 >> 8, 0x9D, 0x03, 0x02)
-    a.emit(0x8A, 0x18, 0x69, 0x04, 0x85, 0xB4)
-    a.emit(0xAA)
-    a.branch(0xF0, 'dead_rts')
-    a.emit(0xE4, 0x37)
-    a.branch(0xB0, 'dead_rts')
-    a.emit(0xAD, VH_TMP4 & 0xFF, VH_TMP4 >> 8, 0x18, 0x69, 12)
-    a.emit(0xC9, 0xEF)
-    a.branch(0xB0, 'dead_rts')
-    a.emit(0x9D, 0x00, 0x02)
-    a.emit(0xA9, 0xEF, 0x9D, 0x01, 0x02)
-    a.emit(0xAD, VH_TMP3 & 0xFF, VH_TMP3 >> 8, 0x9D, 0x02, 0x02)
-    a.emit(0xAD, VH_TMP1 & 0xFF, VH_TMP1 >> 8, 0x9D, 0x03, 0x02)
+    a.emit(0x9D, 0x00, 0x02)                                 # Y (A still holds OAM Y)
+    a.emit(0xC9, 0x8F)                                       # >= 143 (scanline 144+, bush top)?
+    a.emit(0xA9, 0x01)                                       # Pal 1, in front of BG (preserves C)
+    a.branch(0x90, 'dead_attr_ok')                           # above bushes -> always in front of trees
+    a.emit(0xAD, VH_TMP3 & 0xFF, VH_TMP3 >> 8)
+    a.label('dead_attr_ok')
+    a.emit(0x9D, 0x02, 0x02)                                 # attr
+    a.emit(0x98, 0x9D, 0x01, 0x02)                           # tile
+    a.emit(0xAD, VH_TMP1 & 0xFF, VH_TMP1 >> 8, 0x9D, 0x03, 0x02)  # X
     a.emit(0x8A, 0x18, 0x69, 0x04, 0x85, 0xB4)
     a.label('dead_rts')
     a.emit(0x60)
@@ -1227,6 +1394,56 @@ def assemble_bank1(art: dict, roar_info: dict, *, is_pal: bool = False) -> tuple
 
     a.label('forest_ppu_stream')
     a.emit(*build_forest_ppu_stream())
+
+    a.label('grass_ppu_stream')
+    a.emit(*build_grass_ppu_stream())
+
+    a.label('desert_ppu_stream')
+    a.emit(*build_desert_ppu_stream())
+
+    # Encounter scene tables (0=Forest, 1=Overworld Grass, 2=Desert)
+    a.label('tbl_scene_bg_bank')
+    a.emit(18, 32, 36)
+
+    a.label('tbl_scene_sky')
+    a.emit(0x0F, 0x21, 0x22)
+
+    a.label('tbl_scene_ppu_ptrs')
+    a.word_ref('forest_ppu_stream')
+    a.word_ref('grass_ppu_stream')
+    a.word_ref('desert_ppu_stream')
+
+    a.label('tbl_scene_pal_full')
+    a.word_ref('pal_full_forest')
+    a.word_ref('pal_full_grass')
+    a.word_ref('pal_full_desert')
+
+    a.label('tbl_scene_pal_bg')
+    a.word_ref('pal_bg_forest')
+    a.word_ref('pal_bg_grass')
+    a.word_ref('pal_bg_desert')
+
+    a.label('tbl_scene_pal_restore')
+    a.word_ref('pal_res_forest')
+    a.word_ref('pal_res_grass')
+    a.word_ref('pal_res_desert')
+
+    from duck_art import SPRITE_PAL_BYTES
+    scene_pals = [
+        ('forest', 0x0F, bytes.fromhex('0f 17 07 08 0f 29 19 09 0f 0f 29 18 0f 0f 30 16')),
+        ('grass',  0x21, bytes.fromhex('21 30 10 00 21 29 19 09 21 0f 29 18 21 0f 30 16')),
+        ('desert', 0x22, bytes.fromhex('22 30 36 27 22 29 17 09 22 0f 29 18 22 0f 30 16')),
+    ]
+    for sname, sky, bg_pal in scene_pals:
+        spr_pal = bytearray(SPRITE_PAL_BYTES)
+        for i in (0, 4, 8, 12):
+            spr_pal[i] = sky
+        a.label(f'pal_full_{sname}')
+        a.emit(0x3F, 0x00, 0x20, *bg_pal, *spr_pal, 0x00)
+        a.label(f'pal_bg_{sname}')
+        a.emit(0x3F, 0x00, 0x10, *bg_pal, 0x00)
+        a.label(f'pal_res_{sname}')
+        a.emit(0x3F, 0x10, 0x10, *spr_pal, 0x3F, 0x00, 0x10, *bg_pal, 0x00)
 
     code = a.finish()
     assert len(code) <= 8192, f'Bank 1 overflow: {len(code)} > 8192'

@@ -533,7 +533,11 @@ NativeReturn0:
 ; (bank 0 or 1 by $8506 fingerprint, otherwise the area bank in $0769)
 ; and the interrupted MMC3 bank-select register ($64D5 -> $8000).
 LagNmiInBank6:
+.ifdef SOULS_BOSS_METER
+    jsr LagSoulsBg6
+.else
     jsr $9000
+.endif
     pla
     ldx #$00
     cmp #$F0

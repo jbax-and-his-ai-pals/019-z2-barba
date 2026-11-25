@@ -38,6 +38,7 @@ DK_FB1_Y          = 0x7FE7
 DK_FB1_VX         = 0x7FE8
 DK_FB1_VY         = 0x7FE9
 DK_FB_COOLDOWN    = 0x7FEA  # Frames until next fireball shot
+DK_SPRING_TIMER   = 0x7FEB  # Stage 2 (75m) Z2 Shield spawn timer (separate from bomb $36)
 DK_ROAR_TIMER     = 0x7FF8  # Countdown frames for active roar.dmc playback
 DK_ANIM_FRAME     = 0x7FF9  # Global NMI animation frame counter
 DK_CHR_BANK_R0    = 0x7FFA  # Shadow of current MMC3 R0 bank (Lil' Barba)
@@ -381,7 +382,8 @@ def _make_zelda_poses(z2_bytes: bytes, variant: int = 0) -> tuple[list[str], lis
     wave[8] = '00000' + wave[8][5:]
     wave[9] = '00000' + wave[9][5:]
 
-    return top, stand, wave
+    # Mirror Princess Zelda horizontally so she faces right (away from Big Bad Link)
+    return _flip_h(top), _flip_h(stand), _flip_h(wave)
 
 
 def _make_hazard_sprites(z2_bytes: bytes, variant: int) -> dict[str, list[str]]:
@@ -389,40 +391,168 @@ def _make_hazard_sprites(z2_bytes: bytes, variant: int) -> dict[str, list[str]]:
     # Extract Z2 bank-2 P-Bag / Magic Jar silhouette reference for build-time validation
     assert z2_bytes[:4] == b'NES\x1a', 'Invalid z2.nes'
 
-    # Z2 Bombs (shimmering fuse spark & highlight across 4 R1 CHR banks)
-    spark_rows = [
-        ('0000000020300000', '0000000002000000'),
-        ('0000000232000000', '0000000033000000'),
-        ('0000000030200000', '0000000003100000'),
-        ('0000000022300000', '0000000023000000'),
-    ][variant % 4]
-    hi_edge = '2' if variant % 2 == 0 else '3'
-    hi_core = '3' if variant % 2 == 0 else '2'
+    # Classic Zelda Blue Bombs ("B3 Star"): collared neck, fixed upper-left specular
+    # highlight, orbiting star glint, and 4-bank R1 crackling fuse spark.
+    v = variant % 4
+
+    def _spark_patch(rows: list[str], coords: list[tuple[int, int, str]]) -> list[str]:
+        grid = [list(r) for r in rows]
+        for x, y, ch in coords:
+            grid[y][x] = ch
+        return ["".join(r) for r in grid]
+
+    # Top-right spark (used on rolling frame 0)
+    tr_sparks = [
+        [(10, 0, '2'), (11, 0, '3'), (9, 1, '2'), (10, 1, '3'), (11, 1, '2'), (12, 1, '3'), (11, 2, '3')],
+        [(10, 0, '3'), (11, 0, '2'), (9, 1, '3'), (10, 1, '2'), (11, 1, '3'), (12, 1, '2'), (11, 2, '2')],
+        [(9, 0, '2'), (11, 0, '3'), (10, 1, '3'), (11, 1, '2'), (12, 1, '0'), (13, 1, '3'), (11, 2, '3')],
+        [(10, 0, '3'), (12, 0, '2'), (9, 1, '2'), (10, 1, '3'), (11, 1, '2'), (12, 1, '0'), (11, 2, '2')],
+    ][v]
+    # Bottom-right spark (used on rolling frame 1)
+    br_sparks = [
+        [(15, 11, '3'), (12, 12, '2'), (13, 12, '3'), (14, 12, '2'), (15, 12, '3'), (13, 13, '2'), (14, 13, '3')],
+        [(15, 11, '2'), (12, 12, '3'), (13, 12, '2'), (14, 12, '3'), (15, 12, '2'), (13, 13, '3'), (14, 13, '2')],
+        [(14, 11, '3'), (12, 12, '3'), (13, 12, '2'), (14, 12, '0'), (15, 12, '3'), (13, 13, '3'), (15, 13, '2')],
+        [(15, 11, '2'), (12, 12, '2'), (13, 12, '3'), (14, 12, '2'), (15, 12, '0'), (13, 13, '2'), (14, 13, '3')],
+    ][v]
+    # Bottom-left spark (used on rolling frame 2)
+    bl_sparks = [
+        [(4, 13, '3'), (3, 14, '2'), (4, 14, '3'), (5, 14, '2'), (6, 14, '3'), (4, 15, '3'), (5, 15, '2')],
+        [(4, 13, '2'), (3, 14, '3'), (4, 14, '2'), (5, 14, '3'), (6, 14, '2'), (4, 15, '2'), (5, 15, '3')],
+        [(3, 13, '3'), (2, 14, '3'), (4, 14, '3'), (5, 14, '2'), (6, 14, '0'), (4, 15, '2'), (5, 15, '3')],
+        [(4, 13, '2'), (3, 14, '2'), (4, 14, '3'), (5, 14, '2'), (6, 14, '0'), (3, 15, '3'), (5, 15, '2')],
+    ][v]
+    # Top-left spark (used on rolling frame 3)
+    tl_sparks = [
+        [(3, 0, '2'), (4, 0, '3'), (2, 1, '2'), (3, 1, '3'), (4, 1, '2'), (5, 1, '3'), (3, 2, '3')],
+        [(3, 0, '3'), (4, 0, '2'), (2, 1, '3'), (3, 1, '2'), (4, 1, '3'), (5, 1, '2'), (3, 2, '2')],
+        [(2, 0, '2'), (4, 0, '3'), (2, 1, '0'), (3, 1, '3'), (4, 1, '2'), (5, 1, '3'), (3, 2, '3')],
+        [(3, 0, '3'), (5, 0, '2'), (2, 1, '3'), (3, 1, '2'), (4, 1, '3'), (5, 1, '0'), (3, 2, '2')],
+    ][v]
+
+    rb0 = _spark_patch([
+        '0000000000000000',
+        '0000000000000000',
+        '0000000022000000',
+        '0000011122200000',
+        '0001111112210000',
+        '0011332111111100',
+        '0013321112111100',
+        '0113211123211110',
+        '0112111112111110',
+        '0111111111111110',
+        '0111111111111110',
+        '0011111111111100',
+        '0011111111111100',
+        '0001111111111000',
+        '0000011111100000',
+        '0000000000000000',
+    ], tr_sparks)
+    rb1 = _spark_patch([
+        '0000000000000000',
+        '0000011111100000',
+        '0001111111111000',
+        '0011332111111100',
+        '0013321111111100',
+        '0113211111111110',
+        '0112111111111110',
+        '0111111112111220',
+        '0111111123211220',
+        '0111111112111220',
+        '0011111111112200',
+        '0011111111112200',
+        '0001111111100000',
+        '0000011111000000',
+        '0000000000000000',
+        '0000000000000000',
+    ], br_sparks)
+    rb2 = _spark_patch([
+        '0000000000000000',
+        '0000011111100000',
+        '0001111111111000',
+        '0011332111111100',
+        '0013321111111100',
+        '0113211111111110',
+        '0112111111111110',
+        '0111111211111110',
+        '0111112321111110',
+        '0111111211111110',
+        '0011111111111100',
+        '0011222111111100',
+        '0001122211111000',
+        '0000002211100000',
+        '0000000000000000',
+        '0000000000000000',
+    ], bl_sparks)
+    rb3 = _spark_patch([
+        '0000000000000000',
+        '0000000000000000',
+        '0000002200000000',
+        '0000222111100000',
+        '0001221111111000',
+        '0011111111111100',
+        '0011211111111100',
+        '0112321111111110',
+        '0111211111111110',
+        '0111111111111110',
+        '0111111111111110',
+        '0011111111111100',
+        '0011111111111100',
+        '0001111111111000',
+        '0000011111100000',
+        '0000000000000000',
+    ], tl_sparks)
+    rolling_bombs = [rb0, rb1, rb2, rb3]
+
+    # Falling Z2 Bombs ($90..$97): upright wobble frames with left/right whipping fuse
+    fall_sparks_l = [
+        ('0000003230000000', '0000000320000000'),
+        ('0000002320000000', '0000000230000000'),
+        ('0000032030000000', '0000000320000000'),
+        ('0000003203000000', '0000000230000000'),
+    ][v]
+    fall_sparks_r = [
+        ('0000000323000000', '0000000230000000'),
+        ('0000000232000000', '0000000320000000'),
+        ('0000000302300000', '0000000230000000'),
+        ('0000003023000000', '0000000320000000'),
+    ][v]
     bomb0 = [
-        spark_rows[0],
-        spark_rows[1],
-        '0000000113100000',
-        '0000011111111000',
-        f'0000113{hi_edge}21111100',
-        f'0001132{hi_core}21111110',
-        f'000113{hi_edge}111111110',
-        '0011111111111111',
-        '0011111111111111',
-        '0011111111111111',
-        '0001111111111110',
-        '0001111111111110',
-        '0000111111111100',
-        '0000011111111000',
-        '0000000111100000',
+        fall_sparks_l[0],
+        fall_sparks_l[1],
+        '0000002200000000',
+        '0000022222000000',
+        '0000112221100000',
+        '0001133211110000',
+        '0011332111111000',
+        '0011321121111000',
+        '0011111232111000',
+        '0011111121111000',
+        '0011111111111000',
+        '0011111111111000',
+        '0001111111110000',
+        '0000111111100000',
+        '0000011111000000',
         '0000000000000000',
     ]
-    bomb1 = _flip_h(bomb0)
-
-    # Rolling Z2 Bombs ($80..$8F): 4x 90-degree tumbling frames with R1 shimmer
-    rolling_bombs = [bomb0]
-    for _ in range(3):
-        prev = rolling_bombs[-1]
-        rolling_bombs.append([''.join(prev[15 - x][y] for x in range(16)) for y in range(16)])
+    bomb1 = [
+        fall_sparks_r[0],
+        fall_sparks_r[1],
+        '0000000022000000',
+        '0000002222200000',
+        '0000011222110000',
+        '0000113321111000',
+        '0001133211111100',
+        '0001132111211100',
+        '0001111112321100',
+        '0001111111211100',
+        '0001111111111100',
+        '0001111111111100',
+        '0000111111111000',
+        '0000011111110000',
+        '0000001111100000',
+        '0000000000000000',
+    ]
 
     # Z2 Bits (25m / 75m oil-drum spawns, 2 hopping squish frames)
     bit0 = [
@@ -871,27 +1001,16 @@ def build_barba_kong_chr(dk_chr: bytes, z2_bytes: bytes) -> tuple[bytes, dict[st
     ]
     pbag_16x16 = ['0000' + row + '0000' for row in pbag_8x16]
 
-    dragon_block = [
-        '33333332',
-        '32222221',
-        '32111221',
-        '32131221',
-        '32222221',
-        '32221221',
-        '21111111',
-        '11111110',
-    ]
-
-    # Build 24x32 (3 cols x 4 rows = $50-$5B) stack of 4 Z2 Fire-Bombs at top-left
+    # Build 24x32 (3 cols x 4 rows = $50-$5B) stack of 4 Zelda Blue Bombs at top-left
     single_bomb_12x16 = [
-        '000003200000',
-        '000000300000',
-        '000111311000',
+        '000002300000',
+        '000000200000',
+        '000122221000',
         '001132111100',
-        '011322111110',
         '011321111110',
-        '111111111111',
-        '111111111111',
+        '011211121110',
+        '111111232111',
+        '111111121111',
         '111111111111',
         '011111111110',
         '011111111110',
@@ -921,8 +1040,6 @@ def build_barba_kong_chr(dk_chr: bytes, z2_bytes: bytes) -> tuple[bytes, dict[st
                 tid = 0x50 + col * 4 + row
                 sub = [sb_grid[row * 8 + y][col * 8 : (col + 1) * 8] for y in range(8)]
                 write_tile(bank1k, tid - 0x40, encode_tile(sub))
-        # $64: Dragon-scaled title block (keeps $62 intact as authentic 100m/75m steel girder!)
-        write_tile(bank1k, 0x64 - 0x40, encode_tile(dragon_block))
         # $6E-$6F: Z2 Magic Jar (8x16)
         write_tile(bank1k, 0x6E - 0x40, encode_tile(jar_top))
         write_tile(bank1k, 0x6F - 0x40, encode_tile(jar_bot))
@@ -1009,15 +1126,15 @@ def _encode_dk_text(s: str) -> bytes:
 def _make_barba_kong_title_packet() -> bytes:
     """Build custom 'BARBA KONG' title screen PPU packet."""
     # Palettes:
-    # BG0: crimson/gold/white block letters ($0F, $16, $27, $30)
-    # BG1: golden menu options ($0F, $27, $37, $16)
-    # BG2: white/gold footer ($0F, $30, $27, $16)
+    # BG0: vanilla DK blue girders ($0F, $2C, $38, $12)
+    # BG1: vanilla DK gold menu options ($0F, $27, $27, $27)
+    # BG2: vanilla DK white footer ($0F, $30, $30, $30)
     # BG3: $0F, $00, $04, $2C
     # SPR0: Lil' Barba fireball cursor ($0F, $16, $27, $30)
     pal = bytes.fromhex(
-        '0f 16 27 30 '
-        '0f 27 37 16 '
-        '0f 30 27 16 '
+        '0f 2c 38 12 '
+        '0f 27 27 27 '
+        '0f 30 30 30 '
         '0f 00 04 2c '
         '0f 16 27 30 '
         '0f 25 36 27 '
@@ -1030,14 +1147,15 @@ def _make_barba_kong_title_packet() -> bytes:
         (0x23F0, False, True, bytes([0xAA]) * 8),
     ]
 
+    # Girder letterforms matching vanilla DK's KONG proportions (K, O, N, G)
     glyphs = {
         'B': ['###.', '#..#', '###.', '#..#', '###.'],
         'A': ['.##.', '#..#', '####', '#..#', '#..#'],
         'R': ['###.', '#..#', '###.', '#.#.', '#..#'],
-        'K': ['#..#', '#.#.', '##..', '#.#.', '#..#'],
-        'O': ['.##.', '#..#', '#..#', '#..#', '.##.'],
+        'K': ['#..#', '###.', '##..', '#.#.', '#..#'],
+        'O': ['###', '#.#', '#.#', '#.#', '###'],
         'N': ['#..#', '##.#', '#.##', '#..#', '#..#'],
-        'G': ['.###', '#...', '#.##', '#..#', '.###'],
+        'G': ['####', '#...', '#.##', '#..#', '####'],
     }
 
     def add_word(word: str, start_row: int, start_col: int) -> None:
@@ -1045,7 +1163,7 @@ def _make_barba_kong_title_packet() -> bytes:
             row_tiles: list[int] = []
             for idx_ch, ch in enumerate(word):
                 for cell in glyphs[ch][r]:
-                    row_tiles.append(0x64 if cell == '#' else 0x24)
+                    row_tiles.append(0x62 if cell == '#' else 0x24)
                 if idx_ch + 1 < len(word):
                     row_tiles.append(0x24)
             ppu_addr = 0x2000 + (start_row + r) * 32 + start_col
@@ -1064,6 +1182,10 @@ def _make_barba_kong_title_packet() -> bytes:
         ppu_addr = 0x2209 + idx * 0x40
         packets.append((ppu_addr, False, False, _encode_dk_text(label)))
 
+    # Vanilla Donkey Kong copyright footer
+    packets.append((0x2305, False, False, bytes.fromhex('d301090801241712171d0e170d18240c1865151d0d64')))
+    packets.append((0x234B, False, False, bytes.fromhex('160a0d0e24121724130a190a17')))
+
     return _encode_ppu_packets(packets)
 
 
@@ -1076,12 +1198,12 @@ def _upgrade_stage_ppu_packet(orig_prg: bytes, addr: int, stage: str) -> bytes:
     palettes = {
         '25m': bytes.fromhex(
             '0f 15 2c 12 '  # BG0: pink girders, cyan ladders
-            '0f 16 27 30 '  # BG1: stacked Z2 Fire-Bombs (crimson/gold/white)
+            '0f 12 21 30 '  # BG1: stacked Zelda Blue Bombs (cobalt/sky-blue/white)
             '0f 2a 36 17 '  # BG2: Big Bad Link (green tunic, peach skin, brown hair/boots)
             '0f 30 36 06 '  # BG3: HUD text
             '0f 16 27 30 '  # SPR0: Lil' Barba
             '0f 25 36 27 '  # SPR1: Princess Zelda
-            '0f 16 30 37 '  # SPR2: Barba Fireballs / Z2 Bombs / Z2 Bits
+            '0f 12 21 30 '  # SPR2: Zelda Blue Bombs / Z2 Bits
             '0f 16 27 30'   # SPR3: Flame Fury
         ),
         '75m': bytes.fromhex(
@@ -1205,24 +1327,31 @@ def _assemble_bank1(
     a.label('fb_spawn_slot')
     a.emit(0xA9, 0x09, 0x8D, DK_FB_COOLDOWN & 0xFF, DK_FB_COOLDOWN >> 8)
     a.emit(0xA9, 0x1A, 0x9D, DK_FB0_TIMER & 0xFF, DK_FB0_TIMER >> 8)
-    a.emit(0xAD, 0x00, 0x02, 0x18, 0x69, 0x02)               # Y = BarbaY + 2
+    a.emit(0xA5, 0x18)                                       # LDA $18 (DK RNG)
+    a.emit(0x4D, DK_ANIM_FRAME & 0xFF, DK_ANIM_FRAME >> 8)   # EOR DK_ANIM_FRAME
+    a.emit(0x29, 0x0F, 0xA8)                                 # TAY (0..15 across 180-deg forward cone)
+    a.abs_ref(0xB9, 'fb_dy_tbl')
+    a.emit(0x18, 0x6D, 0x00, 0x02)                           # ADC BarbaY (head-to-feet body emit)
     a.emit(0x9D, DK_FB0_Y & 0xFF, DK_FB0_Y >> 8)
     a.emit(0xA5, 0x57, 0xC9, 0x01)
     a.branch(0xF0, 'fb_face_right')
-    a.emit(0xAD, 0x03, 0x02, 0x38, 0xE9, 0x02)               # X = BarbaX - 2
+    a.emit(0xAD, 0x03, 0x02, 0x18, 0x69, 0x04)               # center X = BarbaX + 4
+    a.emit(0x38)
+    a.abs_ref(0xF9, 'fb_dx_tbl')                             # SBC fb_dx_tbl,Y (project left)
     a.branch(0x90, 'fb_store_x')
     a.branch(0xB0, 'fb_store_x')
     a.label('fb_face_right')
-    a.emit(0xAD, 0x03, 0x02, 0x18, 0x69, 0x0A)               # X = BarbaX + 10
+    a.emit(0xAD, 0x03, 0x02, 0x18, 0x69, 0x04)               # center X = BarbaX + 4
+    a.emit(0x18)
+    a.abs_ref(0x79, 'fb_dx_tbl')                             # ADC fb_dx_tbl,Y (project right)
     a.label('fb_store_x')
     a.emit(0x9D, DK_FB0_X & 0xFF, DK_FB0_X >> 8)
-    a.emit(0xA5, 0x18, 0x29, 0x07, 0xA8)                     # Y = RNG & 7
     a.abs_ref(0xB9, 'fb_vy_tbl')
     a.emit(0x9D, DK_FB0_VY & 0xFF, DK_FB0_VY >> 8)
     a.abs_ref(0xB9, 'fb_vx_tbl')
     a.emit(0xA4, 0x57, 0xC0, 0x01)
     a.branch(0xF0, 'fb_store_vx')
-    a.emit(0x49, 0xFF, 0x18, 0x69, 0x01)                     # negate vx when facing left
+    a.emit(0x49, 0xFF, 0x18, 0x69, 0x01)                     # negate vx when facing left (0 stays 0)
     a.label('fb_store_vx')
     a.emit(0x9D, DK_FB0_VX & 0xFF, DK_FB0_VX >> 8)
 
@@ -1273,10 +1402,15 @@ def _assemble_bank1(
     a.emit(0xA9, 0x00, 0x99, DK_FB0_TIMER & 0xFF, DK_FB0_TIMER >> 8)
     a.emit(0xA9, 0xFF, 0x9D, 0x00, 0x02, 0x60)
 
+    # 16-entry 180-deg forward cone (-90 deg straight up through 0 deg forward to +90 deg straight down)
     a.label('fb_vx_tbl')
-    a.emit(0x01, 0x02, 0x02, 0x03, 0x03, 0x03, 0x03, 0x02)
+    a.emit(0x00, 0x01, 0x01, 0x02, 0x03, 0x02, 0x03, 0x03, 0x03, 0x03, 0x02, 0x03, 0x02, 0x01, 0x01, 0x00)
     a.label('fb_vy_tbl')
-    a.emit(0xFD, 0xFD, 0xFE, 0xFE, 0xFF, 0x00, 0x01, 0x01)
+    a.emit(0xFD, 0xFD, 0xFE, 0xFE, 0xFE, 0xFF, 0xFF, 0x00, 0x00, 0x01, 0x01, 0x02, 0x02, 0x02, 0x03, 0x03)
+    a.label('fb_dx_tbl')
+    a.emit(0x00, 0x02, 0x03, 0x04, 0x05, 0x05, 0x06, 0x06, 0x06, 0x06, 0x05, 0x05, 0x04, 0x03, 0x02, 0x00)
+    a.label('fb_dy_tbl')
+    a.emit(0xFE, 0xFF, 0x00, 0x01, 0x02, 0x03, 0x04, 0x04, 0x05, 0x06, 0x07, 0x08, 0x08, 0x09, 0x09, 0x0A)
 
     # BarbaKongFireballHit ($ECBF): test active fireballs against DK enemies/barrels
     a.label('BarbaKongFireballHit')
@@ -1286,7 +1420,7 @@ def _assemble_bank1(
     a.branch(0xF0, 'fb_hit_check1')
     a.emit(0xAD, DK_FB0_X & 0xFF, DK_FB0_X >> 8, 0x85, 0x00)
     a.emit(0xAD, DK_FB0_Y & 0xFF, DK_FB0_Y >> 8, 0x85, 0x01)
-    a.emit(0x20, 0x07, 0xED)                                 # JSR $ED07
+    a.abs_ref(0x20, 'fb_hit_test')
     a.emit(0xA5, 0xBF)
     a.branch(0xF0, 'fb_hit_check1')
     a.emit(0xA9, 0x00, 0x8D, DK_FB0_TIMER & 0xFF, DK_FB0_TIMER >> 8, 0x60)
@@ -1296,13 +1430,130 @@ def _assemble_bank1(
     a.branch(0xF0, 'fb_hit_none')
     a.emit(0xAD, DK_FB1_X & 0xFF, DK_FB1_X >> 8, 0x85, 0x00)
     a.emit(0xAD, DK_FB1_Y & 0xFF, DK_FB1_Y >> 8, 0x85, 0x01)
-    a.emit(0x20, 0x07, 0xED)                                 # JSR $ED07
+    a.abs_ref(0x20, 'fb_hit_test')
     a.emit(0xA5, 0xBF)
     a.branch(0xF0, 'fb_hit_none')
     a.emit(0xA9, 0x00, 0x8D, DK_FB1_TIMER & 0xFF, DK_FB1_TIMER >> 8, 0x60)
 
     a.label('fb_hit_none')
     a.emit(0x4C, 0x87, 0xED)                                 # JMP $ED87 (no hit)
+
+    # fb_hit_test: call vanilla $ED07; on Stage 2 ($53==3) also check bombs in slots 6..8 ($90..$B0)
+    a.label('fb_hit_test')
+    a.emit(0x20, 0x07, 0xED)                                 # JSR $ED07
+    a.emit(0xA5, 0xBF)
+    a.branch(0xD0, 'fb_test_done')
+    a.emit(0xA5, 0x53, 0xC9, 0x03)
+    a.branch(0xD0, 'fb_test_done')
+    a.emit(0xA9, 0x06, 0x85, 0x5D)                           # LDA #$06; STA $5D
+    a.label('fb_s2_loop')
+    a.emit(0x20, 0xD5, 0xEF, 0x86, 0x04)                     # JSR $EFD5; STX $04
+    a.emit(0x20, 0xEC, 0xEA)                                 # JSR $EAEC
+    a.emit(0xA9, 0x3A, 0x20, 0x47, 0xC8)                     # LDA #$3A; JSR $C847
+    a.emit(0x20, 0xEF, 0xEF)                                 # JSR $EFEF
+    a.branch(0xD0, 'fb_s2_hit')
+    a.emit(0xE6, 0x5D, 0xA5, 0x5D, 0xC9, 0x09)
+    a.branch(0xD0, 'fb_s2_loop')
+    a.label('fb_test_done')
+    a.emit(0x60)
+    a.label('fb_s2_hit')
+    a.emit(0x20, 0xD1, 0xEA, 0x20, 0x94, 0xF0)               # JSR $EAD1; JSR $F094
+    a.emit(0xA6, 0x5D, 0xA9, 0x00, 0x95, 0x5E)               # LDX $5D; LDA #0; STA $5E,X
+    a.emit(0xA9, 0x01, 0x85, 0xBF, 0x60)                     # LDA #1; STA $BF; RTS
+
+    # BarbaKongSpringSpawn ($EA34): Stage 2 Z2 Shield spawner using DK_SPRING_TIMER
+    a.label('BarbaKongSpringSpawn')
+    a.emit(0xAD, DK_SPRING_TIMER & 0xFF, DK_SPRING_TIMER >> 8)
+    a.branch(0xD0, 'spring_spawn_done')
+    a.emit(0xA5, 0x19, 0x29, 0x03, 0xAA)                     # LDA $19; AND #$03; TAX
+    a.emit(0xBD, 0xFF, 0xC1, 0x18, 0x69, 0x10)               # LDA $C1FF,X; CLC; ADC #$10
+    a.emit(0xAE, 0x45, 0x04, 0x9D, 0x46, 0x04)               # LDX $0445; STA $0446,X
+    a.emit(0x85, 0x00, 0xA9, 0x30, 0x85, 0x01)               # STA $00; LDA #$30; STA $01
+    a.emit(0xA9, 0xC4, 0x85, 0x02)                           # LDA #$C4; STA $02
+    a.emit(0x20, 0xDB, 0xEA, 0x20, 0xF7, 0xEA)               # JSR $EADB; JSR $EAF7
+    a.emit(0xBD, 0x57, 0xC4)                                 # LDA $C457,X
+    a.emit(0x8D, DK_SPRING_TIMER & 0xFF, DK_SPRING_TIMER >> 8)
+    a.label('spring_spawn_done')
+    a.emit(0x60)
+
+    # BarbaKongStage2Hook ($CF07): run vanilla collision ($EC29), tick spring timer, & run Link's bombs
+    a.label('BarbaKongStage2Hook')
+    a.emit(0x20, 0x29, 0xEC)                                 # JSR $EC29
+    a.emit(0xAD, DK_SPRING_TIMER & 0xFF, DK_SPRING_TIMER >> 8)
+    a.branch(0xF0, 's2_bombs_start')
+    a.emit(0xCE, DK_SPRING_TIMER & 0xFF, DK_SPRING_TIMER >> 8)
+    a.label('s2_bombs_start')
+    a.emit(0xA9, 0x06, 0x85, 0x5D)                           # LDA #$06; STA $5D (OAM $90, $A0, $B0)
+    a.label('s2_bomb_loop')
+    a.emit(0x20, 0xD5, 0xEF)                                 # JSR $EFD5
+    a.emit(0xBD, 0x00, 0x02, 0xC9, 0xFF)                     # LDA $0200,X; CMP #$FF
+    a.branch(0xD0, 's2_bomb_active')
+    a.emit(0xA5, 0x36)                                       # LDA $36
+    a.branch(0xD0, 's2_bomb_next')
+    a.emit(0xA9, 0x80, 0xA6, 0x5D, 0x95, 0x5E)               # LDA #$80; LDX $5D; STA $5E,X
+    a.emit(0xA9, 0x10, 0x85, 0x37)                           # LDA #$10; STA $37
+    a.emit(0x20, 0xF7, 0xEA, 0xBD, 0x43, 0xC4, 0x85, 0x36)   # JSR $EAF7; LDA $C443,X; STA $36
+    a.abs_ref(0x4C, 's2_bomb_active')                        # Draw initial grab frame immediately
+    a.label('s2_bomb_next')
+    a.emit(0xE6, 0x5D, 0xA5, 0x5D, 0xC9, 0x09)               # INC $5D; LDA $5D; CMP #$09
+    a.branch(0xD0, 's2_bomb_loop')
+    # Check player collision against Stage 2 bombs ($90, $A0, $B0)
+    a.emit(0xA9, 0x06, 0x85, 0x5D)
+    a.label('s2_col_loop')
+    a.emit(0x20, 0xD5, 0xEF, 0x20, 0xEC, 0xEA)               # JSR $EFD5; JSR $EAEC
+    a.emit(0xA9, 0x3A, 0x20, 0x47, 0xC8, 0x20, 0xEF, 0xEF)   # LDA #$3A; JSR $C847; JSR $EFEF
+    a.branch(0xD0, 's2_col_hit')
+    a.emit(0xE6, 0x5D, 0xA5, 0x5D, 0xC9, 0x09)
+    a.branch(0xD0, 's2_col_loop')
+    a.emit(0x60)
+    a.label('s2_col_hit')
+    a.emit(0x20, 0x51, 0xEF, 0xA9, 0xFF, 0x85, 0x96, 0x60)   # JSR $EF51; LDA #$FF; STA $96; RTS
+
+    a.label('s2_bomb_active')
+    a.emit(0xA6, 0x5D, 0xB5, 0x5E)                           # LDX $5D; LDA $5E,X
+    a.emit(0xC9, 0x80)
+    a.branch(0xD0, 's2_not_80')
+    a.emit(0x20, 0x9C, 0xDA)                                 # JSR $DA9C (grab)
+    a.abs_ref(0x4C, 's2_bomb_next')
+    a.label('s2_not_80')
+    a.emit(0xC9, 0x81)
+    a.branch(0xD0, 's2_not_81')
+    a.emit(0x20, 0x00, 0xDB)                                 # JSR $DB00 (throw)
+    a.abs_ref(0x4C, 's2_bomb_next')
+    a.label('s2_not_81')
+    a.emit(0xC9, 0x01)
+    a.branch(0xD0, 's2_not_01')
+    # Rolling ($01): top girder rolls right to X=$B8 then falls; bottom girder rolls left to X=$12 then despawns
+    a.emit(0x20, 0xD5, 0xEF, 0x86, 0x04, 0x20, 0xEC, 0xEA)   # JSR $EFD5; STX $04; JSR $EAEC
+    a.emit(0xA5, 0x01, 0xC9, 0x80)
+    a.branch(0xB0, 's2_bot_girder')
+    a.emit(0xE6, 0x00, 0xA5, 0x00, 0xC9, 0xB8)               # INC $00; LDA $00; CMP #$B8
+    a.branch(0x90, 's2_draw_bomb')
+    a.emit(0xA6, 0x5D, 0xA9, 0x08, 0x95, 0x5E)               # LDX $5D; LDA #$08; STA $5E,X
+    a.abs_ref(0x4C, 's2_draw_bomb')
+    a.label('s2_bot_girder')
+    a.emit(0xC6, 0x00, 0xA5, 0x00, 0xC9, 0x12)               # DEC $00; LDA $00; CMP #$12
+    a.branch(0xB0, 's2_draw_bomb')
+    a.emit(0x20, 0xD1, 0xEA, 0xA6, 0x5D, 0xA9, 0x00, 0x95, 0x5E)  # JSR $EAD1; LDX $5D; LDA #0; STA $5E,X
+    a.abs_ref(0x4C, 's2_bomb_next')
+
+    a.label('s2_not_01')
+    a.emit(0xC9, 0x08)
+    a.branch(0xD0, 's2_bomb_next_tramp')
+    # Falling ($08): fall down until Y=$CA, then roll left on bottom girder
+    a.emit(0x20, 0xD5, 0xEF, 0x86, 0x04, 0x20, 0xEC, 0xEA)
+    a.emit(0xE6, 0x01, 0xA5, 0x01, 0xC9, 0xCA)               # INC $01; LDA $01; CMP #$CA
+    a.branch(0x90, 's2_draw_bomb')
+    a.emit(0xA9, 0xCA, 0x85, 0x01)                           # LDA #$CA; STA $01
+    a.emit(0xA6, 0x5D, 0xA9, 0x01, 0x95, 0x5E)               # LDX $5D; LDA #$01; STA $5E,X
+
+    a.label('s2_draw_bomb')
+    a.emit(0x20, 0xEE, 0xDB)                                 # JSR $DBEE (spin bomb)
+    a.emit(0xA6, 0x5D, 0xB5, 0x72, 0x85, 0x02)               # LDX $5D; LDA $72,X; STA $02
+    a.emit(0x20, 0xDB, 0xEA)                                 # JSR $EADB
+    a.emit(0xA6, 0x04, 0xA9, 0x02, 0x20, 0x6C, 0xEE)         # LDX $04; LDA #2; JSR $EE6C
+    a.label('s2_bomb_next_tramp')
+    a.abs_ref(0x4C, 's2_bomb_next')
 
     # BarbaKongStageClear ($D086): LDA #$00; STA $FC; LDA #$01; STA $9A; JMP TriggerBarbaRoar
     a.label('BarbaKongStageClear')
@@ -1354,6 +1605,19 @@ def _assemble_bank1(
     a.emit(0xCE, DK_ROAR_TIMER & 0xFF, DK_ROAR_TIMER >> 8)
     a.label('roar_done')
 
+    # Force all bomb OAM slots ($80..$97) to SPR2 (Zelda Blue) after VBlank PPU writes
+    a.emit(0xA2, 0x30)                                          # LDX #$30
+    a.label('bomb_pal_loop')
+    a.emit(0xBD, 0x01, 0x02, 0xC9, 0x80)                        # LDA $0201,X; CMP #$80
+    a.branch(0x90, 'bomb_pal_next')
+    a.emit(0xC9, 0x98)                                          # CMP #$98
+    a.branch(0xB0, 'bomb_pal_next')
+    a.emit(0xBD, 0x02, 0x02, 0x29, 0xFC, 0x09, 0x02)            # LDA $0202,X; AND #$FC; ORA #$02
+    a.emit(0x9D, 0x02, 0x02)                                    # STA $0202,X
+    a.label('bomb_pal_next')
+    a.emit(0xE8, 0xE8, 0xE8, 0xE8)                              # INX x4
+    a.branch(0xD0, 'bomb_pal_loop')
+
     # Finish DK NMI ($C8E8..$C8F2)
     a.emit(0x68, 0xA8, 0x68, 0xAA)                              # PLA; TAY; PLA; TAX
     a.emit(0xA5, 0x10, 0x49, 0x80, 0x8D, 0x00, 0x20, 0x85, 0x10)
@@ -1361,12 +1625,12 @@ def _assemble_bank1(
 
     code = a.finish()
     code_off = DK_BANK1_CODE_BASE - 0x8000
-    assert code_off + len(code) <= 0x600
+    assert code_off + len(code) <= 0x800
     bank1[code_off : code_off + len(code)] = code
     syms = dict(a.labels)
 
-    # Place upgraded PPU packets starting at $8600 in Bank 1
-    pkt_cursor = 0x8600
+    # Place upgraded PPU packets starting at $8800 in Bank 1
+    pkt_cursor = 0x8800
     for name, pkt in (
         ('PKT_25M', _upgrade_stage_ppu_packet(orig_prg, 0xF55B, '25m')),
         ('PKT_75M', _upgrade_stage_ppu_packet(orig_prg, 0xF7CD, '75m')),
@@ -1705,10 +1969,19 @@ def _patch_dk_prg_mmc3(
     patch(0xD086, jsr('BarbaKongStageClear') + bytes([0xEA] * 5), bytes.fromhex('a9 00 85 fc a9 01 85 9a'))
     patch(0xD75C, jmp('BarbaKongFireballUpdate'), bytes.fromhex('a5 9f 4a'))
     patch(0xD88F, jsr('BarbaKongPickupFury') + bytes([0xEA, 0xEA]), bytes.fromhex('a5 fc 8d 19 05'))
+    patch(0xCF07, jsr('BarbaKongStage2Hook'), bytes.fromhex('20 29 ec'))
+    patch(0xEA34, jmp('BarbaKongSpringSpawn'), bytes.fromhex('a5 36 d0'))
+    patch(0xEB24, bytes([0x04]), bytes([0x02]))
     patch(0xECBF, jmp('BarbaKongFireballHit') + bytes([0xEA]), bytes.fromhex('a5 a0 d0 03'))
 
-    # 8. Update 100m Flame Fury sprite-pal-2 flash ($C6A2-$C6A9): blue vulnerable Z2 Bubbles -> fiery restore
-    patch(0xC6A2, bytes([0x13, 0x2C, 0x30, 0x12, 0x13, 0x16, 0x30, 0x37]), bytes.fromhex('13 2c 16 13 13 16 30 37'))
+    # Keep Lil' Barba facing forward during Flame Fury instead of cycling back-facing climb frames ($10-$1C)
+    patch(0xC1A2, bytes([0x04, 0x08, 0x20, 0x04, 0x08, 0x20]), bytes.fromhex('0c 14 1c 10 18 20'))
+
+    # 8. Update Flame Fury sprite-pal-2 flash ($C6A2-$C6A9): fury blue -> Zelda Blue Bombs ($12 $21 $30)
+    patch(0xC6A2, bytes([0x13, 0x2C, 0x30, 0x12, 0x13, 0x12, 0x21, 0x30]), bytes.fromhex('13 2c 16 13 13 16 30 37'))
+    # Keep left-side behind-BG bombs ($DFD5) and 25m barrel spawn ($EE57) on SPR2 ($22 / $02) instead of SPR3
+    patch(0xDFD6, bytes([0x22]), bytes([0x23]))
+    patch(0xEE58, bytes([0x02]), bytes([0x03]))
 
     # 9. Update Big Bad Link 6x4 BG tile tables ($C60C..$C6A1 and $C71C..$C74D)
     bg_pose_patches = (

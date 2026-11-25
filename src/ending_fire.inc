@@ -55,3 +55,34 @@ EndingFire:
     inc ENDING_FIRE_STATE
 @ash:
     jmp ENDING_ASH
+
+.export EndingPalFix0
+
+; Reload Bank 1's palette table ($800E..$80ED -> $7919) before entering $8B50,
+; so beating Dark Barba in Great Palace renders the ending with the
+; lavender/brown/white/pink palace palette instead of Great Palace's black one.
+.segment "BANK0"
+EndingPalFix0:
+    lda #>(EndingPalFix2 - 1)
+    pha
+    lda #<(EndingPalFix2 - 1)
+    pha
+    lda #$02
+    jmp $FFCC                 ; SwapPRG -> Bank 2, RTS enters EndingPalFix2
+
+.segment "BANK2_SMOKE"
+EndingPalFix2:
+    ldy #$00
+@copy:
+    lda EndingPalTable2,y
+    sta $7919,y
+    iny
+    cpy #$E0
+    bcc @copy
+    lda #>($8B50 - 1)
+    pha
+    lda #<($8B50 - 1)
+    pha
+    jmp $C388                 ; LC388: LDA #$05 / JMP SwapPRG -> $8B50
+EndingPalTable2:
+    .incbin "ending_pal.bin"

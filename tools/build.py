@@ -106,6 +106,9 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
     # Asset compilation emits the tile-index include consumed by ca65. Complete
     # it before assembling so the ROM and renderer always share one layout.
     mapping, graphics, ow, _ = compile_assets(ROOT, source_path)
+    ending_pal = source[prg_offset(1, 0x800E):prg_offset(1, 0x80EE)].replace(
+        bytes.fromhex('18 36 2a'), bytes.fromhex('16 27 30'))
+    (output/'ending_pal.bin').write_bytes(ending_pal)
     labels = assemble(output, bool(title_roar_wav), waldo_portal, boss_meter == 'souls')
     overlay = Overlay(source)
     # FarCall0 identifies the ACTUAL mapped bank without touching the native
@@ -332,11 +335,23 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
         if waldo_portal or not title_roar_wav:
             souls_irq_addr = 0xFC90
             souls_irq_split = bytes.fromhex(
-                'a9 00 8d 01 20 '                # blank scanline 214 immediately in HBlank of 213
+                '98 48 '                         # TYA / PHA (preserve Y across IRQ)
+                'a9 0b 38 e9 01 d0 fb '          # wait ~80 cycles to HBlank of scanline 213
+                '2c 02 20 '                      # bit $2002
+                'ae 5d 63 d0 18 '                # ldx SOULS_BG_VALID / bne +24
+                'a9 00 8d 01 20 '                # frame 1 only: blank to read $3F00
+                'a9 3f 8d 06 20 a9 00 8d 06 20 ' # PPUADDR = $3F00
+                'ad 07 20 8d 5b 63 ee 5d 63 '    # read $3F00 -> SOULS_SAVED_BG, SOULS_BG_VALID = 1
+                'a0 3f a2 0f a9 00 '             # Y=$3F, X=$0F, A=$00
+                '8d 01 20 '                      # $2001 = $00 at start of HBlank (dot ~270)
+                '8c 06 20 8d 06 20 '             # PPUADDR = $3F00 (8 cyc)
+                '8e 07 20 '                      # [$3F00] = $0F black (12 cyc)
+                'a2 04 8e 06 20 8d 06 20 '       # PPUADDR = $0400 (22 cyc, still in HBlank!)
+                'a9 01 8d 5c 63 '                # SOULS_BG_DIRTY = 1
                 'a9 01 8d 00 80 a9 9c 8d 01 80 ' # R1 = 156 (Souls CHR) while rendering is off
                 'ad d5 64 8d 00 80 '             # restore MMC3 $8000 shadow
-                '2c 02 20 a9 04 8d 06 20 a9 00 8d 06 20 ' # PPUADDR = $0400 ($2400 row 0, col 0)
-                'a9 09 38 e9 01 d0 fb '          # wait ~64 cycles to HBlank of scanline 214
+                'a9 18 38 e9 01 d0 fb '          # wait ~170 cycles to HBlank of scanline 215 (dot ~290)
+                '68 a8 '                         # PLA / TAY
                 'a9 0e 4c 99 c1'                 # $2001 = $0E (BG on, sprites off) -> $C199
             )
             souls_irq_off = prg_offset(7, souls_irq_addr)
@@ -468,6 +483,8 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
         arcade_addr = labels['BarbaArcadeArea']
         overlay.prg(3, 0x855B, arcade_addr.to_bytes(2, 'little'), b'\xc2\x9c',
                     "Barba's Arcade room $1C area pointer", group='crossover_portals')
+        overlay.prg(3, 0x85D9, (0x73E0).to_bytes(2, 'little'), b'\x7b\x70',
+                    "Barba's Arcade room $1C enemy pointer", group='crossover_portals')
         overlay.prg(3, 0x881C, b'\x70', b'\x71',
                     "Rauru $01 page 1 enters Barba's Arcade page 0", group='crossover_portals')
         overlay.prg(3, 0x878B, b'\x05', b'\x00',
@@ -1407,6 +1424,15 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
         b'\xff' * 8,
         'Ending init toast state helper',
     )
+    # Reload North Palace's palette table ($7919..$79F8) before entering $8B50
+    # so beating Dark Barba in Great Palace renders North Palace with its own
+    # lavender/brown/white/pink palette instead of Great Palace's black palette.
+    overlay.prg(
+        7, 0xC376,
+        bytes.fromhex('20 c5 ff') + b'\x4c' + labels['EndingPalFix0'].to_bytes(2, 'little'),
+        bytes.fromhex('20 88 c3 4c 50 8b'),
+        'Ending reload North Palace palette before $8B50',
+    )
     # L8CE3: keep the $074B awakening flash timer without clobbering Sprite Palette 0 ($3F10),
     # which turned Barba into a red silhouette when the split Triforce passed over him.
     # ($8CE2 is RTS, so D0 FA returns cleanly.)
@@ -2079,14 +2105,29 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
     ext_chr[(155 - 128) * 1024:(156 - 128) * 1024] = sv_r2
     if boss_meter == 'souls':
         ext_chr[(156 - 128) * 1024:(158 - 128) * 1024] = compile_souls_bar_chr()
-        # R5 banks 175-178: odd-bank ($076E+1) sprite pairs ($08..$2E -> $C1..$E7, plus Gooma $9E..$A2 -> $E9..$ED)
+        # R5 banks 175-180: odd-bank ($076E+1) sprite pairs ($08..$2E -> $C1..$E7,
+        # Rebonack/Thunderbird $3E..$4E -> $ED..$FD, Gooma $9E..$A2 -> $E9..$ED)
         # so MMC3 scanline IRQs never see A12=0 sprite fetches during boss fights.
-        for r5_bank, gfx_id in ((175, 0x08), (176, 0x0A), (177, 0x14), (178, 0x16)):
+        for r5_bank, gfx_id in ((175, 0x08), (176, 0x0A), (177, 0x14), (178, 0x16), (179, 0x12), (180, 0x0C)):
             r5_buf = bytearray(1024)
             src_spr = CHR_OFFSET + (gfx_id + 1) * 4096
             for pair in range(0x08, 0x30, 2):
                 dst_off = (pair + 0xB9 - 0xC1) * 16
                 r5_buf[dst_off:dst_off + 32] = source[src_spr + pair * 16:src_spr + pair * 16 + 32]
+            if gfx_id in (0x0C, 0x12):
+                for pair in range(0x3E, 0x50, 2):
+                    dst_off = (pair + 0xAF - 0xC1) * 16
+                    r5_buf[dst_off:dst_off + 32] = source[src_spr + pair * 16:src_spr + pair * 16 + 32]
+            if gfx_id == 0x12:
+                # Dismounted Rebonack ($50..$5E) -> unused slots $DB..$E9 in bank 179.
+                for pair in range(0x50, 0x60, 2):
+                    dst_off = (pair + 0x8B - 0xC1) * 16
+                    r5_buf[dst_off:dst_off + 32] = source[src_spr + pair * 16:src_spr + pair * 16 + 32]
+            if gfx_id in (0x0A, 0x14):
+                src_even = CHR_OFFSET + gfx_id * 4096
+                src_tile = 0xCE if gfx_id == 0x0A else 0xDC
+                dst_off = (0xEE - 0xC0) * 16
+                r5_buf[dst_off:dst_off + 32] = source[src_even + src_tile * 16:src_even + src_tile * 16 + 32]
             if gfx_id == 0x16:
                 for pair in (0x9E, 0xA0, 0xA2):
                     dst_off = (pair + 0x4B - 0xC1) * 16
