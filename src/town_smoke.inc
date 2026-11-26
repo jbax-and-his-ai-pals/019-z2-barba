@@ -12,10 +12,10 @@ SMOKE_Y     = $634B         ; 4 bytes
 SMOKE_OAM_Y = $634F
 SMOKE_TMP0  = $6350         ; base screen X of current chimney
 SMOKE_TMP1  = $6351         ; current puff Y
-SMOKE_BANDS = $635B         ; 16 bytes: foreground OAM counts per 16px Y band ($0..$F)
+SMOKE_BANDS = $6700        ; 16 bytes: foreground OAM counts per 16px Y band ($0..$F)
 SMOKE_IDX   = $08           ; ZP scratch (safe during FinishSceneOam6)
 SMOKE_PUFF  = $09
-SMOKE_LOAD  = $0A
+SMOKE_LOAD  = $0A           ; nonzero once SMOKE_BANDS is built this frame
 
 .segment "BANK3_PAD"
 HopTownSmoke2:
@@ -51,53 +51,29 @@ DrawTownSmoke2:
     jmp $FFCC
 
 @active:
-    ; Lazy room scan: rescan $6000-$633F only when (room, world/continent) changes.
-    lda $0707
-    asl
-    asl
-    asl
-    asl
-    ora $0706
-    cmp SMOKE_WLD
-    bne @rescan
+    ; The chimney list is built during the room load (ScanTownSmoke2, mode 9).
+    ; If the key doesn't match (a room reached without that load), draw no
+    ; smoke rather than spend a frame on a gameplay-time scan.
     lda $0561
     cmp SMOKE_RM
+    bne @stale
+    jsr SmokeRoomKey2
+    cmp SMOKE_WLD
     beq @draw_ready
-@rescan:
+@stale:
+    jsr SmokeRoomKey2
     sta SMOKE_WLD
     lda $0561
     sta SMOKE_RM
-    jsr ScanTownChimneys3
+    lda #$00
+    sta SMOKE_COUNT
 @draw_ready:
     lda SMOKE_COUNT
     bne :+
     jmp @ret
 :
-    ; Single-pass foreground OAM histogram over $6500..$6564 (16px Y bands).
-    ldx #$0F
     lda #$00
-@clr_bands:
-    sta SMOKE_BANDS,x
-    dex
-    bpl @clr_bands
-    ldy #$64
-@count_fg:
-    lda $6500,y
-    cmp #$F0
-    bcs @count_next
-    lsr
-    lsr
-    lsr
-    lsr
-    tax
-    inc SMOKE_BANDS,x
-@count_next:
-    dey
-    dey
-    dey
-    dey
-    bpl @count_fg
-
+    sta SMOKE_LOAD
     lda #$FC
     sta SMOKE_OAM_Y
     lda #$00
@@ -177,6 +153,10 @@ DrawTownSmoke2:
     bcc @pop2_next
 
 @check_load:
+    lda SMOKE_LOAD
+    bne :+
+    jsr SmokeBuildBands2
+:
     ; O(1) check: sum foreground sprites in bands [b-1, b, b+1] where b = puffY >> 4 (>= 2).
     lda SMOKE_TMP1
     lsr
@@ -233,6 +213,57 @@ DrawTownSmoke2:
 @next_chimney:
     inc SMOKE_IDX
     jmp @chimney_loop
+
+; Foreground OAM histogram over $6500..$6564 (16px Y bands). Clobbers A/X/Y.
+SmokeBuildBands2:
+    lda #$01
+    sta SMOKE_LOAD
+    ldx #$0F
+    lda #$00
+@clr_bands:
+    sta SMOKE_BANDS,x
+    dex
+    bpl @clr_bands
+    ldy #$64
+@count_fg:
+    lda $6500,y
+    cmp #$F0
+    bcs @count_next
+    lsr
+    lsr
+    lsr
+    lsr
+    tax
+    inc SMOKE_BANDS,x
+@count_next:
+    dey
+    dey
+    dey
+    dey
+    bpl @count_fg
+    rts
+
+; Key A = ($0707 << 4) | $0706.
+SmokeRoomKey2:
+    lda $0707
+    asl
+    asl
+    asl
+    asl
+    ora $0706
+    rts
+
+; Room-load entry (game mode 9, hopped from SetupEncounterScenery6): record
+; the room key and scan the freshly decoded metatile map once, while the
+; screen is still off. Returns to Bank 6.
+ScanTownSmoke2:
+    jsr SmokeRoomKey2
+    sta SMOKE_WLD
+    lda $0561
+    sta SMOKE_RM
+    jsr ScanTownChimneys3
+    lda #$06
+    jmp $FFCC
 
 ; Scan $6000-$633F across populated pages (0..min($D1,3)) for chimney metatiles
 ; ($59/$5A) with sky ($40) directly above (row >= 2).

@@ -17,7 +17,15 @@ Template for wiring a subgame completion reward (such as beating *Where's Waldo?
    - Scan **forward from `$20`** (`ldx #$20`) so player accessories stay ahead of villager shout glyphs (`$2C–$44`), villagers (`$60+`), clouds, and chimney smoke on shared scanlines.
    - If a 2nd tile pair is needed in `sv_r2` (`bank 155`), alias a redundant pose tile (e.g., `windup/hurt` `$1D` → `$03`) in `DrawWaldoHat6` so `$1C` is free only when the reward is active.
 
-## 2. All-Screens Graphics Distribution Checklist
+## 2. Equipped Cosmetic Gear & Additional Trophies (`BARBA_GEAR = $648F`)
+
+- **Pause Menu Gear Bar (`src/arcade_spells.inc`)**: Inside the 2-column spell pause menu, pressing **Select** toggles focus between the spell grid and the bottom **Gear Bar** (`HAT`, `MASK`, `HELM` on row 14; `TIE`, `BELT` on row 16). Pressing **A** or **B** equips/toggles unlocked trophies (`$F8` heart badge), with `BARBA_GEAR` bit 7 (`$80`) marking explicit user configuration (when unset and `$648B == $57`, Waldo Hat defaults to active).
+- **Friday the 13th → Hockey Mask (`$63B1 == 1`, head `2`)**: Swaps `R2` to extended CHR bank `181` (`sv_r2_mask`, white plate + dark eye/air holes + red chevrons over Barba's snout/face in `$02/$04`, `$1C`, `$20`, `$3A/$3C`) and steps `$4010` DMC rate down by 2 (`RoarSetRate6` in `src/sampled_roar.inc`) for a deeper, creepier roar.
+- **Barba Man 2 → Mega Helmet (`$63B7 == 1`, head `3`)**: Draws a Palette 1 blue crest OAM sprite (`$78` non-town / `$F8` town -> `$79`/`$F9`) in `DrawExtraGear4` (`BANK4_GEAR` / `PALACE_ROAR`) and swaps Barba's palette (`$69D2 = $12`, `$69D8 = $21`) while `BLADE` (`ARCADE_ACTIVE_LO & $40`) is active.
+- **Barba Kong → Red Necktie (`$63B3 == 1`, stackable bit `4`)**: Draws a necktie OAM sprite (`$7A` non-town / `$FA` town -> `$7B`/`$FB`) behind Barba's neck, flapping (`EOR #$40` + Y bob on `$12 & $04`) during jumps (`$0479 != 0`).
+- **Barba's Punch-Out!! → Championship Belt (`$63BA == 1`, stackable bit `5`)**: Draws a gleaming gold-buckle belt OAM sprite (`$7C` non-town / `$FC` town -> `$7D`/`$FD`, flashing Palette 3 on `$12 & $1C == 0`) on Barba's lower torso (`+20px` standing, `+12px` crouching).
+
+## 3. All-Screens Graphics Distribution Checklist
 
 Whenever adding a new player transformation or visual accessory to Barba, audit **every** screen, pose, and special case below:
 

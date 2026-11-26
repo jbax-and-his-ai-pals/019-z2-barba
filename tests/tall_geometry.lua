@@ -252,7 +252,8 @@ end,function()
     check(allHidden({0x214,0x218,0x21C}),'swamp hides bottom row')
 end)
 
-local NEAR,OUTER,TIP,FAR=0x6550,0x6554,0x6558,0x655C
+-- The trail takes the highest free shadow entries, one per visible piece, near
+-- torso lowest (first priority). trailSlots() (newgame.lua) finds the pieces.
 local function encounterTorso(keepHistory)
     w(0x6518,0xA0);w(0x6519,0x0D);w(0x651A,0x40);w(0x651B,0x54)
     w(0x5FA,3*9)
@@ -266,19 +267,28 @@ local function isEnemy(slot,y)
     return r(slot)==y and r(slot+1)==0xB5 and r(slot+2)==0x01 and r(slot+3)==0x40
 end
 local function checkTrail(y,x,attr)
+    local s=trailSlots()
+    local near,outer=s.near,s.outer
     local facesRight=attr&0x40~=0
-    check(r(NEAR)==y and r(OUTER)==y,'both trail sprites have the expected Y')
-    check(r(NEAR+3)==x+(facesRight and 8 or 0) and r(OUTER+3)==x+(facesRight and 0 or 8),
-        'the column nearest Barba has first priority in either facing')
-    check(r(NEAR+1)==0x15 and r(OUTER+1)==0x3F,'the rotated torso uses its near column before its outer column')
-    check(r(NEAR+2)==attr and r(OUTER+2)==attr,'trail inherits Barba palette and draws in front of the background')
+    check(near and outer and r(near)==y and r(outer)==y,'both trail sprites have the expected Y')
+    check(near and outer and near<outer and r(near+3)==x+(facesRight and 8 or 0)
+        and r(outer+3)==x+(facesRight and 0 or 8),'the column nearest Barba has first priority in either facing')
+    check(near and outer and r(near+1)==0x15 and r(outer+1)==0x3F,'the rotated torso uses its near column before its outer column')
+    check(near and outer and r(near+2)==attr and r(outer+2)==attr,'trail inherits Barba palette and draws in front of the background')
 end
 local function checkTip(y,x,attr)
+    local s=trailSlots()
     local farX=x+((attr&0x40~=0) and -8 or 8)
-    check(r(TIP)==y and r(TIP+1)==0x45 and r(TIP+2)==attr and r(TIP+3)==x,
+    check(s.tip and r(s.tip)==y and r(s.tip+2)==attr and r(s.tip+3)==x,
         'the near tip column follows the torso')
-    check(r(FAR)==y and r(FAR+1)==0x31 and r(FAR+2)==attr and r(FAR+3)==farX,
+    check(s.far and r(s.far)==y and r(s.far+2)==attr and r(s.far+3)==farX,
         'the far tip column follows, 8px further out')
+    check(s.near and s.tip and s.far and s.near<s.tip and s.tip<s.far,'the tips sit behind the torso')
+end
+local function noTrail(names)
+    local s=trailSlots()
+    for _,name in ipairs(names) do if s[name] then return false end end
+    return true
 end
 add('right-facing encounter trail at rest','DrawEncounterTorso',encounterTorso,function()
     checkTrail(0xA0,0x3C,0x40)
@@ -304,7 +314,7 @@ add('downstab suppresses the horizontal encounter trail','DrawEncounterTorso',fu
     encounterTorso();w(0x5FA,9*9);w(0x6519,0x5B);w(0x6515,0x5D)
 end,function()
     check(r(0x6519)==0x5B and r(0x6515)==0x5D,'the downstab body tiles are intact')
-    check(allHidden({NEAR,OUTER,TIP,FAR}),'downstab does not sprout a horizontal tail from the downward head')
+    check(noTrail({'near','outer','tip','far'}),'downstab does not sprout a horizontal tail from the downward head')
     check(r(0x6487)==0,'downstab resets the encounter trail history index')
 end)
 add('encounter trail stays visible over grass','DrawEncounterTorso',function()
@@ -347,42 +357,54 @@ end,function()
     checkTrail(0x55,0x3C,0x40)
     checkTip(0x55,0x34,0x40)
 end)
-add('the trail outranks an enemy and moves it to the end of OAM','DrawEncounterTorso',function()
-    encounterTorso();enemy(NEAR,0xA2)
+add('enemies keep their entries and outrank the trail','DrawEncounterTorso',function()
+    encounterTorso();enemy(0x6550,0xA2);enemy(0x6554,0xA4)
 end,function()
     checkTrail(0xA0,0x3C,0x40)
     checkTip(0xA0,0x34,0x40)
-    check(isEnemy(0x65FC,0xA2),'the enemy sprite keeps its data in the last free entry')
+    check(isEnemy(0x6550,0xA2) and isEnemy(0x6554,0xA4),'the enemy sprites stay ahead of the trail')
 end)
-add('moved enemies skip occupied HUD entries','DrawEncounterTorso',function()
-    encounterTorso();w(0x65F8,0x0F);w(0x65FC,0x0F);enemy(OUTER,0xA2);enemy(FAR,0xA6)
+add('the trail skips occupied HUD entries','DrawEncounterTorso',function()
+    encounterTorso();w(0x65F8,0x0F);w(0x65F9,0x71);w(0x65FC,0x0F);w(0x65FD,0x6F);enemy(0x65F4,0xA2)
 end,function()
-    checkTrail(0xA0,0x3C,0x40)
-    checkTip(0xA0,0x34,0x40)
-    check(isEnemy(0x65F4,0xA2) and isEnemy(0x65F0,0xA6),'enemies fill free entries from the end inward')
+    local s=trailSlots()
+    check(s.near==0x65E4 and s.outer==0x65E8 and s.tip==0x65EC and s.far==0x65F0,
+        'the trail takes the four highest free entries below the HUD and enemy')
+    check(isEnemy(0x65F4,0xA2),'the enemy entry is intact')
     check(r(0x65F8)==0x0F and r(0x65FC)==0x0F,'the HUD entries are intact')
 end)
-add('the trail stops when no entry is free','DrawEncounterTorso',function()
+add('the tips give way first when entries run out','DrawEncounterTorso',function()
     encounterTorso()
-    for slot=0x6560,0x65FC,4 do w(slot,0x30)end
-    w(0x65FC,0xF8);enemy(NEAR,0xA2);enemy(OUTER,0xA4)
+    for slot=0x6550,0x65FC,4 do enemy(slot,0x30)end
+    w(0x65F4,0xF8);w(0x65FC,0xF8)
 end,function()
-    check(r(NEAR+1)==0x15 and isEnemy(0x65FC,0xA2),'the near torso takes the last free entry')
-    check(isEnemy(OUTER,0xA4),'the next enemy stays when it has nowhere to go')
-    check(allHidden({TIP,FAR}),'no tip is drawn past the gap')
+    local s=trailSlots()
+    check(s.near==0x65F4 and s.outer==0x65FC,'the torso takes the only two free entries, near one first')
+    check(s.tip==nil and s.far==nil,'no tip is drawn without a free entry')
+    check(isEnemy(0x65F0,0x30) and isEnemy(0x65F8,0x30),'occupied entries are untouched')
+end)
+add('the trail never uses entries ahead of the enemy blocks','DrawEncounterTorso',function()
+    encounterTorso()
+    for slot=0x6550,0x65FC,4 do enemy(slot,0x30)end
+    w(0x654C,0xF8)
+end,function()
+    check(r(0x654C)==0xF8,'entry $4C stays free')
+    local s=trailSlots()
+    check(s.near==nil and s.outer==nil and s.tip==nil and s.far==nil,'no piece is drawn when $50-$FC are full')
 end)
 add('the tip clips at the left edge','DrawEncounterTorso',function()
     encounterTorso();w(0x651B,0x1C)
 end,function()
     checkTrail(0xA0,0x04,0x40)
-    check(allHidden({TIP,FAR}),'no tip column is drawn')
+    check(noTrail({'tip','far'}),'no tip column is drawn')
 end)
 add('the far tip hides at the right edge','DrawEncounterTorso',function()
     encounterTorso();w(0x651A,1);w(0x651B,0xD8)
 end,function()
     checkTrail(0xA0,0xE8,0x01)
-    check(r(TIP)==0xA0 and r(TIP+1)==0x45 and r(TIP+3)==0xF8,'the near tip still draws')
-    check(r(FAR)==0xF8,'the far tip column stays hidden instead of wrapping')
+    local s=trailSlots()
+    check(s.tip and r(s.tip)==0xA0 and r(s.tip+3)==0xF8,'the near tip still draws')
+    check(s.far==nil,'the far tip column stays hidden instead of wrapping')
 end)
 for _,case in ipairs({
     {'hidden lower row',function()w(0x6518,0xF8)end},
@@ -394,7 +416,7 @@ for _,case in ipairs({
     add('no encounter trail at '..case[1],'DrawEncounterTorso',function()
         encounterTorso();case[2]()
     end,function()
-        check(allHidden({NEAR,OUTER,TIP,FAR}),'all trail slots stay hidden')
+        check(noTrail({'near','outer','tip','far'}),'all trail slots stay hidden')
     end)
 end
 

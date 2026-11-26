@@ -11,7 +11,7 @@ import prepare_test_player as player
 
 class CheckpointSets(unittest.TestCase):
     def test_set_sizes_and_unique_ids(self):
-        self.assertEqual(pack.SETS,['core','saria','items','palaces','endgame','bosses','world','gem','busy','movement','edges'])
+        self.assertEqual(pack.SETS,['core','saria','items','palaces','endgame','bosses','world','gem','busy','movement','spells','fireballs','ngplus','edges'])
         for scenes in pack.RECIPES['sets'].values():
             self.assertTrue(1<=len(scenes)<=10)
             self.assertEqual(len({s['id'] for s in scenes}),len(scenes))
@@ -61,11 +61,21 @@ class CheckpointSets(unittest.TestCase):
                         self.assertEqual(writes[0x793],0)
                         self.assertEqual(writes[0x700],3)
                         self.assertEqual(writes[0x773],p['magic']*32-1)
-                        self.assertEqual(writes[0x774],p['hearts']*32-1)
+                        self.assertEqual(writes[0x774],scene.get('entry',{}).get('1908',p['hearts']*32-1))
+                        self.assertTrue(0<writes[0x774]<=p['hearts']*32-1)
                         self.assertNotEqual(p['levels'],[8,8,8])
                         self.assertEqual(writes[0x770],min([l for l in p['levels'] if l<8]))
                         if scene['world']>=3:
                             self.assertEqual(writes[0x56C],{1:0,2:1,3:2,4:0,5:0,6:1,7:2}[scene['number']])
+                        if p.get('arcade_spells'):
+                            for a in range(0x77B,0x783):
+                                self.assertEqual(writes[a],1)
+                            self.assertEqual(writes[0x648B],0x57)
+                            for a in (0x63B1,0x63B2,0x63B3,0x63B4,0x63B5,0x63B7,0x63B8,0x63B9,0x63BA):
+                                self.assertEqual(writes[a],1)
+                        if p.get('ngplus'):
+                            self.assertEqual(expected[0x7A0],1)
+                            self.assertEqual(writes[0x7A0],1)
 
     def test_lua_serializer_preserves_integer_ram_keys(self):
         self.assertEqual(pack.lua_value({0x777:2,'id':'test'}),'{[1911]=2,["id"]="test"}')

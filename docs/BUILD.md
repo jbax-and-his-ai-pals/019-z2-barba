@@ -62,13 +62,14 @@ They stay in `build/` and must not be committed.
 
 ## Build numbers and history
 
-Numbering started at **60** on 2026-11-20. The baseline of **59** is a
-historical lower bound. At the time, 49 surviving `build/**/build-report.json`
-files with an output SHA-256 represented 46 distinct ROMs. Build hashes
-explicitly cited in `AGENTS.md` and `docs/` added 13 after deduplicating by the
-12-character hash prefix. Earlier identical rebuilds and overwritten builds
-are generally unrecoverable. Historical release tags have no assigned build
-numbers.
+Numbering started at **60** on 2026-11-20 from a conservative historical lower
+bound of **59** (49 surviving `build/**/build-report.json` files representing 46
+distinct ROMs, plus 13 deduplicated hashes cited in `AGENTS.md` and `docs/`).
+On 2026-11-25, after observing 440 recorded builds (`#60–#499`) over 4.49 days,
+the pre-numbering baseline was revised by `+200` to **259** (shifting the
+recorded sequence to `#260–#699` so the next build is **#700**). Earlier
+identical rebuilds and overwritten builds are generally unrecoverable.
+Historical release tags have no assigned build numbers.
 
 Every successful Barba ROM build gets the next number, including identical
 rebuilds, alternate `--out` builds, and tools that call `build.build()`.

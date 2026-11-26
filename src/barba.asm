@@ -102,19 +102,8 @@ OwTerrainPal0:
 ;             otherwise plays Flute ($851D) on Spider/open ground when Flute is owned.
 BarbaOverworldA:
 BarbaOverworldB:
-    lda $0563
-    beq @fire_react     ; Town ($00)
-    cmp #$06            ; Forest
-    beq @fire_forest
-    cmp #$02            ; Palace
-    beq @fire_react
-    lda $0789           ; Have Flute?
-    beq @fire_fx
-    jmp $851D           ; play Flute
-@fire_react:
-    lda #$04            ; magic/rumble reaction SFX
-    sta $EC
-@fire_fx:
+    jmp BarbaOverworldB_OW
+BurnFireFx0:
     lda #$18
     sta OW_FIRE_TIMER
     lda $0562
@@ -123,187 +112,50 @@ BarbaOverworldB:
     ora #$40            ; Barba fireball/roar SFX
     sta $ED
     rts
-@fire_forest:
-    jsr @fire_fx
-    jsr $E024           ; queue PPU macro ($6C plains) & set $00/$01/$7D=0
-    jsr $DFD2           ; vanilla check (reveals Hidden Kasuto if Region 2, $3E, $33)
-    jmp BarbaSplitBurnForest
+BurnAbort0:
+    lda #$00
+    sta $0301
+    lda #$FF
+    sta $0302
+    rts
+BurnAttrHop0:
+    lda #>(OwAttrUpdate4 - 1)
+    pha
+    lda #<(OwAttrUpdate4 - 1)
+    pha
+    lda #$04
+    jmp $FFCC
+BurnAfterE024_0:
+    jsr $8A07           ; resolve ($0E),y, $00, $03, $04 for facing tile ($74, $73)
+    jmp BarbaBurnTile0
 
 .segment "BANK0_OW"
-; Split RLE run at ($0E),y for row $04 (0..$4A), 1-based X $00, run_end $03.
-; Turns ONLY the single facing forest tile into Desert ($04) so neighboring trees survive battles/scrolling.
-BarbaSplitBurnForest:
-    lda ($0E),y
-    cmp #$06
-    bne @check_multi
-    lda #$04            ; single-tile run ($06): no shift needed
-    sta ($0E),y
-@done:
-    rts
-@check_multi:
-    and #$0F
-    cmp #$06
-    bne @done
-@split:
-    tya
-    pha                 ; save Y (byte index in row)
-    lda ($0E),y
-    lsr
-    lsr
-    lsr
-    lsr                 ; A = run_len - 1 (1..15)
-    tax
-    lda $03
-    sec
-    sbc $00
-    sta $02             ; $02 = right_count
-    txa
-    sec
-    sbc $02
-    sta $03             ; $03 = left_count
-    ldx #$00
-    lda $03
-    beq :+
-    inx
-:
-    lda $02
-    beq :+
-    inx
-:
-    stx $05             ; $05 = insert (1 or 2)
-    ; Find end byte of row $4A ($6094/$6095) BEFORE updating row pointers
-    lda $6094
-    sta $08
-    lda $6095
-    sta $09
-    ldy #$00
-    sty $0A
-@find_end:
-    lda ($08),y
-    lsr
-    lsr
-    lsr
-    lsr
-    sec
-    adc $0A
-    sta $0A
-    cmp #$40
-    bcs @found_end
-    iny
-    bne @find_end
-@found_end:
-    jmp BurnMapEndGuard ; computes end_lo/end_hi; refuses a split that would overflow WRAM
-BurnMapEndBack = *
-    sta $0B             ; $0B = dst_hi
-    lda #$00
-    sta $08             ; $08 = 0 (page base)
-    lda $05
-    sta $0A             ; $0A = insert (1 or 2)
-    ; Update row pointers $6000 + (row+1)*2 .. $6094
-    lda $04
-    asl
-    tax
-    inx
-    inx
-@ptr_loop:
-    cpx #$96
-    bcs @shift
-    lda $6000,x
-    clc
-    adc $05
-    sta $6000,x
-    bcc :+
-    inc $6001,x
-:
-    inx
-    inx
-    bne @ptr_loop
-@shift:
-    pla
-    pha                 ; peek original row byte index
-    clc
-    adc $0E
-    sta $06
-    lda $0F
-    adc #$00
-    sta $07             ; $06/$07 = ($0E + Y) = stop_addr - 1
-    lda $09
-    cmp $07
-    beq @last_page
-@page_loop:
-    lda ($08),y
-    sta ($0A),y
-    tya
-    beq @prev_page
-    dey
-    jmp @page_loop
-@prev_page:
-    dec $09
-    dec $0B
-    ldy #$FF
-    lda $09
-    cmp $07
-    bne @page_loop
-@last_page:
-    cpy $06
-    beq @write_runs
-    lda ($08),y
-    sta ($0A),y
-    dey
-    jmp @last_page
-@write_runs:
-    pla
-    tay                 ; restore Y
-    lda $03             ; left_count
-    beq @write_burnt
-    jsr @pack_forest
-    iny
-@write_burnt:
-    lda #$04
-    sta ($0E),y
-    lda $02             ; right_count
-    beq @split_done
-    iny
-@pack_forest:
-    sec
-    sbc #$01
-    asl
-    asl
-    asl
-    asl
-    ora #$06
-    sta ($0E),y
-@split_done:
-    rts
-BurnAbort:
-    pla                 ; drop saved row index; map unchanged
-    lda #$00
-    sta $0301           ; cancel queued PPU macro byte count
-    lda #$FF
-    sta $0302           ; mark PPU macro buffer empty ($FF terminator)
-    rts
-
-.segment "BANK0_TAIL"
-; Bank 0 pad $BFE0-$BFF9 (between the unused reset stub and the vectors).
-; The overworld RLE map lives at $7C00 and ends near $7F20; each forest split
-; grows it by up to 2 bytes. Past $7FFF the shift would write MMC1 registers,
-; so once the map end reaches $7FF0 further splits are refused (the tree stays).
-; Entry: Y = row-$4A end index, $08/$09 = row-$4A base, saved Y on the stack.
-BurnMapEndGuard:
-    tya
-    clc
-    adc $08
-    tay                 ; Y = end_lo
-    lda $09
-    adc #$00
-    sta $09             ; $09 = end_hi
-    cmp #$7F
-    bcc @ok
-    cpy #$F0
-    bcc @ok
-    jmp BurnAbort
-@ok:
-    jmp BurnMapEndBack
+BarbaOverworldB_OW:
+    lda $0563
+    beq @fire_react     ; Town ($00)
+    cmp #$06            ; Forest
+    beq @fire_burn
+    cmp #$02            ; Palace
+    beq @fire_react
+    cmp #$0B            ; Mountain
+    bne @not_mtn
+    lda $07A0           ; NG+ active?
+    bne @fire_burn
+@not_mtn:
+    lda $0789           ; Have Flute?
+    beq @fire_fx_only
+    jmp $851D           ; play Flute
+@fire_fx_only:
+    jmp BurnFireFx0
+@fire_react:
+    lda #$04            ; magic/rumble reaction SFX
+    sta $EC
+    jmp BurnFireFx0
+@fire_burn:
+    jsr BurnFireFx0
+    jsr $E024           ; queue PPU macro ($6C plains) & set $00/$01/$7D=0
+    jsr $DFD2           ; vanilla check (reveals Hidden Kasuto if Region 2, $3E, $33)
+    jmp BurnAfterE024_0
 
 .segment "BANK0"
 BarbaInferno:
@@ -432,12 +284,15 @@ RoarPitch:
 .include "town.inc"
 .include "sign.inc"
 .include "sage_basement.inc"
+.include "ow_burn.inc"
 .include "town_smoke.inc"
 .include "title_lava.inc"
 .include "ow_foliage.inc"
 .include "scales.inc"
+.include "splat.inc"
 .include "farcall.inc"
 .include "scanline_irq.inc"
+.include "cave_light.inc"
 .include "death_display.inc"
 .include "ending_fire.inc"
 .include "palace_roar.inc"
@@ -446,6 +301,7 @@ RoarPitch:
 .include "souls_boss_bar.inc"
 .endif
 .include "ow_sparkle.inc"
+.include "arcade_spells.inc"
 .ifdef SAMPLED_ROAR
 .include "sampled_roar.inc"
 .endif
@@ -475,23 +331,28 @@ SwapToBank6:
     jmp $FFCC
 
 .segment "GATEWAY"
-; Fast path: with no backed shot alive, run the original E48B test in place
-; (no bank switches). Original bytes at E48B were LDA $B6,X / CMP #$01;
-; E48F continues with BNE/rts and the native two-slot loop.
+; Run native slot 0/1 collision in Bank 7 (0 bank switches); only swap to Bank 0
+; for ExtraCollision when the enemy is active/hittable and EXTRA_LIVE != 0.
 EnemyFireGateway:
-    lda EXTRA_LIVE
-    bne @slow
     lda $B6,x
     cmp #$01
-    jmp $E48F
-@slow:
+    bne @done
+    lda $040E,x
+    bne @done
+    jsr $E496
+    lda EXTRA_LIVE
+    beq @done
     jsr $FFC5
-    jsr BarbaEnemyFire
+    jsr BarbaEnemyFireOnly
     jmp $FFC9
-ShieldFireGateway:
+@done:
+    rts
+ShieldFireGatewaySlow:
     jsr $FFC5
     jsr BarbaShieldFire
     jmp $FFC9
+
+.segment "LAG_RET"
 LagNmiReturn:
     pla
     sta $64D5
@@ -507,25 +368,23 @@ TerrainBatch:
 @corner:
     lda $04,x
     jsr $850C
-    bcs @result
+    bcs NativeReturn0
     dex
     bpl @corner
-@result:
+NativeReturn0:
     php
     jsr $FFC5
     plp
     rts
-
-; Caller (BarbaEnemyFire, bank 0) has already required $B6,X = 1.
-NativeEnemyFire:
-    jsr $FFC9
-    jsr $E491
-NativeReturn0:
-    php
-    pha
-    jsr $FFC5
-    pla
-    plp
+ShieldFireGateway:
+    lda $C8
+    asl
+    and #$0C
+    ora $C9
+    and #$FC
+    bne @rts
+    jmp ShieldFireGatewaySlow
+@rts:
     rts
 
 .segment "PALACE_SHAKE"
@@ -536,7 +395,7 @@ LagNmiInBank6:
 .ifdef SOULS_BOSS_METER
     jsr LagSoulsBg6
 .else
-    jsr $9000
+    jsr SplatSoundDriver6
 .endif
     pla
     ldx #$00

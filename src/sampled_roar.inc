@@ -120,8 +120,12 @@ RoarStart:
     sta $07FA           ; retire any previous native DMC state
     lda #$FF
     sta ROAR_COOLDOWN
+.ifdef WALDO_PORTAL
+    jsr RoarSetRate6
+.else
     lda #ROAR_RATE
     sta $4010
+.endif
     lda #$D0
     sta $4012
     stx $4013

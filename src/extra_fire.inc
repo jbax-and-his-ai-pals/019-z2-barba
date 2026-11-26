@@ -1,7 +1,7 @@
 ; Three backed projectiles multiplex native slot 0 without changing range.
 ; Record offsets: state,Y,Xlo,Xhi,vx,dir,actorCode,class,fraction,life,OAM.
 .export BarbaExtraAllocate, BarbaExtraUpdate, BarbaExtraReset
-.export BarbaEnemyFire, BarbaShieldFire, BarbaExtraBlocks, DarkLinkFireCheck
+.export BarbaEnemyFireOnly, BarbaShieldFire, BarbaExtraBlocks, DarkLinkFireCheck
 EXTRA_BASE = $6400
 EXTRA_SAVE = $6440
 EXTRA_INDEX = $6450
@@ -193,17 +193,15 @@ BarbaExtraUpdate:
     lda #$00
     sta EXTRA_KIND+$03
     sta EXTRA_INDEX
+    lda $12
+    asl
+    asl
+    asl
+    asl
+    asl
+    and #$80
+    sta EXTRA_DELTA
 @slot:
-    lda EXTRA_INDEX
-    lsr
-    lsr
-    lsr
-    lsr
-    tay
-    lda ExtraOam,y
-    tay
-    lda #$F8
-    sta $0200,y
     ldx EXTRA_INDEX
     lda EXTRA_BASE,x
     bne :+
@@ -276,7 +274,6 @@ BarbaExtraUpdate:
     ora #$F0
 :
     ldy #$00
-    cmp #$00
     bpl :+
     dey
 :
@@ -300,24 +297,15 @@ BarbaExtraUpdate:
     lda #$00
     ror
     ror
-    sta $00
-    lda $12
-    asl
-    asl
-    asl
-    asl
-    asl
-    and #$80
-    ora $00
+    ora EXTRA_DELTA
     ora #$01
-    pha
-    tya
-    pha
+    sta $02
+    sty $01
     lda EXTRA_BASE+$0A,x
     tay
-    pla
+    lda $01
     sta $0203,y
-    pla
+    lda $02
     sta $0202,y
     lda #$84
     sta $0201,y
@@ -404,18 +392,13 @@ NativeShieldFire:
     asl
     jsr $E61A
     rts
-BarbaEnemyFire:
-    lda $B6,x
-    cmp #$01
-    bne :+
-    jsr NativeEnemyFire
-:
+BarbaEnemyFireOnly:
     php
     pha
     tya
     pha
     lda #$00
-    jmp ExtraCollision
+    beq ExtraCollision
 BarbaShieldFire:
     jsr NativeShieldFire
     php
@@ -426,44 +409,14 @@ BarbaShieldFire:
 ExtraCollision:
     sta EXTRA_KIND
     stx EXTRA_ENEMY_X
-    ; Most enemies never see a backed projectile. Return with the original
-    ; helper's exact registers/flags before copying any native slot fields.
-    lda EXTRA_READY
-    cmp #$01
-    bne @fast_return
+    ; EnemyFireGateway already requires $B6,X == 1 and $040E,X == 0;
+    ; ShieldFireGateway only guarantees EXTRA_LIVE != 0.
+    beq @active
     lda $B6,x
     cmp #$01
     bne @fast_return
-    lda EXTRA_KIND
-    bne @check_slots
-    lda $040E,x
-    bne @fast_return
-@check_slots:
-    lda EXTRA_BASE
-    beq :+
-    bpl @active
-:
-    lda EXTRA_BASE+$10
-    beq :+
-    bpl @active
-:
-    lda EXTRA_BASE+$20
-    beq @fast_return
-    bpl @active
-@fast_return:
-    pla
-    tay
-    pla
-    plp
-    rts
 @active:
-    lda $10
-    sta EXTRA_OLD10
-    lda $11
-    sta EXTRA_OLD11
-    lda $8E
-    sta EXTRA_OLD8E
-    ; Save slot 0 lazily: most enemies are far from every backed shot.
+    ; Save slot 0 and $10/$11/$8E lazily: most enemies are far from backed shots.
     lda #$00
     sta EXTRA_KIND+$03 ; $6457: 1 once slot 0 has been saved this call
     sta EXTRA_INDEX
@@ -477,6 +430,12 @@ ExtraCollision:
     bcc @next
     lda EXTRA_KIND+$03
     bne :+
+    lda $10
+    sta EXTRA_OLD10
+    lda $11
+    sta EXTRA_OLD11
+    lda $8E
+    sta EXTRA_OLD8E
     jsr ExtraSaveZero
     lda #$00
     sta $8E
@@ -488,7 +447,8 @@ ExtraCollision:
     stx $10
     lda EXTRA_KIND
     bne @shield
-    jsr NativeEnemyFire
+    ldy #$00
+    jsr $E498
     jmp @store
 @shield:
     jsr NativeShieldFire
@@ -502,9 +462,8 @@ ExtraCollision:
     cmp #$30
     bcc @slot
     lda EXTRA_KIND+$03
-    beq :+
+    beq @fast_return
     jsr ExtraRestoreZero
-:
     lda EXTRA_OLD8E
     sta $8E
     lda EXTRA_OLD10
@@ -512,6 +471,7 @@ ExtraCollision:
     lda EXTRA_OLD11
     sta $11
     ldx EXTRA_ENEMY_X
+@fast_return:
     pla
     tay
     pla
@@ -574,6 +534,14 @@ BarbaExtraBlocks:
     pha
     ldx #$00
 @slot:
+    txa
+    lsr
+    lsr
+    lsr
+    lsr
+    eor $12
+    and #$01
+    bne @next
     lda EXTRA_BASE,x
     beq @next
     bmi @next
@@ -589,28 +557,11 @@ BarbaExtraBlocks:
     bcc @next
     cmp #$D8
     bcs @next
-    clc
-    adc #$05
-    sta $0480
+    tay
     txa
     pha
-    lda $0707
-    beq @castle_slot
-    cmp #$03
-    bcs @native_block
-    bcc @town_burn
-@castle_slot:
-    lda $0561
-    ora $0706
-    beq @town_burn
-@native_block:
-    lda #$09
-    sta $80
-    jsr $E1DD
-    jmp @slot_done
-@town_burn:
-    jsr BarbaTownBurn
-@slot_done:
+    tya
+    jsr BarbaBlockRun
     pla
     tax
 @next:

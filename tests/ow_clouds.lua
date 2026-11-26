@@ -228,11 +228,16 @@ emu.addEventCallback(function()
             -- Verify fresh splits every frame, including during sampled combat audio.
             if lines[0]~=31 or lines[1]~=sky then eastWalk.badSplits=eastWalk.badSplits+1 end
             eastWalk.frames=eastWalk.frames+1
-            -- The trail sits ahead of enemies in $50-$5C; displaced enemy
-            -- sprites move to free entries, so no sprite may be lost.
-            local near,outer,tip,far=0x6550,0x6554,0x6558,0x655C
-            local function shown(slot,tile) return r(slot)<0xF0 and r(slot+1)==tile end
+            -- The trail takes the highest free entries behind every enemy and
+            -- moves nothing, so no sprite may be lost and no free entry may sit
+            -- above its lowest piece.
+            local ts=trailSlots()
+            local near,outer,tip,far=ts.near,ts.outer,ts.tip,ts.far
+            local function shown(slot,tile) return slot and r(slot)<0xF0 and r(slot+1)==tile end
             if shown(near,0x15) then
+                for slot=near,0x65FC,4 do
+                    if r(slot)>=0xF0 then eastWalk.badTrail=eastWalk.badTrail+1;break end
+                end
                 local facesRight=r(0x651A)&0x40~=0
                 local x=r(0x651B)+(facesRight and -24 or 16)
                 if facesRight then eastWalk.trailRight=eastWalk.trailRight+1
@@ -265,7 +270,7 @@ emu.addEventCallback(function()
                 end
                 local pieces=0
                 for _,piece in ipairs({{near,0x15},{outer,0x3F},{tip,0x45},{far,0x31}}) do
-                    if shown(piece[1],piece[2]) then pieces=pieces+1 end
+                    if piece[1] and shown(piece[1],piece[2]) then pieces=pieces+1 end
                 end
                 if shadowShown-pieces~=nativeShown then eastWalk.badTrail=eastWalk.badTrail+1 end
             end

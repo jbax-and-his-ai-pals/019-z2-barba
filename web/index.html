@@ -339,6 +339,7 @@
 
     <nav class="tab-bar" aria-label="Workspace Views">
       <button type="button" class="tab-btn active" data-tab="fe">Barba Enterprise (Flags &amp; Seed)</button>
+      <button type="button" class="tab-btn" data-tab="titles">Title Screen Review</button>
       <button type="button" class="tab-btn" data-tab="patcher">ROM Patcher (Local BPS)</button>
       <button type="button" class="tab-btn" data-tab="waldo">Where's Barba? Tile Tagger</button>
       <button type="button" class="tab-btn" data-tab="feud">Family Feud Cast</button>
@@ -644,6 +645,42 @@
         </div>
       </section>
     </div>
+
+    <div id="view-titles" class="hidden">
+      <section class="top-box" aria-label="Title Screen Review Controls">
+        <div class="row">
+          <strong style="color:var(--gold);">Done Title Screens:</strong>
+          <div id="titles-done-strip" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+        </div>
+        <div class="row">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;" role="tablist" aria-label="Title Review Sub-tabs">
+            <button id="titles-subtab-main" class="primary" type="button">Title Screens (6)</button>
+            <button id="titles-subtab-mask" type="button">Jason Mask Lab (F13)</button>
+          </div>
+          <label for="titles-filter" style="min-width:52px;">Filter</label>
+          <select id="titles-filter">
+            <option value="all">All Remaining Games (6)</option>
+            <option value="prototype">Not Started / Prototyped (F13, Zelda 1)</option>
+            <option value="rework">Fixed / Needs Rework (SMB, Punch-Out!!)</option>
+            <option value="discuss">Direction &amp; Multi-Screen (MM2, Wheel)</option>
+          </select>
+          <label for="titles-zoom" style="min-width:42px;">Zoom</label>
+          <select id="titles-zoom">
+            <option value="1">1x (256px)</option>
+            <option value="2" selected>2x (512px)</option>
+          </select>
+          <label style="display:inline-flex;align-items:center;gap:6px;min-width:auto;cursor:pointer;">
+            <input id="titles-anim" type="checkbox" checked> Animate Intro↔Title
+          </label>
+          <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;">
+            <button id="titles-copy-md" class="primary" type="button">Copy Feedback (Markdown)</button>
+            <button id="titles-copy-json" type="button">Copy Feedback (JSON)</button>
+          </div>
+        </div>
+        <div class="toast" id="titles-toast" role="status" aria-live="polite"></div>
+      </section>
+      <main class="grid" id="titles-list"></main>
+    </div>
   </div>
 
   <script src="catalog.js"></script>
@@ -653,6 +690,8 @@
   <script src="feud_cast_ui.js"></script>
   <script src="duck_tiles_data.js"></script>
   <script src="duck_tiles_ui.js"></script>
+  <script src="title_review_data.js"></script>
+  <script src="title_review_ui.js"></script>
   <script>
     const catalog = window.BARBA_FE_CATALOG;
     const state = { values: {}, seed: 'BARBA2026', filter: 'all', preset: 'barba' };
@@ -1048,12 +1087,13 @@
       document.getElementById('view-waldo').classList.toggle('hidden', tab !== 'waldo');
       document.getElementById('view-feud').classList.toggle('hidden', tab !== 'feud');
       document.getElementById('view-duck').classList.toggle('hidden', tab !== 'duck');
+      document.getElementById('view-titles').classList.toggle('hidden', tab !== 'titles');
     };
     document.querySelectorAll('.tab-btn').forEach(btn => {
       btn.onclick = () => switchTab(btn.dataset.tab);
     });
     const reqTab = new URLSearchParams(location.search).get('tab') || location.hash.replace('#', '');
-    if (['fe', 'patcher', 'waldo', 'feud', 'duck'].includes(reqTab)) switchTab(reqTab);
+    if (['fe', 'titles', 'patcher', 'waldo', 'feud', 'duck'].includes(reqTab)) switchTab(reqTab);
 
     // Client-side BPS ROM Patcher
     (() => {

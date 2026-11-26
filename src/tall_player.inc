@@ -982,9 +982,7 @@ BarbaDisplayRight:
 ; Called from the Bank 3 hop after EncounterTorsoFrom6.
 ; Return through the fixed mapper routine to restore Bank 6.
 DrawPlayerTrailReturn6:
-    jsr DrawEncounterTorso
-EncounterTorsoReturn6:
-    jmp SwapToBank6
+    jmp DrawEncounterTorso
 
 ; Three frames behind Barba and a further three behind the torso. Refill
 ; after a transition or a displacement outside normal six-frame travel.

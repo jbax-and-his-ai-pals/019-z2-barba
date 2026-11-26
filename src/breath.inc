@@ -8,13 +8,13 @@ BREATH_GEOMETRY_FLAGS = $05F6
 BURST_DEADLINE = $05F1 ; finite 120-update lifetime, including blocked spawns
 BREATH_BURST_DELAY = $05F7
 BREATH_BURST_STATE = $05F8 ; 0 ready, 1 active, 2 wait for release/attack idle
-VOLLEY_SLOT = $05FC ; two independent projectile lifetime counters (33 updates)
-VOLLEY_LIFE = $21 ; 33 updates / 32 movement steps = 64 px
+VOLLEY_SLOT = $05FC ; two independent projectile lifetime counters (63 updates)
+VOLLEY_LIFE = $3F ; 63 updates / 62 movement steps = 124 px
 BREATH_UP = $646B ; volley aim latch: 0 forward, $40 upward
 BREATH_REMAINING = $05FE ; pending shots, initially four after first allocation
 METEOR_STATE = $6474 ; 0 idle, 1 diving (METEOR spell, slot 4 / $076F bit 4)
 METEOR_WAVE = $C0 ; INFERNO_AIM / VOLLEY_SLOT flag pair: flat floor shockwave
-METEOR_WAVE_LIFE = VOLLEY_LIFE ; 33 updates (64 px each way); longer waves hold the 2-live-shot cap and throttle the next volley
+METEOR_WAVE_LIFE = VOLLEY_LIFE ; 63 updates (124 px each way)
 METEOR_WAVE_DY = $12 ; shockwave Y below the player's $29 (floor-level enemies)
 METEOR_DIVE_VY = $06 ; forced fall speed while diving (6 px/frame)
 
@@ -168,8 +168,10 @@ BarbaLoadOk:
     tax
     cpx #$30
     bcc @extra
+    lda $01
+    beq @allow
     lda $00
-    cmp #$02
+    cmp #$04
     bcc @total
     lda $01
     cmp #$02
@@ -180,12 +182,13 @@ BarbaLoadOk:
     adc $01
     cmp #LOAD_LIMIT
     bcs @deny
+@allow:
     sec
     rts
 @deny:
     clc
     rts
-LOAD_LIMIT = 7
+LOAD_LIMIT = 6
 
 ; Both damage classes share aim and expiry. Fire changes vulnerability,
 ; not the lifetime, which guarantees that a two-slot pool can emit five shots.

@@ -28,15 +28,15 @@ ShoutTile_P = $BF
 ; The counter draws digit 0 with ShoutTile_O to save a pair.
 ShoutTile_B = $AE
 ShoutTile_H = $7C
-ShoutTile_X = $6C
+ShoutTile_X = $66
 ShoutTile_1 = $78
 ShoutTile_2 = $7A
-ShoutTile_3 = $9C
-ShoutTile_4 = $9E
-ShoutTile_5 = $A0
-ShoutTile_6 = $A2
-ShoutTile_7 = $A4
-ShoutTile_8 = $A6
+ShoutTile_3 = $B2
+ShoutTile_4 = $B4
+ShoutTile_5 = $94
+ShoutTile_6 = $96
+ShoutTile_7 = $98
+ShoutTile_8 = $AC
 ShoutTile_9 = $AA
 ; Town sprite palette 2 ($0F black, $16 red, $36 pale): letters use index 3,
 ; outline index 1. The same palette already draws the ash pile.

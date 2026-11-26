@@ -96,8 +96,22 @@ The original two slots and three backed slots retain full projectile range. The 
 without locking movement. Holding B does not restart it; B release and an idle
 attack state (`$0400 == 0` or standing post-slash recovery `$0400 == 4`) are required before rearming.
 
+- **Dark-cave envelope firelight & rounded glow halo (`src/cave_light.inc`, `src/scanline_irq.inc`, Build #767):** When
+  in a West Hyrule / Death Mountain dark grotto without the Candle (`$0736 = $0B`, `$0707 = 0`,
+  `$0785 = 0`, `($07AF & $38) = $08`), `CaveFireLightHop6` (`BANK6_HAZE`, called from
+  `FinishBossOam6`) fast-returns with 0 bank switches while idle (`$8D | $8E | EXTRA_LIVE | CAVE_GLOW_ON | CAVE_PAL_PEND == 0`),
+  and otherwise hops to `CaveFireLight1` (`BANK1_SOULS`) to:
+  1. Check live fireball RAM (`$8D`, `$8E`, `$6400`, `$6410`, `$6420` in `1..$7F`, skipping extra slots when `EXTRA_LIVE == 0`)
+     and place a rounded, stippled behind-BG (`$20`) Pal-2 (`$02`) OAM glow halo (`$87` from `CHR 00` `$86/$87`, rotating H/V-flip and `±1` px shimmer) in free DMA shadow
+     slots (`CLOUD_OAM_START` down to `$60`) behind each live fireball (`$38/$40/$3C/$44/$48`).
+  2. Drive a 10-step (`0..9`) envelope in `CAVE_GLOW_ON` (`$64FF`) toward a count-proportional target (`1→4`, `2→6`, `3→8`, `4-5→9` capped), igniting immediately to dim ember (`1`), swelling (`+1` / 3 frames) with top-end PRNG shimmer (`Disp 7..9`), descending (`-1` / 3 frames) as fireballs expire, and fading smoothly (`-1` / 2 frames) back to cold blue (`0`) when none remain.
+  3. Queue `CAVE_PAL_PEND` (`$635F`) for VBlank direct palette writes (`CaveApplyPalHop6` → `CaveApplyPal2` in `BANK2_CAVE`, 4 × 18-byte palettes) and update `CAVE_LIGHT_DISP` (`$6741`) so `CaveEmph6` in `IrqSetup6` applies `$2001` emphasis (`$E0` dim / `$20` red tint / `$00` clean) below scanline 31.
+     Verified by `tests/cave_light.lua`.
+
 A full pool retries only until the 120-update burst deadline. Each projectile
-has a 33-update maximum lifetime and is cleared before its Y coordinate wraps.
+has a 63-update maximum lifetime (`VOLLEY_LIFE = $3F`, 124 px horizontally) and
+is cleared before its Y coordinate wraps. `BarbaLoadOk` caps live player shots
+at 2 when `>= 4` enemies are active (and enforces `enemies + live_shots < 7`).
 Menus, transitions, death and Wyrmling cancel queued shots. Health is never an
 eligibility test. Breath is always fire class (`$05CA = 0`), so Fire-only enemies
 take hits without a spell; flame class strictly dominates the native beam (`$D2`)

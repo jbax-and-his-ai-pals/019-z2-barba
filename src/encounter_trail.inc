@@ -5,7 +5,7 @@
 ResetEncounterTrail:
     lda #$00
     sta TRAIL_INDEX
-    rts
+    jmp SwapToBank6
 
 ; Sample torso and tip motion for the bank-1 shadow OAM pass.
 .export DrawEncounterTorso
@@ -44,7 +44,7 @@ DrawEncounterTorso:
     adc #$10                  ; 24px after the left edge of the body
     bcc @place
 @reject:
-    rts
+    jmp SwapToBank6
 @facing_right:
     sec
     sbc #$18                  ; 16px before the left edge of the body
@@ -143,61 +143,80 @@ DrawEncounterTrailSprites:
     lda #$F8
     sta $6500,x
 @far_call:
-    lda #>(DrawEncounterTrailSprites1-1)
+    lda #>(DrawEncounterTrailSprites6-1)
     pha
-    lda #<(DrawEncounterTrailSprites1-1)
+    lda #<(DrawEncounterTrailSprites6-1)
     pha
-    lda #$01
-    jmp $FFCC
+    jmp SwapToBank6
 
-.segment "BANK1"
-; Sprite priority on a crowded scanline: Barba, his fireballs, projectiles
-; and clouds first, then the trail, then enemies. The trail takes the first
-; four enemy entries ($50-$5C). A visible occupant moves to the last free
-; entry, so enemies drop (and flicker through their native rotation) before
-; the tail does. With no free entry left, the remaining pieces are skipped.
-TRAIL_OAM = $50
-DrawEncounterTrailSprites1:
-    lda #$FC
-    sta $05                   ; next free-entry candidate, from the end
-    ldy #$00                  ; piece
-    ldx #TRAIL_OAM
+.segment "BANK6"
+; Sprite priority on a crowded scanline: Barba, his fireballs, projectiles,
+; enemies and the HUD markers first, then the trail. The trail never moves
+; another sprite: it takes the four highest free shadow entries, with the near
+; torso in the lowest of them so it still outranks the outer torso and tips.
+; The tail gives way on full scanlines instead of the enemies. Entries below
+; TRAIL_FLOOR (Barba, fireballs, projectiles) are never used; with too few
+; free entries the tips are skipped first. Clouds, smoke and the downstab
+; tail are placed later, in the free entries below the trail.
+TRAIL_FLOOR = $50
+TRAIL_SLOTS = $02             ; $02-$05: free entries found, highest first
+TRAIL_FREE = $06              ; visible pieces / upper bound in TRAIL_SLOTS
+TRAIL_POS = $07               ; next slot index in TRAIL_SLOTS
+DrawEncounterTrailSprites6:
+    ldy #$03
+    lda #$00
+    sta TRAIL_FREE
+@count:
+    lda $000C,y               ; one entry per visible piece
+    cmp #$F0
+    bcs :+
+    inc TRAIL_FREE
+:
+    dey
+    bpl @count
+    ldy TRAIL_FREE
+    beq @done
+    ldx #$FC
+    bne @scan
+@found:
+    dey
+    stx TRAIL_SLOTS,y
+    beq @found_all
+    txa
+    sbc #$04                  ; C=1 from cmp #$F0
+    tax
+    cmp #TRAIL_FLOOR
+    bcc @scanned
+@scan:
+    lda $6500,x
+    cmp #$F0
+    bcs @found
+    txa
+    sbc #$03                  ; C=0 from cmp #$F0 -> subtracts 4
+    tax
+    cmp #TRAIL_FLOOR
+    bcs @scan
+@scanned:
+    stx CLOUD_OAM_START
+    sty TRAIL_POS
+    bpl @start_pieces
+@found_all:
+    txa
+    sbc #$04                  ; C=1 from cmp #$F0 -> clouds start below last trail slot
+    sta CLOUD_OAM_START
+    sty TRAIL_POS             ; Y = 0
+@start_pieces:
+    ldy #$00                  ; piece: near torso first, into the lowest entry found
 @piece:
     lda $000C,y
     cmp #$F0
     bcs @next_piece
-    lda $6500,x
-    cmp #$F0
-    bcs @write
-    sty $06
-    ldy $05
-@find:
-    cpy #TRAIL_OAM+$10
-    bcc @done                 ; no room to move the occupant
-    lda $6500,y
-    cmp #$F0
-    bcs @found
-    dey
-    dey
-    dey
-    dey
-    bne @find
-@found:
-    lda $6500,x
-    sta $6500,y
-    lda $6501,x
-    sta $6501,y
-    lda $6502,x
-    sta $6502,y
-    lda $6503,x
-    sta $6503,y
-    dey
-    dey
-    dey
-    dey
-    sty $05
-    ldy $06
-@write:
+    ldx TRAIL_POS
+    cpx TRAIL_FREE
+    bcs @done                 ; no entry left for this or any farther piece
+    inc TRAIL_POS
+    lda TRAIL_SLOTS,x
+    tax
     lda $000C,y
     sta $6500,x
     lda $0008,y
@@ -207,15 +226,11 @@ DrawEncounterTrailSprites1:
     lda $01
     sta $6502,x
 @next_piece:
-    inx
-    inx
-    inx
-    inx
     iny
     cpy #$04
     bne @piece
 @done:
-    jmp $FFC5
+    rts
 TrailPieceTiles:
     .byte TRAIL_TORSO_LEFT, TRAIL_TORSO_RIGHT, TRAIL_TIP, TRAIL_TIP_FAR
 

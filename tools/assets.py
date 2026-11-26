@@ -195,17 +195,17 @@ SHOUT_PAIR_SHA256 = {
     (7, 0xA0): '56c8c7c281e4177f', (7, 0xA2): '904a335528773b88', (7, 0xA8): '8a67b0ac638f1721',
     (7, 0xAA): '28d9e3968e5dce9e',
     (7, 0xBA): '77125f6e91a0dc9e', (7, 0xBC): '14f9bfc9ad98c854', (7, 0xBE): '5155a7a4143a9e04',
-    # Combo counter X/1-9, BA, and H: unused Link-only pairs of town sprite bank 6.
-    (6, 0x6C): '41bbc50209ce0558', (6, 0x78): '3054cb3b20613bbd', (6, 0x7A): 'd5aa306916f80c94',
-    (6, 0x7C): 'dd16785f9de0c5fe',
-    (6, 0x9C): 'e5f9ae051f2311dd', (6, 0x9E): '4c70c04982e6fd14', (6, 0xA0): 'ba30f82dfe5d2a47',
-    (6, 0xA2): 'c8832b8c620c9f3a', (6, 0xA4): '081984032b7704fb', (6, 0xA6): '70a54fcbbaddb8d6',
-    (6, 0xAA): '75da72438cdf4244', (6, 0xAE): 'be16549eb5b081fb',
+    # Combo counter X/1-9, BA, and H: unused Link-only / palace pairs of town sprite bank 6.
+    (6, 0x66): 'beda0a359f94a46e', (6, 0xB2): 'd9a52e50afa1aff0', (6, 0xB4): '9e9f47dbebac4537',
+    (6, 0x78): '3054cb3b20613bbd', (6, 0x7A): 'd5aa306916f80c94', (6, 0x7C): 'dd16785f9de0c5fe',
+    (6, 0x94): 'a19816f6150159eb', (6, 0x96): 'c4a1e8d2f73af810', (6, 0x98): 'ad60a4ced100a384',
+    (6, 0xAA): '75da72438cdf4244', (6, 0xAC): 'e0526bda20a145b0', (6, 0xAE): 'be16549eb5b081fb',
 }
 # Town sprite pairs that must stay vanilla (checked after every build).
 TOWN_SPRITE_PAIRS = {
     7: tuple(range(0x00, 0x28, 2)) + (0x2E, 0x30, 0x64, 0x66, 0x74, 0x76, 0x7A, 0xC4, 0xF4, 0xFE),
-    6: (0x62, 0x64, 0x74, 0x76, 0xC0, 0xC2, 0xC4, 0xC6, 0xC8, 0xCA, 0xCC, 0xCE),
+    6: (0x60, 0x62, 0x64, 0x6C, 0x6E, 0x70, 0x74, 0x76, 0x9C, 0x9E, 0xA0, 0xA2, 0xA4, 0xA6,
+        0xC0, 0xC2, 0xC4, 0xC6, 0xC8, 0xCA, 0xCC, 0xCE),
 }
 
 
@@ -780,3 +780,17 @@ def compile_assets(root: Path, source_path: Path | None = None) -> tuple[bytes, 
         'note': 'Actor-relative y assumes canvas starts actorY-16; right-facing x mirrors at 23.'
     }, indent=2)+'\n')
     return bytes(mapping), graphics, bytes(ow), frames
+
+
+def compile_overworld_wyrmling(root: Path) -> bytes:
+    """Build 2 frames of centered 16x16 overworld Wyrmling sprite pairs ($80-$87)."""
+    wyrmling = json.loads((root / 'assets/barba.json').read_text())['wyrmling']
+    if len(wyrmling) != 2 or any(len(f) != 16 or any(len(r) != 8 or set(r) - set('0123') for r in f)
+                                 for f in wyrmling):
+        raise ValueError('wyrmling needs two 8x16 frames of 0-3 pixels')
+    out = bytearray()
+    for frame in wyrmling:
+        left_pair, right_pair = sprite_pairs(['0000' + row + '0000' for row in frame])
+        out.extend(left_pair)
+        out.extend(right_pair)
+    return bytes(out)

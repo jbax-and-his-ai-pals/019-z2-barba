@@ -51,6 +51,7 @@ end,emu.callbackType.exec,0xC197)
 emu.addEventCallback(function()
     local b=newGameInput(frame)
     if (frame>=1200 and frame<1350) or (frame>=1790 and frame<1970) then b.right=true end
+    if frame==1356 then b.start=true end
     emu.setInput(b,0)
 end,emu.eventType.inputPolled)
 
@@ -86,7 +87,13 @@ emu.addEventCallback(function()
     if frame==1355 then
         check(sawBridgeParallax and r(0x64EE)>=63,string.format('Overworld bridge uses 3-band parallax (fd=%d cnt=%d line=%d x0=%d x1=%d x2=%d)',
             r(0xFD),r(0x64D7),r(0x64EE),r(0x64DC),r(0x64DD),r(0x64DE)))
+    end
+    if frame==1375 then
+        check(r(0x0524)>=2 and r(0x64EE)>=63 and r(0x64D7)==1 and r(0x64DC)==r(0xFD) and r(0x64E0)==(r(0x0746)%2),
+            string.format('Overworld pause skips sky split (p524=%d cnt=%d x0=%d fd=%d c0=%d c746=%d)',
+                r(0x0524),r(0x64D7),r(0x64DC),r(0xFD),r(0x64E0),r(0x0746)%2))
         -- Phase 2b: Overworld forest ($0707=0, room $03) disables parallax (OW_PARALLAX_LINE=0)
+        w(0x0524,0)
         w(0x707,0);w(0x706,0);w(0x769,1);w(0x561,0x03)
         w(0x568,0);w(0x56B,0);w(0x56C,0);w(0x701,0);w(0x75C,0);w(0x704,0)
         w(0x736,7);w(0x73D,0);w(0x726,1)

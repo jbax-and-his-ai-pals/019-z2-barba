@@ -187,7 +187,8 @@ emu.addEventCallback(function()
                 roarPoseHeld=roarPoseHeld and music==0 and r(0x076C)~=3
                     and r(0x05FA)==0x48 and r(0x0218)-r(0x0204)==0x28
                 local y=r(0x218)
-                roarTrailSeen=roarTrailSeen or y<0xF0 and r(0x6518)==y and r(0x6519)==0x35 and r(0x6550)==y
+                local near=trailSlots().near
+                roarTrailSeen=roarTrailSeen or y<0xF0 and r(0x6518)==y and r(0x6519)==0x35 and near~=nil and r(near)==y
             end
         end
         if r(0x076C)==3 then endingStart=frame end

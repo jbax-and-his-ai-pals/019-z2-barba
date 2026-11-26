@@ -15,7 +15,7 @@ from assets import (ASH_TILES, CASTLE_FIRE_BANK, CASTLE_FIRE_TILE_SHA256,
                     TEXT_GLYPH_BANK, TEXT_GLYPH_SHA256, TEXT_GLYPHS,
                     BREATH_ICON_BANKS, BREATH_ICON_SHA256, BREATH_ICON_TILE,
                     compile_assets, compile_breath_icon, compile_castle_fire, compile_ending_fire,
-                    compile_castle_shout_glyphs, compile_file_select_doll,
+                    compile_castle_shout_glyphs, compile_file_select_doll, compile_overworld_wyrmling,
                     compile_shout_glyphs, compile_souls_bar_chr, compile_text_glyphs, compile_title_logo,
                     compile_title_shore, compile_town_fire, validate_layout)
 from bps import apply, encode
@@ -119,7 +119,7 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
         if source[offset] != expected:
             raise ValueError(f'FarCall0 bank fingerprint changed: {bank}')
     segment_groups = {
-        'lava': 'platform', 'terrain': 'platform', 'gateway': 'platform',
+        'lava': 'platform', 'terrain': 'platform', 'lag-ret': 'platform', 'gateway': 'platform',
         'bank6': 'platform', 'bank6-pad': 'platform',
         'town': 'town_chaos', 'bank2-smoke': 'town_chaos', 'bank3-sign': 'town_chaos',
         'bank3-pad': 'town_chaos', 'bank3-dlg': 'town_chaos',
@@ -127,20 +127,37 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
         'bank4-spk': 'scanline_scenery', 'bank4-spk2': 'scanline_scenery',
         'bank4-spk3': 'scanline_scenery', 'bank4-spk4': 'scanline_scenery',
     }
-    for filename, bank, address in [('code', 0, 0xAA40), ('bank0-ow', 0, 0xA89E), ('bank0-tail', 0, 0xBFE0),('lava', 7, 0xD39A), ('terrain', 7, 0xFF4C), ('town', 3, 0xB803), ('gateway', 7, 0xFEAA), ('bank6', 6, 0xAC09), ('bank6-cloud', 6, 0x8900), ('bank6-pad', 6, 0x8DB0), ('bank6-haze', 6, 0x9DA8), ('bank5', 5, 0xBDE0), ('bank1', 1, 0x9EB9), ('bank2-smoke', 2, 0xA933), ('bank3-sign', 3, 0x9D0A), ('bank3-pad', 3, 0x9134), ('bank3-dlg', 3, 0x8BB1), ('bank4-spk', 4, 0x9EE0), ('bank4-spk2', 4, 0xA539), ('bank4-spk3', 4, 0xA80F), ('bank4-spk4', 4, 0xA7E5)]:
+    for filename, bank, address in [('code', 0, 0xAA40), ('bank0-ow', 0, 0xA89E), ('bank0-tail', 0, 0xBFE0),('lava', 7, 0xD39A), ('terrain', 7, 0xFF4C), ('lag-ret', 7, 0xE013), ('town', 3, 0xB803), ('gateway', 7, 0xFEAA), ('bank6', 6, 0xAC09), ('bank6-cloud', 6, 0x8900), ('bank6-pad', 6, 0x8DB0), ('bank6-haze', 6, 0x9DA8), ('bank5', 5, 0xBDE0), ('bank5-splat', 5, 0xBBD5), ('bank1', 1, 0x9EB9), ('bank2-cave', 2, 0x87D3), ('bank2-smoke', 2, 0xA933), ('bank3-sign', 3, 0x9D0A), ('bank3-pad', 3, 0x9134), ('bank3-dlg', 3, 0x8BB1), ('bank4-spk', 4, 0x9EE0), ('bank4-spk2', 4, 0xA539), ('bank4-spk3', 4, 0xA80F), ('bank4-spk4', 4, 0xA7E5), ('bank4-ow', 4, 0x8817), ('bank4-ow2', 4, 0xA3FB), ('bank5-ow', 5, 0xBB15), ('bank2-ow', 2, 0x9FA1), ('bank2-ow2', 2, 0xBF33), ('bank2-ow3', 2, 0x93C9)]:
         data = (output/f'barba-{filename}.bin').read_bytes()
         expected = b'\xFF'*len(data)
         if filename == 'code' and len(data) > 0x1530:
             expected = b'\xFF'*0x1530 + bytes.fromhex('78d8a2008e00')[:len(data)-0x1530]
+        elif filename == 'lag-ret':
+            expected = bytes.fromhex('85 03 48 20 c5 ff 68 60')[:len(data)]
         overlay.prg(bank, address, data, expected, f'New {filename} routines',
                     group=segment_groups.get(filename, 'barba_core'))
-    if boss_meter == 'souls':
-        souls_bin = (output/'barba-bank1-souls.bin').read_bytes()
-        overlay.prg(1, 0xA933, souls_bin, b'\xFF'*len(souls_bin), 'Dark Souls bottom boss bar (Bank 1)', group='boss_meters')
+    gear_bin = (output/'barba-bank1-gear.bin').read_bytes()
+    if gear_bin:
+        overlay.prg(1, 0x87C6, gear_bin, b'\xFF'*len(gear_bin), 'Cosmetic gear menu (Bank 1)')
+    pad2_bin = (output/'barba-bank1-pad2.bin').read_bytes()
+    if pad2_bin:
+        overlay.prg(1, 0x84E7, pad2_bin, b'\xFF'*len(pad2_bin), 'Arcade DoubleXp2 (Bank 1)')
+    tail1_bin = (output/'barba-bank1-tail.bin').read_bytes()
+    if tail1_bin:
+        overlay.prg(1, 0xBFE0, tail1_bin, b'\xFF'*len(tail1_bin), 'Arcade SideViewInit2 (Bank 1)')
+    gear2_bin = (output/'barba-bank1-gear2.bin').read_bytes()
+    if gear2_bin:
+        overlay.prg(1, 0x93BB, gear2_bin, b'\xFF'*len(gear2_bin), 'Cosmetic gear menu init (Bank 1)')
+    souls_bin = (output/'barba-bank1-souls.bin').read_bytes()
+    if souls_bin:
+        overlay.prg(1, 0xA933, souls_bin, b'\xFF'*len(souls_bin), 'Dark Souls bottom boss bar & gear UI (Bank 1)', group='boss_meters')
     scene_oam = (output/'barba-bank6-oam.bin').read_bytes()
     overlay.prg(6, 0x878C, scene_oam, b'\xFF'*len(scene_oam), 'Room sprite priority and boss meters', group='boss_meters')
     palace_roar = (output/'barba-palace-roar.bin').read_bytes()
     overlay.prg(4, 0x8EC3, palace_roar, b'\xFF'*len(palace_roar), 'Palace roar choreography and boss meters')
+    bank4_gear = (output/'barba-bank4-gear.bin').read_bytes()
+    if bank4_gear:
+        overlay.prg(4, 0x83DC, bank4_gear, b'\xFF'*len(bank4_gear), 'Cosmetic gear OAM renderer (Bank 4)')
     palace_shake = (output/'barba-palace-shake.bin').read_bytes()
     overlay.prg(6, 0x87CC, palace_shake, b'\xFF'*len(palace_shake), 'Lava Link entrance camera shake')
     lair_hud_shake = (output/'barba-lair-hud-shake.bin').read_bytes()
@@ -165,6 +182,9 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
     hook(4, 0xB122, 'LavaLinkIntro', 0x20, '20 de b1')
     hook(0, 0x8518, 'BarbaOverworldA', 0x4C, 'ad 89 07')
     hook(0, 0x922A, 'ThunderHit', 0x20, '20 26 e7')
+    splat5 = labels['GiantBotSplat5']
+    overlay.prg(5, 0xA180, bytes([0x20, splat5 & 255, splat5 >> 8, 0xB0, 0x45, 0xA0, 0x05, 0xEA]),
+                bytes.fromhex('b5 c2 c9 30 b0 44 a0 05'), 'GiantBotSplat5 hook (preserving $A188)')
     hook(7, 0xD52D, 'BarbaDisplay', 0x20, '20 f0 eb')
     hook(0, 0x91A1, 'BarbaDisplay', 0x4C, '4c f0 eb')
     hook(0, 0x92DE, 'BarbaDisplay', 0x4C, '4c f0 eb')
@@ -229,6 +249,15 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
         'a0 01 e8 20 7d f2 a6 10 b5 b6 0a a8 b9 f1 d5 85 0e b9 f2 d5 4c d6 d6'
         ' 03 d6 ca d6 ae dc 6c dd'
     ), 'Skip offscreen mask for empty enemy slots and direct-dispatch active enemies')
+    overlay.prg(7, 0xD458, b'\x20' + labels['FarCall0'].to_bytes(2, 'little')
+                + labels['ArcadeDoubleXp0'].to_bytes(2, 'little') + b'\xea',
+                bytes.fromhex('ad 76 07 18 65 00'), 'DOUBLE spell 2x XP hook')
+    overlay.prg(7, 0xE899, b'\x20' + labels['FarCall0'].to_bytes(2, 'little')
+                + labels['ArcadeLuckyDrop0'].to_bytes(2, 'little') + b'\xea',
+                bytes.fromhex('fe de 05 bd de 05'), 'LUCKY spell forced drop hook')
+    overlay.prg(7, 0xE731, b'\x20' + labels['FarCall0'].to_bytes(2, 'little')
+                + labels['ArcadeHeavyDmg0'].to_bytes(2, 'little') + b'\xea',
+                bytes.fromhex('38 f9 6c e6 95 c2'), 'HEAVY spell 2x damage hook')
     hook(7, 0xE48B, 'EnemyFireGateway', 0x4C, 'b5 b6 c9 01', 1)
     hook(7, 0xE617, 'ShieldFireGateway', 0x4C, 'a5 c8 0a')
     hook(7, 0xE646, 'ShieldReboundImpact', 0x20, '20 e8 e6')
@@ -271,6 +300,11 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
         '98 f2 dd db 33 04 01 0f 01 00'
     ), 'MMC3 PRG swap (SwapPRG) and LagNmiBank6 trampoline')
     overlay.prg(7, 0xFFFE, bytes.fromhex('ae d4'), bytes.fromhex('f0 ff'), 'MMC3 scanline IRQ vector ($D4AE)')
+    # Overworld RLE map rows ($6000/$6001) live in WRAM ($7C00-$7FFF); skip
+    # the redundant SwapToSavedPRG / SwapToPRG0 pair per RLE run in LE001.
+    overlay.prg(7, 0xE001, bytes.fromhex('b1 0e 29 0f 85 02 b1 0e 4a 4a 4a 4a 38 65 03 85 03 60'),
+                bytes.fromhex('20 c9 ff b1 0e 29 0f 85 02 b1 0e 4a 4a 4a 4a 38 65 03'),
+                'Skip redundant PRG bank swaps in overworld RLE decode ($E001)', group='platform')
     # Retarget the 5 live bank-0/bank-5 calls to the bank-local $BF9D/$BFB1 MMC1
     # copies so they invoke the fixed-bank MMC3 routines at $FF9D/$FFB1 instead.
     for bank, addr, label in (
@@ -613,6 +647,13 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
                 continue
             offset = CHR_OFFSET + bank*4096 + tile*16
             overlay.put(offset, pair, source[offset:offset+32], f'CHR {bank:02X}: dragon tile {tile:02X}')
+    # AXE Arcade spell: reuse Daira's diagonal spinning axe ($FA in CHR bank 2) at
+    # $7E in non-town side-view banks ($7E is ash in towns) and $FE in town bank 6.
+    daira_axe = source[CHR_OFFSET + 2 * 4096 + 0xFA * 16:CHR_OFFSET + 2 * 4096 + 0xFA * 16 + 32]
+    for bank, tile in [(b, 0x7E) for b in (0, 2, 4, 8, 10, 12, 16, 18, 20, 22, 24)] + [(6, 0xFE)]:
+        axe_off = CHR_OFFSET + bank * 4096 + tile * 16
+        overlay.put(axe_off, daira_axe, source[axe_off:axe_off + 32],
+                    f'CHR {bank:02X}: Daira spinning axe at ${tile:02X}')
     # Ending sprite bank: reuse the four Link pairs displaced by Barba and Zelda.
     ending_fire_graphics = compile_ending_fire()
     fire_off = CHR_OFFSET + 14 * 4096 + 0xE0 * 16
@@ -633,6 +674,30 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
     ])
     q_off = CHR_OFFSET + 15 * 4096 + 0x0F * 16
     overlay.put(q_off, question_tile, b'\x00' * 16, 'CHR 0F: ending question mark tile 0F')
+    # Dark cave fireball glow halo in CHR 00 ($86/$87, replacing unused Link sword beam).
+    cave_glow_top = encode_tile([
+        '00000000',
+        '01000010',
+        '00101000',
+        '01022010',
+        '10233201',
+        '02333320',
+        '12333321',
+        '23333332',
+    ])
+    cave_glow_bot = encode_tile([
+        '23333332',
+        '12333321',
+        '02333320',
+        '10233201',
+        '01022010',
+        '00101001',
+        '01000000',
+        '00000000',
+    ])
+    glow_off = CHR_OFFSET + 0x86 * 16
+    overlay.put(glow_off, cave_glow_top + cave_glow_bot, source[glow_off:glow_off + 32],
+                'CHR 00: dark cave fireball rounded glow halo ($86/$87)')
     # Ending ash tiles ($5E/$62 in CHR 0E only; $62 is Geldarm's head in overworld banks).
     for dst_tile, src_tile in ((0x5E, ASH_TILES[0]), (0x62, ASH_TILES[1])):
         ash_off = CHR_OFFSET + 14*4096 + dst_tile*16
@@ -1210,6 +1275,13 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
         '........', '........', '........', '........',
         '........', '........', '........', '........',
     ])
+    # Replace unused CHR 30 $68-$6B copy and overworld R1 Fairy ($80-$87) with Wyrmling.
+    world[0x68*16:0x6A*16] = graphics[0x68]
+    world[0x6A*16:0x6C*16] = graphics[0x6A]
+    ow_fairy_off = 4096 + 0x80 * 16
+    if hashlib.sha256(world[ow_fairy_off:ow_fairy_off + 128]).hexdigest()[:16] != '80f9fc3bde2ab466':
+        raise ValueError('Overworld R1 Fairy slots $80-$87 do not match expected vanilla bytes')
+    world[ow_fairy_off:ow_fairy_off + 128] = compile_overworld_wyrmling(ROOT)
     offset = CHR_OFFSET+30*4096
     pre_foliage = 4096 + 0x9E * 16
     post_foliage = 4096 + 0xB0 * 16
@@ -1246,12 +1318,32 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
     # Fewer hits: West Hyrule HP table ($9421 + enemy $20, copied to $6D41) 8 -> 4.
     overlay.prg(1, 0x9441, b'\x04', b'\x08', 'Geldarm HP 8 -> 4')
 
-    # Existing menu stores 14-byte rows. Preserve border, cost digits and spacing.
-    for i, name in enumerate(['SCALES','JUMP','LIFE','WYRMLNG','METEOR','REFLECT','SPELL','INFERNO']):
-        offset = prg_offset(0, 0x9C2A + i*14)
-        data = bytes(0xDA+ord(c)-ord('A') for c in name.ljust(7) if c != ' ')
-        data += b'\xCF'*(7-len(data))
-        overlay.put(offset, data, source[offset:offset+7], f'Spell menu: {name}')
+    # Reclaimed SpellMenu_Pane__SpellText ($9C1A..$9D31, 280 bytes) -> 18-spell / 2-col menu stubs.
+    for fname, addr, limit, desc in [
+        ('barba-bank0-spell.bin', 0x9C1A, 0x0118, 'Bank 0 18-spell & 2-col menu stubs'),
+        ('barba-bank0-spell2.bin', 0xA347, 0x0018, 'Bank 0 2-col menu init/attr stubs'),
+        ('barba-bank0-spell3.bin', 0x8DC9, 0x0013, 'Bank 0 2-col menu input stub'),
+    ]:
+        stub = (output / fname).read_bytes()
+        assert len(stub) <= limit, f'{fname} too large: {len(stub)}'
+        off = prg_offset(0, addr)
+        overlay.put(off, stub, source[off:off + len(stub)], desc)
+    spells_bank1 = (output / 'barba-bank1-spells.bin').read_bytes()
+    overlay.prg(1, 0xB234, spells_bank1, b'\xFF' * len(spells_bank1), 'Bank 1 18-spell & 2-col menu routines')
+    hook(0, 0x8CF4, 'ArcadeSideViewInit0', 0x20, '8d 6f 07')
+    hook(0, 0x8DC6, 'ArcadeSpellHook0', 0x4C, '0d 24 05')
+    for ptr_addr, label_name, orig_hex in [
+        (0x9D7D, 'LevelUpInit0', '47 a3'),
+        (0x9DE6, 'SpellMenuInit0', '47 a3'),
+        (0x9DEA, 'SpellMenuAttrSave0', '6b a2'),
+        (0x9DEC, 'SpellMenuDraw0', 'fe a2'),
+        (0x9DEE, 'SpellMenuInput0', 'dd a1'),
+        (0x9DF0, 'SpellMenuAttrSave0', '6b a2'),
+        (0x9DF2, 'SpellMenuRestore0', 'd7 a3'),
+        (0x9DF4, 'SpellMenuDone0', '38 a3'),
+    ]:
+        dest = labels[label_name]
+        overlay.prg(0, ptr_addr, bytes([dest & 255, dest >> 8]), bytes.fromhex(orig_hex), f'Pause pane {label_name}')
 
     # Palace 6 "Lava Link" boss: Link art in R5 CHR bank 154 ($C0-$D1), Spear (05) sword beams, Link palette.
     # Use Sprite Palette 3 ($3F1D) so Sprite Palette 1 ($3F15, shared by health bars and fireballs) stays red/orange.
@@ -2103,6 +2195,25 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
     )
     sv_r2[0x1C * 16:0x1E * 16] = encode_tile(sv_hat_front_rows[:8]) + encode_tile(sv_hat_front_rows[8:])
     ext_chr[(155 - 128) * 1024:(156 - 128) * 1024] = sv_r2
+
+    # R2 bank 181 (side-view): Friday the 13th Hockey Mask over Barba's snout/face.
+    # Color 3 = white mask plate, 1 = dark eye/air holes & outline, 2 = red chevrons.
+    sv_hockey_mask = (
+        '..1111111..',
+        '.133233231.',
+        '.131131131.',
+        '1333333331.',
+        '1323131321.',
+        '1333333331.',
+        '.131313131.',
+        '..1111111..',
+    )
+    sv_r2_mask = bytearray(overlay.target[CHR_OFFSET:CHR_OFFSET + 1024])
+    _overlay_hat_8x16(sv_r2_mask, (0x02, 0x04), 0, 4, sv_hockey_mask)
+    _overlay_hat_8x16(sv_r2_mask, (0x1C,), 0, 4, tuple(r[:8] for r in sv_hockey_mask))
+    _overlay_hat_8x16(sv_r2_mask, (0x20,), 0, 4, tuple(r[:8] for r in sv_hockey_mask))
+    _overlay_hat_8x16(sv_r2_mask, (0x3A, 0x3C), 1, 9, sv_hockey_mask)
+    ext_chr[(181 - 128) * 1024:(182 - 128) * 1024] = sv_r2_mask
     if boss_meter == 'souls':
         ext_chr[(156 - 128) * 1024:(158 - 128) * 1024] = compile_souls_bar_chr()
         # R5 banks 175-180: odd-bank ($076E+1) sprite pairs ($08..$2E -> $C1..$E7,
@@ -2157,6 +2268,49 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
             hat_off = CHR_OFFSET + bank * 4096 + 0x5E * 16
             overlay.put(hat_off, sv_hat_tall, source[hat_off:hat_off + 32],
                         f'CHR {bank:02X}: tall Waldo hat + puffball at $5E')
+
+        # Cross-game cosmetic trophy OAM tiles: $78/$7A/$7C in non-town side-view banks,
+        # $F8/$FA/$FC in town bank 6 (keeping town $78/$7A/$7C shout glyphs untouched).
+        trophy_tiles = (
+            (0x78, 0xF8, (
+                '..1111..',
+                '.133331.',
+                '.123321.',
+                '11222211',
+                '12222221',
+                '12233221',
+                '.111111.',
+                '00000000',
+            )),
+            (0x7A, 0xFA, (
+                '..111...',
+                '.12321..',
+                '..121...',
+                '..121...',
+                '.12221..',
+                '.12221..',
+                '..121...',
+                '...1....',
+            )),
+            (0x7C, 0xFC, (
+                '00000000',
+                '.111111.',
+                '11233211',
+                '11222211',
+                '11233211',
+                '.111111.',
+                '00000000',
+                '00000000',
+            )),
+        )
+        blank8 = ('00000000',) * 8
+        for sv_pair, town_pair, rows8 in trophy_tiles:
+            norm_rows = tuple(r.replace('.', '0') for r in rows8)
+            tile_bytes = encode_tile(norm_rows) + encode_tile(blank8)
+            for bank, pair_id in [(b, sv_pair) for b in (0, 2, 4, 8, 10, 12, 16, 18, 20, 22, 24)] + [(6, town_pair)]:
+                t_off = CHR_OFFSET + bank * 4096 + pair_id * 16
+                overlay.put(t_off, tile_bytes, source[t_off:t_off + 32],
+                            f'CHR {bank:02X}: cosmetic trophy tile at ${pair_id:02X}')
 
     target = bytes(overlay.target) + bytes(ext_chr)
     for bank, expected in enumerate(fingerprints):
@@ -2232,8 +2386,10 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
         chr_base = CHR_OFFSET + prg_16k * 16384 - 128 * 1024
     patch = encode(source, target, 'Zelda II - Barba Edition | development alpha',
                    [(chr_base+30*4096+len(ow), CHR_OFFSET+16*4096+len(ow), 0x60*16-len(ow)),
-                    (chr_base+30*4096+0x64*16, CHR_OFFSET+16*4096+0x64*16, (0xD0-0x64)*16),
-                    (chr_base+30*4096+0xE4*16, CHR_OFFSET+16*4096+0xE4*16, (0x19E-0xE4)*16),
+                    (chr_base+30*4096+0x64*16, CHR_OFFSET+16*4096+0x64*16, (0x68-0x64)*16),
+                    (chr_base+30*4096+0x6C*16, CHR_OFFSET+16*4096+0x6C*16, (0xD0-0x6C)*16),
+                    (chr_base+30*4096+0xE4*16, CHR_OFFSET+16*4096+0xE4*16, (0x180-0xE4)*16),
+                    (chr_base+30*4096+0x188*16, CHR_OFFSET+16*4096+0x188*16, (0x19E-0x188)*16),
                     (chr_base+30*4096+0x1B0*16, CHR_OFFSET+16*4096+0x1B0*16, 8192-0x1B0*16)])
     if apply(source, patch) != target:
         raise ValueError('BPS patch round-trip failed')

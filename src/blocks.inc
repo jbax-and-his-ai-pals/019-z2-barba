@@ -77,22 +77,28 @@ BarbaNativeBlocks:
 
 ; Check one projectile slot X against glove-gated breakable blocks.
 ; Caller must save/restore $80, $047E, $057D and reset $0480 = #$F8.
+; Check each shot every other frame (<=3 px/frame vs 16 px metatiles).
 BarbaBlockSlot:
+    txa
+    eor $12
+    and #$01
+    bne BarbaBlockDone
     lda $8D,x
-    beq @done
-    bmi @done
+    beq BarbaBlockDone
+    bmi BarbaBlockDone
     lda $5A,x
     sec
     sbc $072C
     sta $047E
     lda $48,x
     sbc $072A
-    bne @done
+    bne BarbaBlockDone
     lda $36,x
     cmp #$20
-    bcc @done
+    bcc BarbaBlockDone
     cmp #$D8
-    bcs @done
+    bcs BarbaBlockDone
+BarbaBlockRun:
     clc
     adc #$05
     sta $0480
@@ -110,8 +116,8 @@ BarbaBlockSlot:
 @native_block:
     lda #$09
     sta $80
-    jsr $E1DD
-@done:
+    jmp $E1DD
+BarbaBlockDone:
     rts
 
 ; Scorch outdoor town props, bushes, signs, walls, windows, roofs and ground.
@@ -448,15 +454,11 @@ ScorchRun:
 @anim:
     lda $12
     tay
-    and #$08
-    asl
+    and #$10
     sta $02                 ; $00 = flame A, $10 = flame B
     tya
-    and #$07
-    asl
+    and #$0F
     tax
-    jsr ScorchAnimOne
-    inx
 ScorchAnimOne:
     lda SCORCH_TIME,x
     beq @skip_anim

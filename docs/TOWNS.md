@@ -143,10 +143,15 @@ request therefore leaves no visible word. Up-to-talk is unchanged.
   `$09-$0F`, Fat Woman `$11-$1F`, indoor NPC `$21-$27` in rooms `$2E/$2F`); the
   build refuses to touch them (`TOWN_SPRITE_PAIRS`). Bank-7 glyph pairs: `$32`
   (D), `$7E` (V), `$80`, `$84..$8C`, `$92`, `$94`, `$9C..$A2`, `$A8`, `$AA`, `$BA..$BE`.
-  Bank-6 glyph pairs (even bytes; vanilla XP score digits and Link art, safe because
-  only towns map sprite bank 6 and towns have no XP drops; overworld encounters
-  map CHR = PRG bank x2, i.e. 2 or 4, at `$CD78`): `$6C` (X), `$78..$7A`, `$7C` (H),
-  `$9C..$A6`, `$AA` (digits 1-9), `$AE` (BA). Bank 7 has no free pair left. These
+  Bank-6 glyph pairs (even bytes; unused Link-only and palace-item/elevator pairs in
+  town sprite bank 6; overworld encounters map CHR = PRG bank x2, i.e. 2 or 4, at
+  `$CD78`, and towns with Moas like Old Kasuto still drop XP so vanilla XP score
+  pairs `$60`, `$6C`, and `$9C..$A6` stay intact via `TOWN_SPRITE_PAIRS[6]`):
+  `$66` (X), `$6E/$70` (3/4), `$78/$7A` (1/2), `$7C` (H), `$94/$96/$98` (5/6/7),
+  `$AA` (9), `$AC` (8), `$AE` (BA). Bank 7 has no free pair left. During a town combo
+  banner (`COMBO_TIER != 0`), `DrawPalaceClouds6` yields the upper parallax cloud
+  (`Y < $38`) and `COMBO_BASE_Y = $26` keeps `GODLIKE!` clear of `Y=56` clouds so
+  every letter stays within the 8-sprite-per-scanline limit. These
   are replaced in their bank only. Letters are recolored at build time from the
   user's own ROM font (`$DA` + letter). `!` and `BA` are authored in
   `assets/shout_glyphs.json`. The build checks a hash of each original pair

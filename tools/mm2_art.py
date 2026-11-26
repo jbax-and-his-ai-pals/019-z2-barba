@@ -711,16 +711,17 @@ def compile_title_logo() -> bytes:
     w, h = 192, 32
     face = [[False] * w for _ in range(h)]
     word = 'BARBA'
-    # 5 letters x (24px wide + 6px gap) = 144px, slanted left-to-right to match 'MEGA'
+    # 5 letters x (24px wide + 4px gap) = 136px, slanted left-to-right to match 'MEGA'
+    # Keep x in [24..167] on ty=0 and [16..175] on ty=1 so the trailing 'A' + shadow never clip.
     for idx, ch in enumerate(word):
         g = glyphs[ch]
-        bx = 22 + idx * 30
+        bx = 14 + idx * 28
         for gy in range(8):
             for gx in range(6):
                 if g[gy][gx] == '1':
                     for sy in range(3):
                         y = 2 + gy * 3 + sy
-                        slant = ((25 - y) * 18) // 25
+                        slant = ((25 - y) * 15) // 25
                         for sx in range(4):
                             x = bx + gx * 4 + sx + slant
                             if 0 <= x < w and 0 <= y < h:

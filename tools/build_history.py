@@ -12,8 +12,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 HISTORY_FILE = ROOT / '.build-history.sqlite3'
-# Minimum recoverable count as of 2026-11-20. See docs/BUILD.md.
-HISTORICAL_BASELINE = 59
+# Estimated pre-numbering baseline as of 2026-11-25 (+200 over initial 59 lower bound). See docs/BUILD.md.
+HISTORICAL_BASELINE = 259
 
 SCHEMA = """
     CREATE TABLE IF NOT EXISTS builds (

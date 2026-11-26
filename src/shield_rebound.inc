@@ -6,6 +6,13 @@ REBOUND_LEFT = $C8     ; -3.5 pixels per frame
 
 .segment "BANK0"
 ShieldReboundImpact:
+    lda ARCADE_ACTIVE_HI
+    and #$02                ; HEAVY spell bypasses shields
+    beq @not_heavy
+    pla
+    pla
+    jmp $E6F3
+@not_heavy:
     lda $0769
     cmp #$04
     bne @native

@@ -2,6 +2,24 @@
 ; third head column at $02C4 and the enemies' rotating sprite assignments.
 .segment "PALACE_ROAR"
 DrawBossMeter4:
+.ifdef WALDO_PORTAL
+    jsr DrawExtraGear4
+    lda $0728
+    bne @boss_check
+    lda $0707
+    cmp #$04
+    bne @early_ret
+    lda $056B
+    cmp #$06
+    bne @early_ret
+    lda $0561
+    cmp #$3A
+    beq @boss_check
+@early_ret:
+    lda #$06
+    jmp $FFCC
+@boss_check:
+.endif
 .ifdef SOULS_BOSS_METER
     jsr FindBossForSouls4
     pha

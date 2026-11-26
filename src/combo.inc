@@ -8,7 +8,7 @@ COMBO_TIER  = $646E         ; 0 none, 1 MULTI, 2 MEGA, 3 ULTRA, 4 MONSTER, 5 GOD
 COMBO_TIMER = $646F         ; decay frames remaining
 COMBO_SLAM  = $6488         ; tier-up slam/jitter animation counter
 COMBO_DECAY_TIME = $B4      ; 180 frames (~3.0s) before combo dies
-COMBO_BASE_Y     = $28      ; top row Y (clear of $20 HUD split)
+COMBO_BASE_Y     = $26      ; top row Y (clear of $20 HUD split and Cloud 0 at Y=56)
 COMBO_COUNTER_SLOT = 12     ; first counter entry in ComboOam
 COMBO_OAM_COUNT = 16
 
@@ -150,17 +150,43 @@ ComboDraw:
     lda #$00
 @have_xshake:
     sta $07                     ; X shake offset (signed)
-    ; Draw Row 1.
+    ; Draw Row 1 directly into $02DC..$02F4,$02FC without per-glyph $04/$05/ComboOam loads.
     ldx $06
     lda ComboRow1X,x
     clc
     adc $07
     sta $01
     lda ComboRow1Start,x
-    sta $05
-    lda #$00
+    tax
+    ldy #$DC
+@row1:
+    lda ComboRow1Tiles,x
+    beq @row1_done
+    sta $0201,y
+    lda $00
+    sta $0200,y
+    lda $02
+    sta $0202,y
+    lda $01
+    sta $0203,y
+    clc
+    adc $03
+    sta $01
+    inx
+    iny
+    iny
+    iny
+    iny
+    cpy #$F8
+    bne @row1
+    ldy #$FC
+    bne @row1
+@row1_done:
+    ldy $06
+    txa
+    sec
+    sbc ComboRow1Start,y
     sta $04
-    jsr @draw_line
     ldx $06
     cpx #$04
     beq @godlike_flames
@@ -233,9 +259,7 @@ ComboDraw:
     sta $00
 @draw_counter:
     lda #COMBO_COUNTER_SLOT
-    ldx $04
-    jsr ComboHideRest           ; clear the unused title slots before drawing digits
-    stx $04
+    sta $04
     ; Convert COMBO_PTS (1..255) to decimal: $09 = hundreds, $0A = tens, $05 = ones.
     lda COMBO_PTS
     ldx #$00
@@ -288,10 +312,7 @@ ComboDraw:
 @draw_ones:
     ldx $05
     lda ComboDigits,x
-    jsr @emit_sprite
-    lda #COMBO_OAM_COUNT
-    ldx $04
-    jmp ComboHideRest
+    jmp @emit_sprite
 @one_flame:
     clc
     adc $07

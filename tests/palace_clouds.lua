@@ -112,7 +112,8 @@ emu.addEventCallback(function()
         check(r(0x736)==0x0B and r(0x707)==c.world and r(0x561)==c.room,c.name..' loaded the expected room')
         local n,badAttr,firstX=countCloudSprites(c)
         local staticClouds=countStaticClouds(c)
-        local barbaHeadY=r(0x65C4)
+        local headSlot=r(0x6500)<0xF0 and 0x6500 or 0x65C4
+        local barbaHeadY=r(headSlot)
         if c.expectClouds then
             check(r(0x64EE)==0,c.name..' leaves OW_PARALLAX_LINE=0 (no building shear)')
             check(staticClouds==0,c.name..' stripped static BG clouds ($C2-$C4)')
@@ -120,8 +121,8 @@ emu.addEventCallback(function()
             local pattern=cloudPattern(c)
             if not expectedPattern then expectedPattern=pattern end
             check(pattern:find('[^%z]') and pattern==expectedPattern,c.name..' selected the cloud sprite patterns')
-            check(barbaHeadY<0xF0 and r(0x65C5)~=0xC1 and r(0x65C5)~=0xC3 and r(0x65C5)~=0xC5,
-                c.name..' preserved Barba head slot $C4')
+            check(barbaHeadY<0xF0 and r(headSlot+1)~=0xC1 and r(headSlot+1)~=0xC3 and r(headSlot+1)~=0xC5,
+                c.name..' preserved Barba head slot')
             startDriftX=r(0x64FC)
             startCloudX=firstX
             if c.name=='p1-entrance' then

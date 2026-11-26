@@ -17,3 +17,22 @@ function stopScenario(code)
     local stop=emu.exit or emu.stop
     stop(code)
 end
+
+-- The side-view trail sits in the highest free DMA-shadow entries, with the
+-- near torso in the lowest of them (DrawEncounterTrailSprites1). Returns the
+-- shadow addresses of the visible pieces {near=,outer=,tip=,far=}, searching
+-- $65FC down to $6550 so the trail wins over any earlier sprite with a matching tile.
+TRAIL_TILES={near=0x15,outer=0x3F,tip=0x45,far=0x31}
+function trailSlots()
+    local m=emu.memType.nesMemory
+    local found={}
+    for slot=0x65FC,0x6550,-4 do
+        if emu.read(slot,m)<0xF0 then
+            local tile=emu.read(slot+1,m)
+            for name,t in pairs(TRAIL_TILES) do
+                if tile==t and not found[name] then found[name]=slot end
+            end
+        end
+    end
+    return found
+end

@@ -60,10 +60,42 @@ local function check(ok,msg)
     if not ok then errors=errors+1 end
 end
 
-local t0Ok,t1Ok,t2Ok,t4Ok,t5Ok,t5FlamesOk,t5NoCloudsOk,t3dOk,pauseHideOk,blinkOffOk,decayOk=false,false,false,false,false,false,false,false,false,false,false
+local t0Ok,t1Ok,t2Ok,t4Ok,t5Ok,t5FlamesOk,t5NoCloudsOk,t5GodlikeOk,t5XpZeroOk,t3dOk,pauseHideOk,blinkOffOk,decayOk=false,false,false,false,false,false,false,true,false,false,false,false,false
 local t4Pal1,t4Pal2=false,false
 local t1Crowded,t3Crowded,t5Crowded=false,false,false
 local wantPause=false
+
+local function godlikeUnclipped()
+    local y=r(0x65DC)
+    if y>=0xF0 then return false end
+    for o=0x68,0xFC,4 do
+        local cy,ct=r(0x6500+o),r(0x6501+o)
+        if cy<0x38 and (ct==0x89 or ct==0x8B or ct==0x8D) then return false end
+    end
+    for line=y+1,y+16 do
+        local sprites=0
+        for s=0x6500,0x65F0,4 do
+            local sy=r(s)
+            if sy<line and line<=sy+16 then sprites=sprites+1 end
+        end
+        if sprites>8 then return false end
+    end
+    return true
+end
+
+local function xpZeroVanilla()
+    local ppu=emu.memType.nesPpuMemory
+    for i=0,4 do
+        if emu.read(0x19C0+i,ppu)~=0 or emu.read(0x19C8+i,ppu)~=0 then return false end
+    end
+    for i=5,7 do
+        if emu.read(0x19D0+i,ppu)~=0 or emu.read(0x19D8+i,ppu)~=0 then return false end
+    end
+    for i=0,31 do
+        if emu.read(0x19C0+i,ppu)~=emu.read(0x16E0+i,ppu) then return true end
+    end
+    return false
+end
 
 -- Seed town traffic on the counter's scanlines, away from the text in X.
 -- These entries all follow the dedicated counter slots but precede the old $D8 slot.
@@ -105,7 +137,7 @@ emu.addEventCallback(function()
     if age==5 then w(0x646C,1) end
     if age==10 then
         local n,p1,p2=countBanner()
-        local y,tiles=r(0x2DC)+0x20,{0x6C,0x78,0x7A}
+        local y,tiles=r(0x2DC)+0x20,{0x66,0x78,0x7A}
         t1Ok=(r(0x646E)==1 and n==13 and p2==13 and p1==0 and counterMatches(y,tiles))
         t1Crowded=counterSurvives(y,tiles)
     end
@@ -113,12 +145,12 @@ emu.addEventCallback(function()
     if age==15 then w(0x646C,12) end
     if age==20 then
         local n,p1,p2=countBanner()
-        t2Ok=(r(0x646E)==2 and n==12 and p1==12 and p2==0 and counterMatches(r(0x2DC)+0x20,{0x6C,0x7A,0x9E}))
+        t2Ok=(r(0x646E)==2 and n==12 and p1==12 and p2==0 and counterMatches(r(0x2DC)+0x20,{0x66,0x7A,0xB4}))
     end
     -- Tier 3: +16 pts = 40 pts (ULTRA KILL! + X40).
     if age==25 then w(0x646C,16) end
     if age==29 then
-        t3Crowded=r(0x646E)==3 and counterSurvives(r(0x2DC)+0x20,{0x6C,0x9E,0x9F})
+        t3Crowded=r(0x646E)==3 and counterSurvives(r(0x2DC)+0x20,{0x66,0xB4,0x9F})
     end
     -- Tier 4: +20 pts = 60 pts (MONSTER KILL! + X60 = 15 sprites, strobe pal1/pal2)
     if age==32 then w(0x646C,20) end
@@ -137,7 +169,7 @@ emu.addEventCallback(function()
         for _,o in ipairs(oamSlots) do
             if r(0x200+o+1)==0x84 then flameY=r(0x200+o); break end
         end
-        t5Ok=(r(0x646E)==5 and n==13 and flameY==row1Y+3 and counterMatches(row1Y+0x10,{0x6C,0xA6,0xA0}))
+        t5Ok=(r(0x646E)==5 and n==13 and flameY==row1Y+3 and counterMatches(row1Y+0x10,{0x66,0xAC,0x94}))
         t5FlamesOk=(flames==2)
         local clouds=0
         for o=0x68,0xFC,4 do
@@ -146,12 +178,17 @@ emu.addEventCallback(function()
             if y<0xF0 and (t==0x89 or t==0x8B or t==0x8D) then clouds=clouds+1 end
         end
         t5NoCloudsOk=(clouds>=4)
+        t5GodlikeOk=t5GodlikeOk and godlikeUnclipped()
+        t5XpZeroOk=xpZeroVanilla()
+    end
+    if age==46 then
+        t5GodlikeOk=t5GodlikeOk and godlikeUnclipped()
     end
     -- 3-digit counter: +20 pts = 105 pts (GODLIKE! + 2 flames + X105 = 14 sprites)
     if age==47 then w(0x646C,20) end
     if age==49 then
         local n=countBanner()
-        local y,tiles=r(0x2DC)+0x10,{0x6C,0x78,0x9F,0xA0}
+        local y,tiles=r(0x2DC)+0x10,{0x66,0x78,0x9F,0x94}
         t3dOk=(r(0x646D)==105 and n==14 and counterMatches(y,tiles))
         t5Crowded=counterSurvives(y,tiles)
     end
@@ -178,6 +215,8 @@ emu.addEventCallback(function()
         check(t3Crowded,'ULTRA KILL! keeps X40 on every crowded scanline')
         check(t4Ok and t4Pal1 and t4Pal2,'Tier 4 MONSTER KILL! + X60 draws 15 sprites and strobes pal 1/2')
         check(t5Ok and t5FlamesOk and t5NoCloudsOk,'Tier 5 GODLIKE! + X85 draws 8 letters + 2 flames + counter while keeping clouds')
+        check(t5GodlikeOk,'GODLIKE! yields upper cloud so G-O-D-L-I-K stay unclipped on every scanline')
+        check(t5XpZeroOk,'Bank 6 XP score 0 ($9C) stays vanilla in town PPU memory')
         check(t3dOk,'3-digit combo counter X105 draws 14 sprites with exact digits')
         check(t5Crowded,'GODLIKE! keeps X105 on every crowded scanline')
         check(pauseHideOk,'Pause menu hides all 16 combo OAM slots')

@@ -68,11 +68,12 @@ emu.addMemoryCallback(function()
         end
         if sampled and (r(0x5EE)&0x88)==0x88 and r(0x5FA)==72 and r(0x220)<0xF0 then
             local y=r(0x218)
+            local ts=trailSlots()
             trailFrames=trailFrames+1
             roundedTrail=roundedTrail and r(0x6518)==y and r(0x6519)==0x35
                 and r(0x6514)==y and r(0x6515)==0x37
-                and r(0x6550)==y and r(0x6554)==y
-                and r(0x6558)==y and r(0x655C)==y
+                and ts.near~=nil and ts.outer~=nil and ts.tip~=nil and ts.far~=nil
+                and r(ts.near)==y and r(ts.outer)==y and r(ts.tip)==y and r(ts.far)==y
         end
         if sawRoar and not roaring and r(0xDE)==0 and r(0x64FA)==0 then
             shakeRestored=true

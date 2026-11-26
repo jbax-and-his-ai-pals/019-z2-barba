@@ -146,12 +146,7 @@ BarbaWaldoPortal2:
     bne @done
     lda #$00
     sta WALDO_ENTER_MSG
-    lda #>(BarbaWaldoEnter6 - 1)
-    pha
-    lda #<(BarbaWaldoEnter6 - 1)
-    pha
-    lda #$06
-    jmp $FFCC
+    jmp BarbaWaldoEnter2
 
 @clear_deb:
     lda #$00
@@ -166,11 +161,30 @@ BarbaWaldoPortal2:
     beq @done
 
 .segment "BANK6"
-; Swap MMC3 R2 ($1000-$13FF) to the Waldo-hat Barba CHR bank once Waldo is beaten.
-UpdateWaldoHatChr6:
+; Return effective head gear in A: 0=None, 1=Waldo Hat, 2=Hockey Mask, 3=Mega Helmet.
+GetEffectiveHead6:
+    lda BARBA_GEAR
+    bmi @explicit
     lda WALDO_HAT
     cmp #WALDO_HAT_MAGIC
+    bne @none
+    lda #$01
+    rts
+@none:
+    lda #$00
+    rts
+@explicit:
+    and #$03
+    rts
+
+; Swap MMC3 R2 ($1000-$13FF) to Waldo-hat (155) or Hockey-mask (181) CHR bank.
+UpdateWaldoHatChr6:
+    jsr GetEffectiveHead6
+    cmp #$01
+    beq @need_swap
+    cmp #$02
     bne @hat_done
+@need_swap:
     lda #>(UpdateWaldoHatChr3 - 1)
     pha
     jmp WaldoHatHop6
@@ -189,7 +203,16 @@ UpdateWaldoHatChr3:
     lda $0736
     cmp #$06
     bcc @ret
+    lda BARBA_GEAR
+    bpl @waldo
+    and #$03
+    cmp #$02
+    bne @waldo
+    lda #181
+    bne @set_r2
+@waldo:
     lda #155
+@set_r2:
     ldx #$02
     stx $64D5
     stx $8000
@@ -199,10 +222,10 @@ UpdateWaldoHatChr3:
     jmp $FFCC
 
 .segment "ITEM_ROAR"
-; Draw the tall animated Waldo hat + puffball sprite above Barba's head in side-view ($6500 OAM shadow).
+; Draw Waldo hat ($1D + $5F) above Barba's head in side-view ($6500 OAM shadow) when equipped.
 DrawWaldoHat6:
-    lda WALDO_HAT
-    cmp #WALDO_HAT_MAGIC
+    jsr GetEffectiveHead6
+    cmp #$01
     bne @done
     lda $0736
     cmp #$0B
@@ -375,29 +398,253 @@ DrawWaldoHatWrite6:
     inx
     rts
 
+.segment "BANK6_HAZE"
+; Hockey Mask roar pitch: step DMC rate down 2 notches when Hockey Mask is equipped.
+RoarSetRate6:
+    jsr GetEffectiveHead6
+    cmp #$02
+    bne @normal
+    lda #(ROAR_RATE - 2)
+    .byte $2C
+@normal:
+    lda #ROAR_RATE
+    sta $4010
+    rts
+
+.segment "BANK4_GEAR"
+; Draw Mega Helmet crest ($47), Red Necktie ($49/$57), and Championship Belt ($59)
+; in Bank 4 (called from DrawBossMeter4) while $0736 == $0B.
+DrawExtraGear4:
+    lda $0736
+    cmp #$0B
+    bne @done
+    lda BARBA_GEAR
+    and #$33
+    beq @done
+    ldx #$02
+@next_slot:
+    ldy @head_slots,x
+    lda $6500,y
+    cmp #$F0
+    bcs @skip_slot
+    lda $6501,y
+    cmp #$03
+    beq @have_head
+    cmp #$1D
+    beq @have_head
+    cmp #$21
+    beq @have_head
+    cmp #$3B
+    beq @have_head
+@skip_slot:
+    dex
+    bpl @next_slot
+@done:
+    rts
+@head_slots:
+    .byte $0C, $00, $4C
+@have_head:
+    sty $04
+    sta $05
+    lda BARBA_GEAR
+    and #$03
+    cmp #$03
+    bne @chk_tie
+    ; Mega Helmet blue crest ($47, Palette 1)
+    lda $6500,y
+    sec
+    sbc #$05
+    bcc @chk_tie
+    ldx $05
+    cpx #$3B
+    bne :+
+    clc
+    adc #$05
+    bcs @chk_tie
+:
+    cmp #$20
+    bcc @chk_tie
+    cmp #$F0
+    bcs @chk_tie
+    sta $00
+    lda $6502,y
+    and #$FC
+    ora #$01
+    sta $02
+    lda $6503,y
+    bit $02
+    bvs @helm_r
+    clc
+    adc #$04
+    bcs @chk_tie
+    bcc @helm_x
+@helm_r:
+    sec
+    sbc #$04
+    bcc @chk_tie
+@helm_x:
+    sta $01
+    ldx #$20
+    lda #$79
+    jsr PlaceGearSprite4
+@chk_tie:
+    jmp DrawTie4
+
+.segment "PALACE_ROAR"
+DrawTie4:
+    lda BARBA_GEAR
+    and #$10
+    beq @chk_belt
+    ldy $04
+    lda #$0C
+    ldx $0479
+    beq :+
+    lda #$09
+:
+    clc
+    adc $6500,y
+    bcs @chk_belt
+    cmp #$20
+    bcc @chk_belt
+    cmp #$F0
+    bcs @chk_belt
+    sta $00
+    lda $6502,y
+    cpx #$00
+    beq :+
+    ldx $12
+    txa
+    and #$04
+    beq :+
+    lda $6502,y
+    eor #$40
+    dec $00
+    .byte $2C
+:
+    lda $6502,y
+    sta $02
+    lda $6503,y
+    bit $02
+    bvs @tie_r
+    clc
+    adc #$0A
+    bcs @chk_belt
+    bcc @tie_x
+@tie_r:
+    sec
+    sbc #$0A
+    bcc @chk_belt
+@tie_x:
+    sta $01
+    ldx #$20
+    lda #$7B
+    jsr PlaceGearSprite4
+@chk_belt:
+DrawBelt4:
+    lda BARBA_GEAR
+    and #$20
+    beq @done2
+    ldy $04
+    lda #$14
+    cpy #$0C
+    beq @crouch_y
+    ldx DRAW_FRAME
+    cpx #$36
+    bne @add_y
+@crouch_y:
+    lda #$0C
+@add_y:
+    clc
+    adc $6500,y
+    bcs @done2
+    cmp #$20
+    bcc @done2
+    cmp #$F0
+    bcs @done2
+    sta $00
+    lda $12
+    and #$1C
+    bne @belt_pal0
+    lda $6502,y
+    and #$FC
+    ora #$03
+    .byte $2C
+@belt_pal0:
+    lda $6502,y
+    sta $02
+    lda $6503,y
+    bit $02
+    bvs @belt_r
+    clc
+    adc #$02
+    bcs @done2
+    bcc @belt_x
+@belt_r:
+    sec
+    sbc #$02
+    bcc @done2
+@belt_x:
+    sta $01
+    ldx #$20
+    lda #$7D                  ; Championship Belt ($7C non-town, $FC town)
+    jmp PlaceGearSprite4
+@done2:
+    rts
+
+PlaceGearSprite4:
+    ldy $0707
+    beq :+
+    cpy #$03
+    bcs :+
+    ora #$80                  ; town bank 6 uses $F8/$FA/$FC
+:
+    sta $03
+@find:
+    lda $6500,x
+    cmp #$F0
+    bcs @put
+    inx
+    inx
+    inx
+    inx
+    bne @find
+    rts
+@put:
+    lda $00
+    sta $6500,x
+    lda $03
+    sta $6501,x
+    lda $02
+    sta $6502,x
+    lda $01
+    sta $6503,x
+    rts
+
 .segment "BANK6"
 .export BarbaWaldoRestore6
 
-BarbaWaldoEnter6:
+BarbaWaldoRestore6:
     sei
-    lda #$00
-    sta $4015
-    sta $E000
-
-    jsr BarbaMelt6
-
-    lda #$00
-    sta $2000
-    sta $2001
-
-    lda #>(BarbaWaldoSaveAndLaunch2 - 1)
+    lda #>(BarbaWaldoRestore2 - 1)
     pha
-    lda #<(BarbaWaldoSaveAndLaunch2 - 1)
+    lda #<(BarbaWaldoRestore2 - 1)
     pha
     lda #$02
     jmp $FFCC
 
 .segment "BANK2_SMOKE"
+BarbaWaldoEnter2:
+    sei
+    lda #$00
+    sta $4015
+    sta $E000
+
+    jsr BarbaMelt2
+
+    lda #$00
+    sta $2000
+    sta $2001
+
 BarbaWaldoSaveAndLaunch2:
     ldy PORTAL_GAME
     lda #$A1
@@ -552,21 +799,6 @@ CheckPortalDoor2:
     rts
 
 PollUpKey2:
-    lda #$01
-    sta $4016
-    lsr a
-    sta $4016
-    ldx #$04
-@up_skip:
-    bit $4016
-    dex
-    bne @up_skip
-    lda $4016
-    and #$01
-    rts
-
-.segment "BANK6"
-PollUpKey6:
     lda #$01
     sta $4016
     lsr a
@@ -918,10 +1150,9 @@ PortalTramp_Boot:
     jmp $E000
 PortalTrampEnd:
 
-.segment "BANK6"
+.segment "BANK2_SMOKE"
 
-BarbaWaldoRestore6:
-    sei
+BarbaWaldoRestore2:
     lda #$00
     sta $2000
     sta $2001
@@ -1015,10 +1246,10 @@ BarbaWaldoRestore6:
     sta $F5
 
 @wait_up_rel:
-    jsr PollUpKey6
+    jsr PollUpKey2
     bne @wait_up_rel
 
-    jsr BarbaWipeIn6
+    jsr BarbaWipeIn2
 
     bit $2002
 @vwait:
@@ -1027,7 +1258,8 @@ BarbaWaldoRestore6:
     lda $FF
     sta $2000
     cli
-    rts                     ; Resume NmiVblankSetup6 in bank 6; it swaps to PRG0
+    lda #$06
+    jmp $FFCC               ; Resume NmiVblankSetup6 in bank 6; it swaps to PRG0
 
 @rest_nt_1k:
     sta $2006
@@ -1048,8 +1280,8 @@ BarbaWaldoRestore6:
     rts
 
 ; Bottom-up wavy horizontal melt + wipe away (30 frames, 0.5s).
-; Preserves $0000-$07FF and PPU VRAM so BarbaWaldoEnter6 can snapshot cleanly afterward.
-BarbaMelt6:
+; Preserves $0000-$07FF and PPU VRAM so BarbaWaldoSaveAndLaunch2 can snapshot cleanly afterward.
+BarbaMelt2:
     lda #$00
     sta MELT_DIR
     sta MELT_FRAME
@@ -1057,7 +1289,7 @@ BarbaMelt6:
 
 ; Top-down wavy horizontal wipe-in (30 frames, 0.5s) on return to Barba.
 ; Populates PPU OAM from $6500 before revealing the restored Rauru scene.
-BarbaWipeIn6:
+BarbaWipeIn2:
     lda #$01
     sta MELT_DIR
     lda #29

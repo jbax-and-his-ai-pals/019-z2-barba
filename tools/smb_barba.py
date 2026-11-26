@@ -1138,8 +1138,8 @@ def apply_barba_patches(prg: bytearray, root: Path) -> dict:
     a.emit(0xAD, 0x72, 0x07, 0xC9, 0x03)          # LDA $0772 (OperMode_Task); CMP #3
     a.branch(0x90, 'r0_small')
     a.label('r0_chk_size')
-    a.emit(0xAD, 0x56, 0x07)                      # LDA $0756 (0=Small, 1=Super, 2=Fire)
-    a.branch(0xD0, 'r0_big')
+    a.emit(0xAD, 0x54, 0x07)                      # LDA $0754 (0=Big/Inferno, 1=Small)
+    a.branch(0xF0, 'r0_big')
     a.label('r0_small')
     a.emit(0xA2, CHR_R0_WYRMLING)
     a.emit(0xAD, W_ROAR_TIMER & 0xFF, W_ROAR_TIMER >> 8)
@@ -1147,8 +1147,8 @@ def apply_barba_patches(prg: bytearray, root: Path) -> dict:
     a.emit(0xA2, CHR_R0_WYRMLING_ROAR)
     a.branch(0xD0, 'set_r0')
     a.label('r0_big')
-    a.emit(0xC9, 0x01)
-    a.branch(0xD0, 'r0_fire')
+    a.emit(0xAD, 0x56, 0x07, 0xC9, 0x02)          # LDA $0756 (2=Fire/Inferno); CMP #2
+    a.branch(0xF0, 'r0_fire')
     a.emit(0xA2, CHR_R0_BARBA)
     a.branch(0xD0, 'r0_chk_roar')
     a.label('r0_fire')

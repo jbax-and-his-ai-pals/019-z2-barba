@@ -11,7 +11,7 @@ ROOT=Path(__file__).resolve().parents[1]
 SCENES=[
     ('castle','Starting castle','Walk, turn, duck, jump and attack with the normal starting stats.'),
     ('combat','Palace 1 combat corridor','Fight normal enemies with the five-shot diagonal volley at damaged health.'),
-    ('spells','All spells and techniques','Safe castle with all eight spells, up/down thrust, full meters and level 4 attack. Press Space to cast Inferno. Reload F3 to refill.'),
+    ('spells','All 18 spells and techniques','Safe castle with all 18 spells (8 Hyrule + 10 Arcade), up/down thrust, full meters and level 4 attack. Press Enter to browse both columns or Space to cast Inferno. Reload F3 to refill.'),
     ('lava-ledge','Palace 6 lava ledge','Walk right off the ledge and into the lava; stop, jump and return.'),
     ('lava-surface','Standing on palace lava','Already on lava. Test moving, jumping and standing still.'),
     ('barba','Palace 6 boss encounter','Test the playable dragon against Lava Link in Palace 6.'),
@@ -66,6 +66,12 @@ def checkpoint_writes(scene: dict) -> tuple[dict,dict]:
     expected.update({0x783:p['magic'],0x784:p['hearts'],0x793:scene.get('keys',0),
                      0x794:6-p['placed'],0x796:p['tech']})
     expected.update({0x77B+i:int(i<p['spells']) for i in range(8)})
+    if p.get('arcade_spells'):
+        expected[0x648B]=0x57
+        for a in (0x63B1,0x63B2,0x63B3,0x63B4,0x63B5,0x63B7,0x63B8,0x63B9,0x63BA):
+            expected[a]=1
+    if p.get('ngplus'):
+        expected[0x7A0]=1
     expected.update({0x785+i:int(i in p['items']) for i in range(8)})
     expected.update({0x78D+i:int(i<p['placed']) for i in range(6)})
     expected.update({a:int(p['flags'].get(str(a),0)) for a in range(0x798,0x79E)})

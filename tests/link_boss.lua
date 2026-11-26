@@ -220,7 +220,8 @@ emu.addEventCallback(function()
         if roarAt then
             if sampled and r(0x5EE)&0x88==0x88 and r(0x5FA)==72 and r(0x220)<0xF0 then
                 local y=r(0x218)
-                roarTrailSeen=roarTrailSeen or r(0x6518)==y and r(0x6519)==0x35 and r(0x6550)==y
+                local near=trailSlots().near
+                roarTrailSeen=roarTrailSeen or r(0x6518)==y and r(0x6519)==0x35 and near~=nil and r(near)==y
             end
             local offset=shakeOffset()
             if offset~=0 then

@@ -83,7 +83,7 @@ Press the same key again at any time to restart that test and refill its meters.
 | --- | --- | --- |
 | F1 | Starting castle | Normal starting stats. Walk, turn, crouch, jump and attack. |
 | F2 | Palace 1 combat corridor | Fight in both directions and try the five-shot volley at different health levels. |
-| F3 | All spells and techniques | Safe castle, full health/magic, all spells and both thrusts. Press Space to cast Inferno. Use Enter for the spell menu or reload F3 to refill or leave the flying form. |
+| F3 | All 18 spells and techniques | Safe castle, full health/magic, all 18 spells (8 Hyrule + 10 Arcade) and both thrusts. Press Enter to browse both columns or Space to cast Inferno. Reload F3 to refill or leave the flying form. |
 | F4 | Palace 6 lava ledge | Walk right into the lava, stop, move, jump and return. |
 | F5 | Standing on lava | Already on the lava surface. Check for sinking and test jumps immediately. |
 | F6 | Palace 6 boss encounter | Test the playable dragon against Lava Link in Palace 6. |
@@ -167,7 +167,7 @@ handled by odd-frame OAM priority rotation. For historical profiling logs, see
 
 ## Playthrough checkpoint sets
 
-Core remains the default. Use **Test Palaces.cmd**, **Test Endgame.cmd**, **Test Bosses.cmd**,
+Core remains the default. Use **Test All Spells.cmd**, **Test Palaces.cmd**, **Test Endgame.cmd**, **Test Bosses.cmd**,
 **Test Towns and World.cmd**, or **Test Tricky Movement.cmd** in `play/zelda2-tests/` (all beside
 `Test Core.cmd`), or the arcade/standalone launchers in `play/arcade-tests/` and `play/standalone/`.
 Each opens its own isolated local profile and maps that set to F1-F10.
@@ -178,9 +178,9 @@ Unused F-keys do not point at another set's states. Script equivalent:
 ```
 
 Use `core`, `items`, `palaces`, `endgame`, `bosses`, `world`, `gem`, `busy`,
-`movement`, or `edges` as the set name. `python tools/create_test_pack.py --force`
-generates and validates all ten standard sets from an existing ROM, then
-leaves Core selected. Add `--set world` to regenerate just one set.
+`movement`, `spells`, `fireballs`, `ngplus`, or `edges` as the set name. `python tools/create_test_pack.py --force`
+generates and validates all standard sets from an existing ROM, then
+leaves Core selected. Add `--set spells` to regenerate just one set.
 
 ### Assumed normal route (not a completed-game save)
 
@@ -234,6 +234,57 @@ Crystals are $078D-$0792, in palace order; $0794 is 6 minus placed. Keys $0793=0
 | mido | 4/4/4 | 5/5 | 4 | Candle, Glove, Hammer | none | 2 | T, R, B, M |
 | darunia | 5/5/5 | 6/6 | 6 | Candle, Glove, Raft, Hammer | D | 3 | T, R, B, M, W, C |
 | nabooru | 5/4/5 | 6/6 | 5 | Candle, Glove, Raft, Hammer | D | 3 | T, R, B, M, W |
+| all_spells | 7/8/8 | 8/8 | 8 (+10 Arcade) | Candle, Glove, Raft, Boots, Flute, Cross, Hammer, Magic Key | D+U | 4 | T, R, B, M, W |
+| ngplus | 7/8/8 | 8/8 | 8 (+10 Arcade) | none (Flute in `ngplus_flute`) | D+U | 0 | none (`$07A0=1`) |
+
+### ngplus
+
+Launch **play/zelda2-tests/Test NG+.cmd** (`./tools/launch.ps1 -NoRebuild -TestPack -CheckpointSet ngplus`) for 8 New Game+ (`$07A0=1`) checkpoints (F1–F8):
+
+| Key | Where | Focus |
+| --- | --- | --- |
+| F1 | West Hyrule NG+ overworld | Walk to any Mountain tile and press **B** to melt it into Desert (`$04`). |
+| F2 | Death Mountain NG+ (with Flute) | Holds the Flute (`$0789=1`); face a Mountain tile and press **B** to verify mountain melting works even with the Flute. |
+| F3 | Maze Island NG+ overworld | NG+ overworld mountain melting and East Hyrule routing. |
+| F4 | Rauru town street (NG+) | Townsfolk, fireballs, and all 18 spells in NG+. |
+| F5 | Palace 1 entrance (NG+) | Early palace with carried-over NG+ spells, levels, and techniques. |
+| F6 | Palace 6 lava ledge (NG+) | Lava traversal, fireballs, and `WYRMLNG` in NG+. |
+| F7 | Before Lava Link (NG+) | Jump right across the lava to trigger the Palace 6 boss fight. |
+| F8 | Before Dark Barba (NG+) | Defeat Dark Barba to test the NG+ ending loop. |
+
+### fireballs
+
+Launch **play/zelda2-tests/Test Fireballs.cmd** (`./tools/launch.ps1 -NoRebuild -TestPack -CheckpointSet fireballs`) for 10 fireball-focused checkpoints (F1–F10) covering dark/lit caves, big ledges and bridges, elevated wall targets, breakable blocks, Ironknuckle rebounds, low ceilings, and crowded corridors:
+
+| Key | Where | Focus |
+| --- | --- | --- |
+| F1 | West Hyrule dark grotto (no Candle) | Fireball glow halos, firelight palette flicker, and shots across the collapsing bridge. |
+| F2 | West Hyrule Myu cave | Crouching fireballs, `METEOR` floor waves, and `BLADE` / `LOCK` in a lit cave. |
+| F3 | West Hyrule water bridge | Full 124 px horizontal fireball range, 5-shot volley cadence, and `Up+B` upward shots. |
+| F4 | Palace 6 lava ledge | Long-range fireballs across a wide lava gap, jumping shots, and `BLADE` 8-way steering. |
+| F5 | Palace 6 drop-shaft high ledge | Long fireball trajectories from height and firing while falling. |
+| F6 | Valley of Death wall ledges | `Up+B` upward-angled fireballs and `LOCK` homing shots against elevated Rock Lizalfos. |
+| F7 | Palace 3 Ironknuckles & blocks | Glove block-breaking with fireballs, Ironknuckle shield rebound, and `HEAVY` / `AXE`. |
+| F8 | Palace 1 low tunnel | Crouched vs. tucked-head fireball mouth height under a 32 px ceiling. |
+| F9 | Palace 2 crowded corridor | 5-shot volley load governor and multi-target fireball hits. |
+| F10 | Great Palace approach | Full volleys, `INFERNO`, `METEOR`, and `HEAVY` against late-game enemies. |
+
+### spells
+
+Launch **play/zelda2-tests/Test All Spells.cmd** (`./tools/launch.ps1 -NoRebuild -TestPack -CheckpointSet spells`) for 10 tailored rooms (F1–F10) with all 18 spells (8 Hyrule + 10 Arcade), all 8 key items, and Magic-8/Life-8 meters. Each slot pre-selects a fitting spell (press **Space** to cast immediately, or **Enter** to pick another):
+
+| Key | Where | Pre-selected | Look for |
+| --- | --- | --- | --- |
+| F1 | Palace 2 Green Palace (world 3, room $14, entry 1) | `BARREL` | Inspect the 2-column pause menu over green bricks, or cast `BARREL`, `BLADE`, `STAR`, or `METEOR` down the crowded corridor. |
+| F2 | Palace 3 Ironknuckles (world 4, room $0D, entry 1) | `HEAVY` | Test `HEAVY` (2× damage + shield bypass), `AXE`, `DECOY`, or `BLADE` against Ironknuckles and breakable blocks. |
+| F3 | Palace 6 lava ledge (world 4, room $33, entry 0) | `WYRMLNG` | Cast `WYRMLNG` to fly over the lava, or `JUMP` to leap the gap. |
+| F4 | Palace 5 two-Mago room (world 3, room $3E, entry 0) | `CLOCK` | Freeze both teleporting Magos with `CLOCK`, or switch to `LOCK` for homing fireballs. |
+| F5 | Carock boss room (world 4, room $1C, entry 0) | `REFLECT` | Cast `REFLECT` and walk right to bounce Carock's bolts back, or test `SCALES` / `HEAVY`. |
+| F6 | Palace 6 Wizzrobe hall (world 4, room $3C, entry 1) | `LOCK` | Track the phasing Wizzrobe with `LOCK`, or cast `DOUBLE` for 2× XP. |
+| F7 | Old Kasuto Moa street (world 2, room $15, entry 1) | `INFERNO` | Clear the swarming Moas with `INFERNO`, or test `STAR`, `AXE`, `DOUBLE`, and `LUCKY`. |
+| F8 | Palace 1 low-HP approach (world 3, room $0C, entry 0) | `LIFE` | Starts at low health (~2.5 hearts): cast `LIFE` to heal, or test `SCALES` and `LUCKY` ahead. |
+| F9 | Great Palace Thunderbird (world 5, room $35, entry 0) | `METEOR` | Cast `METEOR` and walk right to fight Thunderbird, or test `INFERNO`, `AXE`, and `SPELL`. |
+| F10 | Rauru town street (world 1, room $00, entry 1) | `DECOY` | Cast `DECOY` in town, `JUMP` onto roofs, or test `SPELL`, `METEOR`, and `INFERNO` around villagers. |
 
 ### palaces
 

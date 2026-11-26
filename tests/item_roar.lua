@@ -64,10 +64,12 @@ emu.addEventCallback(function()
         elseif (roar==0x8A or roar==0x9A) and r(0x5FA)==72 then
             roaringTorso=roaringTorso and r(0x204)==top-8 and r(0x20C)==top+8
                 and r(0x220)==top+16 and r(0x224)==top+16
+            local ts=trailSlots()
             roundedTrail=roundedTrail and r(0x6518)==top+32 and r(0x6519)==0x35
                 and r(0x651C)==top+32 and r(0x651D)==0x37
-                and r(0x6550)==top+32 and r(0x6554)==top+32
-                and r(0x6558)==top+32 and r(0x655C)==top+32
+                and ts.near~=nil and ts.outer~=nil and ts.tip~=nil and ts.far~=nil
+                and r(ts.near)==top+32 and r(ts.outer)==top+32
+                and r(ts.tip)==top+32 and r(ts.far)==top+32
             poseFrames=poseFrames+1
             if poseFrames==10 then screenshot('item-roar-candle') end
         end

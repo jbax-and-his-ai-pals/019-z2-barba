@@ -5,6 +5,11 @@
 -- Known limit (INFO, not FAIL): extra-projectile records and pending Inferno
 -- waves frozen at death resume for <1 s in the respawn room.
 dofile(TEST_DIR..'/newgame.lua')
+-- All four trail pieces drawn (they sit in the highest free shadow entries).
+local function fullTrail()
+    local t=trailSlots()
+    return t.near~=nil and t.outer~=nil and t.tip~=nil and t.far~=nil
+end
 local mem=emu.memType.nesMemory
 local ppu=emu.memType.nesPpuMemory
 local function r(a)return emu.read(a,mem)end
@@ -160,8 +165,7 @@ emu.addEventCallback(function()
                 and r(0x0208)==0x5C and r(0x020C)==0x5C
                 and r(0x0214)==0x6C and r(0x0218)==0x6C
                 and r(0x6519)==0x35 and r(0x6515)==0x37
-                and r(0x6551)==0x15 and r(0x6555)==0x3F
-                and r(0x6559)==0x45 and r(0x655D)==0x31
+                and fullTrail()
         end
         if not pendingSave and frame>=1000 and r(0x0736)==0x0B and r(0x074C)==0 then
             check(livesFrames>0 and livesPoseValid,string.format(
@@ -189,8 +193,7 @@ emu.addEventCallback(function()
             deathTrailFrames=deathTrailFrames+1
             deathPoseValid=deathPoseValid
                 and r(0x6519)==0x35 and r(bendBack)==0x37
-                and r(0x6551)==0x15 and r(0x6555)==0x3F
-                and r(0x6559)==0x45 and r(0x655D)==0x31
+                and fullTrail()
         end
         if r(0x076C)==6 and r(0x0726)==0 and r(0x024D)==0x02 then
             livesFrames=livesFrames+1
@@ -199,8 +202,7 @@ emu.addEventCallback(function()
                 and r(0x0208)==0x5C and r(0x020C)==0x5C
                 and r(0x0214)==0x6C and r(0x0218)==0x6C
                 and r(0x6519)==0x35 and r(0x6515)==0x37
-                and r(0x6551)==0x15 and r(0x6555)==0x3F
-                and r(0x6559)==0x45 and r(0x655D)==0x31
+                and fullTrail()
         end
         if r(0x0736)~=0x0B then leftSide=true end
         if leftSide and r(0x0736)==0x0B and r(0x074C)==0 and age>60 then

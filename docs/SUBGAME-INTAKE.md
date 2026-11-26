@@ -62,3 +62,8 @@ Keep Round 1 minimal (no custom multi-scenario branches or sprite swaps yet):
 
 ### Stage 4: Greenlight & Round 2
 Once Round 1 passes automated Lua checks and human F-key flip-through, mark `status='greenlit'` in `SUBGAME_POOL`. Round 2 can later add custom scenarios (like F13), Barba sprite/roar swaps, and custom door hints.
+
+## 3. Future Barba Enterprise Dashboard Architecture (Planned)
+When scaling the web dashboard (`web/index.html`) across all subgames:
+* **Top-level grouping by game** (one tab/section per subgame + Zelda II main hack).
+* **Per-game subtabs**: `Title`, `In-Game Graphics`, `Needs Work`, and `Sign-Off`, with candidate previews, animation toggles, vote/rank controls, and open notes per item.

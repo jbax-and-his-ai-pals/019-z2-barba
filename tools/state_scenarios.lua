@@ -46,7 +46,11 @@ local scenes={
     {id='combat',name='Palace 1 combat corridor',frames=230,setup=function()
         upgraded();w(0x774,192);palace(3,0,1,5,0)
     end},
-    {id='spells',name='All spells and techniques',frames=90,setup=upgraded},
+    {id='spells',name='All spells and techniques',frames=90,setup=function()
+        upgraded()
+        w(0x648B,0x57)
+        for _,a in ipairs({0x63B1,0x63B2,0x63B3,0x63B4,0x63B5,0x63B7,0x63B8,0x63B9,0x63BA}) do w(a,1) end
+    end},
     {id='lava-ledge',name='Palace 6 lava ledge',frames=200,setup=function()
         upgraded();palace(4,2,6,0x33,0)
     end},

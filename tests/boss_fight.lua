@@ -63,7 +63,7 @@ function runBossFight(cfg)
             end
             if r(0x80)==0x09 then fight.stabSeen=true end
         end
-    end,emu.callbackType.exec,0xE735)
+    end,emu.callbackType.exec,0xE731)
 
     emu.addEventCallback(function()
         local b=newGameInput(frame)

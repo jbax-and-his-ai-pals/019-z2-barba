@@ -87,9 +87,10 @@ emu.addEventCallback(function()
         check(r(0x6518)==headY+16 and r(back)==headY+16 and r(0x6519)==0x33 and r(back+1)==0x55,
             ids[index]..' Down draws the cropped elbow entirely below the full head')
         local floorY=r(0x29)+32
-        for i,tile in ipairs({0x15,0x3F,0x45,0x31})do
-            local slot=0x6550+4*(i-1)
-            check(r(slot)+16==floorY-1 and r(slot+1)==tile,
+        local ts=trailSlots()
+        for i,name in ipairs({'near','outer','tip','far'})do
+            local slot=ts[name]
+            check(slot~=nil and r(slot)+16==floorY-1,
                 ids[index]..' crouched trail column '..i..' stays above the brick surface')
         end
     end
@@ -142,17 +143,19 @@ emu.addEventCallback(function()
         check(colors>3,ids[index]..' visible game frame')
         if not PACK_SCENES and index<7 then check(r(0x736)==11,ids[index]..' side-view gameplay ready') end
         if not PACK_SCENES and (index==1 or index==2 or index==8) then
-            for i,tile in ipairs({0x15,0x3F,0x45,0x31})do
-                local slot=0x6550+4*(i-1)
-                check(r(slot)<0xF0 and r(slot+1)==tile,
-                    ids[index]..' draws default horizontal body column '..i)
+            local ts=trailSlots()
+            for i,name in ipairs({'near','outer','tip','far'})do
+                check(ts[name]~=nil,ids[index]..' draws default horizontal body column '..i)
             end
         end
         if not PACK_SCENES and index==2 then check(r(0x774)<255 and r(0x707)==3,'combat has damaged health and Palace 1 geometry') end
         if not PACK_SCENES and index==3 then
-            local spells=true
+            local spells=r(0x648B)==0x57
             for a=0x77B,0x782 do if r(a)==0 then spells=false end end
-            check(spells and (r(0x796)&0x14)==0x14,'all spells and both thrust techniques unlocked')
+            for _,a in ipairs({0x63B1,0x63B2,0x63B3,0x63B4,0x63B5,0x63B7,0x63B8,0x63B9,0x63BA}) do
+                if r(a)~=1 then spells=false end
+            end
+            check(spells and (r(0x796)&0x14)==0x14,'all 18 spells and both thrust techniques unlocked')
             check(r(0x773)==255 and r(0x774)==255,'spell sandbox begins with full meters')
         end
         if not PACK_SCENES and index==5 then check(r(0xA7)&4~=0 and r(0x479)==0,'lava surface supports the player') end

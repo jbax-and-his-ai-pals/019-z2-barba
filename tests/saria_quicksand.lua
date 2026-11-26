@@ -71,8 +71,8 @@ local seenBanks={}
 local seenSand={}
 local staticTile=nil
 local staticChanged=false
-local tipAtF8=false
-local tipAt58=false
+local tipSeen=false
+local tipAhead=false -- a villager sprite sat behind a Barba tail tip
 local villagerDropped=false
 
 local function enterTown(town,room,page)
@@ -139,14 +139,19 @@ emu.addEventCallback(function()
         if not readyAt then
             readyAt=frame
             staticChanged=false
-            tipAtF8=false
-            tipAt58=false
+            tipSeen=false
+            tipAhead=false
             villagerDropped=false
         end
         seenSand[readTile(0x98)..readTile(0x99)]=true
         staticChanged=staticChanged or not shoutArtMatches()
-        tipAtF8=tipAtF8 or (r(0x65F9)==0x45)
-        tipAt58=tipAt58 or (r(0x6559)==0x45)
+        local tip=trailSlots().tip
+        if tip then
+            tipSeen=true
+            for slot=tip+4,0x65FC,4 do
+                if r(slot)<0xF0 and r(slot+1)<=0x27 then tipAhead=true end
+            end
+        end
         local lineCounts={}
         for slot=0,63 do
             local y=emu.read(slot*4,emu.memType.nesSpriteRam)
@@ -169,7 +174,7 @@ emu.addEventCallback(function()
             check(count==4,string.format('Room %d animates all four quicksand patterns',room))
             check(not staticChanged,string.format('Room %d keeps town shout glyphs intact across all phases',room))
             if room==7 then
-                check(tipAtF8 and not tipAt58,'Room 7 moves Barba tail tips to end of OAM ($65F8-$65FF)')
+                check(tipSeen and not tipAhead,'Room 7 keeps Barba tail tips behind every villager sprite')
                 check(not villagerDropped,'Room 7 drops zero villager sprites across the graveyard bridge')
             end
             checkStreamedSand(room)
