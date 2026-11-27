@@ -691,6 +691,12 @@
 
     const activeCanvases = [];
     const imgCache = new Map();
+    const canvasObserver = ('IntersectionObserver' in window)
+      ? new IntersectionObserver(entries => {
+          for (const entry of entries) entry.target._vis = entry.isIntersecting;
+        }, { rootMargin: '150px' })
+      : null;
+
     function loadStripImage(src) {
       if (!imgCache.has(src)) {
         const img = new Image();
@@ -707,7 +713,11 @@
       cv.className = 'nes-canvas';
       cv.width = targetW;
       cv.height = targetH;
-      activeCanvases.push({ cv, img: loadStripImage(src), w, h, frames, fps, idx: 0, acc: 0 });
+      cv._vis = !canvasObserver;
+      if (canvasObserver) canvasObserver.observe(cv);
+      const ctx = cv.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      activeCanvases.push({ cv, ctx, img: loadStripImage(src), w, h, frames, fps, idx: 0, drawnIdx: -1, acc: 0 });
       return cv;
     }
 
@@ -715,23 +725,35 @@
     function tickCanvases(now) {
       const dt = Math.min(0.1, (now - lastTick) / 1000);
       lastTick = now;
-      for (let i = activeCanvases.length - 1; i >= 0; i--) {
-        const item = activeCanvases[i];
-        if (!item.cv.isConnected) { activeCanvases.splice(i, 1); continue; }
-        if (!item.img.complete || item.img.naturalWidth === 0) continue;
-        item.acc += dt;
-        const step = 1 / item.fps;
-        if (item.acc >= step) {
-          item.idx = (item.idx + Math.floor(item.acc / step)) % item.frames;
-          item.acc %= step;
+      if (!document.hidden) {
+        for (let i = activeCanvases.length - 1; i >= 0; i--) {
+          const item = activeCanvases[i];
+          if (!item.cv.isConnected) {
+            if (canvasObserver) canvasObserver.unobserve(item.cv);
+            activeCanvases.splice(i, 1);
+            continue;
+          }
+          if (!item.img.complete || item.img.naturalWidth === 0) continue;
+          const visible = item.cv._vis !== false;
+          if (!visible && item.drawnIdx !== -1) continue;
+          if (visible && item.frames > 1) {
+            item.acc += dt;
+            const step = 1 / item.fps;
+            if (item.acc >= step) {
+              item.idx = (item.idx + Math.floor(item.acc / step)) % item.frames;
+              item.acc %= step;
+            }
+          }
+          if (item.idx === item.drawnIdx) continue;
+          item.drawnIdx = item.idx;
+          const ctx = item.ctx;
+          ctx.imageSmoothingEnabled = false;
+          ctx.clearRect(0, 0, item.cv.width, item.cv.height);
+          const cols = Math.max(1, Math.floor(item.img.naturalWidth / item.w));
+          const sx = (item.idx % cols) * item.w;
+          const sy = Math.floor(item.idx / cols) * item.h;
+          ctx.drawImage(item.img, sx, sy, item.w, item.h, 0, 0, item.cv.width, item.cv.height);
         }
-        const ctx = item.cv.getContext('2d');
-        ctx.imageSmoothingEnabled = false;
-        ctx.clearRect(0, 0, item.cv.width, item.cv.height);
-        const cols = Math.max(1, Math.floor(item.img.naturalWidth / item.w));
-        const sx = (item.idx % cols) * item.w;
-        const sy = Math.floor(item.idx / cols) * item.h;
-        ctx.drawImage(item.img, sx, sy, item.w, item.h, 0, 0, item.cv.width, item.cv.height);
       }
       requestAnimationFrame(tickCanvases);
     }
