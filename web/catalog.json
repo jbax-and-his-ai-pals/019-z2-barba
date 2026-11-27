@@ -102,10 +102,10 @@
       }
     },
     {
-      "id": "spell_inferno",
+      "id": "spell_meteor",
       "code": "S3",
       "category": "barba_core",
-      "label": "Fire -> INFERNO",
+      "label": "Fire -> METEOR",
       "type": "bool",
       "status": "built",
       "coupled": true,
@@ -114,44 +114,44 @@
       "requires": [
         "barba_protagonist"
       ],
-      "description": "Replaces Fire with dragon Inferno breath enhancement.",
-      "preview": {
-        "off": "previews/cap_vanilla_spell_inferno.png",
-        "off_w": 256,
-        "off_h": 176,
-        "off_label": "Vanilla Fire",
-        "on": "previews/cap_barba_spell_inferno.png",
-        "on_w": 256,
-        "on_h": 176,
-        "on_label": "INFERNO",
-        "frames": 48,
-        "fps": 20
-      }
-    },
-    {
-      "id": "spell_meteor",
-      "code": "S4",
-      "category": "barba_core",
-      "label": "Thunder -> METEOR",
-      "type": "bool",
-      "status": "built",
-      "coupled": true,
-      "vanilla": false,
-      "barba": true,
-      "requires": [
-        "barba_protagonist"
-      ],
-      "description": "Replaces Thunder with screen-clearing METEOR fireballs.",
+      "description": "Replaces Fire with an airborne Down+B dive slam that sends floor shockwaves crawling left and right.",
       "preview": {
         "off": "previews/cap_vanilla_spell_meteor.png",
         "off_w": 256,
         "off_h": 176,
-        "off_label": "Vanilla Thunder",
+        "off_label": "Vanilla Fire",
         "on": "previews/cap_barba_spell_meteor.png",
         "on_w": 256,
         "on_h": 176,
         "on_label": "METEOR",
-        "frames": 48,
+        "frames": 104,
+        "fps": 20
+      }
+    },
+    {
+      "id": "spell_inferno",
+      "code": "S4",
+      "category": "barba_core",
+      "label": "Thunder -> INFERNO",
+      "type": "bool",
+      "status": "built",
+      "coupled": true,
+      "vanilla": false,
+      "barba": true,
+      "requires": [
+        "barba_protagonist"
+      ],
+      "description": "Replaces Thunder with a 4-wave 4-way firestorm (previewed at Thunderbird).",
+      "preview": {
+        "off": "previews/cap_vanilla_spell_inferno.png",
+        "off_w": 256,
+        "off_h": 176,
+        "off_label": "Vanilla Thunder",
+        "on": "previews/cap_barba_spell_inferno.png",
+        "on_w": 256,
+        "on_h": 176,
+        "on_label": "INFERNO",
+        "frames": 64,
         "fps": 20
       }
     },
@@ -178,7 +178,7 @@
         "on_w": 256,
         "on_h": 176,
         "on_label": "Shield Rebound",
-        "frames": 64,
+        "frames": 96,
         "fps": 20
       }
     },
@@ -235,7 +235,7 @@
         "on_w": 256,
         "on_h": 176,
         "on_label": "Crystal Pulse & Shake",
-        "frames": 48,
+        "frames": 112,
         "fps": 20
       }
     },
@@ -271,14 +271,14 @@
       "preview": {
         "off": "previews/cap_vanilla_title.png",
         "off_w": 256,
-        "off_h": 128,
-        "off_label": "Vanilla Title",
+        "off_h": 144,
+        "off_label": "Vanilla Title & Ending",
         "on": "previews/cap_barba_title.png",
         "on_w": 256,
-        "on_h": 128,
-        "on_label": "Barba Title Cliff",
-        "frames": 16,
-        "fps": 15
+        "on_h": 144,
+        "on_label": "Barba Title & Ending",
+        "frames": 64,
+        "fps": 12
       }
     },
     {
@@ -356,9 +356,9 @@
         "on": "previews/cap_barba_grass_walk.png",
         "on_w": 256,
         "on_h": 176,
-        "on_label": "IRQ Clouds & Sway",
-        "frames": 48,
-        "fps": 30
+        "on_label": "IRQ Clouds & Overworld",
+        "frames": 144,
+        "fps": 20
       }
     },
     {
@@ -383,7 +383,7 @@
         "on_w": 256,
         "on_h": 176,
         "on_label": "Saria Foul Water",
-        "frames": 104,
+        "frames": 64,
         "fps": 20
       }
     },
@@ -405,13 +405,13 @@
       "preview": {
         "off": "previews/cap_vanilla_boss_meter.png",
         "off_w": 256,
-        "off_h": 176,
+        "off_h": 208,
         "off_label": "Vanilla (8-Pip Left)",
         "on": "previews/cap_barba_boss_meter.png",
         "on_w": 256,
-        "on_h": 176,
+        "on_h": 208,
         "on_label": "Dark Souls Bottom Bar",
-        "frames": 48,
+        "frames": 64,
         "fps": 20
       }
     },
@@ -419,13 +419,13 @@
       "id": "crossover_portals",
       "code": "Tp",
       "category": "world_presentation",
-      "label": "Crossover Portals (Where's Barba? / F13)",
+      "label": "Crossover Portals (Barba's Arcade)",
       "type": "bool",
       "status": "toggleable",
       "vanilla": false,
       "barba": true,
       "requires": [],
-      "description": "Enables the 4-slot town portal table in Rauru and Ruto.",
+      "description": "Enables the Rauru/Ruto portal doors into Barba's Arcade.",
       "preview": {
         "off": "previews/cap_vanilla_crossover_portals.png",
         "off_w": 256,
@@ -434,8 +434,8 @@
         "on": "previews/cap_barba_crossover_portals.png",
         "on_w": 256,
         "on_h": 176,
-        "on_label": "Wavy Crossover Portal",
-        "frames": 48,
+        "on_label": "Barba's Arcade",
+        "frames": 96,
         "fps": 20
       }
     },
@@ -632,8 +632,8 @@
         "barba_protagonist": false,
         "spell_scales": false,
         "spell_wyrmling": false,
-        "spell_inferno": false,
         "spell_meteor": false,
+        "spell_inferno": false,
         "ironknuckle_rebound": false,
         "glove_bricks": false,
         "lava_wade": false,
@@ -665,8 +665,8 @@
         "barba_protagonist": true,
         "spell_scales": true,
         "spell_wyrmling": true,
-        "spell_inferno": true,
         "spell_meteor": true,
+        "spell_inferno": true,
         "ironknuckle_rebound": true,
         "glove_bricks": true,
         "lava_wade": true,
@@ -698,8 +698,8 @@
         "barba_protagonist": true,
         "spell_scales": true,
         "spell_wyrmling": true,
-        "spell_inferno": true,
         "spell_meteor": true,
+        "spell_inferno": true,
         "ironknuckle_rebound": true,
         "glove_bricks": true,
         "lava_wade": true,
@@ -731,8 +731,8 @@
         "barba_protagonist": true,
         "spell_scales": true,
         "spell_wyrmling": true,
-        "spell_inferno": true,
         "spell_meteor": true,
+        "spell_inferno": true,
         "ironknuckle_rebound": true,
         "glove_bricks": true,
         "lava_wade": true,

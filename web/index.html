@@ -647,31 +647,18 @@
     </div>
 
     <div id="view-titles" class="hidden">
-      <section class="top-box" aria-label="Title Screen Review Controls">
+      <section class="top-box" aria-label="Title Screen Controls">
         <div class="row">
           <strong style="color:var(--gold);">Done Title Screens:</strong>
           <div id="titles-done-strip" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
         </div>
         <div class="row">
-          <div style="display:flex;gap:6px;flex-wrap:wrap;" role="tablist" aria-label="Title Review Sub-tabs">
-            <button id="titles-subtab-main" class="primary" type="button">Title Screens (6)</button>
-            <button id="titles-subtab-mask" type="button">Jason Mask Lab (F13)</button>
-          </div>
-          <label for="titles-filter" style="min-width:52px;">Filter</label>
-          <select id="titles-filter">
-            <option value="all">All Remaining Games (6)</option>
-            <option value="prototype">Not Started / Prototyped (F13, Zelda 1)</option>
-            <option value="rework">Fixed / Needs Rework (SMB, Punch-Out!!)</option>
-            <option value="discuss">Direction &amp; Multi-Screen (MM2, Wheel)</option>
-          </select>
-          <label for="titles-zoom" style="min-width:42px;">Zoom</label>
+          <strong style="color:var(--text);">Title Screens (Vanilla vs. Our Version)</strong>
+          <label for="titles-zoom" style="min-width:42px;margin-left:8px;">Zoom</label>
           <select id="titles-zoom">
             <option value="1">1x (256px)</option>
             <option value="2" selected>2x (512px)</option>
           </select>
-          <label style="display:inline-flex;align-items:center;gap:6px;min-width:auto;cursor:pointer;">
-            <input id="titles-anim" type="checkbox" checked> Animate Intro↔Title
-          </label>
           <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;">
             <button id="titles-copy-md" class="primary" type="button">Copy Feedback (Markdown)</button>
             <button id="titles-copy-json" type="button">Copy Feedback (JSON)</button>
