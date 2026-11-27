@@ -728,7 +728,10 @@
         const ctx = item.cv.getContext('2d');
         ctx.imageSmoothingEnabled = false;
         ctx.clearRect(0, 0, item.cv.width, item.cv.height);
-        ctx.drawImage(item.img, item.idx * item.w, 0, item.w, item.h, 0, 0, item.cv.width, item.cv.height);
+        const cols = Math.max(1, Math.floor(item.img.naturalWidth / item.w));
+        const sx = (item.idx % cols) * item.w;
+        const sy = Math.floor(item.idx / cols) * item.h;
+        ctx.drawImage(item.img, sx, sy, item.w, item.h, 0, 0, item.cv.width, item.cv.height);
       }
       requestAnimationFrame(tickCanvases);
     }
@@ -821,7 +824,7 @@
 
       const slots = [
         { title: 'Protagonist & Attack', label: heroLabel, src: heroSrc, w: 256, h: 176, frames: 84, fps: 20, dw: 360 },
-        { title: 'Saria Water', label: sariaLabel, src: sariaSrc, w: 256, h: 176, frames: 104, fps: 20, dw: 360 },
+        { title: 'Saria Water', label: sariaLabel, src: sariaSrc, w: 256, h: 176, frames: 64, fps: 20, dw: 360 },
         { title: 'Game Over', label: goLabel, src: goSrc, w: 256, h: 176, frames: 64, fps: 15, dw: 360 },
       ];
 
