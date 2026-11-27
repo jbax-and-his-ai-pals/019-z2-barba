@@ -82,6 +82,10 @@ def assemble(output: Path, sampled_roar: bool = False, waldo_portal: bool = Fals
         defines += ['-D', 'WALDO_PORTAL=1']
     if souls_boss_meter:
         defines += ['-D', 'SOULS_BOSS_METER=1']
+    # ROM-free CI assembly checks call assemble() directly without build() extracting ending_pal.bin.
+    ending_pal_path = output / 'ending_pal.bin'
+    if not ending_pal_path.exists():
+        ending_pal_path.write_bytes(b'\x0f' * 224)
     subprocess.run([find('ca65'), str(ROOT/'src/barba.asm'), '-I', str(ROOT/'src'), '-I', str(output.resolve()),
                     *defines, '-g', '-o', 'barba.o'], cwd=output, check=True)
     subprocess.run([find('ld65'), '-C', str(ROOT/'src/barba.cfg'), 'barba.o',

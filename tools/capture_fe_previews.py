@@ -80,10 +80,11 @@ local function dumpCrop(name, cx, cy, cw, ch)
 end
 
 local function clearSpells()
-    w(0x76F, 0); w(0x74A, 0); w(0x74B, 0)
+    w(0x76F, 0); w(0x74A, 0); w(0x74B, 0); w(0x74C, 0)
     w(0x70F, 0); w(0x710, 0)
     w(0xD0, 0); w(0xD9, 0); w(0xDE, 0)
     w(0x57D, 0); w(0x479, 0)
+    w(0x728, 0); w(0x767, 0); w(0x0524, 0)
     w(0x6470, 0); w(0x6473, 0); w(0x6474, 0)
 end
 
@@ -449,6 +450,7 @@ emu.addEventCallback(function()
         if waitReady('spell_inferno') then prepSpell(0x0782, 7); thunderCastDt = nil end
     elseif phase == 'spell_inferno' then
         local dt = frame - phaseStart
+        w(0x774, 255)
         local px = r(0x3B) * 256 + r(0x4D)
         local py = r(0x29)
         if not thunderCastDt and ((px >= 352 and py == 144 and r(0x479) == 0) or dt >= 360) then thunderCastDt = dt end
