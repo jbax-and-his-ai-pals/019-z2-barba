@@ -168,7 +168,19 @@
       "requires": [
         "barba_protagonist"
       ],
-      "description": "Technique-gated Up-Thrust (Up+B in air) fires upward diagonal firebreath volleys alongside a rising head-butt pose."
+      "description": "Technique-gated Up-Thrust (Up+B in air) fires upward diagonal firebreath volleys alongside a rising head-butt pose.",
+      "preview": {
+        "off": "previews/cap_vanilla_upstab.png",
+        "off_w": 256,
+        "off_h": 176,
+        "off_label": "Vanilla Up-Thrust",
+        "on": "previews/cap_barba_upstab.png",
+        "on_w": 256,
+        "on_h": 176,
+        "on_label": "Upward Breath & Head-Butt",
+        "frames": 64,
+        "fps": 20
+      }
     },
     {
       "id": "downstab_stomp",
@@ -183,7 +195,19 @@
       "requires": [
         "barba_protagonist"
       ],
-      "description": "Technique-gated Down-Thrust (Down+B in air) stomps easy enemies (HP 1..16, excluding shielded foes and bosses) on descent, with a downstab tail pose and contact item pickup."
+      "description": "Technique-gated Down-Thrust (Down+B in air) stomps easy enemies (HP 1..16, excluding shielded foes and bosses) on descent, with a downstab tail pose and contact item pickup.",
+      "preview": {
+        "off": "previews/cap_vanilla_downstab.png",
+        "off_w": 256,
+        "off_h": 176,
+        "off_label": "Vanilla Down-Thrust",
+        "on": "previews/cap_barba_downstab.png",
+        "on_w": 256,
+        "on_h": 176,
+        "on_label": "Dive Stomp & Tail",
+        "frames": 64,
+        "fps": 20
+      }
     },
     {
       "id": "ironknuckle_rebound",
@@ -324,7 +348,19 @@
       "requires": [
         "barba_protagonist"
       ],
-      "description": "Replaces Link's overworld sprite with Barba, adds a multi-segment trailing body in encounters, and swaps the wandering overworld Fairy for a Wyrmling."
+      "description": "Replaces Link's overworld sprite with Barba, adds a multi-segment trailing body in encounters, and swaps the wandering overworld Fairy for a Wyrmling.",
+      "preview": {
+        "off": "previews/cap_vanilla_grass_walk.png",
+        "off_w": 256,
+        "off_h": 176,
+        "off_label": "Vanilla Overworld Link",
+        "on": "previews/cap_barba_grass_walk.png",
+        "on_w": 256,
+        "on_h": 176,
+        "on_label": "Overworld Barba & Trail",
+        "frames": 72,
+        "fps": 20
+      }
     },
     {
       "id": "hud_and_death_polish",
@@ -354,7 +390,19 @@
       "requires": [
         "barba_protagonist"
       ],
-      "description": "10-step fireball-driven ember/warm/golden-orange lighting in dark grottos without the Candle, $2001 emphasis below scanline 31, and a behind-BG glow halo around live fireballs."
+      "description": "10-step fireball-driven ember/warm/golden-orange lighting in dark grottos without the Candle, $2001 emphasis below scanline 31, and a behind-BG glow halo around live fireballs.",
+      "preview": {
+        "off": "previews/cap_vanilla_cave_light.png",
+        "off_w": 256,
+        "off_h": 176,
+        "off_label": "Vanilla Dark Cave",
+        "on": "previews/cap_barba_cave_light.png",
+        "on_w": 256,
+        "on_h": 176,
+        "on_label": "Firelight Envelope & Halo",
+        "frames": 72,
+        "fps": 20
+      }
     },
     {
       "id": "volley_count",
@@ -425,7 +473,19 @@
       "requires": [
         "barba_protagonist"
       ],
-      "description": "Firebreath chars town and overworld signs with a scorched mark and rotating burned-sign messages."
+      "description": "Firebreath chars town and overworld signs with a scorched mark and rotating burned-sign messages.",
+      "preview": {
+        "off": "previews/cap_vanilla_burned_sign.png",
+        "off_w": 256,
+        "off_h": 176,
+        "off_label": "Vanilla Intact Sign",
+        "on": "previews/cap_barba_burned_sign.png",
+        "on_w": 256,
+        "on_h": 176,
+        "on_label": "Scorched Sign Mark",
+        "frames": 64,
+        "fps": 20
+      }
     },
     {
       "id": "ngplus_mountain_melt",
@@ -440,7 +500,19 @@
       "requires": [
         "barba_protagonist"
       ],
-      "description": "On New Game+, pressing B on the overworld melts Mountain tiles into walkable Desert with live PPU attribute updates."
+      "description": "On New Game+, pressing B on the overworld melts Mountain tiles into walkable Desert with live PPU attribute updates.",
+      "preview": {
+        "off": "previews/cap_vanilla_ngplus_melt.png",
+        "off_w": 256,
+        "off_h": 176,
+        "off_label": "Vanilla Impassable Mountain",
+        "on": "previews/cap_barba_ngplus_melt.png",
+        "on_w": 256,
+        "on_h": 176,
+        "on_label": "NG+ Mountain Melt",
+        "frames": 48,
+        "fps": 15
+      }
     },
     {
       "id": "scanline_scenery",

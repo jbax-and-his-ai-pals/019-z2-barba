@@ -75,6 +75,10 @@ class TestDashboardBuilder(unittest.TestCase):
         self.assertNotIn("{{", public_html)
         self.assertNotIn("{{", local_html)
 
+        # Non-visual options must be grouped in their own section below animated cards
+        self.assertIn("Non-Visual Options, Audio & Tunables", public_html)
+        self.assertIn("Non-Visual Options, Audio & Tunables", local_html)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -21,6 +21,11 @@ SCENES = [
     ("title", 256, 144, 64, 12),
     ("grass_walk", 256, 176, 144, 20),
     ("grass_attack", 256, 176, 84, 20),
+    ("upstab", 256, 176, 64, 20),
+    ("downstab", 256, 176, 64, 20),
+    ("cave_light", 256, 176, 72, 20),
+    ("burned_sign", 256, 176, 64, 20),
+    ("ngplus_melt", 256, 176, 48, 15),
     ("spell_scales", 256, 176, 48, 20),
     ("spell_wyrmling", 256, 176, 48, 20),
     ("spell_meteor", 256, 176, 104, 20),
@@ -153,6 +158,17 @@ end
 
 local thunderCastDt = nil
 local bossFightDt = nil
+local meltStartDt = nil
+
+local function enterDarkGrotto()
+    clearSpells()
+    w(0xB5, 1); w(0x707, 0); w(0x706, 0); w(0x769, 1)
+    w(0x561, 0x0E); w(0x568, 0); w(0x56B, 0); w(0x56C, 0)
+    w(0x701, 0); w(0x75C, 0); w(0x704, 0)
+    w(0x736, 0); w(0x73D, 0); w(0x726, 1)
+    w(0x785, 0)
+    w(0x774, 255); w(0x784, 8)
+end
 
 local function enterGameOverCombat()
     clearSpells()
@@ -198,6 +214,33 @@ emu.addEventCallback(function()
         local down = (dt >= 40 and dt < 84) or (dt >= 146 and dt < 182)
         local up = (dt >= 201 and dt < 237)
         emu.setInput({a = jump, b = fire, down = down, up = up}, 0)
+    elseif phase == 'upstab' then
+        local jump = (dt >= 8 and dt < 32) or (dt >= 80 and dt < 104)
+        local up = (dt >= 10 and dt < 52) or (dt >= 82 and dt < 124)
+        local fire = (dt >= 18 and dt < 22) or (dt >= 90 and dt < 94)
+        emu.setInput({a = jump, up = up, b = fire}, 0)
+    elseif phase == 'downstab' then
+        local jump = (dt >= 8 and dt < 28) or (dt >= 72 and dt < 92)
+        local down = (dt >= 28 and dt < 66) or (dt >= 92 and dt < 130)
+        local fire = (dt >= 30 and dt < 34) or (dt >= 94 and dt < 98)
+        local right = (dt >= 60 and dt < 72)
+        emu.setInput({a = jump, down = down, b = fire, right = right}, 0)
+    elseif phase == 'cave_light' then
+        local fire = (dt >= 24 and dt < 28) or (dt >= 36 and dt < 40) or (dt >= 48 and dt < 52)
+        emu.setInput({b = fire}, 0)
+    elseif phase == 'burned_sign' then
+        local right = (dt >= 6 and dt < 20)
+        local fire = (dt >= 26 and dt < 30) or (dt >= 42 and dt < 46)
+        emu.setInput({right = right, b = fire}, 0)
+    elseif phase == 'ngplus_melt' then
+        w(0x86, 0); w(0x87, 0); w(0x88, 0); w(0x89, 0)
+        if not meltStartDt and r(0x0563) ~= 0x0B and dt < 180 then
+            emu.setInput({right = true}, 0)
+        else
+            local mdt = meltStartDt and (dt - meltStartDt) or 0
+            local fire = (mdt >= 18 and mdt < 24)
+            emu.setInput({b = fire}, 0)
+        end
     elseif phase == 'spell_scales' then
         local fire = (dt >= 96 and dt < 100) or (dt >= 118 and dt < 122)
         emu.setInput({select = (dt >= 30 and dt < 34), right = (dt >= 60 and dt < 90), b = fire}, 0)
@@ -313,7 +356,70 @@ emu.addEventCallback(function()
         if (frame - phaseStart) % 3 == 0 and captured < 84 then
             dumpCrop('grass_attack', 0, 32, 256, 176)
             captured = captured + 1
-            if captured >= 84 then enterGrass(); phase = 'spell_scales_wait'; phaseStart = frame; captured = 0 end
+            if captured >= 84 then enterGrass(); phase = 'upstab_wait'; phaseStart = frame; captured = 0 end
+        end
+    elseif phase == 'upstab_wait' then
+        waitReady('upstab')
+    elseif phase == 'upstab' then
+        if (frame - phaseStart) % 2 == 0 and captured < 64 then
+            dumpCrop('upstab', 0, 32, 256, 176)
+            captured = captured + 1
+            if captured >= 64 then enterPalaceRoom(5, 0); phase = 'downstab_wait'; phaseStart = frame; captured = 0 end
+        end
+    elseif phase == 'downstab_wait' then
+        if waitReady('downstab') then
+            for s = 0, 5 do if r(0xB6 + s) == 1 and r(0xA1 + s) ~= 0x02 then w(0xB6 + s, 0) end end
+            w(0x796, 0x14)
+            w(0x3B, 0); w(0x4D, 128); w(0x29, 176); w(0x9F, 1); w(0x5F, 1)
+            w(0xB6 + 1, 1); w(0xA1 + 1, 0x04); w(0x4E + 1, 128); w(0x3C + 1, 0); w(0x2A + 1, 176); w(0xC2 + 1, 4); w(0x040E + 1, 0); w(0x71 + 1, 0)
+            w(0xB6 + 2, 1); w(0xA1 + 2, 0x04); w(0x4E + 2, 168); w(0x3C + 2, 0); w(0x2A + 2, 176); w(0xC2 + 2, 4); w(0x040E + 2, 0); w(0x71 + 2, 0)
+        end
+    elseif phase == 'downstab' then
+        if (frame - phaseStart) % 2 == 0 and captured < 64 then
+            dumpCrop('downstab', 0, 32, 256, 176)
+            captured = captured + 1
+            if captured >= 64 then enterDarkGrotto(); phase = 'cave_light_wait'; phaseStart = frame; captured = 0 end
+        end
+    elseif phase == 'cave_light_wait' then
+        if waitReady('cave_light') then
+            w(0x785, 0); w(0x72A, 1); w(0x72C, 0x20); w(0x3B, 1); w(0x4D, 0x80)
+        end
+    elseif phase == 'cave_light' then
+        if (frame - phaseStart) % 3 == 0 and captured < 72 then
+            dumpCrop('cave_light', 0, 32, 256, 176)
+            captured = captured + 1
+            if captured >= 72 then enterRauruTown(0); phase = 'burned_sign_wait'; phaseStart = frame; captured = 0 end
+        end
+    elseif phase == 'burned_sign_wait' then
+        if waitReady('burned_sign') then
+            for s = 0, 5 do
+                if r(0xB6 + s) == 1 and r(0xA1 + s) == 0x22 then
+                    local sx = r(0x4E + s)
+                    w(0x3B, r(0x3C + s))
+                    w(0x4D, math.max(16, sx - 44))
+                    w(0x9F, 1); w(0x5F, 1)
+                end
+            end
+        end
+    elseif phase == 'burned_sign' then
+        if (frame - phaseStart) % 2 == 0 and captured < 64 then
+            dumpCrop('burned_sign', 0, 32, 256, 176)
+            captured = captured + 1
+            if captured >= 64 then enterWestPathOverworld(); w(0x07A0, 2); phase = 'ngplus_melt_wait'; phaseStart = frame; captured = 0 end
+        end
+    elseif phase == 'ngplus_melt_wait' then
+        if frame >= phaseStart + 12 and r(0x736) == 5 then
+            w(0x07A0, 2); meltStartDt = nil; phase = 'ngplus_melt'; phaseStart = frame; captured = 0
+        elseif frame > phaseStart + 120 then
+            w(0x07A0, 2); meltStartDt = nil; phase = 'ngplus_melt'; phaseStart = frame; captured = 0
+        end
+    elseif phase == 'ngplus_melt' then
+        local dt = frame - phaseStart
+        if not meltStartDt and (r(0x0563) == 0x0B or dt >= 180) then meltStartDt = dt end
+        if meltStartDt and (dt - meltStartDt) % 2 == 0 and captured < 48 then
+            dumpCrop('ngplus_melt', 0, 32, 256, 176)
+            captured = captured + 1
+            if captured >= 48 then enterGrass(); phase = 'spell_scales_wait'; phaseStart = frame; captured = 0 end
         end
     elseif phase == 'spell_scales_wait' then
         if waitReady('spell_scales') then prepSpell(0x077B, 0) end

@@ -1014,16 +1014,18 @@
 
       const container = document.getElementById('categories');
       container.innerHTML = '';
-      for (const cat of catalog.categories) {
-        const items = catalog.flags.filter(f => f.category === cat.id).filter(f => {
-          if (state.filter === 'ready') return f.status !== 'planned';
-          if (state.filter === 'planned') return f.status === 'planned';
-          return true;
-        });
-        if (!items.length) continue;
+
+      const matchesFilter = f => {
+        if (state.filter === 'ready') return f.status !== 'planned';
+        if (state.filter === 'planned') return f.status === 'planned';
+        return true;
+      };
+
+      const renderFlagCard = (title, items) => {
+        if (!items.length) return;
         const card = document.createElement('section');
         card.className = 'card';
-        card.innerHTML = `<h2>${cat.title}</h2>`;
+        card.innerHTML = `<h2>${title}</h2>`;
         for (const f of items) {
           const item = document.createElement('div');
           item.className = 'flag-item' + (f.status === 'planned' ? ' is-planned' : '');
@@ -1063,7 +1065,17 @@
           };
         }
         container.appendChild(card);
+      };
+
+      // 1. Visual / animated features grouped by category
+      for (const cat of catalog.categories) {
+        const visualItems = catalog.flags.filter(f => f.category === cat.id && f.preview && matchesFilter(f));
+        renderFlagCard(cat.title, visualItems);
       }
+
+      // 2. All non-visual options & tunables in their own dedicated section below
+      const nonVisualItems = catalog.flags.filter(f => !f.preview && matchesFilter(f));
+      renderFlagCard('Non-Visual Options, Audio & Tunables', nonVisualItems);
     }
 
     document.getElementById('seed-input').oninput = e => {
