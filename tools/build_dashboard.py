@@ -351,7 +351,7 @@ def render_flavor(
         ),
         "{{LOCAL_STATE_BAR}}": LOCAL_STATE_BAR_HTML if is_local else "",
         "{{FE_TAB_LABEL}}": "Barba Enterprise (Flags &amp; Seed)" if is_local else "Zelda 2",
-        "{{TITLES_TAB_LABEL}}": "Title Screen Review" if is_local else "Title Screens",
+        "{{TITLES_TAB_LABEL}}": "Title Screen Review" if is_local else "All Title Screens",
         "{{WORKSPACE_TABS}}": render_workspace_tabs_html(flavor, games=subgames),
         "{{SUBGAME_VIEWS}}": render_subgame_views_html(flavor, games=subgames),
         "{{PRESET_BAR}}": PRESET_BAR_HTML if is_local else "",

@@ -101,7 +101,7 @@ class TestDashboardBuilder(unittest.TestCase):
         ):
             self.assertNotIn(marker, public_html, f"Public HTML should not contain {marker}")
 
-        for marker in ('src="catalog.js"', 'src="title_review_data.js"', 'src="subgames_data.js"', '>Summary<', 'Barba Edition', '>Zelda 2<'):
+        for marker in ('src="catalog.js"', 'src="title_review_data.js"', 'src="subgames_data.js"', '>Summary<', 'Barba Edition', '>Zelda 2<', '>All Title Screens<'):
             self.assertIn(marker, public_html)
 
         # Local flavor has all internal dev tools, state bar, and local data files
@@ -279,7 +279,6 @@ class TestDashboardBuilder(unittest.TestCase):
             tab_ids,
             [
                 "fe",
-                "titles",
                 "sub-pubgame",
                 "sub-locgame",
                 "z2strings",
@@ -287,6 +286,7 @@ class TestDashboardBuilder(unittest.TestCase):
                 "feud",
                 "duck",
                 "sub-archgame",
+                "titles",
             ],
         )
 
