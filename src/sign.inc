@@ -58,14 +58,10 @@ SignDialog:
     sta $04A0,x
     dey
     tya
-    asl
-    tay
-    lda SignPointers,y
-    pha
-    lda SignPointers+1,y
-    tay
-    pla
-    jmp TownSetNpcDialog
+    clc
+    adc #$0B
+    jsr LoadTownDlg3
+    jmp TownSetArcadeBuf
 @no:
     jsr TownIsError
     bcc @native
@@ -73,37 +69,13 @@ SignDialog:
     cmp #$A0
     bcc @native
     pla
-    lda #<ErrorAshText
-    ldy #>ErrorAshText
-    jmp TownSetNpcDialog
+    lda #$11
+    jsr LoadTownDlg3
+    jmp TownSetArcadeBuf
 @native:
     jmp TownNativeDialog
 
 SIGN_LINES = 6
-SignPointers:
-    .word SignChar, SignBurned, SignAshPile, SignWhatLeft, SignDidThat, SignWasSign
-SignChar:
-    TownLine "CHARRED.", $FD
-    TownLine "YOU CAN'T", $FD
-    TownLine "READ IT.", $FF
-SignBurned:
-    TownLine "WELL. YOU", $FD
-    TownLine "BURNED IT.", $FF
-SignAshPile:
-    TownLine "WELCOME TO", $FD
-    TownLine "THIS ASH", $FD
-    TownLine "PILE.", $FF
-SignWhatLeft:
-    TownLine "WELCOME TO", $FD
-    TownLine "WHAT IS", $FD
-    TownLine "LEFT.", $FF
-SignDidThat:
-    TownLine "SIGN IS", $FD
-    TownLine "ASH. YOU", $FD
-    TownLine "DID THAT.", $FF
-SignWasSign:
-    TownLine "THIS WAS", $FD
-    TownLine "A SIGN.", $FF
 
 ; Error of Ruto: world 1 ($0707=1), town 1 ($056B=1), actor $0E.
 TownIsError:
@@ -150,13 +122,9 @@ ErrorAshCheck:
     clc
     rts
 
-ErrorAshText:
-    TownLine "I AM", $FD
-    TownLine "ASH PILE.", $FF
-
 .segment "BANK3_PAD"
 SariaSignText:
     TownLine "WELCOME TO", $FD
-    TownLine "SARIA.", $FD
+    TownLine "SARIA TOWN.", $FD
     TownLine "DON'T DRINK", $FD
-    TownLine "THE WATER.", $FF
+    TownLine "THE WATER!", $FF

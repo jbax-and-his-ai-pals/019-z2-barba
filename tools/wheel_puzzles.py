@@ -284,7 +284,7 @@ def apply_puzzle_patches_bank0(b0: bytearray) -> None:
     patch(0x83CB, b'ZELDA,II,,', b'I:J:E:,INC')
     patch(0x83E1, b'BARBA,VS,DARK,LINK,,,,,', b'CALIFON,PRODUCTIONS,INC')
 
-    patch(0x8C81, b',BARBA,EDITIO\xce', b'FAMILY,EDITIO\xce')
+    patch(0x8C81, b',' * 13 + b'\xac', b'FAMILY,EDITIO\xce')
     patch(0x8CBF, b',HYRULE,PALACE,STUDIOS,,\xac', b'MERV,GRIFFIN,ENTERPRISES\xbb')
     patch(0x8CE4, b'PALACE,VI,DRAGO\xce', b'COLUMBIA,PICTURE\xd3')
     patch(0x8CF7, b',,BARBA,EDITION,,,\xac', b'ENTERTAINMENT;,INC\xba')

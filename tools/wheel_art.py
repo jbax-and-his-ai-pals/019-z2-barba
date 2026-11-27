@@ -6,9 +6,11 @@ Extracts Barba (24x48) poses directly from roms/z2.nes at build time
 
 from __future__ import annotations
 
+import math
+
 import assets
 import boss_art
-from pack_f13 import Asm6502
+from asm6502 import Asm6502
 
 
 def _encode_tile_2bpp(grid_8x8: list[list[int]]) -> bytes:
@@ -275,6 +277,218 @@ def apply_art_patches_bank1(b1: bytearray, z2_bytes: bytes) -> None:
     helper_addr = fast_addr + a.labels['screen_init_helper'] - fast_addr
     assert b1[0x82CA - 0x8000 : 0x82DD - 0x8000] == bytes.fromhex('a90385ab8503206f8fa9168d0620a9a04cea81')
     b1[0x82CA - 0x8000 : 0x82CD - 0x8000] = bytes([0x4C, helper_addr & 0xFF, helper_addr >> 8])
+
+    patch_s1_logo_bank1(b1)
+
+
+def _decode_tile_2bpp(tile_bytes: bytes) -> list[list[int]]:
+    out = [[0] * 8 for _ in range(8)]
+    for y in range(8):
+        p0, p1 = tile_bytes[y], tile_bytes[y + 8]
+        for x in range(8):
+            out[y][7 - x] = ((p0 >> x) & 1) | (((p1 >> x) & 1) << 1)
+    return out
+
+
+def patch_s1_logo_bank1(b1: bytearray) -> None:
+    """Replace 'FORTUNE' (cols 13..23) in Bank 1 $95F1 with 'BARBA' (shared by Screen 1 & S2 ticker)."""
+    glyphs = {
+        'B': [
+            '11111111110',
+            '11111111111',
+            '11100000111',
+            '11100000111',
+            '11100000111',
+            '11100000111',
+            '11111111110',
+            '11111111110',
+            '11100000111',
+            '11100000111',
+            '11100000111',
+            '11100000111',
+            '11111111111',
+            '11111111110',
+        ],
+        'A': [
+            '00111111100',
+            '01111111110',
+            '11100000111',
+            '11100000111',
+            '11100000111',
+            '11100000111',
+            '11111111111',
+            '11111111111',
+            '11100000111',
+            '11100000111',
+            '11100000111',
+            '11100000111',
+            '11100000111',
+            '11100000111',
+        ],
+        'R': [
+            '11111111110',
+            '11111111111',
+            '11100000111',
+            '11100000111',
+            '11100000111',
+            '11100000111',
+            '11111111110',
+            '11111111100',
+            '11100111000',
+            '11100011100',
+            '11100001110',
+            '11100000111',
+            '11100000111',
+            '11100000111',
+        ],
+    }
+    w, h = 88, 16
+    face = [[False] * w for _ in range(h)]
+    for idx, ch in enumerate('BARBA'):
+        g = glyphs[ch]
+        bx = 2 + idx * 17
+        for gy, row in enumerate(g):
+            for gx, bit in enumerate(row):
+                if bit == '1' and 0 <= bx + gx < w:
+                    face[1 + gy][bx + gx] = True
+
+    grid = [[0] * w for _ in range(h)]
+    for y in range(h):
+        for x in range(w):
+            if face[y][x]:
+                for dy in (-1, 0, 1):
+                    for dx in (-1, 0, 1):
+                        ny, nx = y + dy, x + dx
+                        if 0 <= ny < h and 0 <= nx < w and not face[ny][nx]:
+                            grid[ny][nx] = 3
+    for y in range(h):
+        for x in range(w):
+            if face[y][x]:
+                grid[y][x] = 2
+
+    # B1 $95F1.. is 24 columns x 2 tile rows (column-major: col*32 + row*16)
+    base_off = 0x95F1 - 0x8000
+    for c_rel in range(11):
+        for tr in range(2):
+            tile_grid = [grid[tr * 8 + py][c_rel * 8 : (c_rel + 1) * 8] for py in range(8)]
+            off = base_off + (13 + c_rel) * 32 + tr * 16
+            b1[off : off + 16] = _encode_tile_2bpp(tile_grid)
+
+
+def patch_s2_wheel_barba(b1: bytearray, b2: bytearray) -> None:
+    """Replace 'FORTUNE' on the Screen 2 Big Wheel bottom arc (B1 $B291 + B2 $81C5) with curved 'BARBA'."""
+    chr_off = 0xB291 - 0x8000
+    nt_off = 0x81C5 - 0x8000
+    nt = list(b2[nt_off : nt_off + 304])  # 19 rows x 16 cols
+
+    # Decode entire 128x152 wheel pixel buffer (top left screen (64, 24) -> center (64, 84))
+    w, h = 128, 152
+    buf = [[0] * w for _ in range(h)]
+    tile_cache: dict[int, list[list[int]]] = {}
+    for ry in range(19):
+        for rx in range(16):
+            tid = nt[ry * 16 + rx]
+            if tid == 0:
+                continue
+            if tid not in tile_cache:
+                t_off = chr_off + (tid - 1) * 16
+                tile_cache[tid] = _decode_tile_2bpp(bytes(b1[t_off : t_off + 16]))
+            t = tile_cache[tid]
+            for py in range(8):
+                for px in range(8):
+                    buf[ry * 8 + py][rx * 8 + px] = t[py][px]
+
+    # Erase FORTUNE along bottom arc outside the inner orange/grey oval around 'of'
+    cx, cy = 64.0, 84.0
+    for ly in range(80, h):
+        for lx in range(w):
+            dist = math.hypot(lx - cx, ly - cy)
+            in_inner_ellipse = ((lx - cx) / 37.2) ** 2 + ((ly - cy) / 35.5) ** 2 <= 1.0
+            if not in_inner_ellipse and dist <= 62.5:
+                buf[ly][lx] = 0
+
+    glyphs = {
+        'B': [
+            '11111111', '11111111', '11100111', '11111110',
+            '11111110', '11100111', '11111111', '11111111',
+        ],
+        'A': [
+            '11111111', '11111111', '11100111', '11111111',
+            '11111111', '11100111', '11100111', '11100111',
+        ],
+        'R': [
+            '11111111', '11111111', '11100111', '11111111',
+            '11111110', '11101111', '11100111', '11100111',
+        ],
+    }
+    face = [[False] * w for _ in range(h)]
+    angles = [140.0, 115.0, 90.0, 65.0, 40.0]
+    box_w, box_h, rad_c = 17.0, 22.0, 47.0
+    for ch, deg in zip('BARBA', angles):
+        th = math.radians(deg)
+        lcx = cx + rad_c * math.cos(th)
+        lcy = cy + rad_c * math.sin(th)
+        rx_v, ry_v = math.sin(th), -math.cos(th)
+        ux_v, uy_v = -math.cos(th), -math.sin(th)
+        g = glyphs[ch]
+        for ly in range(90, h):
+            for lx in range(w):
+                dx, dy = lx - lcx, ly - lcy
+                u = dx * rx_v + dy * ry_v
+                v = dx * ux_v + dy * uy_v
+                if -box_w / 2 <= u <= box_w / 2 and -box_h / 2 <= v <= box_h / 2:
+                    gx = int((u + box_w / 2) / box_w * 8)
+                    gy = int((box_h / 2 - v) / box_h * 8)
+                    if 0 <= gx < 8 and 0 <= gy < 8 and g[gy][gx] == '1':
+                        face[ly][lx] = True
+
+    # Drop shadow (+2, +2) color 1, orange 1px outline color 3, grey fill color 2
+    for ly in range(90, h):
+        for lx in range(w):
+            if face[ly][lx] and ly + 2 < h and lx + 2 < w and not face[ly + 2][lx + 2]:
+                buf[ly + 2][lx + 2] = 1
+    for ly in range(90, h):
+        for lx in range(w):
+            if face[ly][lx]:
+                for dy in (-1, 0, 1):
+                    for dx in (-1, 0, 1):
+                        ny, nx = ly + dy, lx + dx
+                        if 0 <= ny < h and 0 <= nx < w and not face[ny][nx]:
+                            buf[ny][nx] = 3
+    for ly in range(90, h):
+        for lx in range(w):
+            if face[ly][lx]:
+                buf[ly][lx] = 2
+
+    # Pack bottom half (ry=10..18) preserving top-half tiles verbatim and reusing bottom-exclusive slots
+    top_tiles = set(nt[: 10 * 16])
+    top_tile_by_bytes: dict[bytes, int] = {}
+    for tid in sorted(top_tiles):
+        if tid != 0:
+            t_off = chr_off + (tid - 1) * 16
+            top_tile_by_bytes[bytes(b1[t_off : t_off + 16])] = tid
+
+    excl_pool = sorted(t for t in set(nt[10 * 16 :]) if t != 0 and t not in top_tiles)
+    alloc_by_bytes: dict[bytes, int] = {}
+    for ry in range(10, 19):
+        for rx in range(16):
+            grid8 = [buf[ry * 8 + py][rx * 8 : (rx + 1) * 8] for py in range(8)]
+            if all(px == 0 for r in grid8 for px in r):
+                b2[nt_off + ry * 16 + rx] = 0
+                continue
+            enc = _encode_tile_2bpp(grid8)
+            if enc in top_tile_by_bytes:
+                tid = top_tile_by_bytes[enc]
+            elif enc in alloc_by_bytes:
+                tid = alloc_by_bytes[enc]
+            else:
+                if not excl_pool:
+                    raise RuntimeError('Wheel S2 bottom-exclusive tile pool exhausted')
+                tid = excl_pool.pop(0)
+                t_off = chr_off + (tid - 1) * 16
+                b1[t_off : t_off + 16] = enc
+                alloc_by_bytes[enc] = tid
+            b2[nt_off + ry * 16 + rx] = tid
 
 
 def apply_art_patches_bank2(b2: bytearray) -> None:

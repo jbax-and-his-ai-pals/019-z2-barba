@@ -246,12 +246,18 @@ def build_volley_frames(rom: bytes, barba_frames: dict[str, list[str]], graphics
 
 def build_palette_shuffle_frames(barba_frames: dict[str, list[str]], graphics: dict[int, bytes]) -> list[list[list[RGBA]]]:
     pals = [PAL_BARBA, PAL_SCALES, PAL_EMERALD, PAL_GOLD]
+    cycle = [
+        ("walk0", True), ("walk1", False), ("walk2", True), ("idle", False),
+        ("walk0", True), ("walk1", False), ("walk2", True), ("idle", False),
+        ("attack", True), ("attack", False), ("idle", False), ("idle", True),
+    ]
     frames = []
-    for i, pal in enumerate(pals):
-        c = new_canvas(64, 56)
-        paint_z2_grass_bg(c, 46)
-        draw_full_barba(c, barba_frames, graphics, "idle", pal, 36, 0, tail_flick=(i % 2 == 1))
-        frames.append(c)
+    for pal in pals:
+        for pose, flick in cycle:
+            c = new_canvas(64, 56)
+            paint_z2_grass_bg(c, 46)
+            draw_full_barba(c, barba_frames, graphics, pose, pal, 36, 0, tail_flick=flick)
+            frames.append(c)
     return frames
 
 
@@ -496,11 +502,22 @@ def build_item_shuffle_frames(rom: bytes) -> list[list[list[RGBA]]]:
     return frames
 
 
-def _write_pcm_wav(path: Path, samples: list[float], sample_rate: int = 16574) -> None:
+def _write_pcm_wav(path: Path, samples: list[float], sample_rate: int = 44100) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    # 1-pole DC blocker + peak normalization to 0.85 so DAC midpoint offsets never click or clip.
+    filtered: list[float] = []
+    prev_x = 0.0
+    prev_y = 0.0
+    for x in samples:
+        y = x - prev_x + 0.996 * prev_y
+        prev_x = x
+        prev_y = y
+        filtered.append(y)
+    peak = max((abs(v) for v in filtered), default=1.0) or 1.0
+    scale = 27850.0 / peak
     pcm_bytes = bytearray()
-    for s in samples:
-        val = max(-32767, min(32767, int(s * 500)))
+    for s in filtered:
+        val = max(-32767, min(32767, round(s * scale)))
         pcm_bytes += struct.pack("<h", val)
     with wave.open(str(path), "wb") as wf:
         wf.setnchannels(1)
@@ -509,35 +526,66 @@ def _write_pcm_wav(path: Path, samples: list[float], sample_rate: int = 16574) -
         wf.writeframes(bytes(pcm_bytes))
 
 
+def _render_laugh_sequence(samples: list[bytes], dmc_rate_hz: float, out_hz: int = 44100) -> list[float]:
+    """Render 5 NES Game Over laugh DPCM clips at native 23-frame spacing and continuous DAC level."""
+    total = round((4 * 23 / 60.099 + 0.35) * out_hz)
+    values = [0.0] * total
+    level = 64
+    for number, sample in enumerate(samples):
+        pcm = game_over_audio.decode(sample, level)
+        level = pcm[-1]
+        start = round(number * 23 / 60.099 * out_hz)
+        dur_samples = round(len(pcm) * out_hz / dmc_rate_hz)
+        for i in range(dur_samples):
+            if start + i >= total:
+                break
+            src_idx = min(len(pcm) - 1, int(i * dmc_rate_hz / out_hz))
+            values[start + i] = (pcm[src_idx] - 64) / 64.0
+        # Hold the resting DAC level until the next laugh rather than snapping to 0.
+        next_start = round((number + 1) * 23 / 60.099 * out_hz) if number < len(samples) - 1 else total
+        tail_val = (level - 64) / 64.0
+        for i in range(start + dur_samples, min(total, next_start)):
+            values[i] = tail_val
+    return values
+
+
 def export_audio_previews(rom: bytes) -> None:
-    """Export real WAV audio previews: Sampled Roar + full 5-tick Ganon and Barba Link laugh sequences."""
+    """Export real WAV audio previews: Sampled Roar + authentic 5-tick Ganon and Barba Link laugh sequences."""
+    from roar_sample import CPU_HZ, PERIODS
+
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     roar_src = ROOT / "assets" / "roar.wav"
     if roar_src.exists():
         shutil.copy2(roar_src, OUT_DIR / "roar_sampled.wav")
 
-    # Full 5-laugh sequence for Vanilla Ganon
-    ganon_pcm: list[float] = []
-    gap_g = [0.0] * 1800
+    native_clips: list[bytes] = []
     for entry in game_over_audio.LAUGH_ENTRIES:
         table = prg_offset(6, 0x917B + entry * 2)
         start = prg_offset(7, 0xC000 + rom[table] * 64)
-        orig_dpcm = rom[start : start + rom[table + 1] * 16 + 1]
-        ganon_pcm.extend(game_over_audio.decode(orig_dpcm))
-        ganon_pcm.extend(gap_g)
-    _write_pcm_wav(OUT_DIR / "ganon_laugh_seq.wav", ganon_pcm, 16574)
+        native_clips.append(rom[start : start + rom[table + 1] * 16 + 1])
 
-    # Full 5-laugh sequence for Barba Link (octave-up boosted)
-    link_pcm: list[float] = []
-    gap_l = [0.0] * 2000
-    for entry, rate in zip(game_over_audio.LAUGH_ENTRIES, game_over_audio.SHARED_LAUGH_RATES):
-        table = prg_offset(6, 0x917B + entry * 2)
-        start = prg_offset(7, 0xC000 + rom[table] * 64)
-        orig_dpcm = rom[start : start + rom[table + 1] * 16 + 1]
-        link_dpcm = game_over_audio.encode_compact(orig_dpcm, rate, boost=4.0)
-        link_pcm.extend(game_over_audio.decode(link_dpcm))
-        link_pcm.extend(gap_l)
-    _write_pcm_wav(OUT_DIR / "link_laugh_seq.wav", link_pcm, 24657)
+    dmc_rate_15 = CPU_HZ / PERIODS[15]
+    ganon_pcm = _render_laugh_sequence(native_clips, dmc_rate_15)
+    _write_pcm_wav(OUT_DIR / "ganon_laugh_seq.wav", ganon_pcm, 44100)
+
+    raised_clips = [data for _, data, _ in game_over_audio.compile_laughs(rom)]
+    link_pcm = _render_laugh_sequence(raised_clips, dmc_rate_15)
+    _write_pcm_wav(OUT_DIR / "link_laugh_seq.wav", link_pcm, 44100)
+    write_audio_data_js()
+
+
+def write_audio_data_js(out_dir: Path = OUT_DIR) -> Path:
+    """Bundle preview WAVs as base64 JS data so Web Audio works on file:// without CORS errors."""
+    import base64
+
+    payload: dict[str, str] = {}
+    for name in ("roar_sampled.wav", "ganon_laugh_seq.wav", "link_laugh_seq.wav"):
+        wav_path = out_dir / name
+        if wav_path.is_file():
+            payload[f"previews/{name}"] = base64.b64encode(wav_path.read_bytes()).decode("ascii")
+    out_path = out_dir / "audio_data.js"
+    out_path.write_text(f"window.BARBA_AUDIO_DATA = {json.dumps(payload)};\n", encoding="utf-8")
+    return out_path
 
 
 def generate_all(source_path: Path = ROOT / "roms" / "z2.nes") -> list[Path]:

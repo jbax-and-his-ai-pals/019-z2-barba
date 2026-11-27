@@ -52,11 +52,13 @@ Outputs:
 
 The default output directory also mirrors the ROM and BPS to `play/` with
 the `-b<N>` build number attached (`play/barba-b<N>.nes`, `play/barba-b<N>.bps`,
-`play/nes/*-b<N>.nes`, `play/bps/*-b<N>.bps`), and writes
+`play/nes/<game>-b<M>.nes`, `play/compat/nes/<game>-compat-b<M>.nes`,
+`play/bps/<game>-b<M>.bps`, `play/compat/bps/<game>-compat-b<M>.bps`), and writes
 `dist/barba-bps-b<N>.zip` containing `barba-b<N>.bps` plus all
-`play/bps/*-b<N>.bps` files in a flat archive for GitHub releases. Subgame ROMs
-and patches live under `play/nes/` and `play/bps/`, with Windows launchers in
-`play/cmd/`. You can also rebuild the archive directly with
+`play/bps/*.bps` and `play/compat/bps/*.bps` files in a flat archive for GitHub releases. Subgame ROMs
+and patches live under `play/nes/` and `play/bps/` (mainline builds omit
+`-barba`), standard Mapper 4 / MMC3 builds live under `play/compat/nes/` and `play/compat/bps/` (using `-compat`), and Windows
+launchers live in `play/cmd/` and `play/compat/cmd/` (generated and validated by `python tools/generate_play_cmds.py`). You can also rebuild the archive directly with
 `python tools/package_bps.py` (optionally `--build-number N` or
 `--version vX.Y.Z`).
 Relocated overworld graphics use BPS source-copy references to the clean
@@ -471,3 +473,19 @@ Rollback: revert this branch commit and rebuild; no source ROM changes.
 The emulator runner copies executable dependencies to build/mesen and writes
 settings there, never into the shared .tools junction. Run scenarios sequentially.
 No ROM, emulator binary, generated state or build output is tracked.
+
+## Web Dashboard & GitHub Pages Visibility
+
+`python tools/build_dashboard.py` generates both dashboard flavors from `tools/dashboard_template.html`:
+
+- **Public GitHub Pages (`web/index.html` + `web/catalog.{json,js}`, `web/subgames_data.js`, `web/title_review_data.js`)**: presentation build deployed by `.github/workflows/pages.yml` via `python tools/build_dashboard.py --stage-pages _site`. `--stage-pages` copies only public HTML/JS/JSON and the preview assets referenced by public data.
+- **Local Dev (`web/local.html` + `web/local_*.js`, gitignored)**: includes internal dev tabs (`Where's Barba? Tile Tagger`, `Family Feud Cast`, `Barba's Hunt Tiles`), Build State bar, CLI command box, and any items marked `"visibility": "local"` with a violet dashed border, left accent stripe, and `"Local Only — Not Published on GitHub Pages"` badge/banner.
+
+Any item across all four dashboard surfaces defaults to `"public"` and can be hidden from GitHub Pages by adding `"visibility": "local"`:
+
+- **Subgame scene row** (`tools/capture_subgame_previews.py` `SUBGAMES[*]["scenes"]`): append `, {"visibility": "local"}` as the 10th tuple element (and optionally set `"public_summary"` on the game dict so the public header omits spoilers). Currently used for Friday the 13th's `forest_coven` row.
+- **Entire subgame tab** (`tools/capture_subgame_previews.py` `SUBGAMES[*]`): set `"visibility": "local"` on the game dict (omits the tab and view from `web/index.html` and shows a `Local` tab pill in `web/local.html`).
+- **Zelda II feature flag** (`tools/fe_catalog.py` `FLAGS[*]`): set `"visibility": "local"` on the flag dict (omitted from `catalog.{json,js}` and public preset flagstrings).
+- **Title Screen game or screen** (`tools/title_dashboard.py` `TITLE_SPECS[*]` or `screens[*]`): set `"visibility": "local"`.
+
+To unveil an item later, remove `"visibility": "local"` (and `"public_summary"` if set), run `python tools/build_dashboard.py`, and commit the updated `web/` public files. Run `python tools/build_dashboard.py --serve` to preview both `/local.html` and `/index.html` locally.

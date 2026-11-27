@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('dk', 'duck', 'f13', 'feud', 'mm2', 'mtpo', 'smb', 'waldo', 'wheel', 'zelda')]
+    [ValidateSet('dk', 'duck', 'feud', 'waldo', 'wheel')]
     [string]$Game,
     [ValidateSet('176', 'mmc3')]
     [string]$Mapper = '176',
@@ -11,10 +11,14 @@ param(
 $ErrorActionPreference = 'Stop'
 $taskRoot = Split-Path -Parent $PSScriptRoot
 
-$playDir = Join-Path $taskRoot "play\nes"
-$romStem = if ($Mapper -eq 'mmc3') { "$Game-mmc3" } else { "$Game-barba" }
+$playDir = if ($Mapper -eq 'mmc3') { Join-Path $taskRoot "play\compat\nes" } else { Join-Path $taskRoot "play\nes" }
+$romStem = if ($Mapper -eq 'mmc3') { "$Game-compat" } else { "$Game" }
 if ($NoRebuild) {
-    $numbered = Get-ChildItem -LiteralPath $playDir -Filter "$romStem-b*.nes" -ErrorAction SilentlyContinue | Sort-Object Name | Select-Object -Last 1
+    $pattern = '^' + [regex]::Escape($romStem) + '-b(\d+)$'
+    $numbered = Get-ChildItem -LiteralPath $playDir -Filter "$romStem-b*.nes" -ErrorAction SilentlyContinue |
+        Where-Object { $_.BaseName -match $pattern } |
+        Sort-Object { [int][regex]::Match($_.BaseName, $pattern).Groups[1].Value } |
+        Select-Object -Last 1
     $playRom = if ($numbered) { $numbered.FullName } else { Join-Path $playDir "$romStem.nes" }
 } else {
     $playRom = Join-Path $playDir "$romStem.nes"
@@ -28,10 +32,6 @@ if ($Mapper -eq 'mmc3') {
 } else {
 
     switch ($Game) {
-        'f13' {
-            $buildScript = Join-Path $PSScriptRoot 'f13_build.py'
-            $builtRom = Join-Path $taskRoot 'build\f13_barba.nes'
-        }
         'waldo' {
             $buildScript = Join-Path $PSScriptRoot 'build_waldo.py'
             $builtRom = Join-Path $taskRoot 'build\waldo_barba.nes'

@@ -99,6 +99,23 @@ OwFoliageTick2:
 
 ; Fast VBlank pass: at most one VRAM read + one optional write, then restore scroll.
 @vblank_pass:
+    lda $076C
+    cmp #$01
+    bne @vb_done
+    ; Gently ripple overworld water/lava tile $6E on R0 during VBlank ($076C = 1, $0736 = 5).
+    ; Base R0 is 1KB banks 124/125 (4KB bank 31); variants live in 230/232/234/236.
+    lda $12
+    lsr
+    lsr
+    lsr
+    lsr
+    and #$07
+    tax
+    lda WaterBank2,x
+    ldx #$00
+    stx $64D5
+    stx $8000
+    sta $8001
     lda #$01
     sta OW_FOL_RUN
     lda OW_FOL_ACTIVE
@@ -510,3 +527,6 @@ FolSeqTiles:
     .byte $AA, $AB, $00, $00    ; 7: forest-TR upper canopy rustle
     .byte $AC, $AD, $AA, $00    ; 8: forest-TR middle breeze
     .byte $AE, $AF, $00, $00    ; 9: forest-TR cross-canopy twitch
+
+WaterBank2:
+    .byte 124, 230, 232, 230, 124, 234, 236, 234

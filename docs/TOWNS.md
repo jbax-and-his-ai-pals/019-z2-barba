@@ -23,7 +23,7 @@ action rechecks eligibility in `src/town.inc`.
 
 ## Behavior
 
-- The Mido knight teaches downstab with “JUMP. HOLD / DOWN FOR A / WYRM DIVE.”
+- The Mido knight teaches downstab with “JUMP AND HOLD / DOWN FOR A / WYRM DIVE!”.
   The Darunia knight teaches upstab with “JUMP. HOLD / UP TO RAM / HEADFIRST.”
   Both first-time lessons use their original bank-3 message slots (`$A99E` and
   `$ADBF`) and the native unlock and dialogue timing.
@@ -31,7 +31,7 @@ action rechecks eligibility in `src/town.inc`.
   “OH MY GOD! / MY MIRROR! / FOLLOW ME.”
 - Outdoor town rooms (`$0707=1,2`, matching `IsSpriteCloudRoom6`) sway the `$45` green bushes (`$4C-$4F` in 4KB CHR bank 7) on R0 during VBlank via `UpdateGrassPhase6` (`WindBank6` cycling `28, 28, 172, 172, 28, 28, 170, 170` with a 32-frame hold per pose). Only the upper 10 rows (`y=192..201`) lean gently `±1px`, leaving the lower belly and tapering base (`y=202..207`), signs, houses, and ground stationary across all West and East Hyrule villages (`tests/town_bush_sway.lua`).
 - Saria Town's street rooms (`$0707=1`, `$056B=2`, `$0561=$06/$07/$08`) have rippling green foul water. `TownFoulWaterChr6` cycles R1 through `146, 148, 150, 152` across all three street rooms using BG palette 1 (`$22` sky, `$37` pale scum, `$2A` foul green, `$0F` shadow). Other town rooms restore base R1. Touching the foul water is lethal to Barba (`LavaSurfaceBody` in `src/farcall.inc`). `tests/saria_quicksand.lua` checks the green/scum/shadow palette across the full width after scrolling, all four ripple phases, lethal contact, and restoration of base R1 in Rauru.
-- The bridge guard in Saria's house (room `$1E`) says "FOUL WATER! / LOCALS / ONLY." before Bagu's note, and the town sign reads "WELCOME TO / SARIA. / DON'T DRINK / THE WATER.". The note still selects the crossing dialogue and sets the bridge flag. On the West Hyrule overworld, `OwTerrainPal0` (`src/barba.asm`) renders Saria's terrain `$0A` river channel with green palette `0` (animated via `$6E`, distinct from ordinary blue water `$0C`), `OwSpkKind4` (`src/ow_sparkle.inc`) emits foul-water bubbles instead of lava embers, and `WestFoulWaterTerrain1` (`src/geldarm.inc`) keeps it unwalkable. Open **Test Barba - Saria Quicksand.cmd** (or `--set saria`). **F1** starts on the overworld beside the green foul-water river; **F2** starts beside the guard; **F3**/**F4** show the town bridges.
+- The bridge guard in Saria's house (room `$1E`) says "FOUL WATER! / LOCALS ONLY. / TURN BACK!" before Bagu's note, and the town sign reads "WELCOME TO / SARIA TOWN. / DON'T DRINK / THE WATER!". The note still selects the crossing dialogue and sets the bridge flag. On the West Hyrule overworld, `OwTerrainPal0` (`src/barba.asm`) renders Saria's terrain `$0A` river channel with green palette `0` (animated via `$6E`, distinct from ordinary blue water `$0C`), `OwSpkKind4` (`src/ow_sparkle.inc`) emits foul-water bubbles instead of lava embers, and `WestFoulWaterTerrain1` (`src/geldarm.inc`) keeps it unwalkable. Open **Test Barba - Saria Quicksand.cmd** (or `--set saria`). **F1** starts on the overworld beside the green foul-water river; **F2** starts beside the guard; **F3**/**F4** show the town bridges.
 - Wanderers panic within 72 pixels, or 96 during an attack, on the same floor.
   `TownPickEscapeDir` picks the direction away from Barba toward the nearest
   doorway (`$8B` / `$91`) or room edge (`$69C4` / `$69C7+1`). They flee at
@@ -80,21 +80,20 @@ action rechecks eligibility in `src/town.inc`.
   The native conversation engine handles text, cancellation and movement lock.
   The guarded dialogue hook preserves native selection for other NPCs, except
   the custom wise-man/healer/magic service lines (native timing retained).
-  Message-box padding rule (producer, 2026-11-16): every line is at most 10
-  characters and every message at most 3 lines, so a blank tile separates the
-  text from all four borders (text starts at tile 2 of the 14-tile box; an
-  11th character or a 4th line sits against the border). `TownLine` asserts
-  `<= 10` and encodes A-Z, space, `.` (`$CF`), `!` (`$36`), `?` (`$34`) and an
-  apostrophe (`$35`, original art in `TEXT_GLYPHS`, `tools/assets.py`). Text tiles
-  must be in `$00-$3F` or `$C0-$FC` (the native engine draws byte = tile there).
-  Two 11-char vanilla lines end one byte early (`A STRANGER`, `THE CASTLE`),
-  and East message 36's five mid-dots (`$32`, now shout glyph D)
-  are drawn as periods (`tools/build.py`). The 66 four-line vanilla messages are
-  not yet rewritten. A post-build guard keeps the font, punctuation and box tiles
-  vanilla in bank 7 and fails if any vanilla message byte leaves that set (the
-  fire art had overwritten `?`, and shout D the mid-dot, until 2026-11-16).
-  Panic pointer selection uses `($12 XOR type) AND 7`, not the old type-mod-4
-  table.
+  Message-box padding rule: the expanded town box (`src/dialog_box.inc`, 18×12
+  tiles) fits up to 14 characters per line and 4 lines per box, leaving at least
+  a 1-tile blank border on all four sides (1 top, 1 left, >= 1 right, >= 2
+  bottom for 4-line messages). `TownLine` asserts `<= 14` and encodes A-Z,
+  space, `.` (`$CF`), `!` (`$36`), `?` (`$34`) and an apostrophe (`$35`,
+  original art in `TEXT_GLYPHS`, `tools/assets.py`). Text tiles must be in
+  `$00-$3F` or `$C0-$FC` (the native engine draws byte = tile there).
+  East message 36's five mid-dots (`$32`, now shout glyph D) are drawn as
+  periods (`tools/build.py`). A post-build guard keeps the font, punctuation
+  and box tiles vanilla in bank 7 and fails if any vanilla message byte leaves
+  that set (the fire art had overwritten `?`, and shout D the mid-dot, until
+  2026-11-16). Panic pointer selection uses `($12 XOR type) AND 7`, copying
+  the selected string from `PORTAL_BANK` (Bank 8) into `ARCADE_DLG_BUF`
+  (`$63C0`) via `LoadTownDlg3`/`CopyTownDlg8`.
 
 Passive panic shouts are floating sprite words only: no top-HUD subtitle,
 PPU text packet, input lock or pause. The global cooldown is 120 updates

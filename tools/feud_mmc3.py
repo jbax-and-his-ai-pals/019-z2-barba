@@ -7,7 +7,7 @@ import feud_art
 import feud_cast
 import feud_engine
 import feud_wram
-from pack_f13 import Asm6502
+from asm6502 import Asm6502
 
 # Extra MMC3 WRAM state ($60B8..$60CF, unused in pure CHR-ROM mode)
 W_MMC3_P1_L   = 0x60B8  # 0..2 active Barba lineup index

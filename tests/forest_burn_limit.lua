@@ -106,6 +106,9 @@ local function tick()
     end
 end
 
-emu.addMemoryCallback(function()guardCalls=guardCalls+1 end,emu.callbackType.exec,LABELS.BurnMapEndGuard)
+emu.addMemoryCallback(function()
+    local prg=emu.convertAddress(LABELS.OwSplitEntry2,mem)
+    if prg and prg.address//0x4000==2 then guardCalls=guardCalls+1 end
+end,emu.callbackType.exec,LABELS.OwSplitEntry2)
 emu.addEventCallback(input,emu.eventType.inputPolled)
 emu.addEventCallback(tick,emu.eventType.endFrame)

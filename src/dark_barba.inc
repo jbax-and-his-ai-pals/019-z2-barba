@@ -99,6 +99,7 @@ DARK_BARBA_LAYOUT = 1
 .include "tall_layout.inc"
 .endscope
 
+.segment "BANK5_RESET"
 ; Raise only the Triforce, leaving $2A at $B0 so the old man stays on the floor.
 ; $91 is enemy 0's rotating OAM base.
 DarkBarbaTriforcePose:
@@ -130,6 +131,7 @@ HiddenJarHit:
 @done:
     rts
 
+.segment "BANK5"
 .ifdef SAMPLED_ROAR
 .export DarkBarbaVictory
 ; Phase 7 holds the Triforce during the victory fanfare and the full roar.

@@ -75,6 +75,8 @@ emu.addMemoryCallback(function()
     end
 end,emu.callbackType.write,0x4014)
 emu.addMemoryCallback(function()
+    local prg=emu.convertAddress(LABELS.ShakeLavaHud6,mem)
+    if not prg or prg.address//0x4000~=6 then return end
     shakeWrites=shakeWrites+1
     scopedShake=scopedShake and roarAt~=nil and not risingAt
         and r(0x707)==4 and r(0x56B)==6 and r(0x561)==0x3A and r(0x728)==2

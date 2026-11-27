@@ -88,6 +88,18 @@ emu.addEventCallback(function()
         else
             emu.setInput({}, 0)
         end
+    elseif phase == 'enter_arcade' then
+        local af = frame - enterStart
+        emu.setInput({up = (af >= 10 and af < 14)}, 0)
+    elseif phase == 'walk_booth' then
+        local curX = read(0x4D)
+        if curX < 0x4C then
+            emu.setInput({right = true}, 0)
+        elseif curX > 0x54 then
+            emu.setInput({left = true}, 0)
+        else
+            emu.setInput({}, 0)
+        end
     elseif phase == 'enter' then
         local ef = frame - enterStart
         emu.setInput({
@@ -112,9 +124,27 @@ emu.addEventCallback(function()
         elseif frame > 1100 and read(0x3B) == 1 and read(0x4D) >= 0x26 then
             for slot = 0, 5 do write(0xB6 + slot, 0) end
             write(0x4D, 40); write(0x70, 0)
+            phase = 'enter_arcade'
+            enterStart = frame
+        end
+    elseif phase == 'enter_arcade' then
+        local af = frame - enterStart
+        if af > 30 and read(0x561) == 0x1C and read(0x726) == 0 and read(0x736) == 0x0B then
+            phase = 'walk_booth'
+            enterStart = frame
+        elseif af > 180 then
+            check(false, 'Timed out entering Barba Arcade R$1C')
+            report:write('RESULT FAIL\n'); report:close(); emu.stop(1)
+        end
+    elseif phase == 'walk_booth' then
+        if read(0x3B) == 0 and math.abs(read(0x4D) - 0x50) <= 4 and read(0x29) == 0xB0 then
+            write(0x70, 0)
             departure = location()
             phase = 'enter'
             enterStart = frame
+        elseif frame - enterStart > 300 then
+            check(false, 'Timed out walking to Waldo booth in R$1C')
+            report:write('RESULT FAIL\n'); report:close(); emu.stop(1)
         end
     elseif phase == 'enter' then
         local ef = frame - enterStart
@@ -154,6 +184,7 @@ emu.addEventCallback(function()
         elseif rf == 280 then
             check(read(0x74C) == 0x00 and read(0x524) == 0x00, 'Pressing B dismissed the return message box')
             check(read(0x648B) == 0x57, string.format('Moon ending set WALDO_HAT ($648B=%02X)', read(0x648B)))
+            check(read(0x6804) == 0x01, string.format('Moon ending set RA_LAST_WIN_GAME ($6804=%d)', read(0x6804)))
             report:write(errors == 0 and 'RESULT PASS\n' or 'RESULT FAIL\n')
             report:close()
             emu.stop(errors == 0 and 0 or 1)

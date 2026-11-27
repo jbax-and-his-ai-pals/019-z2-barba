@@ -82,10 +82,6 @@ def assemble(output: Path, sampled_roar: bool = False, waldo_portal: bool = Fals
         defines += ['-D', 'WALDO_PORTAL=1']
     if souls_boss_meter:
         defines += ['-D', 'SOULS_BOSS_METER=1']
-    # ROM-free CI assembly checks call assemble() directly without build() extracting ending_pal.bin.
-    ending_pal_path = output / 'ending_pal.bin'
-    if not ending_pal_path.exists():
-        ending_pal_path.write_bytes(b'\x0f' * 224)
     subprocess.run([find('ca65'), str(ROOT/'src/barba.asm'), '-I', str(ROOT/'src'), '-I', str(output.resolve()),
                     *defines, '-g', '-o', 'barba.o'], cwd=output, check=True)
     subprocess.run([find('ld65'), '-C', str(ROOT/'src/barba.cfg'), 'barba.o',
@@ -116,9 +112,6 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
     # Asset compilation emits the tile-index include consumed by ca65. Complete
     # it before assembling so the ROM and renderer always share one layout.
     mapping, graphics, ow, _ = compile_assets(ROOT, source_path)
-    ending_pal = source[prg_offset(1, 0x800E):prg_offset(1, 0x80EE)].replace(
-        bytes.fromhex('18 36 2a'), bytes.fromhex('16 27 30'))
-    (output/'ending_pal.bin').write_bytes(ending_pal)
     labels = assemble(output, bool(title_roar_wav), waldo_portal, boss_meter == 'souls')
     overlay = Overlay(source)
     # FarCall0 identifies the ACTUAL mapped bank without touching the native
@@ -130,18 +123,26 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
             raise ValueError(f'FarCall0 bank fingerprint changed: {bank}')
     segment_groups = {
         'lava': 'platform', 'terrain': 'platform', 'lag-ret': 'platform', 'gateway': 'platform',
-        'bank6': 'platform', 'bank6-pad': 'platform',
+        'bank6': 'platform', 'bank6-pad': 'platform', 'bank6-extra': 'platform',
         'town': 'town_chaos', 'bank2-smoke': 'town_chaos', 'bank3-sign': 'town_chaos',
         'bank3-pad': 'town_chaos', 'bank3-dlg': 'town_chaos',
         'bank6-cloud': 'scanline_scenery', 'bank6-haze': 'scanline_scenery',
         'bank4-spk': 'scanline_scenery', 'bank4-spk2': 'scanline_scenery',
         'bank4-spk3': 'scanline_scenery', 'bank4-spk4': 'scanline_scenery',
     }
-    for filename, bank, address in [('code', 0, 0xAA40), ('bank0-ow', 0, 0xA89E), ('bank0-tail', 0, 0xBFE0),('lava', 7, 0xD39A), ('terrain', 7, 0xFF4C), ('lag-ret', 7, 0xE013), ('town', 3, 0xB803), ('gateway', 7, 0xFEAA), ('bank6', 6, 0xAC09), ('bank6-cloud', 6, 0x8900), ('bank6-pad', 6, 0x8DB0), ('bank6-haze', 6, 0x9DA8), ('bank5', 5, 0xBDE0), ('bank5-splat', 5, 0xBBD5), ('bank1', 1, 0x9EB9), ('bank2-cave', 2, 0x87D3), ('bank2-smoke', 2, 0xA933), ('bank3-sign', 3, 0x9D0A), ('bank3-pad', 3, 0x9134), ('bank3-dlg', 3, 0x8BB1), ('bank4-spk', 4, 0x9EE0), ('bank4-spk2', 4, 0xA539), ('bank4-spk3', 4, 0xA80F), ('bank4-spk4', 4, 0xA7E5), ('bank4-ow', 4, 0x8817), ('bank4-ow2', 4, 0xA3FB), ('bank5-ow', 5, 0xBB15), ('bank2-ow', 2, 0x9FA1), ('bank2-ow2', 2, 0xBF33), ('bank2-ow3', 2, 0x93C9)]:
+    reset_stub = bytes.fromhex(
+        '78d8a2008e0020e8ad022010fbcaf0f89a8e00808e00a08e00c08e00e0'
+        'a90f209dbf20b1bfa90720ccbf4c00c0'
+    )
+    for filename, bank, address in [('code', 0, 0xAA40), ('bank0-ow', 0, 0xA89E), ('bank0-tail', 0, 0xBFE0),('lava', 7, 0xD39A), ('terrain', 7, 0xFF4C), ('lag-ret', 7, 0xE013), ('town', 3, 0xB803), ('gateway', 7, 0xFEAA), ('bank6', 6, 0xAC09), ('bank6-cloud', 6, 0x8900), ('bank6-pad', 6, 0x8DB0), ('bank6-extra', 6, 0x8E10), ('bank6-haze', 6, 0x9DA8), ('bank5', 5, 0xBDE0), ('bank5-reset', 5, 0xBF70), ('bank5-title-pad', 5, 0x84C2), ('bank5-splat', 5, 0xBBD5), ('bank1', 1, 0x9EB9), ('bank2-cave', 2, 0x87D3), ('bank2-smoke', 2, 0xA933), ('bank3-sign', 3, 0x9D0A), ('bank3-pad', 3, 0x9134), ('bank3-dlg', 3, 0x8BB1), ('bank4-spk', 4, 0x9EE0), ('bank4-spk2', 4, 0xA539), ('bank4-spk3', 4, 0xA80F), ('bank4-spk4', 4, 0xA7E5), ('bank4-ow', 4, 0x8817), ('bank4-ow2', 4, 0xA3FB), ('bank5-ow', 5, 0xBB15), ('bank2-ow', 2, 0x9FA1), ('bank2-ow2', 2, 0xBF33), ('bank2-ow3', 2, 0x93C9)]:
         data = (output/f'barba-{filename}.bin').read_bytes()
         expected = b'\xFF'*len(data)
         if filename == 'code' and len(data) > 0x1530:
-            expected = b'\xFF'*0x1530 + bytes.fromhex('78d8a2008e00')[:len(data)-0x1530]
+            expected = b'\xFF'*0x1530 + reset_stub[:len(data)-0x1530]
+        elif filename == 'bank6' and len(data) > 0x1367:
+            expected = b'\xFF'*0x1367 + reset_stub[:len(data)-0x1367]
+        elif filename == 'bank5-reset':
+            expected = reset_stub[:len(data)]
         elif filename == 'lag-ret':
             expected = bytes.fromhex('85 03 48 20 c5 ff 68 60')[:len(data)]
         overlay.prg(bank, address, data, expected, f'New {filename} routines',
@@ -269,8 +270,17 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
                 + labels['ArcadeHeavyDmg0'].to_bytes(2, 'little') + b'\xea',
                 bytes.fromhex('38 f9 6c e6 95 c2'), 'HEAVY spell 2x damage hook')
     hook(7, 0xE48B, 'EnemyFireGateway', 0x4C, 'b5 b6 c9 01', 1)
-    hook(7, 0xE617, 'ShieldFireGateway', 0x4C, 'a5 c8 0a')
-    hook(7, 0xE646, 'ShieldReboundImpact', 0x20, '20 e8 e6')
+    hook(7, 0xE62A, 'ShieldFireGateway', 0x20, '20 ba e5')
+    hook(7, 0xE646, 'ShieldReboundGateway', 0x20, '20 e8 e6')
+    overlay.prg(7, 0xC1CD, b'\xea\xea\xea', bytes.fromhex('20 c5 ff'),
+                'Skip redundant SwapToPRG0 at NMI pause/dialogue check ($C1CD)')
+    dmc_retry = labels['DmcPadRetry0']
+    overlay.prg(7, 0xD346,
+                bytes.fromhex('20 67 d3 ad 15 40 29 10 f0 06 20')
+                + labels['FarCall0'].to_bytes(2, 'little')
+                + dmc_retry.to_bytes(2, 'little') + b'\xea',
+                bytes.fromhex('20 67 d3 a5 f5 85 00 20 67 d3 a5 f5 c5 00 d0 f0'),
+                'Single-read controller fast path when DMC is inactive ($D346)')
     hook(5, 0x9A7F, 'DarkBarbaDraw', 0x20, '20 02 ec')
     overlay.prg(5, 0x9887, b'\xa9\x03', b'\xa9\x06', 'Dark Barba full-height pre-fight landing pose')
     overlay.prg(5, 0x99D0, b'\xa9\x0c', b'\xa9\x06', 'Dark Barba full-height ascending jump pose')
@@ -522,8 +532,6 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
     hook(3, 0xB5F8, 'TownDialog', 0x4C, '0a a8 ad 07 07', 2, group='town_chaos')
     if waldo_portal:
         hook(3, 0xB480, 'WaldoDialogCheck', 0x4C, 'a9 00 85 05 8d 8c 04', 4, group='crossover_portals')
-        hat_hop = (output / 'barba-waldo-hat-1.bin').read_bytes()
-        overlay.prg(6, 0x8F66, hat_hop, b'\xff' * len(hat_hop), 'Bank 6 Waldo hat CHR far-call hop', group='crossover_portals')
         arcade_addr = labels['BarbaArcadeArea']
         overlay.prg(3, 0x855B, arcade_addr.to_bytes(2, 'little'), b'\xc2\x9c',
                     "Barba's Arcade room $1C area pointer", group='crossover_portals')
@@ -535,6 +543,21 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
                     "Barba's Arcade page 0 left exit returns to Rauru $01", group='crossover_portals')
         overlay.prg(3, 0x878E, b'\x05', b'\x09',
                     "Barba's Arcade page 3 right exit returns to Rauru $01", group='crossover_portals')
+        mini_arcade = labels['MiniArcadeArea'].to_bytes(2, 'little')
+        # 4 open town Mini-Arcade houses (Ruto dk, Saria feud, Mido duck, Nabooru wheel)
+        for name, door_addr, ddst_addr, ddst_new, dst_room, ap_addr, ap_orig, ep_addr, ep_orig, conn_addr, back_conn in (
+            ('Ruto R$04->R$19 (dk)', 0x8A35, 0x8828, 0x64, 0x19, 0x8555, b'\xc2\x9c', None, None, 0x877F, 0x11),
+            ('Saria R$08->R$1B (feud)', 0x8AE3, 0x8839, 0x6C, 0x1B, 0x8559, b'\xf0\x90', None, None, 0x8787, 0x22),
+            ('Mido R$09->R$36 (duck)', 0x8AFF, 0x883D, 0xD8, 0x36, 0x858F, b'\xf0\x90', None, None, 0x87F3, 0x26),
+            ('Nabooru R$0D->R$3B (wheel)', 0xA047, 0x884C, 0xEC, 0x3B, 0x8599, b'\xf0\x90', None, None, 0x8807, 0x35),
+        ):
+            overlay.prg(3, door_addr, b'\x01', b'\x00', f'{name} open street door', group='crossover_portals')
+            overlay.prg(3, ddst_addr, bytes([ddst_new]), b'\x00', f'{name} door destination', group='crossover_portals')
+            overlay.prg(3, ap_addr, mini_arcade, ap_orig, f'{name} area pointer', group='crossover_portals')
+            if ep_addr is not None and ep_orig is not None:
+                overlay.prg(3, ep_addr, b'\xef\x70', ep_orig, f'{name} empty enemy list', group='crossover_portals')
+            overlay.prg(3, conn_addr, bytes([back_conn] * 4), b'\x00\x00\x00\x00',
+                        f'{name} return connectivity', group='crossover_portals')
     hook(3, 0xB0D2, 'DlgDrawRows', 0x4C, 'ad 25 05', group='town_chaos')
     hook(3, 0xB183, 'DlgEraseRow', 0x4C, 'ce 25 05', group='town_chaos')
     hook(3, 0xB350, 'DlgSaveAttr', 0x4C, 'ad 2c 07', group='town_chaos')
@@ -563,22 +586,18 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
     dest = labels['SignUpdate']
     for address, kind in ((0x94CF, '$21'), (0x94D1, '$22')):
         overlay.prg(3, address, dest.to_bytes(2, 'little'), bytes.fromhex('bd 9a'), f'Sign reader {kind} update {address:04X}')
-    # Message-box padding (max 10 chars/line): end two 11-char vanilla lines one byte
-    # early by turning the final period into the terminator. The following $FF is left unread.
-    for address, line in ((0xA423, 'A STRANGER'), (0xA612, 'THE CASTLE')):
-        overlay.prg(3, address, b'\xff', b'\xcf', f'Vanilla dialogue width trim: {line}')
-    # In-place town dialogue replacements with a blank tile at each border.
+    # In-place town dialogue replacements (14 chars/line max, 1-tile blank border on all sides).
     town_glyphs = {chr(ord('A') + i): 0xDA + i for i in range(26)}
     town_glyphs.update({' ': 0xF4, '.': 0xCF, '!': 0x36, '\n': 0xFD})
     for address, name, original, dialogue in (
         (0xA99E, 'Mido downstab', 'WHEN YOU\nJUMP PRESS\nDOWNWARD\nTO STAB.',
-         'JUMP. HOLD\nDOWN FOR A\nWYRM DIVE.'),
+         'JUMP AND HOLD\nDOWN FOR A\nWYRM DIVE!'),
         (0xADBF, 'Darunia upstab', 'WHEN YOU\nJUMP PRESS\nUP TO STAB.',
          'JUMP. HOLD\nUP TO RAM\nHEADFIRST.'),
         (0xA656, 'Saria mirror lady', 'OH! YOU\nFOUND MY\nMIRROR!\nFOLLOW ME.',
          'OH MY GOD!\nMY MIRROR!\nFOLLOW ME.'),
         (0xA7FE, 'Saria bridge guard', 'ONLY TOWN\nFOLK MAY\nCROSS THIS\nRIVER!',
-         'FOUL WATER!\nLOCALS\nONLY.'),
+         'FOUL WATER!\nLOCALS ONLY.\nTURN BACK!'),
         (0xA9C4, 'Bagu note', 'BAGU IS MY\nNAME. SHOW\nMY NOTE TO\nRIVER MAN.',
          'BAGU IS MY\nNAME. SHOW\nMY NOTE TO\nTHE GUARD.'),
         (0xA9F7, 'Bagu location', 'LET ME BE!\nMASTER IS\nIN WOODS\nN OF RIVER',
@@ -1044,12 +1063,13 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
         # The title pulse volume writers share X=control/volume. Halve only
         # the volume nibble while roaring; preserve duty/envelope bits and all
         # caller registers/flags. Normal envelopes continue running underneath.
-        duck_table = bytes((v & 0xf0) | ((v & 15)//2) for v in range(256))
-        overlay.prg(6, 0x8E00, duck_table, b'\xff'*256,
-                    'PROTOTYPE: title music half-volume table')
+        # Compact 14-byte RoarDuckX helper at $8E00-$8E0D (freeing $8E10-$8EFF for BANK6_EXTRA).
+        roar_duck_x = bytes.fromhex('8a 29 0f 4a 8d 89 64 8a 29 f0 0d 89 64 60')
+        overlay.prg(6, 0x8E00, roar_duck_x, b'\xff' * len(roar_duck_x),
+                    'PROTOTYPE: title/gameplay pulse half-volume helper (RoarDuckX)')
         for original, helper, register in [(0x810F, 0x8F00, 0x4000), (0x8116, 0x8F14, 0x4004)]:
             store = helper + 14
-            code = (bytes.fromhex('08 48 ad f0 05 f0 06 bd 00 8e 4c')
+            code = (bytes.fromhex('08 48 ad f0 05 f0 06 20 00 8e 4c')
                     + store.to_bytes(2, 'little') + b'\x8a\x8d'
                     + register.to_bytes(2, 'little') + bytes.fromhex('68 28 60'))
             overlay.prg(6, helper, code, b'\xff'*len(code),
@@ -1378,7 +1398,8 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
         off = prg_offset(0, addr)
         overlay.put(off, stub, source[off:off + len(stub)], desc)
     spells_bank1 = (output / 'barba-bank1-spells.bin').read_bytes()
-    overlay.prg(1, 0xB234, spells_bank1, b'\xFF' * len(spells_bank1), 'Bank 1 18-spell & 2-col menu routines')
+    expected_spells = (b'\xFF' * 0x0D3C + reset_stub)[:len(spells_bank1)]
+    overlay.prg(1, 0xB234, spells_bank1, expected_spells, 'Bank 1 18-spell & 2-col menu routines')
     hook(0, 0x8CF4, 'ArcadeSideViewInit0', 0x20, '8d 6f 07')
     hook(0, 0x8DC6, 'ArcadeSpellHook0', 0x4C, '0d 24 05')
     for ptr_addr, label_name, orig_hex in [
@@ -1565,14 +1586,14 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
         b'\xff' * 8,
         'Ending init toast state helper',
     )
-    # Reload North Palace's palette table ($7919..$79F8) before entering $8B50
-    # so beating Dark Barba in Great Palace renders North Palace with its own
-    # lavender/brown/white/pink palette instead of Great Palace's black palette.
+    # Reload Bank 5's palette table ($800E..$80ED -> $7919..$79F8) before entering $8B50
+    # so the ending always renders with Bank 5's black palace, gray stone, pink/red altar,
+    # and purple drapes (pal 2) + peach-skinned Zelda (pal 10).
     overlay.prg(
         7, 0xC376,
-        bytes.fromhex('20 c5 ff') + b'\x4c' + labels['EndingPalFix0'].to_bytes(2, 'little'),
+        bytes.fromhex('20 88 c3 4c') + labels['EndingPalFix5'].to_bytes(2, 'little'),
         bytes.fromhex('20 88 c3 4c 50 8b'),
-        'Ending reload North Palace palette before $8B50',
+        'Ending reload Bank 5 palette before $8B50',
     )
     # L8CE3: keep the $074B awakening flash timer without clobbering Sprite Palette 0 ($3F10),
     # which turned Barba into a red silhouette when the split Triforce passed over him.
@@ -1925,6 +1946,74 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
             _shift_bush_row(0x4D, 0x4F, r, shift)
         ext_off = (bank_id - 128) * 1024
         ext_chr[ext_off:ext_off + 2048] = variant
+
+    if waldo_portal:
+        sv_hat_tall_rows = (
+            '33100000',
+            '33113000',
+            '13113300',
+            '13133110',
+            '31100110',
+            '11301111',
+            '00001111',
+            '00000110',
+            '00000000',
+            '00000000',
+            '00000000',
+            '00000000',
+            '00000000',
+            '00000000',
+            '00000000',
+            '00000000',
+        )
+        sv_hat_tall = encode_tile(sv_hat_tall_rows[:8]) + encode_tile(sv_hat_tall_rows[8:])
+        for bank in (0, 2, 4, 6, 8, 10, 12, 16, 18, 20, 22, 24):
+            hat_off = CHR_OFFSET + bank * 4096 + 0x5E * 16
+            overlay.put(hat_off, sv_hat_tall, source[hat_off:hat_off + 32],
+                        f'CHR {bank:02X}: tall Waldo hat + puffball at $5E')
+
+        # Cross-game cosmetic trophy OAM tiles: $78/$7A/$7C in non-town side-view banks,
+        # $F8/$FA/$FC in town bank 6 (keeping town $78/$7A/$7C shout glyphs untouched).
+        trophy_tiles = (
+            (0x78, 0xF8, (
+                '..1111..',
+                '.133331.',
+                '.123321.',
+                '11222211',
+                '12222221',
+                '12233221',
+                '.111111.',
+                '00000000',
+            )),
+            (0x7A, 0xFA, (
+                '..111...',
+                '.12321..',
+                '..121...',
+                '..121...',
+                '.12221..',
+                '.12221..',
+                '..121...',
+                '...1....',
+            )),
+            (0x7C, 0xFC, (
+                '00000000',
+                '.111111.',
+                '11233211',
+                '11222211',
+                '11233211',
+                '.111111.',
+                '00000000',
+                '00000000',
+            )),
+        )
+        blank8 = ('00000000',) * 8
+        for sv_pair, town_pair, rows8 in trophy_tiles:
+            norm_rows = tuple(r.replace('.', '0') for r in rows8)
+            tile_bytes = encode_tile(norm_rows) + encode_tile(blank8)
+            for bank, pair_id in [(b, sv_pair) for b in (0, 2, 4, 8, 10, 12, 16, 18, 20, 22, 24)] + [(6, town_pair)]:
+                t_off = CHR_OFFSET + bank * 4096 + pair_id * 16
+                overlay.put(t_off, tile_bytes, source[t_off:t_off + 32],
+                            f'CHR {bank:02X}: cosmetic trophy tile at ${pair_id:02X}')
 
     # R3 banks 214..227 are shimmer variants of the candle flame ($52/$53):
     # 214..220 from 1 KB bank 9 (identical to 41, 49, 57, 73, 81, 97) and
@@ -2293,73 +2382,6 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
                     dst_off = (pair + 0x4B - 0xC1) * 16
                     r5_buf[dst_off:dst_off + 32] = source[src_spr + pair * 16:src_spr + pair * 16 + 32]
             ext_chr[(r5_bank - 128) * 1024:(r5_bank - 127) * 1024] = r5_buf
-    if waldo_portal:
-        sv_hat_tall_rows = (
-            '33100000',
-            '33113000',
-            '13113300',
-            '13133110',
-            '31100110',
-            '11301111',
-            '00001111',
-            '00000110',
-            '00000000',
-            '00000000',
-            '00000000',
-            '00000000',
-            '00000000',
-            '00000000',
-            '00000000',
-            '00000000',
-        )
-        sv_hat_tall = encode_tile(sv_hat_tall_rows[:8]) + encode_tile(sv_hat_tall_rows[8:])
-        for bank in (0, 2, 4, 6, 8, 10, 12, 16, 18, 20, 22, 24):
-            hat_off = CHR_OFFSET + bank * 4096 + 0x5E * 16
-            overlay.put(hat_off, sv_hat_tall, source[hat_off:hat_off + 32],
-                        f'CHR {bank:02X}: tall Waldo hat + puffball at $5E')
-
-        # Cross-game cosmetic trophy OAM tiles: $78/$7A/$7C in non-town side-view banks,
-        # $F8/$FA/$FC in town bank 6 (keeping town $78/$7A/$7C shout glyphs untouched).
-        trophy_tiles = (
-            (0x78, 0xF8, (
-                '..1111..',
-                '.133331.',
-                '.123321.',
-                '11222211',
-                '12222221',
-                '12233221',
-                '.111111.',
-                '00000000',
-            )),
-            (0x7A, 0xFA, (
-                '..111...',
-                '.12321..',
-                '..121...',
-                '..121...',
-                '.12221..',
-                '.12221..',
-                '..121...',
-                '...1....',
-            )),
-            (0x7C, 0xFC, (
-                '00000000',
-                '.111111.',
-                '11233211',
-                '11222211',
-                '11233211',
-                '.111111.',
-                '00000000',
-                '00000000',
-            )),
-        )
-        blank8 = ('00000000',) * 8
-        for sv_pair, town_pair, rows8 in trophy_tiles:
-            norm_rows = tuple(r.replace('.', '0') for r in rows8)
-            tile_bytes = encode_tile(norm_rows) + encode_tile(blank8)
-            for bank, pair_id in [(b, sv_pair) for b in (0, 2, 4, 8, 10, 12, 16, 18, 20, 22, 24)] + [(6, town_pair)]:
-                t_off = CHR_OFFSET + bank * 4096 + pair_id * 16
-                overlay.put(t_off, tile_bytes, source[t_off:t_off + 32],
-                            f'CHR {bank:02X}: cosmetic trophy tile at ${pair_id:02X}')
 
     target = bytes(overlay.target) + bytes(ext_chr)
     for bank, expected in enumerate(fingerprints):
@@ -2415,22 +2437,21 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
     chr_base = CHR_OFFSET
     if waldo_portal:
         import build_waldo
-        import f13_build
         import pack_waldo
         import portal_pool
         waldo_bytes = build_waldo.build(count_build=False).read_bytes()
-        f13_bytes = f13_build.build(count_build=False).read_bytes() if f13_build.SOURCE_ROM.is_file() else None
         assignments = portal_pool.build_portal_assignments(
-            include_f13=(f13_bytes is not None),
             roms_dir=ROOT / 'roms',
         )
-        target_buf = bytearray(target)
-        portal_pool.patch_portal_tables(target_buf, labels, assignments, prg_offset)
+        portal_bank_raw = (output / 'barba-portal-bank.bin').read_bytes()
+        portal_bank_buf = bytearray(portal_bank_raw.ljust(16384, b'\xFF'))
+        portal_pool.patch_portal_tables(portal_bank_buf, labels, assignments, lambda _bank, addr: addr - 0x8000)
         portal_pool.write_portal_manifest(output / 'portal-manifest.json', assignments)
-        target = pack_waldo.pack_combined(bytes(target_buf), labels['BarbaWaldoRestore6'], waldo_bytes,
-                                          alternate_laugh_data, f13=f13_bytes,
+        target = pack_waldo.pack_combined(target, labels['BarbaWaldoRestore6'], waldo_bytes,
+                                          alternate_laugh_data,
                                           extra_ids=[a.subgame.id for a in assignments],
-                                          roms_dir=ROOT / 'roms')
+                                          roms_dir=ROOT / 'roms',
+                                          portal_bank=bytes(portal_bank_buf))
         prg_16k = ((target[9] & 0x0F) << 8) | target[4]
         chr_base = CHR_OFFSET + prg_16k * 16384 - 128 * 1024
     patch = encode(source, target, 'Zelda II - Barba Edition | development alpha',

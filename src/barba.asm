@@ -3,7 +3,7 @@
 .export BarbaOverworld, BarbaOverworldA, BarbaDisplay, BarbaUpdate, BarbaInferno, ThunderHit
 .export OwTerrainPal0
 .export LavaSurface, LavaLinkPlayerUpdate
-.export EnemyFireGateway, ShieldFireGateway, LagNmiInBank6
+.export EnemyFireGateway, ShieldFireGateway, ShieldReboundGateway, LagNmiInBank6, DmcPadRetry0
 
 ROAR_TIMER = $05F0 ; cleared by the original $0500..$05FF reset loop; no original references
 .ifdef SAMPLED_ROAR
@@ -24,8 +24,17 @@ LAIR_SHAKE_X = $64FA   ; signed display scroll offset during the Lava Link entra
 ; Replaces the overworld renderer's LDX #$0E / LDY #$00 pair.
 ; Two even-numbered 8x16 tiles use the dedicated sprite pattern bank.
 BarbaOverworld:
+    lda #>(BarbaOverworld2 - 1)
+    pha
+    lda #<(BarbaOverworld2 - 1)
+    pha
+    lda #$02
+    jmp $FFCC
+
+.segment "BANK2_SMOKE"
+BarbaOverworld2:
     lda $0562
-    jsr @dir_idx
+    jsr OwDirIdx2
     lda OverworldBase,x
     pha
     lda $07A9
@@ -48,15 +57,21 @@ BarbaOverworld:
     sty $0202
     sty $0206
     lda OW_FIRE_TIMER
-    beq @ow_done
+    beq OwOverworldDone2
     dec OW_FIRE_TIMER
-    bne @draw_flame
+    bne :+
     lda #$F8
     sta $02FC
-    bne @ow_done
-@draw_flame:
+OwOverworldDone2:
+    ldx #$0E
+    jmp $FFC5
+:
+    jmp OwDrawFlame2
+
+.segment "BANK2_CAVE"
+OwDrawFlame2:
     lda OW_FIRE_DIR
-    jsr @dir_idx
+    jsr OwDirIdx2
     lda OwFlameY,x
     sta $02FC
     lda OwFlameX,x
@@ -67,10 +82,8 @@ BarbaOverworld:
     ora #$60
     sta $02FD
     sty $02FE           ; overworld Sprite Palette 0 ($16/$27/$30 fiery red/orange/white)
-@ow_done:
-    ldx #$0E
-    rts
-@dir_idx:
+    jmp OwOverworldDone2
+OwDirIdx2:
     ldx #$FF
 :
     inx
@@ -83,6 +96,8 @@ OwFlameX:
     .byte $94, $74, $84, $84
 OwFlameY:
     .byte $6D, $6D, $7D, $5D
+
+.segment "BANK0"
 
 ; Replaces LDA $87E3,X in bank 0's overworld attribute builders.
 ; West Hyrule ($0706=0) renders terrain $0A (Saria's foul river) with
@@ -126,8 +141,14 @@ BurnAttrHop0:
     lda #$04
     jmp $FFCC
 BurnAfterE024_0:
-    jsr $8A07           ; resolve ($0E),y, $00, $03, $04 for facing tile ($74, $73)
+    lda $75             ; facing map Y (set by $84BF overworld2)
+    sta $01
+    lda $76             ; facing map X
+    jsr $8A0D           ; resolve ($0E),y, $00, $03, $04 for facing tile ($76, $75)
+    beq @kasuto_done    ; $DFD2 just revealed Hidden Kasuto ($00) -- keep Town
     jmp BarbaBurnTile0
+@kasuto_done:
+    rts
 
 .segment "BANK0_OW"
 BarbaOverworldB_OW:
@@ -192,6 +213,15 @@ LavaLinkRoom:
     lda $0561
     cmp #$3A
 @done:
+    rts
+
+DmcPadRetry0:
+    lda $F5
+    sta $00
+    jsr $D367
+    lda $F5
+    cmp $00
+    bne DmcPadRetry0
     rts
 
 ; Hooked at $922A (JSR $E726 inside Thunder_Spell $91E6).
@@ -291,6 +321,7 @@ RoarPitch:
 .include "scales.inc"
 .include "splat.inc"
 .include "farcall.inc"
+.include "ra_telemetry.inc"
 .include "scanline_irq.inc"
 .include "cave_light.inc"
 .include "death_display.inc"
@@ -313,18 +344,18 @@ RoarPitch:
 LavaSurface:
     jsr FarCall0
     .word LavaSurfaceBody
-    bcc @water
+    bcc LavaRts
     jmp $E12B
-@water:
+LavaRts:
     rts
 
-; Only called in palace bank-4 rooms. Carry selects impact vs flight.
-ShieldReboundBank4:
-    php
-    lda #$04
-    jsr $FFCC
-    plp
-    jmp ShieldRebound4
+ShieldReboundGateway:
+    jsr FarCall0
+    .word ShieldReboundImpact
+    bcc LavaRts
+    pla
+    pla
+    jmp $E6F3
 
 SwapToBank6:
     lda #$06
@@ -377,15 +408,11 @@ NativeReturn0:
     plp
     rts
 ShieldFireGateway:
-    lda $C8
-    asl
-    and #$0C
-    ora $C9
-    and #$FC
-    bne @rts
-    jmp ShieldFireGatewaySlow
-@rts:
-    rts
+    lda EXTRA_LIVE
+    beq @native
+    jsr ShieldFireGatewaySlow
+@native:
+    jmp $E5BA
 
 .segment "PALACE_SHAKE"
 ; Lag-frame NMI: run audio in bank 6, then restore the interrupted PRG bank

@@ -241,7 +241,9 @@ DrawBossPips:
     rts
 .endif
 
+.segment "BANK4_GEAR"
 BossMeterRoom:     .byte $0D, $22, $0E, $1C, $29, $3A, $35, $36
+.segment "PALACE_ROAR"
 BossMeterWorld:    .byte    3,   3,   4,   4,   3,   4,   5,   5
 BossMeterEnemy:    .byte $20, $21, $20, $22, $21, $21, $22, $23
 BossMeterHPPerPip: .byte    4,   6,   9,   6,  18,  24,  24,   1

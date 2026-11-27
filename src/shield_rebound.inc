@@ -9,19 +9,33 @@ ShieldReboundImpact:
     lda ARCADE_ACTIVE_HI
     and #$02                ; HEAVY spell bypasses shields
     beq @not_heavy
-    pla
-    pla
-    jmp $E6F3
+    sec
+    rts
 @not_heavy:
     lda $0769
     cmp #$04
     bne @native
-    jmp ShieldReboundBank4
+    jsr ShieldReboundBank4
+    clc
+    rts
 @native:
-    jmp $E6E8
+    jsr $E6E8
+    clc
+    rts
+
+; Only called from Bank 0 in palace bank-4 rooms. Carry selects impact vs flight.
+ShieldReboundBank4:
+    php
+    lda #>(ShieldRebound4 - 1)
+    pha
+    lda #<(ShieldRebound4 - 1)
+    pha
+    lda #$04
+    jmp $FFCC
 
 .segment "PALACE_ROAR"
 ShieldRebound4:
+    plp
     bcc ShieldReboundStep
     lda $A1,x
     cmp #$18
@@ -112,8 +126,8 @@ ShieldReboundStep:
     adc $EAE0,y
     sta $0E
     lda $36,x
-    clc
-    adc #$05
+    sec
+    sbc #$1B            ; +5 center offset minus $20 (32 px HUD) for $6000 rows
     and #$F0
     cmp #$D0
     bcs @alive

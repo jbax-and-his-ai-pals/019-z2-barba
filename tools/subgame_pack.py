@@ -16,8 +16,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def find_play_rom(stem: str) -> Path:
-    """Return the latest build-numbered play/nes/<stem>-b<N>.nes if present, else play/nes/<stem>.nes."""
-    nes_dir = ROOT / 'play' / 'nes'
+    """Return the latest build-numbered play/[compat/]nes/<stem>-b<N>.nes if present, else <stem>.nes."""
+    nes_dir = ROOT / 'play' / 'compat' / 'nes' if stem.endswith('-compat') else ROOT / 'play' / 'nes'
     if nes_dir.is_dir():
         matches = []
         for path in nes_dir.glob(f'{stem}-b*.nes'):

@@ -36,15 +36,14 @@ local function findError()
 end
 
 local function decodeTownLine(addr)
-    local prg=emu.memType.nesPrgRom
-    local base=0xC000+(addr-0x8000)
     local out={}
     for i=0,31 do
-        local b=emu.read(base+i,prg)
+        local b=(addr<0x8000) and r(addr+i) or emu.read(0xC000+(addr-0x8000)+i,emu.memType.nesPrgRom)
         if b==0xFF then break
         elseif b==0xFD then out[#out+1]='/'
         elseif b==0xF4 then out[#out+1]=' '
         elseif b==0xCF then out[#out+1]='.'
+        elseif b==0x35 then out[#out+1]="'"
         elseif b>=0xDA and b<=0xF3 then out[#out+1]=string.char(b-0xDA+65)
         else out[#out+1]='?' end
     end
@@ -175,11 +174,11 @@ emu.addEventCallback(function()
             if hasAshOam() then sawAshOamDuringTalk=true end
             want=(age>=50 and age%20<3) and {b=true} or nil
             if not talking() then
-                local txt=decodeTownLine(ashPtr)
-                check(ashPtr>=0x9D0A and ashPtr<=0x9FFF,
-                    string.format('ash pile uses custom text pointer (%04X)',ashPtr))
-                check(txt=='I AM/ASH PILE.',
-                    string.format('ash pile text is "I AM/ASH PILE." (got "%s")',txt))
+                local txt=decodeTownLine(0x63C0)
+                check(ashPtr>=0x63C0 and ashPtr<0x6400,
+                    string.format('ash pile uses custom text pointer (%04X: %s)',ashPtr,txt))
+                check(txt=="I AM/ERROR'S/ASH PILE.",
+                    string.format('ash pile text is "I AM/ERROR\'S/ASH PILE." (got "%s")',txt))
                 check(sawAshOamDuringTalk,'ash pile OAM remains visible during dialogue')
                 check(r(0xAF+slot)==0xBF and r(0x05C3+slot)==0,
                     'ash pile stays in ash state after closing dialogue')

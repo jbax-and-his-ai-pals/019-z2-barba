@@ -62,10 +62,7 @@ emu.addMemoryCallback(function()
     if phase==4 and r(0x74C)==2 and r(LABELS.TownFastDialogReady)==0xEE and r(LABELS.TownFastDialogReady+1)==0x24 and r(LABELS.TownFastDialogReady+2)==0x05 then
         requests=requests+1
         local actual=r(0x569)+256*r(0x56A)
-        for idx=0,7 do
-            local pointer=LABELS.TownFearPointers+idx*2
-            if actual==r(pointer)+256*r(pointer+1) then dialog=true end
-        end
+        if actual==0x63C0 and r(0x63C0)~=0xFF then dialog=true end
     end
 end,emu.callbackType.exec,LABELS.TownFastDialogReady)
 emu.addMemoryCallback(function()
@@ -112,8 +109,8 @@ emu.addEventCallback(function()
     if phase==2 and age==110 then screenshot('town-ash')end
     if phase==4 then
         local pointer=r(0x569)+256*r(0x56A)
-        if age<=150 and dialog and pointer>=0xB803 and pointer<0xBF70
-            and emu.read(3*0x4000+pointer-0x8000,emu.memType.nesPrgRom)==0xFF then fastComplete=true end
+        if age<=150 and dialog and pointer>=0x63C0 and pointer<0x6400
+            and r(0x63C0)~=0xFF then fastComplete=true end
         if age==130 then screenshot('town-fear-dialogue')end
         if dialog and age>230 and r(0x74C)==0 and r(0xDE)==0 then closed=true end
     end

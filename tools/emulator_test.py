@@ -8,9 +8,14 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+SCENARIO_TIMEOUTS = {
+    'subgame_rewards_e2e': 90,
+}
 
 
-def run(scenario: Path, rom: Path, timeout: int = 30) -> int:
+def run(scenario: Path, rom: Path, timeout: int | None = None) -> int:
+    if timeout is None:
+        timeout = SCENARIO_TIMEOUTS.get(scenario.stem, 30)
     source_emulator = ROOT / '.tools/mesen/Mesen.exe'
     if not source_emulator.exists():
         raise SystemExit('Portable Mesen is missing. See docs/BUILD.md.')
@@ -78,5 +83,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('scenario', type=Path)
     parser.add_argument('--rom', type=Path, default=ROOT / 'build/barba.nes')
+    parser.add_argument('--timeout', type=int, default=None)
     args = parser.parse_args()
-    raise SystemExit(run(args.scenario, args.rom))
+    raise SystemExit(run(args.scenario, args.rom, timeout=args.timeout))

@@ -296,7 +296,7 @@ add('right-facing encounter trail at rest','DrawEncounterTorso',encounterTorso,f
     check(r(0x6519)==0x35 and r(0x6515)==0x37,'the bend uses the center and rear body slots facing right')
     check(r(0x651C)==0xF8,'the old front seam does not use a third lower-row sprite')
     local prg=emu.convertAddress(0x8506,mem)
-    check(prg and prg.address//0x4000==0,'the bank-1 shadow pass restores the player PRG bank')
+    check(prg and prg.address//0x4000==6,'the bank-6 encounter trail swap leaves player return in PRG bank 6')
 end)
 add('the bend mirrors onto the rear slot during a jump','DrawEncounterTorso',function()
     encounterTorso();w(0x651A,1);w(0x5FA,12*9);w(0x6515,0x0B)

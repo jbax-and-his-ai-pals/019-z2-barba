@@ -96,7 +96,7 @@ FLAGS: list[dict[str, Any]] = [
         "barba": True,
         "requires": ["barba_protagonist"],
         "description": "Replaces Thunder with a 4-wave 4-way firestorm (previewed at Thunderbird).",
-        "preview": {"off": "previews/cap_vanilla_spell_inferno.png", "off_w": 256, "off_h": 176, "off_label": "Vanilla Thunder", "on": "previews/cap_barba_spell_inferno.png", "on_w": 256, "on_h": 176, "on_label": "INFERNO", "frames": 84, "fps": 20},
+        "preview": {"off": "previews/cap_vanilla_spell_inferno.png", "off_w": 256, "off_h": 176, "off_label": "Vanilla Thunder", "on": "previews/cap_barba_spell_inferno.png", "on_w": 256, "on_h": 176, "on_label": "INFERNO", "frames": 108, "fps": 20},
     },
     {
         "id": "upstab_breath",
@@ -123,8 +123,8 @@ FLAGS: list[dict[str, Any]] = [
         "vanilla": False,
         "barba": True,
         "requires": ["barba_protagonist"],
-        "description": "Technique-gated Down-Thrust (Down+B in air) stomps easy enemies (HP 1..16, excluding shielded foes and bosses) on descent, with a downstab tail pose and contact item pickup.",
-        "preview": {"off": "previews/cap_vanilla_downstab.png", "off_w": 256, "off_h": 176, "off_label": "Vanilla Down-Thrust", "on": "previews/cap_barba_downstab.png", "on_w": 256, "on_h": 176, "on_label": "Dive Stomp & Tail", "frames": 64, "fps": 20},
+        "description": "Technique-gated Down-Thrust (Down in air) stomps easy enemies (HP 1..16, excluding shielded foes and bosses) on descent, with a downstab tail pose and contact item pickup.",
+        "preview": {"off": "previews/cap_vanilla_downstab.png", "off_w": 256, "off_h": 176, "off_label": "Vanilla Down-Thrust", "on": "previews/cap_barba_downstab.png", "on_w": 256, "on_h": 176, "on_label": "Dive Stomp & Tail", "frames": 80, "fps": 20},
     },
     {
         "id": "ironknuckle_rebound",
@@ -178,7 +178,7 @@ FLAGS: list[dict[str, Any]] = [
         "barba": True,
         "requires": ["barba_protagonist"],
         "description": "Crystal floor pulse, Palace 6 drop roar, and Lava Link entrance camera/HUD shake.",
-        "preview": {"off": "previews/cap_vanilla_palace_roar.png", "off_w": 256, "off_h": 176, "off_label": "Vanilla Crystal", "on": "previews/cap_barba_palace_roar.png", "on_w": 256, "on_h": 176, "on_label": "Crystal Pulse & Shake", "frames": 192, "fps": 20},
+        "preview": {"off": "previews/cap_vanilla_palace_roar.png", "off_w": 256, "off_h": 176, "off_label": "Vanilla Crystal", "on": "previews/cap_barba_palace_roar.png", "on_w": 256, "on_h": 176, "on_label": "Crystal Pulse & Shake", "frames": 180, "fps": 20},
     },
     {
         "id": "rauru_sage_basement",
@@ -194,18 +194,32 @@ FLAGS: list[dict[str, Any]] = [
         "description": "Adds the post-SCALES 'WAIT.' callout and 5-box dialogue with Rauru's sage.",
     },
     {
-        "id": "title_and_ending",
+        "id": "title_screen",
         "code": "Wt",
         "category": "barba_core",
-        "label": "Title & Ending: Link -> Barba Cliff & Dark Barba",
+        "label": "Title Screen: Zelda II -> The Adventure of Barba",
         "type": "bool",
         "status": "built",
         "coupled": True,
         "vanilla": False,
         "barba": True,
         "requires": ["barba_protagonist"],
-        "description": "Title screen dragon silhouette, lava shimmer, 2nd-roar shake, and Dark Barba Triforce ending.",
-        "preview": {"off": "previews/cap_vanilla_title.png", "off_w": 256, "off_h": 144, "off_label": "Vanilla Title & Ending", "on": "previews/cap_barba_title.png", "on_w": 256, "on_h": 144, "on_label": "Barba Title & Ending", "frames": 64, "fps": 12},
+        "description": "Replaces the title screen with Barba on the cliff, lava shimmer, floating 'BARBA I: THE ADVENTURE OF BARBA' title graphic, and 2nd-roar screen shake.",
+        "preview": {"off": "previews/cap_vanilla_title.png", "off_w": 256, "off_h": 208, "off_label": "Vanilla Title Screen", "on": "previews/cap_barba_title.png", "on_w": 256, "on_h": 208, "on_label": "Legend of Barba Title", "frames": 120, "fps": 15},
+    },
+    {
+        "id": "ending_sequence",
+        "code": "Wx",
+        "category": "barba_core",
+        "label": "Ending Sequence: Link & Zelda -> Barba & Ash",
+        "type": "bool",
+        "status": "built",
+        "coupled": True,
+        "vanilla": False,
+        "barba": True,
+        "requires": ["barba_protagonist"],
+        "description": "Replaces Link with 24x48 Barba in the Triforce ending, custom wake-up dialogue, behind-curtain fireball, and credits.",
+        "preview": {"off": "previews/cap_vanilla_ending.png", "off_w": 256, "off_h": 208, "off_label": "Vanilla Ending", "on": "previews/cap_barba_ending.png", "on_w": 256, "on_h": 208, "on_label": "Barba Ending", "frames": 156, "fps": 14},
     },
     {
         "id": "overworld_barba_trail",
@@ -219,7 +233,7 @@ FLAGS: list[dict[str, Any]] = [
         "barba": True,
         "requires": ["barba_protagonist"],
         "description": "Replaces Link's overworld sprite with Barba, adds a multi-segment trailing body in encounters, and swaps the wandering overworld Fairy for a Wyrmling.",
-        "preview": {"off": "previews/cap_vanilla_grass_walk.png", "off_w": 256, "off_h": 176, "off_label": "Vanilla Overworld Link", "on": "previews/cap_barba_grass_walk.png", "on_w": 256, "on_h": 176, "on_label": "Overworld Barba & Trail", "frames": 72, "fps": 20},
+        "preview": {"off": "previews/cap_vanilla_grass_walk.png", "off_w": 256, "off_h": 176, "off_label": "Vanilla Overworld Link", "on": "previews/cap_barba_grass_walk.png", "on_w": 256, "on_h": 176, "on_label": "Overworld Barba & Trail", "frames": 144, "fps": 20},
     },
     {
         "id": "hud_and_death_polish",
@@ -246,7 +260,7 @@ FLAGS: list[dict[str, Any]] = [
         "barba": True,
         "requires": ["barba_protagonist"],
         "description": "10-step fireball-driven ember/warm/golden-orange lighting in dark grottos without the Candle, $2001 emphasis below scanline 31, and a behind-BG glow halo around live fireballs.",
-        "preview": {"off": "previews/cap_vanilla_cave_light.png", "off_w": 256, "off_h": 176, "off_label": "Vanilla Dark Cave", "on": "previews/cap_barba_cave_light.png", "on_w": 256, "on_h": 176, "on_label": "Firelight Envelope & Halo", "frames": 72, "fps": 20},
+        "preview": {"off": "previews/cap_vanilla_cave_light.png", "off_w": 256, "off_h": 176, "off_label": "Vanilla Dark Cave", "on": "previews/cap_barba_cave_light.png", "on_w": 256, "on_h": 176, "on_label": "Firelight Envelope & Halo", "frames": 96, "fps": 20},
     },
     # Barba-Only Options & Tunables
     {
@@ -300,7 +314,7 @@ FLAGS: list[dict[str, Any]] = [
         "barba": True,
         "requires": ["barba_protagonist"],
         "description": "Firebreath chars town and overworld signs with a scorched mark and rotating burned-sign messages.",
-        "preview": {"off": "previews/cap_vanilla_burned_sign.png", "off_w": 256, "off_h": 176, "off_label": "Vanilla Intact Sign", "on": "previews/cap_barba_burned_sign.png", "on_w": 256, "on_h": 176, "on_label": "Scorched Sign Mark", "frames": 64, "fps": 20},
+        "preview": {"off": "previews/cap_vanilla_burned_sign.png", "off_w": 256, "off_h": 176, "off_label": "Vanilla Intact Sign", "on": "previews/cap_barba_burned_sign.png", "on_w": 256, "on_h": 176, "on_label": "Scorched Sign Mark", "frames": 168, "fps": 20},
     },
     {
         "id": "ngplus_mountain_melt",
@@ -314,21 +328,34 @@ FLAGS: list[dict[str, Any]] = [
         "barba": True,
         "requires": ["barba_protagonist"],
         "description": "On New Game+, pressing B on the overworld melts Mountain tiles into walkable Desert with live PPU attribute updates.",
-        "preview": {"off": "previews/cap_vanilla_ngplus_melt.png", "off_w": 256, "off_h": 176, "off_label": "Vanilla Impassable Mountain", "on": "previews/cap_barba_ngplus_melt.png", "on_w": 256, "on_h": 176, "on_label": "NG+ Mountain Melt", "frames": 48, "fps": 15},
+        "preview": {"off": "previews/cap_vanilla_ngplus_melt.png", "off_w": 256, "off_h": 176, "off_label": "Vanilla Impassable Mountain", "on": "previews/cap_barba_ngplus_melt.png", "on_w": 256, "on_h": 176, "on_label": "NG+ Mountain Melt", "frames": 84, "fps": 15},
     },
     # World, Presentation & Crossover (Decoupled)
     {
-        "id": "scanline_scenery",
-        "code": "Ws",
+        "id": "overworld_scenery",
+        "code": "Wv",
         "category": "world_presentation",
-        "label": "Overworld & Encounter Scenery (IRQ Clouds, Foliage & Shimmer)",
+        "label": "Overworld Scenery: Static Map -> Swaying Foliage & Desert Sparkles",
         "type": "bool",
         "status": "built",
         "vanilla": False,
         "barba": True,
         "requires": [],
-        "description": "Parallax clouds, swaying grass/sprigs, overworld foliage sway and desert/water sparkles, shimmering water/lava/flames, and rock-steady HUD split.",
-        "preview": {"off": "previews/cap_vanilla_grass_walk.png", "off_w": 256, "off_h": 176, "off_label": "Vanilla Static Scenery", "on": "previews/cap_barba_grass_walk.png", "on_w": 256, "on_h": 176, "on_label": "IRQ Clouds & Overworld", "frames": 144, "fps": 20},
+        "description": "Animates overworld forest trees, swaying grass, and sparkling desert/water tiles (previewed standing on a West Hyrule road overlooking desert, forest, and grass).",
+        "preview": {"off": "previews/cap_vanilla_ow_scenery.png", "off_w": 256, "off_h": 176, "off_label": "Vanilla Static Overworld", "on": "previews/cap_barba_ow_scenery.png", "on_w": 256, "on_h": 176, "on_label": "Animated Overworld Foliage & Sparkles", "frames": 64, "fps": 15},
+    },
+    {
+        "id": "scanline_scenery",
+        "code": "Ws",
+        "category": "world_presentation",
+        "label": "MMC3 IRQ Clouds & Scenery Parallax",
+        "type": "bool",
+        "status": "built",
+        "vanilla": False,
+        "barba": True,
+        "requires": [],
+        "description": "Replaces static background clouds with smooth behind-BG drifting parallax clouds, animated scenery, and a rock-steady MMC3 scanline HUD split.",
+        "preview": {"off": "previews/cap_vanilla_palace_clouds.png", "off_w": 256, "off_h": 176, "off_label": "Vanilla Static Clouds", "on": "previews/cap_barba_palace_clouds.png", "on_w": 256, "on_h": 176, "on_label": "Drifting IRQ Clouds", "frames": 72, "fps": 15},
     },
     {
         "id": "enemy_polish",
@@ -367,7 +394,7 @@ FLAGS: list[dict[str, Any]] = [
         "barba": "souls",
         "requires": [],
         "description": "vanilla: Improved 8-pip left OAM meter (Gooma weapon priority, Lava Link A12 fix). souls: Full-width Dark Souls bottom bar with boss name above and white hit-flash drain.",
-        "preview": {"off": "previews/cap_vanilla_boss_meter.png", "off_w": 256, "off_h": 208, "off_label": "Vanilla (8-Pip Left)", "on": "previews/cap_barba_boss_meter.png", "on_w": 256, "on_h": 208, "on_label": "Dark Souls Bottom Bar", "frames": 64, "fps": 20},
+        "preview": {"off": "previews/cap_vanilla_boss_meter.png", "off_w": 256, "off_h": 208, "off_label": "Vanilla (8-Pip Left)", "on": "previews/cap_barba_boss_meter.png", "on_w": 256, "on_h": 208, "on_label": "Dark Souls Bottom Bar", "frames": 80, "fps": 20},
     },
     {
         "id": "crossover_portals",
@@ -380,7 +407,7 @@ FLAGS: list[dict[str, Any]] = [
         "barba": True,
         "requires": [],
         "description": "Enables the Rauru/Ruto portal doors into Barba's Arcade.",
-        "preview": {"off": "previews/cap_vanilla_crossover_portals.png", "off_w": 256, "off_h": 176, "off_label": "Vanilla Town Door", "on": "previews/cap_barba_crossover_portals.png", "on_w": 256, "on_h": 176, "on_label": "Barba's Arcade", "frames": 96, "fps": 20},
+        "preview": {"off": "previews/cap_vanilla_crossover_portals.png", "off_w": 256, "off_h": 176, "off_label": "Vanilla Town Door", "on": "previews/cap_barba_crossover_portals.png", "on_w": 256, "on_h": 176, "on_label": "Barba's Arcade", "frames": 120, "fps": 20},
     },
     {
         "id": "arcade_spells_and_gear",
@@ -523,7 +550,7 @@ FLAGS: list[dict[str, Any]] = [
         "barba": False,
         "requires": [],
         "description": "Deterministically remix overworld, palace, and Barba scale palettes from the seed.",
-        "preview": {"off": "previews/barba_hero.png", "off_w": 64, "off_h": 56, "off_label": "Classic Scales", "on": "previews/barba_palettes.png", "on_w": 64, "on_h": 56, "on_label": "Seeded Palettes", "frames": 4},
+        "preview": {"off": "previews/barba_hero.png", "off_w": 64, "off_h": 56, "off_label": "Classic Scales", "off_frames": 4, "off_fps": 6, "on": "previews/barba_palettes.png", "on_w": 64, "on_h": 56, "on_label": "Seeded Palettes", "frames": 48, "fps": 4},
     },
 ]
 
@@ -590,10 +617,12 @@ def resolve_flags(raw: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
     return resolved, notes
 
 
-def encode_flagstring(values: dict[str, Any], seed: int | str) -> str:
-    """Encode flag values and seed into a compact FF4FE-style flagstring."""
+def _encode_flagstring_for_flags(
+    values: dict[str, Any], seed: int | str, flags: list[dict[str, Any]]
+) -> str:
+    """Encode flag values and seed for a given flag subset into a BFE1 flagstring."""
     parts: list[str] = []
-    for f in FLAGS:
+    for f in flags:
         val = values[f["id"]]
         if f["type"] == "bool":
             if val:
@@ -604,6 +633,11 @@ def encode_flagstring(values: dict[str, Any], seed: int | str) -> str:
             idx = f["options"].index(val)
             parts.append(f"{f['code']}{idx}")
     return f"BFE1|{' '.join(parts)}#{seed}"
+
+
+def encode_flagstring(values: dict[str, Any], seed: int | str) -> str:
+    """Encode flag values and seed into a compact FF4FE-style flagstring."""
+    return _encode_flagstring_for_flags(values, seed, FLAGS)
 
 
 def decode_flagstring(flagstring: str) -> tuple[dict[str, Any], str]:
@@ -633,18 +667,32 @@ def decode_flagstring(flagstring: str) -> tuple[dict[str, Any], str]:
     return resolved, seed
 
 
-def catalog_payload() -> dict[str, Any]:
+def catalog_payload(
+    include_local: bool = True, flags_override: list[dict[str, Any]] | None = None
+) -> dict[str, Any]:
+    source_flags = FLAGS if flags_override is None else flags_override
+    flags = (
+        list(source_flags)
+        if include_local
+        else [f for f in source_flags if f.get("visibility", "public") != "local"]
+    )
+    presets: dict[str, Any] = {}
+    for name in ("vanilla", "barba", "barba_lite", "chaos"):
+        if flags_override is None:
+            full_vals = preset_values(name)
+        else:
+            key = "vanilla" if name == "vanilla" else "barba"
+            full_vals = {f["id"]: f[key] for f in source_flags}
+        filtered_vals = {f["id"]: full_vals[f["id"]] for f in flags}
+        presets[name] = {
+            "values": filtered_vals,
+            "flagstring": _encode_flagstring_for_flags(filtered_vals, "BARBA2026", flags),
+        }
     return {
         "version": 1,
         "categories": CATEGORIES,
-        "flags": FLAGS,
-        "presets": {
-            name: {
-                "values": preset_values(name),
-                "flagstring": encode_flagstring(preset_values(name), "BARBA2026"),
-            }
-            for name in ("vanilla", "barba", "barba_lite", "chaos")
-        },
+        "flags": flags,
+        "presets": presets,
     }
 
 
@@ -729,12 +777,15 @@ def main() -> None:
     if args.write_web_catalog:
         web_dir = ROOT / "web"
         web_dir.mkdir(parents=True, exist_ok=True)
-        payload = json.dumps(catalog_payload(), indent=2)
+        pub_payload = json.dumps(catalog_payload(include_local=False), indent=2)
+        loc_payload = json.dumps(catalog_payload(include_local=True), indent=2)
         out_json = web_dir / "catalog.json"
         out_js = web_dir / "catalog.js"
-        out_json.write_text(payload + "\n")
-        out_js.write_text(f"window.BARBA_FE_CATALOG = {payload};\n")
-        print(f"Wrote {out_json} and {out_js}")
+        out_local_js = web_dir / "local_catalog.js"
+        out_json.write_text(pub_payload + "\n", encoding="utf-8")
+        out_js.write_text(f"window.BARBA_FE_CATALOG = {pub_payload};\n", encoding="utf-8")
+        out_local_js.write_text(f"window.BARBA_FE_CATALOG = {loc_payload};\n", encoding="utf-8")
+        print(f"Wrote {out_json}, {out_js}, and {out_local_js}")
         return
 
     if args.flags:

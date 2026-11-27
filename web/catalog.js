@@ -151,7 +151,7 @@ window.BARBA_FE_CATALOG = {
         "on_w": 256,
         "on_h": 176,
         "on_label": "INFERNO",
-        "frames": 84,
+        "frames": 108,
         "fps": 20
       }
     },
@@ -195,7 +195,7 @@ window.BARBA_FE_CATALOG = {
       "requires": [
         "barba_protagonist"
       ],
-      "description": "Technique-gated Down-Thrust (Down+B in air) stomps easy enemies (HP 1..16, excluding shielded foes and bosses) on descent, with a downstab tail pose and contact item pickup.",
+      "description": "Technique-gated Down-Thrust (Down in air) stomps easy enemies (HP 1..16, excluding shielded foes and bosses) on descent, with a downstab tail pose and contact item pickup.",
       "preview": {
         "off": "previews/cap_vanilla_downstab.png",
         "off_w": 256,
@@ -205,7 +205,7 @@ window.BARBA_FE_CATALOG = {
         "on_w": 256,
         "on_h": 176,
         "on_label": "Dive Stomp & Tail",
-        "frames": 64,
+        "frames": 80,
         "fps": 20
       }
     },
@@ -289,7 +289,7 @@ window.BARBA_FE_CATALOG = {
         "on_w": 256,
         "on_h": 176,
         "on_label": "Crystal Pulse & Shake",
-        "frames": 192,
+        "frames": 180,
         "fps": 20
       }
     },
@@ -309,10 +309,10 @@ window.BARBA_FE_CATALOG = {
       "description": "Adds the post-SCALES 'WAIT.' callout and 5-box dialogue with Rauru's sage."
     },
     {
-      "id": "title_and_ending",
+      "id": "title_screen",
       "code": "Wt",
       "category": "barba_core",
-      "label": "Title & Ending: Link -> Barba Cliff & Dark Barba",
+      "label": "Title Screen: Zelda II -> The Adventure of Barba",
       "type": "bool",
       "status": "built",
       "coupled": true,
@@ -321,18 +321,45 @@ window.BARBA_FE_CATALOG = {
       "requires": [
         "barba_protagonist"
       ],
-      "description": "Title screen dragon silhouette, lava shimmer, 2nd-roar shake, and Dark Barba Triforce ending.",
+      "description": "Replaces the title screen with Barba on the cliff, lava shimmer, floating 'BARBA I: THE ADVENTURE OF BARBA' title graphic, and 2nd-roar screen shake.",
       "preview": {
         "off": "previews/cap_vanilla_title.png",
         "off_w": 256,
-        "off_h": 144,
-        "off_label": "Vanilla Title & Ending",
+        "off_h": 208,
+        "off_label": "Vanilla Title Screen",
         "on": "previews/cap_barba_title.png",
         "on_w": 256,
-        "on_h": 144,
-        "on_label": "Barba Title & Ending",
-        "frames": 64,
-        "fps": 12
+        "on_h": 208,
+        "on_label": "Legend of Barba Title",
+        "frames": 120,
+        "fps": 15
+      }
+    },
+    {
+      "id": "ending_sequence",
+      "code": "Wx",
+      "category": "barba_core",
+      "label": "Ending Sequence: Link & Zelda -> Barba & Ash",
+      "type": "bool",
+      "status": "built",
+      "coupled": true,
+      "vanilla": false,
+      "barba": true,
+      "requires": [
+        "barba_protagonist"
+      ],
+      "description": "Replaces Link with 24x48 Barba in the Triforce ending, custom wake-up dialogue, behind-curtain fireball, and credits.",
+      "preview": {
+        "off": "previews/cap_vanilla_ending.png",
+        "off_w": 256,
+        "off_h": 208,
+        "off_label": "Vanilla Ending",
+        "on": "previews/cap_barba_ending.png",
+        "on_w": 256,
+        "on_h": 208,
+        "on_label": "Barba Ending",
+        "frames": 156,
+        "fps": 14
       }
     },
     {
@@ -358,7 +385,7 @@ window.BARBA_FE_CATALOG = {
         "on_w": 256,
         "on_h": 176,
         "on_label": "Overworld Barba & Trail",
-        "frames": 72,
+        "frames": 144,
         "fps": 20
       }
     },
@@ -400,7 +427,7 @@ window.BARBA_FE_CATALOG = {
         "on_w": 256,
         "on_h": 176,
         "on_label": "Firelight Envelope & Halo",
-        "frames": 72,
+        "frames": 96,
         "fps": 20
       }
     },
@@ -483,7 +510,7 @@ window.BARBA_FE_CATALOG = {
         "on_w": 256,
         "on_h": 176,
         "on_label": "Scorched Sign Mark",
-        "frames": 64,
+        "frames": 168,
         "fps": 20
       }
     },
@@ -510,7 +537,31 @@ window.BARBA_FE_CATALOG = {
         "on_w": 256,
         "on_h": 176,
         "on_label": "NG+ Mountain Melt",
-        "frames": 48,
+        "frames": 84,
+        "fps": 15
+      }
+    },
+    {
+      "id": "overworld_scenery",
+      "code": "Wv",
+      "category": "world_presentation",
+      "label": "Overworld Scenery: Static Map -> Swaying Foliage & Desert Sparkles",
+      "type": "bool",
+      "status": "built",
+      "vanilla": false,
+      "barba": true,
+      "requires": [],
+      "description": "Animates overworld forest trees, swaying grass, and sparkling desert/water tiles (previewed standing on a West Hyrule road overlooking desert, forest, and grass).",
+      "preview": {
+        "off": "previews/cap_vanilla_ow_scenery.png",
+        "off_w": 256,
+        "off_h": 176,
+        "off_label": "Vanilla Static Overworld",
+        "on": "previews/cap_barba_ow_scenery.png",
+        "on_w": 256,
+        "on_h": 176,
+        "on_label": "Animated Overworld Foliage & Sparkles",
+        "frames": 64,
         "fps": 15
       }
     },
@@ -518,24 +569,24 @@ window.BARBA_FE_CATALOG = {
       "id": "scanline_scenery",
       "code": "Ws",
       "category": "world_presentation",
-      "label": "Overworld & Encounter Scenery (IRQ Clouds, Foliage & Shimmer)",
+      "label": "MMC3 IRQ Clouds & Scenery Parallax",
       "type": "bool",
       "status": "built",
       "vanilla": false,
       "barba": true,
       "requires": [],
-      "description": "Parallax clouds, swaying grass/sprigs, overworld foliage sway and desert/water sparkles, shimmering water/lava/flames, and rock-steady HUD split.",
+      "description": "Replaces static background clouds with smooth behind-BG drifting parallax clouds, animated scenery, and a rock-steady MMC3 scanline HUD split.",
       "preview": {
-        "off": "previews/cap_vanilla_grass_walk.png",
+        "off": "previews/cap_vanilla_palace_clouds.png",
         "off_w": 256,
         "off_h": 176,
-        "off_label": "Vanilla Static Scenery",
-        "on": "previews/cap_barba_grass_walk.png",
+        "off_label": "Vanilla Static Clouds",
+        "on": "previews/cap_barba_palace_clouds.png",
         "on_w": 256,
         "on_h": 176,
-        "on_label": "IRQ Clouds & Overworld",
-        "frames": 144,
-        "fps": 20
+        "on_label": "Drifting IRQ Clouds",
+        "frames": 72,
+        "fps": 15
       }
     },
     {
@@ -600,7 +651,7 @@ window.BARBA_FE_CATALOG = {
         "on_w": 256,
         "on_h": 208,
         "on_label": "Dark Souls Bottom Bar",
-        "frames": 64,
+        "frames": 80,
         "fps": 20
       }
     },
@@ -624,7 +675,7 @@ window.BARBA_FE_CATALOG = {
         "on_w": 256,
         "on_h": 176,
         "on_label": "Barba's Arcade",
-        "frames": 96,
+        "frames": 120,
         "fps": 20
       }
     },
@@ -821,11 +872,14 @@ window.BARBA_FE_CATALOG = {
         "off_w": 64,
         "off_h": 56,
         "off_label": "Classic Scales",
+        "off_frames": 4,
+        "off_fps": 6,
         "on": "previews/barba_palettes.png",
         "on_w": 64,
         "on_h": 56,
         "on_label": "Seeded Palettes",
-        "frames": 4
+        "frames": 48,
+        "fps": 4
       }
     }
   ],
@@ -844,7 +898,8 @@ window.BARBA_FE_CATALOG = {
         "lava_wade": false,
         "palace_roar_shake": false,
         "rauru_sage_basement": false,
-        "title_and_ending": false,
+        "title_screen": false,
+        "ending_sequence": false,
         "overworld_barba_trail": false,
         "hud_and_death_polish": false,
         "cave_firelight": false,
@@ -853,6 +908,7 @@ window.BARBA_FE_CATALOG = {
         "error_ash_pile": false,
         "burned_signs": false,
         "ngplus_mountain_melt": false,
+        "overworld_scenery": false,
         "scanline_scenery": false,
         "enemy_polish": false,
         "saria_foul_water": false,
@@ -886,7 +942,8 @@ window.BARBA_FE_CATALOG = {
         "lava_wade": true,
         "palace_roar_shake": true,
         "rauru_sage_basement": true,
-        "title_and_ending": true,
+        "title_screen": true,
+        "ending_sequence": true,
         "overworld_barba_trail": true,
         "hud_and_death_polish": true,
         "cave_firelight": true,
@@ -895,6 +952,7 @@ window.BARBA_FE_CATALOG = {
         "error_ash_pile": true,
         "burned_signs": true,
         "ngplus_mountain_melt": true,
+        "overworld_scenery": true,
         "scanline_scenery": true,
         "enemy_polish": true,
         "saria_foul_water": true,
@@ -912,7 +970,7 @@ window.BARBA_FE_CATALOG = {
         "open_great_palace": 6,
         "palette_shuffle": false
       },
-      "flagstring": "BFE1|Bb S1 S2 S3 S4 Wu Wd Ir Gb Lw Wp Wr Wt Wo Wl Wc Vc5 Tc We Wn Nm Ws Wg Wf Wm1 Tp Ta Ar Ap Ag Ri0 Rx0 Ro6#BARBA2026"
+      "flagstring": "BFE1|Bb S1 S2 S3 S4 Wu Wd Ir Gb Lw Wp Wr Wt Wx Wo Wl Wc Vc5 Tc We Wn Nm Wv Ws Wg Wf Wm1 Tp Ta Ar Ap Ag Ri0 Rx0 Ro6#BARBA2026"
     },
     "barba_lite": {
       "values": {
@@ -928,7 +986,8 @@ window.BARBA_FE_CATALOG = {
         "lava_wade": true,
         "palace_roar_shake": true,
         "rauru_sage_basement": true,
-        "title_and_ending": true,
+        "title_screen": true,
+        "ending_sequence": true,
         "overworld_barba_trail": true,
         "hud_and_death_polish": true,
         "cave_firelight": true,
@@ -937,6 +996,7 @@ window.BARBA_FE_CATALOG = {
         "error_ash_pile": false,
         "burned_signs": true,
         "ngplus_mountain_melt": true,
+        "overworld_scenery": true,
         "scanline_scenery": true,
         "enemy_polish": true,
         "saria_foul_water": true,
@@ -954,7 +1014,7 @@ window.BARBA_FE_CATALOG = {
         "open_great_palace": 6,
         "palette_shuffle": false
       },
-      "flagstring": "BFE1|Bb S1 S2 S3 S4 Wu Wd Ir Gb Lw Wp Wr Wt Wo Wl Wc Vc5 Wn Nm Ws Wg Wf Wm1 Ar Ap Ag Ri0 Rx0 Ro6#BARBA2026"
+      "flagstring": "BFE1|Bb S1 S2 S3 S4 Wu Wd Ir Gb Lw Wp Wr Wt Wx Wo Wl Wc Vc5 Wn Nm Wv Ws Wg Wf Wm1 Ar Ap Ag Ri0 Rx0 Ro6#BARBA2026"
     },
     "chaos": {
       "values": {
@@ -970,7 +1030,8 @@ window.BARBA_FE_CATALOG = {
         "lava_wade": true,
         "palace_roar_shake": true,
         "rauru_sage_basement": true,
-        "title_and_ending": true,
+        "title_screen": true,
+        "ending_sequence": true,
         "overworld_barba_trail": true,
         "hud_and_death_polish": true,
         "cave_firelight": true,
@@ -979,6 +1040,7 @@ window.BARBA_FE_CATALOG = {
         "error_ash_pile": true,
         "burned_signs": true,
         "ngplus_mountain_melt": true,
+        "overworld_scenery": true,
         "scanline_scenery": true,
         "enemy_polish": true,
         "saria_foul_water": true,
@@ -996,7 +1058,7 @@ window.BARBA_FE_CATALOG = {
         "open_great_palace": 4,
         "palette_shuffle": true
       },
-      "flagstring": "BFE1|Bb S1 S2 S3 S4 Wu Wd Ir Gb Lw Wp Wr Wt Wo Wl Wc Vc5 Tc We Wn Nm Ws Wg Wf Wm1 Tp Ta Ar Ap Ag Ri2 Rs Rb Rp Rx1 Ro4 Rc#BARBA2026"
+      "flagstring": "BFE1|Bb S1 S2 S3 S4 Wu Wd Ir Gb Lw Wp Wr Wt Wx Wo Wl Wc Vc5 Tc We Wn Nm Wv Ws Wg Wf Wm1 Tp Ta Ar Ap Ag Ri2 Rs Rb Rp Rx1 Ro4 Rc#BARBA2026"
     }
   }
 };

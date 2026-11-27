@@ -6,7 +6,7 @@ from pathlib import Path
 
 from subgame_pack import ROOT, create_pack, find_play_rom, prepare_profile, run_cli
 
-ROM_PATH = ROOT / 'play/nes/waldo-barba.nes'
+ROM_PATH = ROOT / 'play/nes/waldo.nes'
 PACK_DIR = ROOT / 'build/waldo-pack'
 PROFILE_DIR = ROOT / 'build/mesen-scenarios/wheres-barba'
 SCENARIOS = ROOT / 'tools/scenarios/waldo_scenarios.lua'
@@ -28,11 +28,11 @@ SLOTS = [
 def _paths(mmc3: bool = False) -> tuple[Path, Path, Path]:
     if mmc3:
         return (
-            find_play_rom('waldo-mmc3'),
+            find_play_rom('waldo-compat'),
             ROOT / 'build/waldo-mmc3-pack',
             ROOT / 'build/mesen-scenarios/wheres-barba-mmc3',
         )
-    return find_play_rom('waldo-barba'), PACK_DIR, PROFILE_DIR
+    return find_play_rom('waldo'), PACK_DIR, PROFILE_DIR
 
 
 def _build(mmc3: bool, rom_path: Path) -> None:
@@ -64,7 +64,7 @@ def prepare(force: bool = False, mmc3: bool = False) -> tuple[Path, dict]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--mmc3', action='store_true', help='Use play/nes/waldo-mmc3.nes instead of standalone.')
+    parser.add_argument('--mmc3', action='store_true', help='Use play/compat/nes/waldo-compat.nes instead of standalone.')
     parser.add_argument('--force', action='store_true', help='Regenerate all 10 save states.')
     parser.add_argument('--prepare-only', action='store_true', help='Prepare profile without opening Mesen.')
     args = parser.parse_args()

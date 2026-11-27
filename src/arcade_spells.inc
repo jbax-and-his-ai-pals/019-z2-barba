@@ -80,6 +80,11 @@ ArcadeHeavyDmg0:
     lda #$02
     jmp $FFCC
 
+SpellMenuDone0:
+    lda #$00
+    sta SPELL_MENU_ACTIVE
+    jmp $A338
+
 .segment "BANK0_SPELL"
 
 ; Hooked at $8DC6 (A = $074C on entry, after ItemHoldSpell if sampled roar).
@@ -99,17 +104,16 @@ ArcadeSpellHook0:
     jsr CallBank2Spell0
 @skip_cast:
     lda ARCADE_ACTIVE_LO
-    ora ARCADE_ACTIVE_HI
+    and #$7B                ; ticking spells only (DECOY, AXE, BARREL, STAR, LOCK, BLADE)
+    bne @do_tick
+    lda ARCADE_ACTIVE_HI
+    and #$01                ; ticking spell only (CLOCK)
     beq @done
+@do_tick:
     ldx #$01
     jsr CallBank2Spell0
 @done:
     jmp $8E1F               ; vanilla active ticks + RTS
-
-SpellMenuDone0:
-    lda #$00
-    sta SPELL_MENU_ACTIVE
-    jmp $A338
 
 .segment "BANK0_SPELL2"
 
@@ -147,9 +151,9 @@ SpellMenuAttrSave0:
 SpellMenuInit0:
     ldx #$02
     stx SPELL_MENU_ACTIVE
-    .byte $2C               ; BIT $0BA2 skips LDX #$0B
+    .byte $2C               ; BIT $0AA2 skips LDX #$0A
 LevelUpInit0:
-    ldx #$0B
+    ldx #$0A
     jsr CallBank2Spell0
     jmp $A31C               ; $074F=$C0, $EE=$08, INC $0524, RTS
 
@@ -277,7 +281,6 @@ Bank2SpellLo:
     .byte <(ArcadeDoubleXp2 - 1)
     .byte <(ArcadeLuckyDrop2 - 1)
     .byte <(LevelUpInit2 - 1)
-    .byte <(LevelUpInit2 - 1)
 Bank2SpellHi:
     .byte >(ArcadeCast2 - 1)
     .byte >(ArcadeTick2 - 1)
@@ -290,9 +293,8 @@ Bank2SpellHi:
     .byte >(ArcadeDoubleXp2 - 1)
     .byte >(ArcadeLuckyDrop2 - 1)
     .byte >(LevelUpInit2 - 1)
-    .byte >(LevelUpInit2 - 1)
 
-.segment "BANK1"
+.segment "BANK1_SPELLS"
 ; Populate Level-Up Pane template rows $789A..$7917 (9x14 bytes: $CC, 12x$F4, $CC;
 ; $D0 at $78C8, $78D6, $78E4), replacing vanilla $A347 copy from $9CB4..$9D31.
 LevelUpInit2:
@@ -319,6 +321,7 @@ LevelUpInit2:
     sta $78E4
     jmp $FFC5
 
+.segment "BANK1"
 AxeSpinAttr:
     .byte $01, $41, $C1, $81 ; 0 -> 90 -> 180 -> 270 deg clockwise spin, palette 1
 
@@ -421,6 +424,27 @@ ArcadeHeavyDmgBank2:
     sta $01
     jmp $FFC5
 
+.segment "BANK1"
+; Active Arcade spells (1 = active, 0 = archived post-2.0: f13/AXE, smb/STAR, mm2/BLADE, zelda/CLOCK, mtpo/HEAVY)
+ArcadeSpellActiveTbl:
+    .byte 1, 0, 1, 1, 0, 1, 0, 1, 0, 0
+
+ArcadeActiveCheck1:
+    stx $0F
+    tax
+    lda ArcadeSpellActiveTbl,x
+    bne @ok
+    ldx $0F
+    pla
+    pla
+    lda #$00
+    rts
+@ok:
+    txa
+    ldx $0F
+    cmp #$00
+    rts
+
 .segment "BANK1_SPELLS"
 
 ; Check if spell Y (0..17) is owned. Returns A != 0 (Z=0) if owned, A = 0 (Z=1) if not.
@@ -434,6 +458,7 @@ CheckSpellOwned2:
     tya
     sec
     sbc #$08
+    jsr ArcadeActiveCheck1
     beq @waldo
     cmp #$06
     bcs @upper
@@ -448,8 +473,8 @@ CheckSpellOwned2:
     lda $63B1,x             ; $63B7..$63BA = mm2, wheel, zelda, mtpo (X=6..9 -> $63B7..$63BA)
     ldx $0F
 @chk_one:
-    cmp #$01
-    beq @owned
+    ora #$00
+    bne @owned
     lda #$00
     rts
 @waldo:
@@ -609,11 +634,21 @@ ArcadeCast2:
 @done:
     jmp $FFC5
 
-; Active per-frame tick for spells 8..17 (Phase 2/3 hooks plug in here).
+; Active per-frame tick for spells 8..17 (fast bitmask early-out per spell).
 ArcadeTick2:
-    lda ARCADE_CLOCK_TMR
+    lda ARCADE_ACTIVE_HI
+    and #$01
     beq @clock_done
+    lda ARCADE_CLOCK_TMR
+    beq @clock_clr
     dec ARCADE_CLOCK_TMR
+    bne @clock_step
+@clock_clr:
+    lda ARCADE_ACTIVE_HI
+    and #$FE
+    sta ARCADE_ACTIVE_HI
+    jmp @clock_done
+@clock_step:
     lda $0728
     bne @clock_done
     ldx #$05
@@ -636,18 +671,25 @@ ArcadeTick2:
     dex
     bpl @clk_loop
 @clock_done:
-    lda ARCADE_STAR_TMR
+    lda ARCADE_ACTIVE_LO
+    and #$10
     bne :+
     jmp @star_done
 :
+    lda ARCADE_STAR_TMR
+    beq @star_expire
     dec ARCADE_STAR_TMR
     bne @star_active
-    ; STAR expired: restore Barba's normal red/orange palette
+@star_expire:
+    ; STAR expired: restore Barba's normal red/orange palette and clear active bit
     lda #$16
     sta $69D2
     lda #$27
     sta $69D8
-    bne @star_done
+    lda ARCADE_ACTIVE_LO
+    and #$EF
+    sta ARCADE_ACTIVE_LO
+    jmp @star_done
 @star_active:
     lda #$02
     sta $050C               ; contact invincibility
@@ -715,11 +757,11 @@ ArcadeTick2:
     dex
     bpl @star_loop
 @star_done:
-    lda ARCADE_STAR_TMR
-    bne @no_blade_pal
     lda ARCADE_ACTIVE_LO
     and #$40                ; BLADE active?
     beq @no_blade_pal
+    lda ARCADE_STAR_TMR
+    bne @no_blade_pal
     lda BARBA_GEAR
     and #$03
     cmp #$03                ; Mega Helmet equipped?
@@ -729,11 +771,31 @@ ArcadeTick2:
     lda #$21                ; Mega Man cyan
     sta $69D8
 @no_blade_pal:
+    lda ARCADE_ACTIVE_LO
+    and #$01
+    beq :+
     jsr TickDecoy2
+:
+    lda ARCADE_ACTIVE_LO
+    and #$02
+    beq :+
     jsr TickAxe2
+:
+    lda ARCADE_ACTIVE_LO
+    and #$08
+    beq :+
     jsr TickBarrel2
+:
+    lda ARCADE_ACTIVE_LO
+    and #$20
+    beq :+
     jsr TickLock2
+:
+    lda ARCADE_ACTIVE_LO
+    and #$40
+    beq :+
     jsr TickBlade2
+:
     jmp $FFC5
 
 LaunchAxe2:
@@ -879,11 +941,15 @@ DrawScreenSprite2:
 
 TickDecoy2:
     lda ARCADE_DECOY_TMR
-    beq @done
+    beq @clr_done
     dec ARCADE_DECOY_TMR
     bne @active
+@clr_done:
     lda #$F8
     sta $02E0
+    lda ARCADE_ACTIVE_LO
+    and #$FE
+    sta ARCADE_ACTIVE_LO
     rts
 @active:
     lda ARCADE_DECOY_XLO
@@ -909,6 +975,9 @@ TickDecoy2:
     sta ARCADE_DECOY_TMR
     lda #$F8
     sta $02E0
+    lda ARCADE_ACTIVE_LO
+    and #$FE
+    sta ARCADE_ACTIVE_LO
     lda #$04
     sta $EC
     ldx #$05
@@ -923,11 +992,6 @@ TickDecoy2:
     rts
 
 TickAxe2:
-    lda ARCADE_ACTIVE_LO
-    and #$02
-    bne :+
-    rts
-:
     lda ARCADE_AXE_TMR
     bne @move
     lda $F5
@@ -993,11 +1057,15 @@ TickAxe2:
 
 TickBarrel2:
     lda ARCADE_BARREL_TMR
-    beq @done
+    beq @clr_done
     dec ARCADE_BARREL_TMR
     bne @alive
+@clr_done:
     lda #$F8
     sta $02DC
+    lda ARCADE_ACTIVE_LO
+    and #$F7
+    sta ARCADE_ACTIVE_LO
     rts
 @alive:
     lda ARCADE_BARREL_VX
@@ -1183,16 +1251,27 @@ SpellMenuInit2:
 
 .segment "BANK1_SPELLS"
 
-; Compute left-edge metatile X ($01 = px & $F0, $00 = page) for box.
+; Compute left-edge metatile X ($01 = px & $F0, $00 = page), start col ($06 = 0..31),
+; and nametable base ($07 = $20 or $24) for the 2-column pause box.
 BoxOrigin2:
     lda $072C
     clc
     adc #SPELL_BOX_XOFF
     and #$F0
     sta $01
+    lsr
+    lsr
+    lsr
+    sta $06                 ; start col (0..31)
     lda $072A
     adc #$00
     sta $00
+    and #$01
+    asl
+    asl
+    clc
+    adc #$20
+    sta $07                 ; nt base ($20 or $24)
     rts
 
 ; Save 6x7 room attribute bytes covering the 13-metatile x 10-metatile box into SPELL_ATTR_BUF.
@@ -1887,18 +1966,6 @@ EmitNtRow2:
 ; Draw 1 tile row $0525 (0..19) of 2-column menu.
 SpellMenuDraw2:
     jsr BoxOrigin2
-    lda $01
-    lsr
-    lsr
-    lsr
-    sta $06                 ; start col (0..31)
-    lda $00
-    and #$01
-    asl
-    asl
-    clc
-    adc #$20
-    sta $07                 ; nt base ($20 or $24)
     lda $0525
     jsr BuildMenuTileRow2
     lda $0525
@@ -1932,18 +1999,6 @@ SpellMenuDraw2:
 ; Restore 1 tile row $0525 (19..0) from SPELL_ROW_BUF0/1 prepared by SpellMenuRestore0.
 SpellMenuRestore2:
     jsr BoxOrigin2
-    lda $01
-    lsr
-    lsr
-    lsr
-    sta $06
-    lda $00
-    and #$01
-    asl
-    asl
-    clc
-    adc #$20
-    sta $07
     lda $0525
     clc
     adc #$06
@@ -2124,18 +2179,6 @@ SpellMenuInput2:
     sta $EF                 ; cursor SFX
     ; Update old cursor -> $F4 and new cursor -> $FA via $0302
     jsr BoxOrigin2
-    lda $01
-    lsr
-    lsr
-    lsr
-    sta $06                 ; left box col (0..31)
-    lda $00
-    and #$01
-    asl
-    asl
-    clc
-    adc #$20
-    sta $07                 ; nt base
     ldy #$00
     lda SPELL_OLD_SEL
     ldx #$F4
@@ -2257,10 +2300,12 @@ ArcadeSpellCostTbl:
     .byte 56,52,48,44,40,36,32,28  ; 16: CLOCK
     .byte 48,44,40,36,32,28,24,20  ; 17: HEAVY
 
+.segment "BANK1_SOULS"
 MenuHeaderRow26:
     .byte $CC,$F4,$F4,$F4,$E1,$F2,$EB,$EE,$E5,$DE,$F4,$F4,$F4 ; |   HYRULE   
     .byte $CC,$F4,$F4,$DA,$EB,$DC,$DA,$DD,$DE,$F4,$F4,$F4,$CC ; |  ARCADE   |
 
+.segment "BANK1_SPELLS"
 ; 8 x 7 = 56 bytes (Z2 uppercase $DA..$F3, dot leader $CF)
 HyruleSpellNames:
     .byte $EC,$DC,$DA,$E5,$DE,$EC,$CF ; SCALES.
@@ -2370,22 +2415,6 @@ DrawGearRange1:
     bcc @loop
     rts
 
-GearSetupOrigin1:
-    jsr BoxOrigin2
-    lda $01
-    lsr
-    lsr
-    lsr
-    sta $06
-    lda $00
-    and #$01
-    asl
-    asl
-    clc
-    adc #$20
-    sta $07
-    rts
-
 ; Emit tile X at gear slot A (0..4) cursor/badge (C=0 cursor, C=1 badge) into $0302,y.
 EmitGearCell1:
     php
@@ -2407,7 +2436,7 @@ EmitGearCell1:
 
 .segment "BANK1_GEAR"
 GearToggleFocus1:
-    jsr GearSetupOrigin1
+    jsr BoxOrigin2
     ldy #$00
     lda SPELL_GEAR_SEL
     bne @to_spells
@@ -2497,7 +2526,7 @@ GearMenuInput1:
     ldy GearSpellIdTbl,x
     jsr CheckSpellOwned2
     beq @step
-    jsr GearSetupOrigin1
+    jsr BoxOrigin2
     ldy #$00
     lda SPELL_GEAR_SEL
     sec
@@ -2565,7 +2594,7 @@ GearCheckAB1:
     eor GearBitTbl,x
 @store_gear:
     sta BARBA_GEAR
-    jsr GearSetupOrigin1
+    jsr BoxOrigin2
     ldy #$00
     ldx #$00
 @bdg_loop:

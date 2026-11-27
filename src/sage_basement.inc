@@ -151,9 +151,9 @@ SageDialogCheck:
 @native_wise:
     ldy $05
     beq @native_index
-    lda #<TownWiseManText
-    ldy #>TownWiseManText
-    jmp TownSetNpcDialog
+    lda #$08
+    jsr LoadTownDlg3
+    jmp TownSetArcadeBuf
 @native_index:
     jmp TownNativeIndex
 
@@ -165,12 +165,11 @@ SageWaitText:
 SageUmText:
     TownLine "UM...", $FF
 SageThinkText:
-    TownLine "DO YOU", $FD
-    TownLine "THINK A", $FD
-    TownLine "SAGE...", $FF
+    TownLine "DO YOU THINK", $FD
+    TownLine "A SAGE...", $FF
 SageDragonText:
-    TownLine "AND A", $FD
+    TownLine "AND A FIRE", $FD
     TownLine "DRAGON...", $FF
 SageNevermindText:
-    TownLine "NEVER", $FD
+    TownLine "OH... NEVER", $FD
     TownLine "MIND...", $FF

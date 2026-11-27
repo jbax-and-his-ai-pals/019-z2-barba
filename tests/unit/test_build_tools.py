@@ -157,4 +157,120 @@ class PatchTests(unittest.TestCase):
             self.assertNotIn(pair, TOWN_SPRITE_PAIRS[bank], f'glyph overwrites villager pair {bank}:{pair:02X}')
 
 
+class StampPlayArtifactsTests(unittest.TestCase):
+    def test_stamp_prefers_newly_built_barba_over_stale_numbered(self) -> None:
+        from package_bps import collect_bps_files, stamp_play_artifacts
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            play = root / 'play'
+            nes_dir = play / 'nes'
+            bps_dir = play / 'bps'
+            compat_nes_dir = play / 'compat' / 'nes'
+            compat_bps_dir = play / 'compat' / 'bps'
+            nes_dir.mkdir(parents=True)
+            bps_dir.mkdir(parents=True)
+            compat_nes_dir.mkdir(parents=True)
+            compat_bps_dir.mkdir(parents=True)
+            (play / 'barba-b811.nes').write_bytes(b'old-811-nes')
+            (play / 'barba.nes').write_bytes(b'new-812-nes')
+            (play / 'barba-b811.bps').write_bytes(b'old-811-bps')
+            (play / 'barba.bps').write_bytes(b'new-812-bps')
+            (play / 'other.nes').write_bytes(b'keep-other')
+            (nes_dir / 'dk-b790.nes').write_bytes(b'old-dk')
+            (nes_dir / 'dk.nes').write_bytes(b'new-dk')
+            (bps_dir / 'dk-b790.bps').write_bytes(b'old-dk-bps')
+            (bps_dir / 'dk.bps').write_bytes(b'new-dk-bps')
+            (compat_nes_dir / 'dk-compat-b790.nes').write_bytes(b'old-dk-compat')
+            (compat_nes_dir / 'dk-compat.nes').write_bytes(b'new-dk-compat')
+            (compat_bps_dir / 'dk-compat-b790.bps').write_bytes(b'old-dk-compat-bps')
+            (compat_bps_dir / 'dk-compat.bps').write_bytes(b'new-dk-compat-bps')
+
+            stamp_play_artifacts(root, 812, {'dk': 791})
+
+            self.assertFalse((play / 'barba-b811.nes').exists())
+            self.assertFalse((play / 'barba.nes').exists())
+            self.assertEqual((play / 'barba-b812.nes').read_bytes(), b'new-812-nes')
+            self.assertEqual((play / 'barba-b812.bps').read_bytes(), b'new-812-bps')
+            self.assertEqual((play / 'other.nes').read_bytes(), b'keep-other')
+            self.assertFalse((nes_dir / 'dk-b790.nes').exists())
+            self.assertEqual((nes_dir / 'dk-b791.nes').read_bytes(), b'new-dk')
+            self.assertEqual((bps_dir / 'dk-b791.bps').read_bytes(), b'new-dk-bps')
+            self.assertFalse((compat_nes_dir / 'dk-compat-b790.nes').exists())
+            self.assertEqual((compat_nes_dir / 'dk-compat-b791.nes').read_bytes(), b'new-dk-compat')
+            self.assertEqual((compat_bps_dir / 'dk-compat-b791.bps').read_bytes(), b'new-dk-compat-bps')
+            collected = [p.name for p in collect_bps_files(root)]
+            self.assertEqual(collected, ['barba-b812.bps', 'dk-b791.bps', 'dk-compat-b791.bps'])
+
+    def test_stamp_migrates_legacy_barba_and_mmc3_names(self) -> None:
+        from package_bps import collect_bps_files, stamp_play_artifacts
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            play = root / 'play'
+            nes_dir = play / 'nes'
+            bps_dir = play / 'bps'
+            compat_nes_dir = play / 'compat' / 'nes'
+            compat_bps_dir = play / 'compat' / 'bps'
+            nes_dir.mkdir(parents=True)
+            bps_dir.mkdir(parents=True)
+            compat_nes_dir.mkdir(parents=True)
+            compat_bps_dir.mkdir(parents=True)
+            (play / 'barba-b812.nes').write_bytes(b'core-nes')
+            (play / 'barba-b812.bps').write_bytes(b'core-bps')
+            (nes_dir / 'dk-barba-b20.nes').write_bytes(b'legacy-dk')
+            (nes_dir / 'dk.nes').write_bytes(b'fresh-dk')
+            (bps_dir / 'dk-barba-b20.bps').write_bytes(b'legacy-dk-bps')
+            (compat_nes_dir / 'dk-mmc3-b20.nes').write_bytes(b'legacy-mmc3')
+            (compat_bps_dir / 'dk-mmc3-b20.bps').write_bytes(b'legacy-mmc3-bps')
+
+            stamp_play_artifacts(root, 813, {'dk': 21})
+
+            self.assertEqual((play / 'barba-b813.nes').read_bytes(), b'core-nes')
+            self.assertEqual((play / 'barba-b813.bps').read_bytes(), b'core-bps')
+            self.assertFalse((nes_dir / 'dk-barba-b20.nes').exists())
+            self.assertFalse((bps_dir / 'dk-barba-b20.bps').exists())
+            self.assertFalse((compat_nes_dir / 'dk-mmc3-b20.nes').exists())
+            self.assertFalse((compat_bps_dir / 'dk-mmc3-b20.bps').exists())
+            self.assertEqual((nes_dir / 'dk-b21.nes').read_bytes(), b'fresh-dk')
+            self.assertEqual((bps_dir / 'dk-b21.bps').read_bytes(), b'legacy-dk-bps')
+            self.assertEqual((compat_nes_dir / 'dk-compat-b21.nes').read_bytes(), b'legacy-mmc3')
+            self.assertEqual((compat_bps_dir / 'dk-compat-b21.bps').read_bytes(), b'legacy-mmc3-bps')
+            collected = [p.name for p in collect_bps_files(root)]
+            self.assertEqual(collected, ['barba-b813.bps', 'dk-b21.bps', 'dk-compat-b21.bps'])
+
+    def test_stamp_numeric_ordering_past_100(self) -> None:
+        from package_bps import collect_bps_files, stamp_play_artifacts
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            play = root / 'play'
+            play.mkdir(parents=True)
+            (play / 'barba-b99.nes').write_bytes(b'b99')
+            (play / 'barba-b100.nes').write_bytes(b'b100')
+            (play / 'barba-b99.bps').write_bytes(b'b99-bps')
+            (play / 'barba-b100.bps').write_bytes(b'b100-bps')
+
+            self.assertEqual([p.name for p in collect_bps_files(root)], ['barba-b100.bps'])
+            stamp_play_artifacts(root, 101)
+            self.assertFalse((play / 'barba-b99.nes').exists())
+            self.assertFalse((play / 'barba-b100.nes').exists())
+            self.assertEqual((play / 'barba-b101.nes').read_bytes(), b'b100')
+
+
+class PlayCmdLaunchersTests(unittest.TestCase):
+    def test_all_play_cmd_launchers_valid_and_in_sync(self) -> None:
+        from generate_play_cmds import validate_cmds
+        root = Path(__file__).resolve().parents[2]
+        self.assertEqual(validate_cmds(root), [])
+
+    def test_no_compat_files_outside_play_compat(self) -> None:
+        root = Path(__file__).resolve().parents[2]
+        play = root / 'play'
+        compat_dir = play / 'compat'
+        stray = [
+            p.relative_to(root).as_posix()
+            for p in play.rglob('*-compat*')
+            if compat_dir not in p.parents
+        ]
+        self.assertEqual(stray, [])
+
+
 if __name__=='__main__':unittest.main()

@@ -1,7 +1,7 @@
 ; Three backed projectiles multiplex native slot 0 without changing range.
 ; Record offsets: state,Y,Xlo,Xhi,vx,dir,actorCode,class,fraction,life,OAM.
 .export BarbaExtraAllocate, BarbaExtraUpdate, BarbaExtraReset
-.export BarbaEnemyFireOnly, BarbaShieldFire, BarbaExtraBlocks, DarkLinkFireCheck
+.export BarbaEnemyFireOnly, BarbaShieldFire, BarbaExtraBlocks, DarkLinkFireCheck, ExtraShieldOne0
 EXTRA_BASE = $6400
 EXTRA_SAVE = $6440
 EXTRA_INDEX = $6450
@@ -316,6 +316,9 @@ BarbaExtraUpdate:
     lda #$00
     sta EXTRA_BASE,x
     sta EXTRA_BASE+$09,x
+    ldy EXTRA_BASE+$0A,x
+    lda #$F8
+    sta $0200,y
     jmp @next
 @slow_slot:
     lda EXTRA_KIND+$03
@@ -385,13 +388,27 @@ BarbaExtraUpdate:
     tax
     rts
 
-; The shield test and its melee escape use fixed code and RAM. The extra
-; return address lets $E654 discard it when a melee hit meets the shield.
-NativeShieldFire:
-    lda $C8
-    asl
-    jsr $E61A
+; Single-slot-0 shield check for backed shots (hooked at $E62A, so native
+; slots 0/1 and melee run natively in Bank 7 afterward). Preserves the
+; 1-level stack frame expected by ShieldReboundImpact on HEAVY pierce.
+ExtraShieldOne0:
+    jsr $E5BA
+    lda #$01
+    sta $0B
+    ldy #$00
+    sty $11
+    jsr $E4BC
+    jsr $E9F9
+    bcc @done
+    lda #$02
+    sta $EC
+    jsr ExtraShieldHit
+@done:
     rts
+ExtraShieldHit:
+    jsr $E646
+    rts
+
 BarbaEnemyFireOnly:
     php
     pha
@@ -400,7 +417,6 @@ BarbaEnemyFireOnly:
     lda #$00
     beq ExtraCollision
 BarbaShieldFire:
-    jsr NativeShieldFire
     php
     pha
     tya
@@ -414,9 +430,10 @@ ExtraCollision:
     beq @active
     lda $B6,x
     cmp #$01
-    bne @fast_return
+    beq @active
+    jmp @fast_return
 @active:
-    ; Save slot 0 and $10/$11/$8E lazily: most enemies are far from backed shots.
+    ; Save slot 0 and $10/$11/$8E/$0B lazily: most enemies are far from backed shots.
     lda #$00
     sta EXTRA_KIND+$03 ; $6457: 1 once slot 0 has been saved this call
     sta EXTRA_INDEX
@@ -436,6 +453,8 @@ ExtraCollision:
     sta EXTRA_OLD11
     lda $8E
     sta EXTRA_OLD8E
+    lda $0B
+    sta EXTRA_SAVE+$0F
     jsr ExtraSaveZero
     lda #$00
     sta $8E
@@ -451,9 +470,13 @@ ExtraCollision:
     jsr $E498
     jmp @store
 @shield:
-    jsr NativeShieldFire
+    jsr ExtraShieldOne0
 @store:
     jsr ExtraStoreRecord
+    ldx EXTRA_ENEMY_X
+    lda $B6,x
+    cmp #$01
+    bne @restore_exit
 @next:
     lda EXTRA_INDEX
     clc
@@ -463,7 +486,10 @@ ExtraCollision:
     bcc @slot
     lda EXTRA_KIND+$03
     beq @fast_return
+@restore_exit:
     jsr ExtraRestoreZero
+    lda EXTRA_SAVE+$0F
+    sta $0B
     lda EXTRA_OLD8E
     sta $8E
     lda EXTRA_OLD10

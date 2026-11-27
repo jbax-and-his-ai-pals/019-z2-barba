@@ -243,7 +243,7 @@ RoarPulse1:
     pha
     lda ROAR_REQUEST
     bpl @normal
-    lda $8E00,x
+    jsr $8E00
     jmp @store
 @normal:
     txa
@@ -257,7 +257,7 @@ RoarPulse2:
     pha
     lda ROAR_REQUEST
     bpl @normal
-    lda $8E00,x
+    jsr $8E00
     jmp @store
 @normal:
     txa

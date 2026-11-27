@@ -320,28 +320,36 @@ class FeudArtTests(unittest.TestCase):
             return seen
 
         total_bytes = 0
+        seen_vecs: set[tuple[int, ...]] = set()
         for pool in (pack_feud.ZELDA2_MAIN_PUZZLES, pack_feud.ZELDA2_FM_PUZZLES):
             for p_idx, q_str, answers in pool:
                 rec = pack_feud.encode_puzzle(p_idx, q_str, answers)
                 self.assertLess(len(rec), 256, q_str)
                 total_bytes += len(rec)
+                pts = [p for _ans, p in answers]
+                self.assertEqual(sum(pts), 100, q_str)
+                self.assertTrue(all(pts[i] >= pts[i + 1] for i in range(len(pts) - 1)), q_str)
+                self.assertGreaterEqual(pts[-1], 2, q_str)
+                self.assertFalse(all(p % 5 == 0 for p in pts), q_str)
+                seen_vecs.add(tuple(pts))
                 for ans_text, _pts in answers:
                     variants = expand_variants(ans_text)
                     self.assertLessEqual(len(variants), 20, f'{q_str}: {ans_text} -> {len(variants)} variants')
                     buf_len = sum(len(v) + 1 for v in variants)
                     self.assertLess(buf_len, 256, f'{q_str}: {ans_text} buffer {buf_len}')
+        self.assertEqual(len(seen_vecs), len(pack_feud.ZELDA2_MAIN_PUZZLES) + len(pack_feud.ZELDA2_FM_PUZZLES))
         self.assertLessEqual(total_bytes, 4096)
 
         town_q = next(a for _p, q, a in pack_feud.ZELDA2_MAIN_PUZZLES if q == 'FOUND IN A TOWN')
         villager_ans, pts = town_q[0]
-        self.assertEqual(pts, 28)
+        self.assertEqual(pts, 34)
         town_variants = expand_variants(villager_ans)
         for accepted in ('HEALER', 'LADY', 'TOWN LADY', 'VILLAGER', 'VILLAGERS', 'PEOPLE'):
             self.assertIn(accepted, town_variants)
 
         triforce_q = next(a for _p, q, a in pack_feud.ZELDA2_MAIN_PUZZLES if q == 'THAT GUARDS THE TRIFORCE')
         old_man_ans, old_man_pts = triforce_q[2]
-        self.assertEqual(old_man_pts, 20)
+        self.assertEqual(old_man_pts, 13)
         triforce_variants = expand_variants(old_man_ans)
         for accepted in ('OLD MAN', 'SAGE', 'IMPA'):
             self.assertIn(accepted, triforce_variants)

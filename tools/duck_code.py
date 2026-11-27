@@ -1,7 +1,7 @@
 """6502 code and PPU stream assembly for Villager Hunt (Duck Hunt MMC3 upgrade)."""
 from __future__ import annotations
 
-from pack_f13 import Asm6502
+from asm6502 import Asm6502
 
 
 # Unused internal RAM ($0620-$063F, cleared at boot by $C000)
@@ -186,11 +186,15 @@ def build_title_ppu_stream(build_number: int | None = None) -> bytes:
 
     # Attribute colors (matching vanilla Duck Hunt):
     # $23C0..$23DF (rows 0-15): BARBA'S, divider bar, HUNT -> Pal 0 ($00: cyan + orange bar)
+    # $23C6..$23C7 top quadrants (row 1 cols 26..31): build number -> Pal 3 ($0C, $0F: orange on black)
     # $23E0..$23E1, $23E8..$23E9: cursor col 6 -> Pal 1 ($55: white)
     # $23E2..$23E7, $23EA..$23EF: GAME A/B/C -> Pal 3 ($FF: orange)
     # $23F0..$23F7: TOP SCORE = 12000 (top half) Pal 2 green + DPAD AIM... (bottom half) Pal 1 white ($5A)
     # $23F8..$23FF: bottom border -> Pal 0 ($00)
     repeat_row(0x23C0, 32, 0x00)
+    if build_number is not None:
+        # Row 1 cols 26..31 (build tag) -> Pal 3 (orange on black); keep row 3 BARBA'S (bits 7..4) Pal 0
+        write_row(0x23C6, [0x0C, 0x0F])
     repeat_row(0x23E0, 2, 0x55)
     repeat_row(0x23E2, 6, 0xFF)
     repeat_row(0x23E8, 2, 0x55)

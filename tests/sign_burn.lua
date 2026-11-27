@@ -19,6 +19,7 @@ local cases={{room=0x00,kind=0x22,talk=0x98,name='Rauru entrance ($22)'},
     {room=0x09,kind=0x21,talk=0x80,name='room $09 ($21)'}}
 local ci=1
 local talks={}            -- text pointer captured per talk
+local talkSigs={}         -- buffer prefix signature per talk
 local talkAt=nil
 local f=assert(io.open(OUTPUT_DIR..'/sign-burn.txt','w'))
 local function check(ok,msg)
@@ -26,7 +27,12 @@ local function check(ok,msg)
     if not ok then errors=errors+1 end
 end
 local function ptr()return r(0x569)+r(0x56A)*256 end
-local function signText(p)return p>=SIGN_LO and p<=SIGN_HI end
+local function signText(p)return p==0x63C0 end
+local function bufSig()
+    local s={}
+    for i=0,11 do s[#s+1]=string.format('%02X',r(0x63C0+i)) end
+    return table.concat(s)
+end
 local function idle()return {start=false,select=false,a=false,b=false,up=false,down=false,left=false,right=false}end
 local function findSign()
     for x=0,5 do if r(0xB6+x)==1 and r(0xA1+x)==cases[ci].kind then return x end end
@@ -86,7 +92,11 @@ local function talkTo(target)
     elseif talkStep==2 then
         -- advance/close the box with B presses until the dialogue ends
         -- the letter pointer moves off its stale value once the new text starts
-        if not captured and ptr()~=startPtr then talks[#talks+1]=ptr();captured=true end
+        if not captured and ptr()~=startPtr then
+            talks[#talks+1]=ptr()
+            talkSigs[#talks]=bufSig()
+            captured=true
+        end
         -- wait for the text to finish printing (pointer stops moving), then close it
         if ptr()~=lastPtr then lastPtr=ptr();stable=0 else stable=stable+1 end
         if captured and stable==60 and #talks==2 and not shotText then shotText=true;screenshot('sign-burn-text') end
@@ -153,14 +163,14 @@ emu.addEventCallback(function()
     elseif phase==3 then
         if age<20 then want=nil return end
         if talkTo(cases[ci].talk) then
-            local ok={}
-            for i=2,#talks do if talks[i]~=-1 then ok[#ok+1]=talks[i] end end
+            local ok,sigs={},{}
+            for i=2,#talks do if talks[i]~=-1 then ok[#ok+1]=talks[i];sigs[#sigs+1]=talkSigs[i] end end
             if #ok>=3 or #talks>=8 then
                 for i=2,#talks do f:write(string.format('talk %d ptr=%04X mark-after=%d\n',i,talks[i]&0xFFFF,r(0x4A0+slot))) end
                 check(#ok>=3,'three burned reads open ('..#ok..')')
                 check(ok[1] and signText(ok[1]),cases[ci].name..': '..'burned sign shows burned-sign text')
-                check(ok[2] and signText(ok[2]) and ok[2]~=ok[1],cases[ci].name..': '..'second read shows the next line')
-                check(ok[3] and signText(ok[3]) and ok[3]~=ok[2],cases[ci].name..': '..'third read shows another line (mark survives dialogue)')
+                check(ok[2] and signText(ok[2]) and sigs[2]~=sigs[1],cases[ci].name..': '..'second read shows the next line')
+                check(ok[3] and signText(ok[3]) and sigs[3]~=sigs[2],cases[ci].name..': '..'third read shows another line (mark survives dialogue)')
                 local expect=(startMark-1+3)%6+1
                 check(r(0x4A0+slot)==expect,'rotation advanced three lines from '..startMark..' to '..expect..' ('..r(0x4A0+slot)..')')
                 check(scrolledReads>0 and missingSplits==0,string.format(

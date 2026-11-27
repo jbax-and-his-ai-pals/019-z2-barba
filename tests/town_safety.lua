@@ -25,8 +25,8 @@ for _,c in ipairs({
     {world=1,room=0,kind=0x19,origin=5,fear=true},
     {world=1,room=0x1C,kind=0x19,origin=255,fear=false},
     {world=1,room=0,kind=0x1D,origin=5,fear=true},
-    {world=1,room=0,kind=0x17,origin=255,fear=false,text=LABELS.TownHealerText},
-    {world=1,room=0,kind=0x18,origin=255,fear=false,text=LABELS.TownMagicText},
+    {world=1,room=0,kind=0x17,origin=255,fear=false,text=0x63C0},
+    {world=1,room=0,kind=0x18,origin=255,fear=false,text=0x63C0},
     {world=1,room=0,kind=0x0C,origin=255,fear=false},
     {world=1,room=0,kind=0x10,origin=255,fear=true},
     {world=1,room=0,kind=0x11,origin=255,fear=true},
@@ -44,9 +44,9 @@ for phase=0,7 do
     end
 end
 for _,c in ipairs({
-    {kind=0x0F,service=1,text=LABELS.TownWiseManText},
-    {kind=0x17,text=LABELS.TownHealerText},
-    {kind=0x18,text=LABELS.TownMagicText}
+    {kind=0x0F,service=1,text=0x63C0},
+    {kind=0x17,text=0x63C0},
+    {kind=0x18,text=0x63C0}
 })do c.world=1;c.room=0x1C;c.origin=255;c.alive=1;c.dialog=true;cases[#cases+1]=c end
 local function advance()
     current=current+1
@@ -67,15 +67,14 @@ emu.addMemoryCallback(function()
     if not running then return end
     local c=cases[current]
     if c.dialog then
-        local pointer=LABELS.TownFearPointers+(((c.phase or 0x35) ~ c.kind)&7)*2
-        local expected=c.fear and (r(pointer)+256*r(pointer+1)) or 0
+        local expected=c.fear and 0x63C0 or 0
         if not c.fear then
             local base=r(0xB421+c.world*2)+256*r(0xB422+c.world*2)
             expected=c.text or (r(base)+256*r(base+1))
         end
         if r(0x569)+256*r(0x56A)~=expected or r(0x524)~=1
-            or (c.fear and (r(0x566)~=0x0A or r(0x489)~=0 or r(0x48A)~=0))
-            or (c.text and r(0x566)~=0x0A) then
+            or (c.fear and (r(0x566)~=0x0A or r(0x489)~=0 or r(0x48A)~=0 or r(0x63C0)==0xFF))
+            or (c.text and (r(0x566)~=0x0A or r(0x63C0)==0xFF)) then
             failures=failures+1;f:write(string.format('FAIL dialogue case %d frame=%d kind=$%02X pointer=$%04X expected=$%04X ready=%d\n',current,frame,c.kind,r(0x569)+256*r(0x56A),expected,r(0x524)))
         end
         advance();return

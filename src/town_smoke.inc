@@ -112,9 +112,10 @@ DrawTownSmoke2:
     tay                      ; Y = age (0..31)
 
     ; puffY = SMOKE_Y[idx] - age
+    sty SMOKE_TMP1
     lda SMOKE_Y,x
     sec
-    sbc SmokeAgeVal3,y
+    sbc SMOKE_TMP1
     bcc @puff_skip
     cmp #$24
     bcs :+
@@ -364,6 +365,3 @@ SmokePhaseOff3:
     .byte 0, 11, 22, 5
 SmokeSway3:
     .byte 0, 1, 1, 2, 2, 3, 3, 4
-SmokeAgeVal3:
-    .byte 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
-    .byte 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31

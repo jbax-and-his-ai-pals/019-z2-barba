@@ -111,6 +111,9 @@ SoulsBossBar1:
     bne @ppu_busy_near
     lda $0362
     bne @ppu_busy_near
+    lda $0301
+    cmp #$0E            ; yield when buffer 0 has >= 2 pending PPU packets so VBlank never overflows
+    bcs @ppu_busy_near
     lda SOULS_PHASE
     cmp #$01
     bne :+
@@ -556,47 +559,73 @@ RemapBossSpr1:
     sta $8000
     pla
     sta $8001
-    lda #$00
+    ldx #$50
+    cpy #$04
+    bne :+
+    ldx #$30            ; Gooma body sprites occupy $30..$4C
+    jmp @fast_loop
+:
     cpy #$01
     bne :+
-    lda #$CF
+    lda #$CF            ; Helmethead odd tile remap
+    bne @odd_path
 :
     cpy #$03
-    bne :+
-    lda #$DD
+    beq :+
+    jmp @fast_loop
 :
+    lda #$DD            ; Carock ($91,x = $48) + odd tile remap
+    ldx #$40
+@odd_path:
     sta $00
-    ldx #$00
-@loop:
-    .repeat 4, i
-    lda $6500 + i*4,x
+@odd_loop:
+    lda $6500,x
     cmp #$F0
-    bcs :+++
+    bcs @odd_next
+    lda $6501,x
+    lsr
+    bcs @odd_chk
+    cmp #$52
+    bcs @odd_next
+    tay
+    lda BossEvenRemapTbl,y
+    beq @odd_next
+    sta $6501,x
+    bne @odd_next
+@odd_chk:
+    rol
+    cmp $00
+    bne @odd_next
+    lda #$EF
+    sta $6501,x
+@odd_next:
+    txa
+    clc
+    adc #$04
+    tax
+    bne @odd_loop
+    pla
+    tay
+    rts
+@fast_loop:
+    .repeat 4, i
     lda $6501 + i*4,x
     lsr
+    bcs :++             ; skip odd tiles with zero rol/cmp overhead
+    cmp #$52
     bcs :++
     tay
     lda BossEvenRemapTbl,y
-    beq :+
-    sta $6501 + i*4,x
-    bne :+++
-:
-    tya
-    cmp #$28
+    bne :+
+    cpy #$28
     bcc :++
-    cmp #$30
+    cpy #$30
     bcs :++
     lda SOULS_BOSS_IDX
     cmp #$02
     bne :++
     lda BossRebHiTbl-$28,y
-    sta $6501 + i*4,x
-    bne :++
 :
-    rol
-    cmp $00
-    bne :+
-    lda #$EF
     sta $6501 + i*4,x
 :
     .endrep
@@ -604,23 +633,22 @@ RemapBossSpr1:
     clc
     adc #$10
     tax
-    beq @done
-    jmp @loop
+    cpx #$E0
+    bcs @done
+    jmp @fast_loop
 @done:
     pla
     tay
     rts
 
-; Indexed by (even_tile >> 1) for $00..$FE; 0 means unchanged (or Rebonack $50..$5E).
+; Indexed by (even_tile >> 1) for $00..$A2; 0 means unchanged (or Rebonack $50..$5E).
 BossEvenRemapTbl:
     .byte $00,$00,$00,$00, $C1,$C3,$C5,$C7, $C9,$CB,$CD,$CF, $D1,$D3,$D5,$D7 ; $00..$1E
     .byte $D9,$DB,$DD,$DF, $E1,$E3,$E5,$E7, $00,$00,$00,$00, $00,$00,$00,$ED ; $20..$3E
     .byte $EF,$F1,$F3,$F5, $F7,$F9,$FB,$FD, $00,$00,$00,$00, $00,$00,$00,$00 ; $40..$5E
     .byte $00,$00,$00,$00, $00,$00,$00,$00, $00,$00,$00,$00, $00,$00,$00,$00 ; $60..$7E
     .byte $00,$00,$00,$00, $00,$00,$00,$00, $00,$00,$00,$00, $00,$00,$00,$E9 ; $80..$9E
-    .byte $EB,$ED,$00,$00, $00,$00,$00,$00, $00,$00,$00,$00, $00,$00,$00,$00 ; $A0..$BE
-    .byte $00,$00,$00,$00, $00,$00,$00,$00, $00,$00,$00,$00, $00,$00,$00,$00 ; $C0..$DE
-    .byte $00,$00,$00,$00, $00,$00,$00,$00, $00,$00,$00,$00, $00,$00,$00,$00 ; $E0..$FE
+    .byte $EB,$ED                                                             ; $A0..$A2
 BossRebHiTbl:
     .byte $DB,$DD,$DF,$E1, $E3,$E5,$E7,$E9 ; $50..$5E + $8B
 

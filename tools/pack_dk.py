@@ -14,7 +14,8 @@ import json
 from pathlib import Path
 
 from nes import CHR_OFFSET as Z2_CHR_OFFSET, decode_tile, encode_tile, load_source
-from pack_f13 import Asm6502
+from asm6502 import Asm6502
+from portal_transitions import build_return_helper, emit_clean_apu_mute, emit_wavy_transition
 import roar_sample
 from subgame_pack import make_rom_header
 
@@ -26,9 +27,16 @@ DK_WIN_HOOK       = 0x7870
 DK_SEED_RNG       = 0x7880
 DK_RETURN         = 0x7960
 DK_BOOT           = 0x7AE0
+DK_WIPE_THUNK     = 0x78B0
+DK_B0_WIPE_IN     = 0x8500
+DK_B0_MELT_OUT    = 0x8640
 
 # Guest WRAM state bytes (in guest WRAM bank $A3)
 # $7FF0-$7FF7 are reserved for Barba's subgame RNG seed.
+DK_WIPE_DONE      = 0x7FD8  # 0 = pending wipe-in, 1 = complete
+DK_TR_FRAME       = 0x7FD9
+DK_TR_CUT         = 0x7FDA
+DK_TR_BAND        = 0x7FDB
 DK_FB0_TIMER      = 0x7FE0  # Fireball item slot 0 lifetime (0 = inactive)
 DK_FB0_X          = 0x7FE1
 DK_FB0_Y          = 0x7FE2
@@ -1711,6 +1719,7 @@ def make_dk_wram_code(
     reward_magic: int = DK_REWARD_MAGIC,
     rng_adv_addr: int = 0xF4ED,
     mmc3_mode: bool = False,
+    enable_transitions: bool = False,
 ) -> bytes:
     """Assemble the 1024-byte ($7800-$7BFF) WRAM helper for Barba Kong."""
     out = bytearray(b'\xFF' * 0x400)
@@ -1734,6 +1743,11 @@ def make_dk_wram_code(
     a.emit(0xA5, DK_PAD1_ZP, 0x29, DK_START_SELECT, 0xC9, DK_START_SELECT)  # LDA $14; AND #$30; CMP #$30
     a.branch(0xF0, 'do_return')                                 # BEQ do_return
     a.label('normal_nmi')
+    if enable_transitions:
+        a.emit(0xAD, DK_WIPE_DONE & 0xFF, DK_WIPE_DONE >> 8)
+        a.branch(0xD0, 'go_orig_nmi')
+        a.emit(0x4C, DK_WIPE_THUNK & 0xFF, DK_WIPE_THUNK >> 8)
+        a.label('go_orig_nmi')
     a.emit(0x68, 0x4C, DK_ORIG_NMI & 0xFF, DK_ORIG_NMI >> 8)    # PLA; JMP $C85F
     a.label('do_return')
     a.emit(0x68)                                                # PLA
@@ -1761,42 +1775,65 @@ def make_dk_wram_code(
     a.emit(0xA9, 0xA5, 0x85, 0x18)                              # LDA #$A5; STA $18
     a.label('seed_ok')
     a.emit(0x4C, rng_adv_addr & 0xFF, rng_adv_addr >> 8)        # JMP rng_adv_addr
-    place(DK_SEED_RNG, a.finish(), DK_RETURN)
+    place(DK_SEED_RNG, a.finish(), DK_WIPE_THUNK if enable_transitions else DK_RETURN)
+
+    if enable_transitions:
+        at = Asm6502(DK_WIPE_THUNK)
+        at.emit(0xA5, 0x11, 0x29, 0x08)
+        at.branch(0xF0, 'skip_wipe')
+        at.emit(0xAD, DK_DEBOUNCE & 0xFF, DK_DEBOUNCE >> 8, 0xC9, 0x02)
+        at.branch(0x90, 'skip_wipe')
+        at.emit(0x8A, 0x48, 0x98, 0x48)
+        at.emit(0xEE, DK_WIPE_DONE & 0xFF, DK_WIPE_DONE >> 8)
+        at.emit(0xA9, 0x06, 0x8D, 0x00, 0x80, 0xA9, 0x00, 0x8D, 0x01, 0x80)
+        at.emit(0x20, DK_B0_WIPE_IN & 0xFF, DK_B0_WIPE_IN >> 8)
+        at.emit(0xA9, 0x06, 0x8D, 0x00, 0x80, 0xA9, 0x01, 0x8D, 0x01, 0x80)
+        at.emit(0x68, 0xA8, 0x68, 0xAA)
+        at.label('skip_wipe')
+        at.emit(0x68, 0x4C, DK_ORIG_NMI & 0xFF, DK_ORIG_NMI >> 8)
+        place(DK_WIPE_THUNK, at.finish(), DK_RETURN)
 
     # 3. DK_RETURN ($7960): silence APU/PPU, copy RAM trampoline to $0300, restore Barba banks & reward
     a = Asm6502(DK_RETURN)
     a.emit(0x78)                                                # SEI
-    a.emit(0xA9, 0x00)
-    a.emit(0x8D, 0x00, 0x20)                                    # STA $2000 (disable NMI)
-    a.emit(0x8D, 0x01, 0x20)                                    # STA $2001 (disable rendering)
-    a.emit(0x8D, 0x15, 0x40)                                    # STA $4015 (mute APU + DMC)
-    a.emit(0x8D, 0x00, 0xE0)                                    # STA $E000 (disable MMC3 IRQ)
-    a.emit(0xAE, DK_WIN_FLAG & 0xFF, DK_WIN_FLAG >> 8)          # LDX $7FFE (preserve win flag across $A001 switch)
-    tramp = (
-        bytes.fromhex(
-            'a9 80 8d 01 a0 '                                   # LDA #$80; STA $A001 (unlock $5FF0-$5FF3)
-            'a9 01 8d f0 5f '                                   # LDA #$01; STA $5FF0
-            'a9 00 8d f1 5f 8d f2 5f '                          # LDA #$00; STA $5FF1; STA $5FF2
-            'a9 06 8d 00 80 a9 0c 8d 01 80 '                    # R6 = $0C
-            'a9 07 8d 00 80 a9 0d 8d 01 80 '                    # R7 = $0D
-            'a9 a0 8d 01 a0 '                                   # LDA #$A0; STA $A001 (Barba WRAM bank 0 + lock)
-            '8a f0 03 '                                         # TXA; BEQ +3
-            '8d'
+    if enable_transitions:
+        a.emit(0xA5, 0x10, 0x29, 0x7F, 0x8D, 0x00, 0x20)        # keep PPU ctrl bits, disable NMI
+        emit_clean_apu_mute(a)
+        a.emit(0xA9, 0x06, 0x8D, 0x00, 0x80, 0xA9, 0x00, 0x8D, 0x01, 0x80)  # R6 = 0
+        a.emit(0x4C, DK_B0_MELT_OUT & 0xFF, DK_B0_MELT_OUT >> 8)
+        place(DK_RETURN, a.finish(), DK_BOOT)
+    else:
+        a.emit(0xA9, 0x00)
+        a.emit(0x8D, 0x00, 0x20)                                # STA $2000 (disable NMI)
+        a.emit(0x8D, 0x01, 0x20)                                # STA $2001 (disable rendering)
+        a.emit(0x8D, 0x15, 0x40)                                # STA $4015 (mute APU + DMC)
+        a.emit(0x8D, 0x00, 0xE0)                                # STA $E000 (disable MMC3 IRQ)
+        a.emit(0xAE, DK_WIN_FLAG & 0xFF, DK_WIN_FLAG >> 8)      # LDX $7FFE (preserve win flag across $A001 switch)
+        tramp = (
+            bytes.fromhex(
+                'a9 80 8d 01 a0 '                               # LDA #$80; STA $A001 (unlock $5FF0-$5FF3)
+                'a9 01 8d f0 5f '                               # LDA #$01; STA $5FF0
+                'a9 00 8d f1 5f 8d f2 5f '                      # LDA #$00; STA $5FF1; STA $5FF2
+                'a9 06 8d 00 80 a9 0c 8d 01 80 '                # R6 = $0C
+                'a9 07 8d 00 80 a9 0d 8d 01 80 '                # R7 = $0D
+                'a9 a0 8d 01 a0 '                               # LDA #$A0; STA $A001 (Barba WRAM bank 0 + lock)
+                '8a f0 03 '                                     # TXA; BEQ +3
+                '8d'
+            )
+            + reward_addr.to_bytes(2, 'little')                 # STA reward_addr (in WRAM bank 0!)
+            + b'\x4c'                                           # JMP restore_addr
+            + restore_addr.to_bytes(2, 'little')
         )
-        + reward_addr.to_bytes(2, 'little')                     # STA reward_addr (in WRAM bank 0!)
-        + b'\x4c'                                               # JMP restore_addr
-        + restore_addr.to_bytes(2, 'little')
-    )
-    a.emit(0xA0, len(tramp) - 1)                                # LDY #(len(tramp)-1)
-    a.label('cp_tramp')
-    a.abs_ref(0xB9, 'tramp_data')                               # LDA tramp_data,Y
-    a.emit(0x99, 0x00, 0x03)                                    # STA $0300,Y
-    a.emit(0x88)                                                # DEY
-    a.branch(0x10, 'cp_tramp')                                  # BPL cp_tramp
-    a.emit(0x4C, 0x00, 0x03)                                    # JMP $0300
-    a.label('tramp_data')
-    a.emit(*tramp)
-    place(DK_RETURN, a.finish(), DK_BOOT)
+        a.emit(0xA0, len(tramp) - 1)                            # LDY #(len(tramp)-1)
+        a.label('cp_tramp')
+        a.abs_ref(0xB9, 'tramp_data')                           # LDA tramp_data,Y
+        a.emit(0x99, 0x00, 0x03)                                # STA $0300,Y
+        a.emit(0x88)                                            # DEY
+        a.branch(0x10, 'cp_tramp')                              # BPL cp_tramp
+        a.emit(0x4C, 0x00, 0x03)                                # JMP $0300
+        a.label('tramp_data')
+        a.emit(*tramp)
+        place(DK_RETURN, a.finish(), DK_BOOT)
 
     # 4. DK_BOOT ($7AE0): init PPU/APU/MMC3 Horizontal mirroring, map PRG/CHR, JMP $C79E
     a = Asm6502(DK_BOOT)
@@ -1819,9 +1856,10 @@ def make_dk_wram_code(
     for reg, val in chr_init:
         a.emit(0xA9, reg, 0x8D, 0x00, 0x80, 0xA9, val, 0x8D, 0x01, 0x80)
     a.emit(0xA9, 0x00)
-    for state_addr in (
+    state_addrs = (
         DK_ROAR_TIMER, DK_ANIM_FRAME, DK_ROAR_COUNT, DK_WIN_FLAG, DK_DEBOUNCE,
-    ):
+    ) + ((DK_WIPE_DONE,) if enable_transitions else ())
+    for state_addr in state_addrs:
         a.emit(0x8D, state_addr & 0xFF, state_addr >> 8)
     if mmc3_mode:
         a.emit(0xA9, 0x00, 0x8D, DK_CHR_BANK_R0 & 0xFF, DK_CHR_BANK_R0 >> 8)
@@ -1839,8 +1877,11 @@ def make_dk_bank0(
     wram_bank: int = 0xA3,
     standalone_stub: bool = False,
     reward_addr: int = DK_REWARD_ADDR,
+    reward_magic: int = DK_REWARD_MAGIC,
     rng_adv_addr: int = 0xF4ED,
     mmc3_mode: bool = False,
+    enable_transitions: bool = False,
+    game_id: int | None = None,
 ) -> bytes:
     """Build 8KB bank 0 ($8000-$9FFF): copies $8100-$84FF -> $7800-$7BFF and jumps to DK_BOOT."""
     bank0 = bytearray(b'\xFF' * 8192)
@@ -1882,9 +1923,61 @@ def make_dk_bank0(
     bank0[0x100 : 0x500] = make_dk_wram_code(
         restore_addr,
         reward_addr=reward_addr,
+        reward_magic=reward_magic,
         rng_adv_addr=rng_adv_addr,
         mmc3_mode=mmc3_mode,
+        enable_transitions=enable_transitions,
     )
+    if enable_transitions:
+        aw = Asm6502(DK_B0_WIPE_IN)
+        emit_wavy_transition(
+            aw,
+            prefix='dkw',
+            frame_addr=DK_TR_FRAME,
+            cut_addr=DK_TR_CUT,
+            band_addr=DK_TR_BAND,
+            direction='in',
+            ppuctrl_addr=0x10,
+            ppuctrl_mask=0x7C,
+            ppumask_addr=0x11,
+            end_on_vblank=True,
+        )
+        wipe_bytes = aw.finish()
+        assert DK_B0_WIPE_IN + len(wipe_bytes) <= DK_B0_MELT_OUT
+        bank0[DK_B0_WIPE_IN - 0x8000 : DK_B0_WIPE_IN - 0x8000 + len(wipe_bytes)] = wipe_bytes
+
+        am = Asm6502(DK_B0_MELT_OUT)
+        emit_wavy_transition(
+            am,
+            prefix='dkm',
+            frame_addr=DK_TR_FRAME,
+            cut_addr=DK_TR_CUT,
+            band_addr=DK_TR_BAND,
+            direction='out',
+            ppuctrl_addr=0x10,
+            ppuctrl_mask=0x7C,
+            ppumask_addr=0x11,
+            emit_rts=False,
+        )
+        am.emit(0xA9, 0x00, 0x8D, 0x00, 0x20, 0x8D, 0x01, 0x20)
+        am.emit(0xAE, DK_WIN_FLAG & 0xFF, DK_WIN_FLAG >> 8)
+        tramp = build_return_helper(
+            restore_addr,
+            reward_addr,
+            game_id=game_id,
+            win_reg='x',
+        )
+        am.emit(0xA0, len(tramp) - 1)
+        am.label('cp_tramp')
+        am.abs_ref(0xB9, 'tramp_data')
+        am.emit(0x99, 0x00, 0x03, 0x88)
+        am.branch(0x10, 'cp_tramp')
+        am.emit(0x4C, 0x00, 0x03)
+        am.label('tramp_data')
+        am.emit(*tramp)
+        melt_bytes = am.finish()
+        assert DK_B0_MELT_OUT - 0x8000 + len(melt_bytes) <= 8192
+        bank0[DK_B0_MELT_OUT - 0x8000 : DK_B0_MELT_OUT - 0x8000 + len(melt_bytes)] = melt_bytes
     return bytes(bank0)
 
 
@@ -2069,6 +2162,9 @@ def patch_dk_for_combined(
     restore_addr: int,
     *,
     reward_addr: int = 0x63B3,
+    reward_magic: int = DK_REWARD_MAGIC,
+    enable_transitions: bool = False,
+    game_id: int | None = None,
 ) -> tuple[bytes, bytes]:
     """Build (prg_256k, chr_32k) for Barba Kong (Round 2) inside barba.nes Slot 7."""
     orig_prg, orig_chr = _validate_dk_rom(dk_bytes)
@@ -2086,8 +2182,11 @@ def patch_dk_for_combined(
         wram_bank=0xA3,
         standalone_stub=False,
         reward_addr=reward_addr,
+        reward_magic=reward_magic,
         rng_adv_addr=0xC7E7,
         mmc3_mode=True,
+        enable_transitions=enable_transitions,
+        game_id=game_id,
     )
 
     prg256 = bytearray(b'\xFF' * (256 * 1024))
@@ -2166,15 +2265,15 @@ if __name__ == '__main__':
     parser.add_argument('--out', type=Path, default=None)
     parser.add_argument('--mapper', choices=('176', 'mmc3'), default='176')
     args = parser.parse_args()
-    default_out = root / ('play/nes/dk-mmc3.nes' if args.mapper == 'mmc3' else 'build/subgames/dk.nes')
+    default_out = root / ('play/compat/nes/dk-compat.nes' if args.mapper == 'mmc3' else 'build/subgames/dk.nes')
     out = build_standalone(args.out or default_out, root / 'roms/dk.nes', root / 'roms/z2.nes', mapper=args.mapper)
     if args.mapper == 'mmc3' and args.out is None:
         from bps import write_bps
         write_bps(
             root / 'roms/dk.nes',
             out,
-            out_bps_path=root / 'play/bps/dk-mmc3.bps',
-            metadata='dk-mmc3 | Barba Edition (MMC3)',
+            out_bps_path=root / 'play/compat/bps/dk-compat.bps',
+            metadata='dk-compat | Barba Edition (MMC3)',
         )
     rom = out.read_bytes()
     expected_mapper = 4 if args.mapper == 'mmc3' else 176

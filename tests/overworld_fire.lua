@@ -86,7 +86,7 @@ local function tick()
             if frame==actionFrame+20 then
                 check(sawRightFlameCentered and not badRightFlameX,'overworld forest burn flame X is centered on tile ($94)')
                 check(r(0x078B)==0,'Barba has no Hammer ($078B==0)')
-                check(r(0x7CEB)==0x04 and r(0x7CEC)==0x56,
+                check(r(0x7CEB)==0x06 and r(0x7CEC)==0x04 and r(0x7CED)==0x46,
                     string.format('RLE split into single burnt facing tile (7CEB=%02X %02X %02X)',
                         r(0x7CEB),r(0x7CEC),r(0x7CED)))
                 phase='step_onto_burnt'

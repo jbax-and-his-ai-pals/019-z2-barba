@@ -40,6 +40,9 @@
   function buildMarkdownSummary() {
     const lines = ['# Title Screen Review Feedback', ''];
     for (const g of data.games) {
+      if (isPublic && g.visibility === 'local') continue;
+      const screens = isPublic ? g.screens.filter(s => s.visibility !== 'local') : g.screens;
+      if (isPublic && !screens.length) continue;
       const st = ui.gameStatus[g.id] || 'approved';
       lines.push(`## ${g.name} [${st}]`);
       if (ui.gameNotes[g.id]) lines.push(`- Notes: ${ui.gameNotes[g.id]}`);
@@ -64,20 +67,19 @@
   }
 
   function render() {
-    const doneEl = document.getElementById('titles-done-strip');
-    if (doneEl) {
-      doneEl.innerHTML = (data.done_games || []).map(d =>
-        `<span class="badge b-toggleable" title="${d.note}">✓ ${d.name}</span>`
-      ).join('');
-    }
-
     const listEl = document.getElementById('titles-list');
     if (!listEl) return;
     listEl.innerHTML = '';
 
     for (const g of data.games) {
+      if (isPublic && g.visibility === 'local') continue;
+      const screens = isPublic ? g.screens.filter(s => s.visibility !== 'local') : g.screens;
+      if (isPublic && !screens.length) continue;
+
+      const isGameLocal = !isPublic && g.visibility === 'local';
+      const localScreensCount = isPublic ? 0 : screens.filter(s => s.visibility === 'local').length;
       const card = document.createElement('section');
-      card.className = 'card';
+      card.className = 'card' + (isGameLocal ? ' local-only-card' : '');
 
       const curStatus = ui.gameStatus[g.id] || 'approved';
       const head = document.createElement('div');
@@ -88,30 +90,65 @@
             <option value="in_review" ${curStatus === 'in_review' ? 'selected' : ''}>In Review</option>
             <option value="approved" ${curStatus === 'approved' ? 'selected' : ''}>Sign Off / Approved</option>
           </select>`;
+      const buildBadge = g.build_number != null
+        ? `<span class="badge b-built">Build #${g.build_number}</span>`
+        : `<span class="badge b-built">${g.status_label}</span>`;
+      const extraBadge = (g.build_number != null && g.status_label && g.status_label !== `Build #${g.build_number}`)
+        ? `<span class="badge">${g.status_label}</span>`
+        : '';
+      const archivedBadgeHtml = g.archived
+        ? '<span class="badge b-archived">Archived · Post-2.0</span>'
+        : '';
+      const localBadgeHtml = isGameLocal
+        ? '<span class="badge b-local">Local Only · Hidden on GitHub Pages</span>'
+        : (localScreensCount > 0 ? `<span class="badge b-local">${localScreensCount} Local Only</span>` : '');
       head.innerHTML = `
         <div>
           <h2 style="border:none;padding:0;margin:0;">${g.name}</h2>
           <div class="flag-desc" style="margin-top:4px;">${g.summary}</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-          <span class="badge b-built">${g.status_label}</span>
+          ${archivedBadgeHtml}
+          ${localBadgeHtml}
+          ${buildBadge}
+          ${extraBadge}
           ${statusSelectHtml}
         </div>
       `;
       card.appendChild(head);
 
-      for (const scr of g.screens) {
-        if (g.screens.length > 1) {
+      if (isGameLocal) {
+        const banner = document.createElement('div');
+        banner.className = 'local-only-banner';
+        banner.setAttribute('role', 'note');
+        banner.innerHTML = 'Local Only — Not Published on GitHub Pages <span class="local-sub">Omitted from public builds until marked public.</span>';
+        card.appendChild(banner);
+      }
+
+      for (const scr of screens) {
+        const isScreenLocal = !isPublic && !isGameLocal && scr.visibility === 'local';
+        const targetParent = isScreenLocal ? document.createElement('div') : card;
+        if (isScreenLocal) {
+          targetParent.className = 'flag-item is-local-only';
+          targetParent.innerHTML = `
+            <div class="flag-head">
+              <strong style="color:var(--gold);">${scr.title}</strong>
+              <span class="badge b-local">Local Only · Hidden on GitHub Pages</span>
+            </div>
+            <div class="local-only-banner" role="note">Local Only — Not Published on GitHub Pages <span class="local-sub">Visible only in the local dashboard until unveiled.</span></div>
+          `;
+        } else if (screens.length > 1) {
           const st = document.createElement('div');
           st.className = 'stage-title';
           st.textContent = scr.title;
-          card.appendChild(st);
+          targetParent.appendChild(st);
         }
         const pairRow = document.createElement('div');
         pairRow.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;';
         pairRow.appendChild(renderSide(scr.vanilla, false));
         pairRow.appendChild(renderSide(scr.ours, true));
-        card.appendChild(pairRow);
+        targetParent.appendChild(pairRow);
+        if (isScreenLocal) card.appendChild(targetParent);
       }
 
       if (!isPublic) {

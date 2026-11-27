@@ -135,17 +135,29 @@ BarbaEmitOneCached:
 ; enemies; each live shot adds ~1.2-1.7k, and lag began once enemies plus live
 ; shots reached seven. Carry set when another shot may spawn.
 BarbaLoadOk:
+    tya
+    pha
     lda #$00
     sta $00
     sta $01
+    tay
     ldx #$05
 @enemy:
     lda $B6,x
     beq :+
     inc $00
 :
+    lda $87,x
+    beq :+
+    iny
+:
     dex
     bpl @enemy
+    tya
+    lsr
+    clc
+    adc $00
+    sta $00
     ldx #$01
 @native:
     lda $8D,x
@@ -184,9 +196,11 @@ BarbaLoadOk:
     bcs @deny
 @allow:
     sec
-    rts
+    .byte $24                   ; BIT zp skips CLC below; PLA/TAY keep Carry intact
 @deny:
     clc
+    pla
+    tay
     rts
 LOAD_LIMIT = 6
 

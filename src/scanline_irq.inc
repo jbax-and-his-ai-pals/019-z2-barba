@@ -28,8 +28,8 @@ OW_HAS_GRASS = $64F0    ; qualifying row using the West Hyrule sprig art
 CLOUD_DRIFT_SUB = $64FB ; fractional subpixel accumulator for idle cloud drift
 CLOUD_DRIFT_X   = $64FC ; cloud drift pixel offset (0..255)
 CLOUD_DRIFT_NT  = $64FD ; cloud drift nametable bit (0..1)
-CLOUD_DX_HI     = $64F2 ; palace cloud sprite 9th X bit
-CLOUD_COL       = $64F3 ; current tile column within cloud
+IS_CLOUD_ROOM   = $64F2 ; cached IsSpriteCloudRoom6 result (0 = yes, !=0 = no)
+HALO_OAM_START  = $64F3 ; highest OAM slot below Barba's trail ($FC or post-trail)
 CLOUD_OAM_START = $64F4 ; highest OAM slot for clouds ($FC or post-trail)
 CLOUD_Y         = $64F5 ; current cloud OAM Y
 CLOUD_WIDTH     = $64F6 ; current cloud width in 8x16 tiles
@@ -54,7 +54,7 @@ NmiVblankSetup6:
 @dec_macro:
     dec $0725
 @clear_buf:
-    ldx @table0,y
+    ldx VblankMacroTbl6,y
     lda $0302,x
     sta OW_FOL_SKIP
     lda #$00
@@ -64,6 +64,7 @@ NmiVblankSetup6:
     lda $0725
 @done_macro:
     sta $0725
+    jsr RaTelemetryCheck6
 .ifdef SOULS_BOSS_METER
     jsr RestoreSoulsBg6 ; restore $3F00 if boss bar darkened it
 .endif
@@ -92,23 +93,23 @@ NmiVblankSetup6:
     jsr OwFoliageHop6
 :
     jmp $FFC5           ; SwapToPRG0
-@table0:
+
+.segment "BANK6_OAM"
+VblankMacroTbl6:
     .byte $00, $61, $A2
+
+.segment "BANK6"
 
 ; NMI RNG update in Bank 6, then copy OAM shadow and jump to SwapToPRG0 ($C1A3).
 NmiRng6:
     inc $12
-    ldx #$00
-    ldy #$09
     lda $051A
     eor $051B
     lsr
     lsr
-@rng:
-    ror $051A,x
-    inx
-    dey
-    bne @rng
+    .repeat 9, i
+    ror $051A + i
+    .endrep
     jsr CopySceneOam6
     jsr FinishSceneOam6
     ; If game logic finished inside the next VBlank ($2002 bit 7 set), reading
@@ -178,36 +179,45 @@ CopyOamShadow6:
     jmp @loop
 :
 ; Barba's third head column is native OAM $C4, behind every enemy and the
-; trail, so it lost lines near tall enemies. In side-view play, when DMA
-; entry $00 is free (no shout glyph there), move that column to $00.
+; trail, so it lost lines near tall enemies. In side-view play (except when a
+; villager shout swaps $C4/$00 itself), move that column ahead of enemies into
+; the first free slot among $00, $20, $24.
 HeadColumnFirst6:
     lda $0736
     cmp #$0B
-    bne @done
+    bne HeadDone6
     bit $0100                   ; title has its own sprite table
-    bvc @done
-    lda SHOUT_WORD              ; shouts swap $C4/$00 themselves
-    bne @done
+    bvc HeadDone6
+    lda SHOUT_WORD              ; villager shouts ($6465 >= 0) swap $C4/$00 themselves
+    beq @promote
+    lda $6465
+    bpl HeadDone6
+@promote:
     lda $65C4
     cmp #$F0
-    bcs @done
-    ldx $6500
-    cpx #$F0
-    bcc @done
-    ldx #$03
-@copy:
-    lda $65C4,x
-    sta $6500,x
-    dex
-    bpl @copy
-    lda #$F8
-    sta $65C4
-@done:
+    bcs HeadDone6
+    ldy #$00
+    lda $6500
+    cmp #$F0
+    bcs @move_to_y
+    ldy #$20
+    lda $6520
+    cmp #$F0
+    bcs @move_to_y
+    ldy #$24
+    lda $6524
+    cmp #$F0
+    bcc HeadDone6
+@move_to_y:
+    jmp HeadMoveToY6
+HeadDone6:
     lda #$FC
     sta CLOUD_OAM_START
+    sta HALO_OAM_START
     jmp PrioritizeRoomOam6
 
-; Reuse the OAM copy caller's return address through the fixed mapper code.
+; Dispatch to Bank 6 DrawEncounterTorso6 directly (0 bank switches in gameplay),
+; or swap to Bank 3 EncounterTorsoFrom6 during transitions/talking/Dark Barba.
 EncounterTorsoHop6:
     bit $0100                 ; title has its own Barba sprite table
     bvc @done
@@ -224,11 +234,12 @@ EncounterTorsoHop6:
     lda $0561
     cmp #$36                  ; Dark Barba uses Bank 4 trail in GP room $36
     beq @slow
-    lda #>(DrawEncounterTorso-1)
+    lda #>(DrawEncounterTorso - 1)
     pha
-    lda #<(DrawEncounterTorso-1)
+    lda #<(DrawEncounterTorso - 1)
     pha
-    jmp $FFC5
+    lda #$00
+    jmp $FFCC
 @slow:
     lda #>(EncounterTorsoFrom6-1)
     pha
@@ -240,18 +251,32 @@ EncounterTorsoHop6:
     rts
 
 .segment "BANK6_OAM"
+HeadMoveToY6:
+    lda $65C4
+    sta $6500,y
+    lda $65C5
+    sta $6501,y
+    lda $65C6
+    sta $6502,y
+    lda $65C7
+    sta $6503,y
+    lda #$F8
+    sta $65C4
+    jmp HeadDone6
 PrioritizeRoomOam6:
     lda $0707
-    bne :+
-    jmp EncounterTorsoHop6
-:
+    beq :+
     jmp ShoutOamPriority6
+:
+    rts
 
 FinishSceneOam6:
-    jsr DrawDownstabTailHop6
     jsr DrawPalaceClouds6
+    jsr EncounterTorsoHop6
+    jsr DrawDownstabTailHop6
     jmp FinishBossOam6
 
+.segment "PALACE_SHAKE"
 DrawDownstabTailHop6:
     lda $0736
     cmp #$05
@@ -291,6 +316,7 @@ TownSmokeHop6:
 
 .segment "BANK6"
 TitleEndNmi6:
+    jsr RaTelemetryInit6
     jsr CopyOamShadow6
     lda $6560
     cmp #$9F
@@ -327,7 +353,9 @@ CopySceneOam6:
     jsr ShakeLavaOam6
     lda $0736
     cmp #$0F
-    beq DrawExtendedFall6
+    bne :+
+    jmp DrawExtendedFall6
+:
     lda $076C
     cmp #$04                  ; ending routine changes game mode between phases
     bne @done
@@ -366,7 +394,7 @@ EndingTrailTiles:
 .segment "BANK6_OAM"
 EndingTrailX:
     .byte $58, $50, $48, $40
-.segment "PALACE_SHAKE"
+.segment "BANK6_EXTRA"
 
 DrawExtendedFall6:
     ; Finish Barba before the shadow starts at $3C so he wins overlaps.
@@ -485,12 +513,15 @@ IrqSetup6:
 
     lda $0707
     beq @encounter_setup
+    jsr IsSpriteCloudRoom6
+    sta IS_CLOUD_ROOM
+    lda $0707
     cmp #$03
     bcs @palace_setup
 
 @single_hud_split:
     ; Towns ($0707 = 1, 2): single HUD split + idle cloud drift in outdoor rooms.
-    jsr IsSpriteCloudRoom6
+    lda IS_CLOUD_ROOM
     bne :+
     jsr AdvanceCloudDrift6
 :
@@ -528,7 +559,7 @@ IrqSetup6:
 ;   31+:   full camX (preserves palace walls, curtains, doors, and bricks; lava animates via R1 CHR)
 ;   207+ (when ROOM_HAS_LAVA != 0): warm red emphasis ($2001 bit 5) over the bottom lava rows (no X wobble)
 @palace_setup:
-    jsr IsSpriteCloudRoom6
+    lda IS_CLOUD_ROOM
     bne :+
     jsr AdvanceCloudDrift6
 :
@@ -677,15 +708,11 @@ SetupEncounterScenery6:
     lda $0707
     beq @check_ow
     jsr IsSpriteCloudRoom6
+    sta IS_CLOUD_ROOM
     bne @exit
-    jsr StripPalaceClouds6
-    lda $0707
-    cmp #$03
-    bcs @exit
-    ; Outdoor town: build the chimney list now, while the screen is off.
-    lda #>(ScanTownSmoke2-1)
+    lda #>(StripAndSmoke2 - 1)
     pha
-    lda #<(ScanTownSmoke2-1)
+    lda #<(StripAndSmoke2 - 1)
     pha
     lda #$02
     jmp $FFCC
@@ -706,7 +733,7 @@ SetupEncounterScenery6:
     jmp $FFCC
 
 .segment "BANK6_CLOUD"
-; A = world ($0707). Returns Z set iff the room uses behind-BG sprite clouds:
+; A = world ($0707). Returns A=0 (Z set) iff the room uses behind-BG sprite clouds:
 ; outdoor town rooms ($0707=1,2; $0561 < $19 or $3C) and outdoor palace rooms.
 ; Preserve X and Y.
 IsSpriteCloudRoom6:
@@ -732,14 +759,14 @@ IsSpriteCloudRoom6:
     lda $0561
     cmp #$19
     bcc @yes_cloud
-    cmp #$3C
+    eor #$3C
     rts
 @palaces_125:
     lda $0561
     beq @yes_cloud              ; Palace 1
     cmp #$0E                    ; Palace 2
     beq @yes_cloud
-    cmp #$23                    ; Palace 5
+    eor #$23                    ; Palace 5
     rts
 @palaces_346:
     lda $0561
@@ -748,7 +775,7 @@ IsSpriteCloudRoom6:
     beq @yes_cloud
     cmp #$0F                    ; Palace 4
     beq @yes_cloud
-    cmp #$24                    ; Palace 6
+    eor #$24                    ; Palace 6
     rts
 @yes_cloud:
     lda #$00
@@ -1008,10 +1035,10 @@ UpdateLavaRoomFlag6:
 
 .segment "BANK6"
 
-.segment "BANK6_CLOUD"
+.segment "BANK2_SMOKE"
 ; Strip static background cloud metatiles ($C2-$C4 in palaces, $C4-$C6 in towns)
-; so behind-background parallax cloud sprites replace them cleanly.
-StripPalaceClouds6:
+; and scan outdoor town chimneys in Bank 2 during Mode 9 room setup.
+StripAndSmoke2:
     lda $00
     pha
     lda $01
@@ -1032,9 +1059,9 @@ StripPalaceClouds6:
     ldx #$03
 :
 @page_loop:
-    lda PageLo6,x
+    lda OwPageLo2,x
     sta $00
-    lda PageHi6,x
+    lda OwPageHi2,x
     sta $01
     ldy #$D0
 @y_loop:
@@ -1055,12 +1082,15 @@ StripPalaceClouds6:
     sta $01
     pla
     sta $00
-    rts
-PageLo6:
-    .byte $00, $D0, $A0, $70
-PageHi6:
-    .byte $60, $60, $61, $62
+    lda $0707
+    cmp #$03
+    bcs @ret_bank6
+    jmp ScanTownSmoke2
+@ret_bank6:
+    lda #$06
+    jmp $FFCC
 
+.segment "BANK6_CLOUD"
 ; Compute cache key A = ($0707 << 4) | ($0706 & $0F).
 RoomCacheKey6:
     lda $0707
@@ -1071,6 +1101,7 @@ RoomCacheKey6:
     ora $0706
     rts
 
+.segment "BANK6_EXTRA"
 ; Keep all of Barba at $6500-$6528, then the villager's glyphs at $652C-$6544.
 ; The NES resolves both overlapping sprite pixels and the scanline limit
 ; by OAM order. Swap complete entries to keep the displaced sprites visible.
@@ -1081,9 +1112,9 @@ ShoutOamPriority6:
     bmi @ret
     ldx #$04
 @swap_sprite:
-    ldy @shout_src,x
+    ldy ShoutSrc6,x
     stx IRQ_TMP0
-    lda @shout_dst,x
+    lda ShoutDst6,x
     tax
 @swap_byte:
     lda $6500,x
@@ -1101,15 +1132,18 @@ ShoutOamPriority6:
     dex
     bpl @swap_sprite
 @ret:
-    jmp EncounterTorsoHop6
-@shout_src:
+    rts
+.segment "BANK6_HAZE"
+ShoutSrc6:
     .byte $DC, $C4, $28, $4C, $00
-@shout_dst:
+.segment "BANK6_PAD"
+ShoutDst6:
     .byte $44, $3C, $C4, $38, $4C
 
 .segment "BANK6"
-; Draw behind-background parallax clouds on outdoor town and palace rooms.
-; Runs right after CopyOamShadow6 so live sprites in $6500-$65FF are never overwritten.
+; Draw behind-background parallax clouds on outdoor town and palace rooms
+; BEFORE Barba's trail, storing the updated slot cursor in CLOUD_OAM_START
+; so behind-BG clouds sit at the highest OAM indices (behind the foreground tail).
 DrawPalaceClouds6:
     lda $0736
     cmp #$0B
@@ -1121,7 +1155,7 @@ DrawPalaceClouds6:
     bcs @exit
     lda $0707
     beq @exit
-    jsr IsSpriteCloudRoom6
+    lda IS_CLOUD_ROOM
     bne @exit
     ldx #$05
     ldy #$00
@@ -1184,6 +1218,7 @@ DrawPalaceClouds6:
 @cloud:
     lda @clouds,y               ; Y coordinate (0 = end of table)
     bne :+
+    stx CLOUD_OAM_START
     rts
 :
     sta $00
@@ -1214,6 +1249,7 @@ DrawPalaceClouds6:
 @find_slot:
     cpx #$68
     bcs :+
+    stx CLOUD_OAM_START
     rts
 :
     lda $6500,x
@@ -1224,6 +1260,7 @@ DrawPalaceClouds6:
     tax
     cmp #$68
     bcs :-
+    stx CLOUD_OAM_START
     rts
 @slot_ok:
     lda $00
@@ -1266,6 +1303,7 @@ DrawPalaceClouds6:
     .repeat 3, i
     cpx #$68
     bcs :+
+    stx CLOUD_OAM_START
     rts
 :
     lda $6500,x
@@ -1276,6 +1314,7 @@ DrawPalaceClouds6:
     tax
     cmp #$68
     bcs :-
+    stx CLOUD_OAM_START
     rts
 :
     lda $00
@@ -1326,12 +1365,12 @@ UpdateSceneryChr6:
 @exit_chr:
     rts
 @overworld_chr:
-    jmp UpdateOverworldWaterChr6
+    jmp OwFoliageHop6
 @chr_active:
     jsr UpdateCastleFlameChr6
     lda $0707
     beq @encounter_surfaces
-    jsr IsSpriteCloudRoom6
+    lda IS_CLOUD_ROOM
     bne :+
     ldx #$05
     lda #228                ; palace entrance cloud sprites ($C0-$C5) in R5
@@ -1355,8 +1394,7 @@ UpdateSceneryChr6:
     lda #34                 ; vanilla R4 (CHR bank 8) for intact pause key items ($8C-$9A)
     bne @town_set_r4
 @town_restore_r4:
-    lda $0707
-    jsr IsSpriteCloudRoom6
+    lda IS_CLOUD_ROOM
     beq @town_r4_ok         ; outdoor town already set R4 = 229 above
     lda #26                 ; indoor town: restore bank 6 R4 (6*4 + 2)
 @town_set_r4:
@@ -1509,7 +1547,7 @@ UpdateCastleFlameChr6:
 @var_base:
     .byte 213, 220
 
-.segment "BANK6_OAM"
+.segment "PALACE_SHAKE"
 OwFoliageHop6:
     lda #>(OwFoliageTick2 - 1)
     pha
@@ -1519,20 +1557,6 @@ OwFoliageHop6:
     jmp $FFCC
 
 .segment "BANK6"
-; Gently ripple overworld water/lava tile $6E on R0 during VBlank ($0736 = 5).
-; Base R0 is 1KB banks 124/125 (4KB bank 31); variants live in 230/232/234/236.
-UpdateOverworldWaterChr6:
-    lda $12
-    lsr
-    lsr
-    lsr
-    lsr
-    and #$07
-    tax
-    lda WaterBank6,x
-    ldx #$00
-    jsr WriteChrReg6
-    jmp OwFoliageHop6
 WriteChrReg6:
     stx $64D5
     stx $8000
@@ -1540,8 +1564,6 @@ WriteChrReg6:
     rts
 
 .segment "BANK6_HAZE"
-WaterBank6:
-    .byte 124, 230, 232, 230, 124, 234, 236, 234
 
 ; Title lava shimmer: trampoline to Bank 2 (TitleLavaChr2) in VBlank so R0
 ; cycles across banks 238/240/242/244 and R5 maps bank 154 for tiny lava bubbles.
@@ -1701,7 +1723,7 @@ RestoreSoulsBg6:
 BgDone6:
     rts
 .endif
-.segment "BANK5"
+.segment "BANK5_TITLE_PAD"
 .export TitleEndHook5
 TitleEndHook5:
     lda #>(TitleEndNmi6 - 1)

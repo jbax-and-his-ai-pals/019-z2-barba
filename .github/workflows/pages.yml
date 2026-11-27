@@ -5,6 +5,11 @@ on:
     branches: [main]
     paths:
       - 'web/**'
+      - 'tools/build_dashboard.py'
+      - 'tools/dashboard_template.html'
+      - 'tools/fe_catalog.py'
+      - 'tools/capture_subgame_previews.py'
+      - 'tools/title_dashboard.py'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -25,9 +30,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Stage public GitHub Pages dashboard
+        run: python tools/build_dashboard.py --stage-pages _site
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: web
+          path: _site
       - id: deployment
         uses: actions/deploy-pages@v4

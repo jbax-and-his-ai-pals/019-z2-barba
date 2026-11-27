@@ -11,7 +11,8 @@ from duck_code import (
     assemble_bank1,
     assemble_fixed_pad,
 )
-from pack_f13 import Asm6502
+from asm6502 import Asm6502
+from portal_transitions import TransitionAsm, build_return_helper, emit_clean_apu_mute, emit_wavy_transition
 import roar_sample
 from subgame_pack import make_rom_header
 
@@ -27,6 +28,12 @@ DUCK_BOOT           = 0x7AE0
 # Guest WRAM state bytes (in guest WRAM bank)
 DUCK_WIN_FLAG       = 0x7FFE  # 0 = Start+Select exit, DUCK_REWARD_MAGIC = round clear exit
 DUCK_DEBOUNCE       = 0x7FFF  # 60-frame ($3C) NMI debounce counter
+DUCK_WIPE_DONE      = 0x7FD0
+DUCK_TR_FRAME       = 0x7FD1
+DUCK_TR_CUT         = 0x7FD2
+DUCK_TR_BAND        = 0x7FD3
+DUCK_TR_DIR         = 0x7FD4
+DUCK_TRANS_BASE     = 0xEF80
 
 # Barba WRAM bank 0 reward flag (standalone default; combined uses $63B5)
 DUCK_REWARD_ADDR    = 0x648F
@@ -44,12 +51,55 @@ STANDALONE_RESTORE_ADDR = 0x80F0
 ROOT = Path(__file__).resolve().parent.parent
 
 
+def assemble_duck_fixed_transitions() -> tuple[bytes, dict[str, int]]:
+    """Assemble Fixed Bank 31 ($EF80+) unified transition core and wipe check."""
+    a = TransitionAsm(DUCK_TRANS_BASE)
+    a.label('duck_trans_core')
+    emit_wavy_transition(
+        a,
+        prefix='dkh',
+        frame_addr=DUCK_TR_FRAME,
+        cut_addr=DUCK_TR_CUT,
+        band_addr=DUCK_TR_BAND,
+        dir_addr=DUCK_TR_DIR,
+        ppuctrl_addr=0x08,
+        ppuctrl_mask=0x7C,
+        ppumask_addr=0x09,
+        end_on_vblank=False,
+    )
+    a.label('duck_wipe_check')
+    a.lda(DUCK_WIPE_DONE)
+    a.branch(0xD0, 'dwc_orig')
+    a.lda(0x09)
+    a.and_imm(0x08)
+    a.branch(0xF0, 'dwc_orig')
+    a.lda(DUCK_DEBOUNCE)
+    a.cmp_imm(0x02)
+    a.branch(0x90, 'dwc_orig')
+    a.emit(0x8A, 0x48, 0x98, 0x48)                             # TXA; PHA; TYA; PHA
+    a.inc(DUCK_WIPE_DONE)
+    a.lda_imm(0x01)
+    a.abs_ref(0x20, 'duck_trans_core')
+    a.emit(0x68, 0xA8, 0x68, 0xAA)                             # PLA; TAY; PLA; TAX
+    a.label('dwc_orig')
+    a.emit(0x68)                                               # PLA (saved A from DUCK_NMI_HOOK)
+    a.jmp_abs(DUCK_ORIG_NMI)
+    code = a.finish()
+    assert DUCK_TRANS_BASE + len(code) <= 0xF300, (
+        f'Duck fixed transitions overflow: ${DUCK_TRANS_BASE + len(code):04X} > $F300'
+    )
+    return code, dict(a.labels)
+
+
 def make_duck_wram_code(
     restore_addr: int,
     *,
     reward_addr: int = DUCK_REWARD_ADDR,
     reward_magic: int = DUCK_REWARD_MAGIC,
     standalone_stub: bool = False,
+    enable_transitions: bool = False,
+    game_id: int | None = None,
+    trans_syms: dict[str, int] | None = None,
 ) -> bytes:
     """Assemble the 1024-byte ($7800-$7BFF) WRAM helper for Villager Hunt."""
     out = bytearray(b'\xFF' * 0x400)
@@ -73,7 +123,12 @@ def make_duck_wram_code(
     a.emit(0xA5, DUCK_PAD1_ZP, 0x29, DUCK_START_SELECT, 0xC9, DUCK_START_SELECT)
     a.branch(0xF0, 'do_return')                                 # BEQ do_return
     a.label('normal_nmi')
-    a.emit(0x68, 0x4C, DUCK_ORIG_NMI & 0xFF, DUCK_ORIG_NMI >> 8)
+    if enable_transitions:
+        assert trans_syms is not None
+        chk = trans_syms['duck_wipe_check']
+        a.emit(0x4C, chk & 0xFF, chk >> 8)
+    else:
+        a.emit(0x68, 0x4C, DUCK_ORIG_NMI & 0xFF, DUCK_ORIG_NMI >> 8)
     a.label('do_return')
     a.emit(0x68)                                                # PLA
     a.emit(0xA9, 0x00, 0x8D, DUCK_WIN_FLAG & 0xFF, DUCK_WIN_FLAG >> 8)
@@ -105,27 +160,46 @@ def make_duck_wram_code(
     # 3. DUCK_RETURN ($7960): silence APU/PPU/IRQ, copy RAM trampoline to $0300, restore Barba banks & reward
     a = Asm6502(DUCK_RETURN)
     a.emit(0x78)                                                # SEI
+    if enable_transitions:
+        assert trans_syms is not None
+        core = trans_syms['duck_trans_core']
+        ta = TransitionAsm(DUCK_RETURN)
+        ta.buf = a.buf
+        ta.lda(0x08)
+        ta.and_imm(0x7F)
+        ta.sta(0x2000)
+        emit_clean_apu_mute(ta)
+        ta.jsr_abs(core)                                        # A = 0 -> melt-out
     a.emit(0xA9, 0x00)
     a.emit(0x8D, 0x00, 0x20)                                    # STA $2000 (disable NMI)
     a.emit(0x8D, 0x01, 0x20)                                    # STA $2001 (disable rendering)
-    a.emit(0x8D, 0x15, 0x40)                                    # STA $4015 (mute APU/DMC)
-    a.emit(0x8D, 0x00, 0xE0)                                    # STA $E000 (disable MMC3 IRQ)
+    if not enable_transitions:
+        a.emit(0x8D, 0x15, 0x40)                                # STA $4015 (mute APU/DMC)
+        a.emit(0x8D, 0x00, 0xE0)                                # STA $E000 (disable MMC3 IRQ)
     a.emit(0xAE, DUCK_WIN_FLAG & 0xFF, DUCK_WIN_FLAG >> 8)      # LDX $7FFE
-    tramp = (
-        bytes.fromhex(
-            'a9 80 8d 01 a0 '                                   # LDA #$80; STA $A001 (unlock $5FF0-$5FF3)
-            'a9 01 8d f0 5f '                                   # LDA #$01; STA $5FF0 (Barba Lower 2MB)
-            'a9 00 8d f1 5f 8d f2 5f '                          # LDA #$00; STA $5FF1; STA $5FF2
-            'a9 06 8d 00 80 a9 0c 8d 01 80 '                    # R6 = $0C
-            'a9 07 8d 00 80 a9 0d 8d 01 80 '                    # R7 = $0D
-            'a9 a0 8d 01 a0 '                                   # LDA #$A0; STA $A001 (Barba WRAM bank 0 + lock)
-            '8a f0 03 '                                         # TXA; BEQ +3
-            '8d'
+    if enable_transitions:
+        tramp = build_return_helper(
+            restore_addr,
+            reward_addr,
+            game_id=game_id,
+            win_reg='x',
         )
-        + reward_addr.to_bytes(2, 'little')                     # STA reward_addr (in WRAM bank 0!)
-        + b'\x4c'                                               # JMP restore_addr
-        + restore_addr.to_bytes(2, 'little')
-    )
+    else:
+        tramp = (
+            bytes.fromhex(
+                'a9 80 8d 01 a0 '                               # LDA #$80; STA $A001 (unlock $5FF0-$5FF3)
+                'a9 01 8d f0 5f '                               # LDA #$01; STA $5FF0 (Barba Lower 2MB)
+                'a9 00 8d f1 5f 8d f2 5f '                      # LDA #$00; STA $5FF1; STA $5FF2
+                'a9 06 8d 00 80 a9 0c 8d 01 80 '                # R6 = $0C
+                'a9 07 8d 00 80 a9 0d 8d 01 80 '                # R7 = $0D
+                'a9 a0 8d 01 a0 '                               # LDA #$A0; STA $A001 (Barba WRAM bank 0 + lock)
+                '8a f0 03 '                                     # TXA; BEQ +3
+                '8d'
+            )
+            + reward_addr.to_bytes(2, 'little')                 # STA reward_addr (in WRAM bank 0!)
+            + b'\x4c'                                           # JMP restore_addr
+            + restore_addr.to_bytes(2, 'little')
+        )
     a.emit(0xA0, len(tramp) - 1)
     a.label('cp_tramp')
     a.abs_ref(0xB9, 'tramp_data')
@@ -155,6 +229,8 @@ def make_duck_wram_code(
     a.emit(0xA9, 0x00)
     a.emit(0x8D, DUCK_DEBOUNCE & 0xFF, DUCK_DEBOUNCE >> 8)
     a.emit(0x8D, DUCK_WIN_FLAG & 0xFF, DUCK_WIN_FLAG >> 8)
+    if enable_transitions:
+        a.emit(0x8D, DUCK_WIPE_DONE & 0xFF, DUCK_WIPE_DONE >> 8)
     a.emit(0x4C, DUCK_ORIG_RESET & 0xFF, DUCK_ORIG_RESET >> 8)  # JMP $C000
     place(DUCK_BOOT, a.finish(), 0x7C00)
 
@@ -167,6 +243,10 @@ def make_duck_bank0(
     wram_bank: int = 0xA3,
     standalone_stub: bool = False,
     reward_addr: int = DUCK_REWARD_ADDR,
+    reward_magic: int = DUCK_REWARD_MAGIC,
+    enable_transitions: bool = False,
+    game_id: int | None = None,
+    trans_syms: dict[str, int] | None = None,
 ) -> bytes:
     """Build 8KB bank 0 ($8000-$9FFF): copies $8100-$84FF -> $7800-$7BFF and jumps to DUCK_BOOT."""
     bank0 = bytearray(b'\xFF' * 8192)
@@ -206,7 +286,11 @@ def make_duck_bank0(
     bank0[0x100 : 0x500] = make_duck_wram_code(
         restore_addr,
         reward_addr=reward_addr,
+        reward_magic=reward_magic,
         standalone_stub=standalone_stub,
+        enable_transitions=enable_transitions,
+        game_id=game_id,
+        trans_syms=trans_syms,
     )
     return bytes(bank0)
 
@@ -227,9 +311,12 @@ def _build_villager_hunt_banks(
     restore_addr: int,
     *,
     reward_addr: int,
+    reward_magic: int = DUCK_REWARD_MAGIC,
     standalone_stub: bool,
     roar_wav: Path | None = None,
     build_number: int | None = None,
+    enable_transitions: bool = False,
+    game_id: int | None = None,
 ) -> tuple[bytes, bytes]:
     """Build full (prg_256k, chr_32k) for Villager Hunt."""
     _validate_duck_rom(duck_bytes)
@@ -256,6 +343,10 @@ def _build_villager_hunt_banks(
 
     # Place fixed-bank audio guards at $EF5A
     patch(FIXED_PAD_BASE, fixed_pad, b'\xFF' * len(fixed_pad))
+    trans_syms: dict[str, int] | None = None
+    if enable_transitions:
+        trans_code, trans_syms = assemble_duck_fixed_transitions()
+        patch(DUCK_TRANS_BASE, trans_code, b'\xFF' * len(trans_code))
 
     # Portal / reset / NMI / win / RNG hooks
     patch(
@@ -387,7 +478,11 @@ def _build_villager_hunt_banks(
     prg256[0 : 8192] = make_duck_bank0(
         restore_addr,
         reward_addr=reward_addr,
+        reward_magic=reward_magic,
         standalone_stub=standalone_stub,
+        enable_transitions=enable_transitions,
+        game_id=game_id,
+        trans_syms=trans_syms,
     )
     prg256[1 * 8192 : 2 * 8192] = bank1
     if standalone_stub:
@@ -437,6 +532,9 @@ def patch_duck_for_combined(
     restore_addr: int,
     *,
     reward_addr: int = 0x63B5,
+    reward_magic: int = DUCK_REWARD_MAGIC,
+    enable_transitions: bool = False,
+    game_id: int | None = None,
 ) -> tuple[bytes, bytes]:
     """Build Villager Hunt (prg_256k, chr_up_to_128k) for Slot 12 of combined barba.nes."""
     prg256, chr_data = _build_villager_hunt_banks(
@@ -444,7 +542,10 @@ def patch_duck_for_combined(
         z2_bytes,
         restore_addr,
         reward_addr=reward_addr,
+        reward_magic=reward_magic,
         standalone_stub=False,
+        enable_transitions=enable_transitions,
+        game_id=game_id,
     )
     assert len(prg256) == 256 * 1024
     assert len(chr_data) <= 128 * 1024 and len(chr_data) % 8192 == 0
@@ -490,15 +591,15 @@ if __name__ == '__main__':
     parser.add_argument('--out', type=Path, default=None)
     parser.add_argument('--mapper', choices=('176', 'mmc3'), default='176')
     args = parser.parse_args()
-    default_out = ROOT / ('play/nes/duck-mmc3.nes' if args.mapper == 'mmc3' else 'build/subgames/duck.nes')
+    default_out = ROOT / ('play/compat/nes/duck-compat.nes' if args.mapper == 'mmc3' else 'build/subgames/duck.nes')
     out = build_standalone(args.out or default_out, mapper=args.mapper)
     if args.mapper == 'mmc3' and args.out is None:
         from bps import write_bps
         write_bps(
             ROOT / 'roms/duck.nes',
             out,
-            out_bps_path=ROOT / 'play/bps/duck-mmc3.bps',
-            metadata='duck-mmc3 | Barba Edition (MMC3)',
+            out_bps_path=ROOT / 'play/compat/bps/duck-compat.bps',
+            metadata='duck-compat | Barba Edition (MMC3)',
         )
     rom = out.read_bytes()
     chr_len = rom[5] * 8192

@@ -6,7 +6,7 @@ local function write(a, v) emu.write(a, v, mem) end
 
 local booths = {
     {id='waldo',  page=0, x=0x50, nmi=0xF603},
-    {id='f13',    page=0, x=0x90, nmi=0x7840},
+    {id='f13',    page=0, x=0x90, nmi=0x7852},
     {id='feud',   page=0, x=0xD0, nmi=0xCA5E},
     {id='dk',     page=1, x=0x20, nmi=0x7840},
     {id='smb',    page=1, x=0x70, nmi=0x7800},
@@ -14,7 +14,7 @@ local booths = {
     {id='mm2',    page=2, x=0x70, nmi=0xF380},
     {id='wheel',  page=2, x=0xC0, nmi=0x7850},
     {id='zelda',  page=3, x=0x20, nmi=0xFF58},
-    {id='mtpo',   page=3, x=0x70, nmi=0xDA57},
+    {id='mtpo',   page=3, x=0x70, nmi=0xDA76},
 }
 
 local report = assert(io.open(OUTPUT_DIR .. '/arcade-smoke.txt', 'w'))

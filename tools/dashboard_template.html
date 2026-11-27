@@ -17,6 +17,10 @@
       --green: #3ddc97;
       --cyan: #5bc0eb;
       --amber: #f4a261;
+      --local-accent: #c084fc;
+      --local-text: #e9d5ff;
+      --local-border: rgba(192, 132, 252, 0.65);
+      --local-bg: rgba(168, 85, 247, 0.10);
     }
     * { box-sizing: border-box; }
     body {
@@ -91,6 +95,36 @@
     .b-built { background: rgba(91, 192, 235, 0.15); color: var(--cyan); border: 1px solid rgba(91, 192, 235, 0.35); }
     .b-coupled { background: rgba(255, 107, 53, 0.14); color: var(--ember); border: 1px solid rgba(255, 107, 53, 0.35); }
     .b-planned { background: rgba(244, 162, 97, 0.14); color: var(--amber); border: 1px solid rgba(244, 162, 97, 0.35); }
+    .b-local { background: rgba(168, 85, 247, 0.22); color: var(--local-text); border: 1px solid var(--local-border); }
+    .b-archived { background: rgba(244, 162, 97, 0.2); color: #ffd6a5; border: 1px solid rgba(244, 162, 97, 0.55); }
+
+    .local-only-card {
+      border: 1.5px dashed var(--local-border);
+      border-left: 5px solid var(--local-accent);
+      background: linear-gradient(135deg, var(--local-bg) 0%, var(--panel) 48%);
+    }
+    .local-only-banner {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      padding: 7px 10px; border-radius: 8px;
+      background: rgba(168, 85, 247, 0.14); border: 1px solid rgba(192, 132, 252, 0.45);
+      color: var(--local-text); font-size: 0.78rem; font-weight: 600;
+    }
+    .local-only-banner span.local-sub { color: var(--muted); font-weight: 400; }
+    .tab-btn.is-local-only { border: 1.5px dashed var(--local-border); }
+    .tab-local-pill {
+      display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 999px;
+      font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+      background: rgba(168, 85, 247, 0.25); color: var(--local-text); border: 1px solid var(--local-border);
+      vertical-align: middle;
+    }
+    .tab-btn.active .tab-local-pill { background: #1d1030; color: var(--local-text); border-color: #1d1030; }
+    .tab-archived-pill {
+      display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 999px;
+      font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+      background: rgba(244, 162, 97, 0.22); color: #ffd6a5; border: 1px solid rgba(244, 162, 97, 0.55);
+      vertical-align: middle;
+    }
+    .tab-btn.active .tab-archived-pill { background: #2d1b0a; color: #ffd6a5; border-color: #2d1b0a; }
 
     .grid { display: grid; grid-template-columns: 1fr; gap: 18px; margin-top: 16px; }
     .card {
@@ -108,6 +142,11 @@
       border-radius: 10px; background: var(--panel-alt); border: 1px solid transparent;
     }
     .flag-item.is-planned { opacity: 0.82; border-style: dashed; border-color: var(--border); }
+    .flag-item.is-local-only {
+      border: 1.5px dashed var(--local-border);
+      border-left: 4px solid var(--local-accent);
+      background: linear-gradient(135deg, var(--local-bg) 0%, var(--panel-alt) 55%);
+    }
     .flag-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
     .flag-title { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 0.93rem; cursor: pointer; }
     .flag-desc { font-size: 0.82rem; color: var(--muted); }
@@ -135,8 +174,19 @@
       box-shadow: 0 0 0 1px rgba(255, 107, 53, 0.35);
     }
     .choice-tile.is-dimmed { opacity: 0.48; }
+    .subgame-tile {
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+      background: #121620; border: 1px solid var(--border); border-radius: 8px;
+      padding: 8px;
+    }
+    .subgame-tile.is-modded {
+      border-color: var(--ember);
+      background: radial-gradient(circle at top, rgba(255, 107, 53, 0.14), #131621);
+      box-shadow: 0 0 0 1px rgba(255, 107, 53, 0.35);
+    }
+    @media (max-width: 720px) { .preview-compare { grid-template-columns: 1fr; } }
     .choice-label { font-size: 0.75rem; color: var(--muted); display: flex; align-items: center; gap: 5px; }
-    .choice-tile.is-selected .choice-label { color: var(--text); font-weight: 600; }
+    .choice-tile.is-selected .choice-label, .subgame-tile.is-modded .choice-label { color: var(--text); font-weight: 600; }
     .pill-on {
       font-size: 0.65rem; background: var(--ember); color: #111; font-weight: 700;
       padding: 1px 5px; border-radius: 4px; text-transform: uppercase;
@@ -152,7 +202,7 @@
     .toast { font-size: 0.84rem; color: var(--green); min-height: 1.2em; }
 
     /* Tabs & Waldo Tile Tagger */
-    .tab-bar { display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+    .tab-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
     .tab-btn.active { background: var(--ember); border-color: var(--ember); color: #111; font-weight: 700; }
     .hidden { display: none !important; }
     .waldo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 14px; }
@@ -327,85 +377,99 @@
       background: var(--panel-alt); border: 1px solid var(--border); border-radius: 10px;
       padding: 10px; display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 150px;
     }
+
+    /* Z2 String Review (Local Only) */
+    .z2str-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(390px, 1fr));
+      gap: 12px; margin-top: 6px;
+    }
+    .z2str-card {
+      background: var(--panel-alt); border: 1px solid var(--border); border-radius: 10px;
+      padding: 12px; display: flex; flex-direction: column; gap: 8px;
+    }
+    .z2str-card.st-ok { border-color: rgba(61, 220, 151, 0.35); }
+    .z2str-card.st-warn { border-color: rgba(244, 162, 97, 0.65); }
+    .z2str-card.st-error { border-color: rgba(255, 107, 53, 0.85); background: rgba(255, 107, 53, 0.06); }
+    .z2str-card.is-modified { box-shadow: 0 0 0 1px var(--cyan); }
+    .z2str-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+    .z2str-title { font-weight: 700; font-size: 0.92rem; color: var(--text); }
+    .z2str-meta-row { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; margin-top: 4px; }
+    .z2str-loc { font-size: 0.72rem; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .z2str-head-right { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
+    .b-ok { background: rgba(61, 220, 151, 0.15); color: var(--green); border: 1px solid rgba(61, 220, 151, 0.35); }
+    .b-warn { background: rgba(244, 162, 97, 0.16); color: var(--amber); border: 1px solid rgba(244, 162, 97, 0.45); }
+    .b-err { background: rgba(255, 107, 53, 0.2); color: var(--ember); border: 1px solid rgba(255, 107, 53, 0.55); }
+    .z2str-editor-wrap {
+      background: #0d1017; border: 1px solid var(--border); border-radius: 8px;
+      padding: 6px 10px; overflow-x: auto;
+    }
+    .z2str-ruler {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.72rem; line-height: 1.1; color: #525d77; letter-spacing: 0.04em;
+      user-select: none; white-space: pre; border-bottom: 1px dashed #222938; padding-bottom: 3px; margin-bottom: 4px;
+    }
+    .z2str-textarea {
+      width: 100%; background: transparent; border: none; color: var(--text);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92rem; line-height: 1.35; letter-spacing: 0.04em;
+      resize: vertical; outline: none; padding: 0; white-space: pre;
+    }
+    .z2str-metrics {
+      display: flex; flex-wrap: wrap; gap: 10px; font-size: 0.76rem; color: var(--muted);
+    }
+    .z2str-metrics code { color: var(--cyan); font-size: 0.74rem; }
+    .z2str-lines { display: flex; flex-wrap: wrap; gap: 5px; }
+    .z2str-line-pill {
+      font-size: 0.71rem; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      padding: 2px 6px; border-radius: 6px; border: 1px solid var(--border); background: #121620; color: var(--muted);
+    }
+    .z2str-line-pill.is-ok { border-color: rgba(61, 220, 151, 0.3); color: var(--green); }
+    .z2str-line-pill.is-warn { border-color: rgba(244, 162, 97, 0.45); color: var(--amber); }
+    .z2str-line-pill.is-err { border-color: rgba(255, 107, 53, 0.65); color: var(--ember); font-weight: 700; }
+    .z2str-issues { display: flex; flex-direction: column; gap: 3px; }
+    .z2str-issue { font-size: 0.76rem; padding: 3px 7px; border-radius: 6px; }
+    .z2str-issue.err { background: rgba(255, 107, 53, 0.14); color: var(--ember); }
+    .z2str-issue.warn { background: rgba(244, 162, 97, 0.12); color: var(--amber); }
+    .z2str-vanilla { font-size: 0.76rem; color: var(--muted); }
+    .z2str-vanilla summary { cursor: pointer; color: var(--cyan); }
+    .z2str-vanilla pre {
+      margin: 5px 0 0; padding: 6px 8px; border-radius: 6px; background: #0d1017;
+      border: 1px solid var(--border); font-family: ui-monospace, monospace; font-size: 0.78rem;
+      white-space: pre-wrap; color: var(--text);
+    }
+    .z2str-notes { font-size: 0.74rem; color: var(--muted); font-style: italic; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <header>
       <div>
-        <h1>Zelda II: <span>Barba Enterprise</span>{{HEADER_BADGE}}</h1>
+        <h1>{{HEADER_TITLE}}{{HEADER_BADGE}}</h1>
         <div class="subtitle">{{HEADER_SUBTITLE}}</div>
       </div>
-      <div class="preset-bar" id="presets"></div>
+      {{PRESET_BAR}}
     </header>
 
     {{LOCAL_STATE_BAR}}
 
     <nav class="tab-bar" aria-label="Workspace Views">
-      <button type="button" class="tab-btn active" data-tab="fe">Barba Enterprise (Flags &amp; Seed)</button>
+      <button type="button" class="tab-btn active" data-tab="fe">{{FE_TAB_LABEL}}</button>
       <button type="button" class="tab-btn" data-tab="titles">{{TITLES_TAB_LABEL}}</button>
-      <button type="button" class="tab-btn" data-tab="patcher">ROM Patcher (Local BPS)</button>
-{{DEV_TABS}}
+{{WORKSPACE_TABS}}
     </nav>
 
     <div id="view-fe">
 
-    <section class="stage" aria-label="Live Build Visual Summary">
+    <section class="stage" aria-label="Summary">
       <div>
-        <div class="stage-title">Live Build Preview</div>
-        <div class="subtitle" style="margin:0; max-width:260px;">
-          Updates in real time as you toggle visual options below.
-        </div>
+        <div class="stage-title" style="margin-bottom:0;">Summary</div>
       </div>
       <div class="stage-slots" id="live-stage"></div>
     </section>
 
-    <section class="top-box" aria-label="Seed and Flagstring">
-      <div class="row">
-        <label for="seed-input">Seed</label>
-        <input id="seed-input" class="mono" value="BARBA2026" style="max-width: 220px;">
-        <button id="roll-seed" type="button">Roll Seed</button>
-        <div class="filter-bar" style="margin-left: auto;">
-          <span style="font-size:0.84rem;color:var(--muted)">Show:</span>
-          <button type="button" class="filter-btn active" data-filter="all">All</button>
-          <button type="button" class="filter-btn" data-filter="ready">Built &amp; Toggleable</button>
-          <button type="button" class="filter-btn" data-filter="planned">Unbuilt / Planned</button>
-        </div>
-      </div>
-      <div class="row">
-        <label for="flagstring">Flagstring</label>
-        <input id="flagstring" class="mono" spellcheck="false">
-        <button id="apply-flagstring" type="button">Apply</button>
-        <button id="copy-flagstring" class="primary" type="button">Copy Flags</button>
-      </div>
-{{CLI_ROW}}
-      <div class="stats" id="stats"></div>
-      <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    </section>
+{{SEED_FLAGSTRING_BOX}}
 
     <main class="grid" id="categories"></main>
-    </div>
-
-    <div id="view-patcher" class="hidden">
-      <section class="top-box" aria-label="Client-Side BPS ROM Patcher">
-        <div class="subtitle" style="margin:0;">
-          Patch your own clean Zelda II (USA PRG0) ROM locally in your browser. Your files never leave your device, and shareable <code>--no-portals</code> patches contain zero third-party subgame ROMs.
-        </div>
-        <div class="row">
-          <label for="bps-rom-file">Source ROM</label>
-          <input id="bps-rom-file" type="file" accept=".nes">
-          <span id="bps-rom-status" class="mono" style="color:var(--muted);">Select clean Zelda II (.nes, 262,160 bytes)</span>
-        </div>
-        <div class="row">
-          <label for="bps-patch-file">BPS Patch</label>
-          <input id="bps-patch-file" type="file" accept=".bps">
-          <span id="bps-patch-status" class="mono" style="color:var(--muted);">Select barba.bps</span>
-        </div>
-        <div class="row">
-          <button id="bps-apply-btn" class="primary" type="button" disabled>Patch &amp; Download .nes</button>
-          <span id="bps-out-status" class="mono" style="color:var(--muted);"></span>
-        </div>
-      </section>
     </div>
 
     <!-- DEV_VIEWS_START -->
@@ -644,14 +708,56 @@
         </div>
       </section>
     </div>
+
+    <div id="view-z2strings" class="hidden">
+      <section class="top-box local-only-card" aria-label="Zelda II String Review Controls">
+        <div class="local-only-banner" role="note">
+          Local Only — Not Published on GitHub Pages
+          <span class="local-sub">All Zelda II hack strings (no subgame ROM strings) with live length, line-split, byte-budget, and charset checks. Edits persist in localStorage.</span>
+        </div>
+        <div class="row">
+          <label for="z2str-groupby" style="min-width:64px;">Group By</label>
+          <select id="z2str-groupby">
+            <option value="area" selected>Area</option>
+            <option value="character">Character / Speaker</option>
+            <option value="source_file">Source File</option>
+            <option value="none">Flat List</option>
+          </select>
+          <label for="z2str-area" style="min-width:42px;">Area</label>
+          <select id="z2str-area">
+            <option value="all">All Areas</option>
+          </select>
+          <label for="z2str-char" style="min-width:66px;">Character</label>
+          <select id="z2str-char">
+            <option value="all">All Characters</option>
+          </select>
+          <label for="z2str-status" style="min-width:48px;">Status</label>
+          <select id="z2str-status">
+            <option value="all">All</option>
+            <option value="issues">Issues (Errors + Notes)</option>
+            <option value="error">Errors Only</option>
+            <option value="warn">Split / Fit Notes Only</option>
+            <option value="modified">Modified Locally Only</option>
+          </select>
+          <label for="z2str-search" style="min-width:52px;">Search</label>
+          <input id="z2str-search" placeholder="Filter text, label, bank..." style="min-width:190px;flex:1;">
+        </div>
+        <div class="row">
+          <div class="stats" id="z2str-stats"></div>
+          <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;">
+            <button id="z2str-reset-all" type="button">Reset All Edits</button>
+            <button id="z2str-copy-json" type="button">Copy JSON</button>
+            <button id="z2str-copy-md" class="primary" type="button">Copy Report (Markdown)</button>
+          </div>
+        </div>
+        <div class="toast" id="z2str-toast" role="status" aria-live="polite"></div>
+      </section>
+      <main class="grid" id="z2str-groups"></main>
+    </div>
     <!-- DEV_VIEWS_END -->
 
     <div id="view-titles" class="hidden">
       <section class="top-box" aria-label="Title Screen Controls">
-        <div class="row">
-          <strong style="color:var(--gold);">Done Title Screens:</strong>
-          <div id="titles-done-strip" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
-        </div>
         <div class="row">
           <strong style="color:var(--text);">Title Screens (Vanilla vs. Our Version)</strong>
           <label for="titles-zoom" style="min-width:42px;margin-left:8px;">Zoom</label>
@@ -665,13 +771,17 @@
       </section>
       <main class="grid" id="titles-list"></main>
     </div>
+
+{{SUBGAME_VIEWS}}
   </div>
 
   <script>window.BARBA_DASHBOARD_FLAVOR = "{{FLAVOR}}";</script>
-  <script src="catalog.js"></script>
-  <script src="bps.js"></script>
-  <script src="title_review_data.js"></script>
+  <script src="{{CATALOG_JS}}"></script>
+  <script src="{{TITLE_DATA_JS}}"></script>
   <script src="title_review_ui.js"></script>
+  <script src="{{SUBGAMES_DATA_JS}}"></script>
+  <script src="subgames_ui.js"></script>
+  <script src="previews/audio_data.js"></script>
 {{DEV_SCRIPTS}}
   <script>
 {{LOCAL_STATE_RENDER_JS}}
@@ -681,7 +791,8 @@
     const byCode = Object.fromEntries(catalog.flags.map(f => [f.code, f]));
 
     function setToast(msg) {
-      document.getElementById('toast').textContent = msg;
+      const el = document.getElementById('toast');
+      if (el) el.textContent = msg;
     }
 
     const activeCanvases = [];
@@ -716,6 +827,29 @@
       return cv;
     }
 
+    function playlistEl(playlist, displayW = 360, initialIdx = 0, onClipChange = null) {
+      const targetW = displayW;
+      const targetH = Math.round(176 * (targetW / 256));
+      const cv = document.createElement('canvas');
+      cv.className = 'nes-canvas';
+      cv.width = targetW;
+      cv.height = targetH;
+      cv._vis = !canvasObserver;
+      if (canvasObserver) canvasObserver.observe(cv);
+      const ctx = cv.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      const startIdx = playlist.length ? (initialIdx % playlist.length) : 0;
+      const item = {
+        cv, ctx, playlist, clipIdx: startIdx, drawnClipIdx: -1,
+        idx: 0, drawnIdx: -1, acc: 0, onClipChange
+      };
+      if (playlist.length > 1) {
+        loadStripImage(playlist[(startIdx + 1) % playlist.length].src);
+      }
+      activeCanvases.push(item);
+      return { cv, item };
+    }
+
     let lastTick = performance.now();
     let tickRaf = 0;
     function ensureTicking() {
@@ -743,6 +877,54 @@
         }
         const visible = item.cv._vis !== false;
         if (!visible) continue;
+
+        if (item.playlist && item.playlist.length) {
+          const clip = item.playlist[item.clipIdx];
+          const img = loadStripImage(clip.src);
+          if (!img.complete || img.naturalWidth === 0) continue;
+          if (clip.frames > 1) {
+            item.acc += dt;
+            const step = 1 / clip.fps;
+            if (item.acc >= step) {
+              const advance = Math.floor(item.acc / step);
+              item.acc %= step;
+              const nextIdx = item.idx + advance;
+              if (nextIdx >= clip.frames && item.playlist.length > 1) {
+                item.clipIdx = (item.clipIdx + 1) % item.playlist.length;
+                item.idx = 0;
+                const nextClip = item.playlist[item.clipIdx];
+                loadStripImage(item.playlist[(item.clipIdx + 1) % item.playlist.length].src);
+                if (item.onClipChange) item.onClipChange(nextClip, item.clipIdx, item.playlist.length);
+                const nextImg = loadStripImage(nextClip.src);
+                if (!nextImg.complete || nextImg.naturalWidth === 0) continue;
+              } else {
+                item.idx = nextIdx % clip.frames;
+              }
+            }
+          }
+          const activeClip = item.playlist[item.clipIdx];
+          const activeImg = loadStripImage(activeClip.src);
+          if (!activeImg.complete || activeImg.naturalWidth === 0) continue;
+          if (item.idx === item.drawnIdx && item.clipIdx === item.drawnClipIdx) continue;
+          item.drawnIdx = item.idx;
+          item.drawnClipIdx = item.clipIdx;
+          const ctx = item.ctx;
+          ctx.imageSmoothingEnabled = false;
+          ctx.clearRect(0, 0, item.cv.width, item.cv.height);
+          const cols = Math.max(1, Math.floor(activeImg.naturalWidth / activeClip.w));
+          const rows = Math.max(1, Math.floor(activeImg.naturalHeight / activeClip.h));
+          const drawIdx = item.idx % Math.max(1, Math.min(activeClip.frames, cols * rows));
+          const sx = (drawIdx % cols) * activeClip.w;
+          const sy = Math.floor(drawIdx / cols) * activeClip.h;
+          const scale = Math.min(item.cv.width / activeClip.w, item.cv.height / activeClip.h);
+          const dw = Math.round(activeClip.w * scale);
+          const dh = Math.round(activeClip.h * scale);
+          const dx = Math.round((item.cv.width - dw) / 2);
+          const dy = Math.round((item.cv.height - dh) / 2);
+          ctx.drawImage(activeImg, sx, sy, activeClip.w, activeClip.h, dx, dy, dw, dh);
+          continue;
+        }
+
         if (!item.img) item.img = loadStripImage(item.src);
         if (!item.img.complete || item.img.naturalWidth === 0) continue;
         if (item.frames > 1) {
@@ -759,8 +941,10 @@
         ctx.imageSmoothingEnabled = false;
         ctx.clearRect(0, 0, item.cv.width, item.cv.height);
         const cols = Math.max(1, Math.floor(item.img.naturalWidth / item.w));
-        const sx = (item.idx % cols) * item.w;
-        const sy = Math.floor(item.idx / cols) * item.h;
+        const rows = Math.max(1, Math.floor(item.img.naturalHeight / item.h));
+        const drawIdx = item.idx % Math.max(1, Math.min(item.frames, cols * rows));
+        const sx = (drawIdx % cols) * item.w;
+        const sy = Math.floor(drawIdx / cols) * item.h;
         ctx.drawImage(item.img, sx, sy, item.w, item.h, 0, 0, item.cv.width, item.cv.height);
       }
       tickRaf = requestAnimationFrame(tickCanvases);
@@ -839,62 +1023,251 @@
       return '<span class="badge b-planned">Unbuilt / Planned</span>';
     }
 
+    const stageSlotIdx = [0, 0, 0];
+
+    function buildStageClip(flagId) {
+      const f = byId[flagId];
+      if (!f || !f.preview) return null;
+      const p = f.preview;
+      const isEnabled = f.type === 'bool' ? Boolean(state.values[f.id]) : state.values[f.id] !== f.vanilla;
+      let label = isEnabled ? p.on_label : p.off_label;
+      if (flagId === 'barba_protagonist' && isEnabled) {
+        label = `Barba (${state.values.volley_count}-Shot Volley)`;
+      }
+      return {
+        src: isEnabled ? p.on : p.off,
+        w: isEnabled ? p.on_w : p.off_w,
+        h: isEnabled ? p.on_h : p.off_h,
+        frames: isEnabled ? p.frames : (p.off_frames || p.frames),
+        fps: isEnabled ? p.fps : (p.off_fps || p.fps),
+        label,
+      };
+    }
+
     function renderLiveStage() {
       const stage = document.getElementById('live-stage');
       stage.innerHTML = '';
 
-      const heroSrc = state.values.barba_protagonist ? 'previews/cap_barba_grass_attack.png' : 'previews/cap_vanilla_grass_attack.png';
-      const heroLabel = state.values.barba_protagonist ? `Barba (${state.values.volley_count}-Shot Volley)` : 'Link (Sword Slash)';
-
-      const sariaSrc = state.values.saria_foul_water ? 'previews/cap_barba_saria_town.png' : 'previews/cap_vanilla_saria_town.png';
-      const sariaLabel = state.values.saria_foul_water ? 'Saria Foul Water' : 'Vanilla Blue Water';
-
-      const goSrc = state.values.game_over_portrait ? 'previews/cap_barba_game_over.png' : 'previews/cap_vanilla_game_over.png';
-      const goLabel = state.values.game_over_portrait ? 'Barba Link' : 'Vanilla Ganon';
-
-      const slots = [
-        { title: 'Protagonist & Attack', label: heroLabel, src: heroSrc, w: 256, h: 176, frames: 84, fps: 20, dw: 360 },
-        { title: 'Saria Water', label: sariaLabel, src: sariaSrc, w: 256, h: 176, frames: 64, fps: 20, dw: 360 },
-        { title: 'Game Over', label: goLabel, src: goSrc, w: 256, h: 176, frames: 64, fps: 15, dw: 360 },
+      const slotDefs = [
+        {
+          title: 'Combat & Spells',
+          flags: [
+            'barba_protagonist',
+            'upstab_breath',
+            'downstab_stomp',
+            'ironknuckle_rebound',
+            'spell_scales',
+            'spell_wyrmling',
+            'spell_meteor',
+            'spell_inferno',
+          ],
+        },
+        {
+          title: 'World & Towns',
+          flags: [
+            'saria_foul_water',
+            'overworld_barba_trail',
+            'cave_firelight',
+            'town_chaos',
+            'burned_signs',
+            'ngplus_mountain_melt',
+            'crossover_portals',
+          ],
+        },
+        {
+          title: 'Bosses, Title & UI',
+          flags: [
+            'game_over_portrait',
+            'title_screen',
+            'palace_roar_shake',
+            'hud_and_death_polish',
+          ],
+        },
       ];
 
-      for (const s of slots) {
+      slotDefs.forEach((slot, slotPos) => {
+        const playlist = slot.flags.map(buildStageClip).filter(Boolean);
+        if (!playlist.length) return;
+        const startIdx = stageSlotIdx[slotPos] % playlist.length;
+        stageSlotIdx[slotPos] = startIdx;
+
         const box = document.createElement('div');
         box.className = 'stage-slot';
-        box.innerHTML = `<span>${s.title}</span>`;
-        box.appendChild(spriteEl(s.src, s.w, s.h, s.frames, s.fps, s.dw));
+        box.style.cursor = playlist.length > 1 ? 'pointer' : 'default';
+        if (playlist.length > 1) box.title = 'Auto-plays in sequence — click to skip to next feature';
+
+        const head = document.createElement('span');
+        const stepEl = document.createElement('span');
+        stepEl.textContent = `${startIdx + 1}/${playlist.length}`;
+        head.textContent = `${slot.title} · `;
+        head.appendChild(stepEl);
+        box.appendChild(head);
+
         const lbl = document.createElement('strong');
-        lbl.textContent = s.label;
+        lbl.textContent = playlist[startIdx].label;
+
+        const updateHeader = (clip, idx, total) => {
+          stageSlotIdx[slotPos] = idx;
+          stepEl.textContent = `${idx + 1}/${total}`;
+          lbl.textContent = clip.label;
+        };
+
+        const { cv, item } = playlistEl(playlist, 360, startIdx, updateHeader);
+        box.appendChild(cv);
         box.appendChild(lbl);
+
+        if (playlist.length > 1) {
+          box.onclick = () => {
+            item.clipIdx = (item.clipIdx + 1) % playlist.length;
+            item.idx = 0;
+            item.acc = 0;
+            item.drawnIdx = -1;
+            const nextClip = playlist[item.clipIdx];
+            loadStripImage(playlist[(item.clipIdx + 1) % playlist.length].src);
+            updateHeader(nextClip, item.clipIdx, playlist.length);
+          };
+        }
+
         stage.appendChild(box);
+      });
+    }
+
+    let sharedAudioCtx = null;
+    let activeAudioStop = null;
+    const audioBufCache = new Map();
+
+    function getAudioCtx() {
+      if (!sharedAudioCtx) {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return null;
+        sharedAudioCtx = new Ctx();
+      }
+      if (sharedAudioCtx.state === 'suspended') sharedAudioCtx.resume().catch(() => {});
+      return sharedAudioCtx;
+    }
+
+    // WSOLA-style overlap-add time-stretcher so speed and pitch scale independently.
+    function timeStretchBuffer(ctx, srcBuf, stretchFactor) {
+      if (Math.abs(stretchFactor - 1.0) <= 0.01) return srcBuf;
+      const sr = srcBuf.sampleRate;
+      const inData = srcBuf.getChannelData(0);
+      const win = Math.round(sr * 0.032);
+      if (inData.length <= win) return srcBuf;
+      const hopOut = Math.max(64, Math.round(win * 0.5));
+      const hopIn = hopOut * stretchFactor;
+      const search = Math.round(sr * 0.008);
+      const outLen = Math.max(win, Math.round(inData.length / stretchFactor) + win);
+      const outBuf = ctx.createBuffer(1, outLen, sr);
+      const outData = outBuf.getChannelData(0);
+      const norm = new Float32Array(outLen);
+      const hann = new Float32Array(win);
+      for (let i = 0; i < win; i++) hann[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (win - 1)));
+
+      let inPos = 0;
+      for (let outPos = 0; outPos + win < outLen && Math.round(inPos) + win < inData.length; outPos += hopOut) {
+        let bestOffset = Math.round(inPos);
+        if (outPos > 0) {
+          let bestCorr = -Infinity;
+          const base = Math.round(inPos);
+          const lo = Math.max(0, base - search);
+          const hi = Math.min(inData.length - win - 1, base + search);
+          for (let cand = lo; cand <= hi; cand += 2) {
+            let corr = 0;
+            for (let k = 0; k < hopOut; k += 4) corr += outData[outPos + k] * inData[cand + k];
+            if (corr > bestCorr) { bestCorr = corr; bestOffset = cand; }
+          }
+        }
+        for (let i = 0; i < win; i++) {
+          const w = hann[i];
+          outData[outPos + i] += inData[bestOffset + i] * w;
+          norm[outPos + i] += w;
+        }
+        inPos += hopIn;
+      }
+      for (let i = 0; i < outLen; i++) {
+        if (norm[i] > 1e-4) outData[i] /= norm[i];
+      }
+      return outBuf;
+    }
+
+    function playBufferWithRate(buf, speed = 1.0, pitch = 1.0, volume = 1.0) {
+      const ctx = getAudioCtx();
+      if (!ctx) return null;
+      if (activeAudioStop) { activeAudioStop(); activeAudioStop = null; }
+      const stretch = speed / pitch;
+      const playBuf = timeStretchBuffer(ctx, buf, stretch);
+      const src = ctx.createBufferSource();
+      src.buffer = playBuf;
+      src.playbackRate.value = pitch;
+      const gainNode = ctx.createGain();
+      gainNode.gain.value = volume;
+      src.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      src.start();
+      activeAudioStop = () => { try { src.stop(); } catch (_) {} };
+      src.onended = () => { if (activeAudioStop) activeAudioStop = null; };
+      return gainNode;
+    }
+
+    async function playWav(src, speed = 1.0, pitch = 1.0, volume = 1.0) {
+      const ctx = getAudioCtx();
+      if (!ctx) return null;
+      if (ctx.state === 'suspended') {
+        try { await ctx.resume(); } catch (_) {}
+      }
+      try {
+        if (!audioBufCache.has(src)) {
+          let arr;
+          const b64 = window.BARBA_AUDIO_DATA && window.BARBA_AUDIO_DATA[src];
+          if (b64) {
+            const bin = atob(b64);
+            const bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            arr = bytes.buffer;
+          } else {
+            const resp = await fetch(src);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            arr = await resp.arrayBuffer();
+          }
+          audioBufCache.set(src, await ctx.decodeAudioData(arr));
+        }
+        return playBufferWithRate(audioBufCache.get(src), speed, pitch, volume);
+      } catch (err) {
+        try {
+          if (activeAudioStop) { activeAudioStop(); activeAudioStop = null; }
+          const el = new Audio(src);
+          el.volume = Math.max(0, Math.min(1, volume));
+          el.playbackRate = pitch;
+          if ('preservesPitch' in el) el.preservesPitch = false;
+          activeAudioStop = () => { try { el.pause(); el.currentTime = 0; } catch (_) {} };
+          el.onended = () => { if (activeAudioStop) activeAudioStop = null; };
+          await el.play();
+          return { gain: { set value(v) { el.volume = Math.max(0, Math.min(1, v)); } } };
+        } catch (fallbackErr) {
+          setToast(`Audio error: ${err.message}`);
+          return null;
+        }
       }
     }
 
-    let activeAudio = null;
-    function playWav(src, rate = 1.0) {
-      if (activeAudio) { activeAudio.pause(); activeAudio = null; }
-      activeAudio = new Audio(src);
-      activeAudio.playbackRate = rate;
-      activeAudio.preservesPitch = false;
-      activeAudio.play().catch(err => setToast(`Audio error: ${err.message}`));
-    }
-
-    function playNoiseRoar(rate = 1.0) {
-      const Ctx = window.AudioContext || window.webkitAudioContext;
-      if (!Ctx) return;
-      const ctx = new Ctx();
-      const dur = 0.75 / rate;
-      const buf = ctx.createBuffer(1, Math.max(1, Math.floor(ctx.sampleRate * dur)), ctx.sampleRate);
+    function playNoiseRoar(speed = 1.0, pitch = 1.0, volume = 1.0) {
+      const ctx = getAudioCtx();
+      if (!ctx) return null;
+      const dur = 0.75;
+      const len = Math.max(1, Math.floor(ctx.sampleRate * dur));
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
       const data = buf.getChannelData(0);
-      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
-      const src = ctx.createBufferSource();
-      src.buffer = buf;
-      const filter = ctx.createBiquadFilter();
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(950 * rate, ctx.currentTime);
-      filter.frequency.exponentialRampToValueAtTime(180 * rate, ctx.currentTime + dur);
-      src.connect(filter).connect(ctx.destination);
-      src.start();
+      // NES-style descending noise sweep baked into a mono buffer so Speed & Pitch scale independently.
+      let lp = 0;
+      for (let i = 0; i < len; i++) {
+        const t = i / len;
+        const cutoff = 950 * Math.pow(180 / 950, t);
+        const alpha = Math.min(1, (2 * Math.PI * cutoff) / ctx.sampleRate);
+        const white = (Math.random() * 2 - 1) * (1 - t);
+        lp += alpha * (white - lp);
+        data[i] = lp * 1.4;
+      }
+      return playBufferWithRate(buf, speed, pitch, volume);
     }
 
     function buildAudioNode(f, isEnabled) {
@@ -903,56 +1276,78 @@
       const bar = document.createElement('div');
       bar.className = 'audio-bar';
       let pitchRate = 1.0;
+      let speedRate = 1.0;
+      let volumeLevel = 1.0;
+      let currentGain = null;
 
       const offBtn = document.createElement('button');
       offBtn.type = 'button';
       offBtn.className = 'audio-btn' + (!isEnabled ? ' is-active' : '');
       offBtn.textContent = `▶ ${a.off_label}`;
-      offBtn.onclick = () => (a.off_wav ? playWav(a.off_wav, pitchRate) : playNoiseRoar(pitchRate));
+      offBtn.onclick = async () => {
+        currentGain = a.off_wav
+          ? await playWav(a.off_wav, speedRate, pitchRate, volumeLevel)
+          : playNoiseRoar(speedRate, pitchRate, volumeLevel);
+      };
       bar.appendChild(offBtn);
 
       const onBtn = document.createElement('button');
       onBtn.type = 'button';
       onBtn.className = 'audio-btn' + (isEnabled ? ' is-active' : '');
       onBtn.textContent = `▶ ${a.on_label}`;
-      onBtn.onclick = () => playWav(a.on_wav, pitchRate);
+      onBtn.onclick = async () => {
+        currentGain = await playWav(a.on_wav, speedRate, pitchRate, volumeLevel);
+      };
       bar.appendChild(onBtn);
 
-      if (a.pitch_control) {
+      const makeSlider = (labelText, min, max, initial, step, fmt, onChange) => {
         const wrap = document.createElement('label');
         wrap.className = 'pitch-wrap';
         const valSpan = document.createElement('span');
-        valSpan.textContent = '1.00x';
+        valSpan.textContent = fmt(Number(initial));
         const slider = document.createElement('input');
         slider.type = 'range';
-        slider.min = '0.60';
-        slider.max = '1.60';
-        slider.step = '0.05';
-        slider.value = '1.00';
+        slider.min = min;
+        slider.max = max;
+        slider.step = step;
+        slider.value = initial;
         slider.oninput = () => {
-          pitchRate = Number(slider.value);
-          valSpan.textContent = `${pitchRate.toFixed(2)}x`;
+          const v = Number(slider.value);
+          valSpan.textContent = fmt(v);
+          onChange(v);
         };
-        wrap.append('Pitch:', slider, valSpan);
-        bar.appendChild(wrap);
+        wrap.append(labelText, slider, valSpan);
+        return wrap;
+      };
+
+      if (a.pitch_control) {
+        bar.appendChild(makeSlider('Speed:', '0.50', '1.60', '1.00', '0.05', v => `${v.toFixed(2)}x`, v => { speedRate = v; }));
+        bar.appendChild(makeSlider('Pitch:', '0.60', '1.60', '1.00', '0.05', v => `${v.toFixed(2)}x`, v => { pitchRate = v; }));
       }
+      bar.appendChild(makeSlider('Volume:', '0', '1', '1', '0.05', v => `${Math.round(v * 100)}%`, v => {
+        volumeLevel = v;
+        if (currentGain) currentGain.gain.value = v;
+      }));
       return bar;
     }
 
     function buildPreviewNode(f, isEnabled, missingReq) {
       const p = f.preview;
       if (!p) return null;
-      const fps = p.fps || 6;
+      const onFps = p.fps || 6;
+      const offFps = p.off_fps || onFps;
+      const onFrames = p.frames || 4;
+      const offFrames = p.off_frames || onFrames;
 
       if (p.off) {
         const wrap = document.createElement('div');
         wrap.className = 'preview-compare';
 
-        const makeChoice = (active, src, w, h, label, targetVal) => {
+        const makeChoice = (active, src, w, h, frames, fps, label, targetVal) => {
           const tile = document.createElement('div');
           tile.className = 'choice-tile ' + (active ? 'is-selected' : 'is-dimmed');
           const dw = w >= 200 ? 512 : (w >= 100 ? 384 : Math.round(w * 4));
-          tile.appendChild(spriteEl(src, w, h, p.frames || 4, fps, dw));
+          tile.appendChild(spriteEl(src, w, h, frames, fps, dw));
           const lbl = document.createElement('div');
           lbl.className = 'choice-label';
           lbl.innerHTML = `${label} ${active ? '<span class="pill-on">Active</span>' : ''}`;
@@ -967,15 +1362,15 @@
           return tile;
         };
 
-        wrap.appendChild(makeChoice(!isEnabled, p.off, p.off_w, p.off_h, p.off_label, false));
-        wrap.appendChild(makeChoice(isEnabled, p.on, p.on_w, p.on_h, p.on_label, true));
+        wrap.appendChild(makeChoice(!isEnabled, p.off, p.off_w, p.off_h, offFrames, offFps, p.off_label, false));
+        wrap.appendChild(makeChoice(isEnabled, p.on, p.on_w, p.on_h, onFrames, onFps, p.on_label, true));
         return wrap;
       }
 
       const single = document.createElement('div');
       single.className = 'preview-single ' + (isEnabled ? 'is-active' : 'is-inactive');
       const dw = p.on_w >= 200 ? 512 : Math.round(p.on_w * 3.5);
-      single.appendChild(spriteEl(p.on, p.on_w, p.on_h, p.frames || 4, fps, dw));
+      single.appendChild(spriteEl(p.on, p.on_w, p.on_h, onFrames, onFps, dw));
       const cap = document.createElement('div');
       cap.className = 'choice-label';
       cap.innerHTML = `${p.on_label} ${isEnabled ? '<span class="pill-on">On</span>' : ''}`;
@@ -985,39 +1380,56 @@
 
     function render() {
       const presetBar = document.getElementById('presets');
-      presetBar.innerHTML = '';
-      for (const [id, label] of [['vanilla', 'Vanilla Z2'], ['barba', 'Barba Mode'], ['barba_lite', 'Barba Lite'], ['chaos', 'Chaos Seed']]) {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.textContent = label;
-        if (state.preset === id) btn.classList.add('active');
-        btn.onclick = () => applyPreset(id);
-        presetBar.appendChild(btn);
+      if (presetBar) {
+        presetBar.innerHTML = '';
+        for (const [id, label] of [['vanilla', 'Vanilla Z2'], ['barba', 'Barba Mode'], ['barba_lite', 'Barba Lite'], ['chaos', 'Chaos Seed']]) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.textContent = label;
+          if (state.preset === id) btn.classList.add('active');
+          btn.onclick = () => applyPreset(id);
+          presetBar.appendChild(btn);
+        }
       }
 
       renderLiveStage();
 
-      document.getElementById('seed-input').value = state.seed;
+      const seedEl = document.getElementById('seed-input');
+      if (seedEl) seedEl.value = state.seed;
       const fs = encodeFlagstring();
-      document.getElementById('flagstring').value = fs;
+      const fsEl = document.getElementById('flagstring');
+      if (fsEl) fsEl.value = fs;
       const cliEl = document.getElementById('cli-cmd');
       if (cliEl) cliEl.value = `python tools/fe_catalog.py --flags "${fs}" --build`;
 
-      const counts = { toggleable: 0, built: 0, planned: 0, enabled: 0 };
-      for (const f of catalog.flags) {
+      const isPublicFlavor = window.BARBA_DASHBOARD_FLAVOR === 'public';
+      const visibleFlags = isPublicFlavor
+        ? catalog.flags.filter(f => f.visibility !== 'local')
+        : catalog.flags;
+
+      const counts = { toggleable: 0, built: 0, planned: 0, enabled: 0, localOnly: 0 };
+      for (const f of visibleFlags) {
         counts[f.status]++;
+        if (f.visibility === 'local') counts.localOnly++;
         if (f.type === 'bool' ? state.values[f.id] : state.values[f.id] !== f.vanilla) counts.enabled++;
       }
-      document.getElementById('stats').innerHTML =
-        `<span>Active vs Vanilla: <strong>${counts.enabled}/${catalog.flags.length}</strong></span>` +
-        `<span>Toggleable Now: <strong>${counts.toggleable}</strong></span>` +
-        `<span>Built (Bundled): <strong>${counts.built}</strong></span>` +
-        `<span>Unbuilt / Planned: <strong>${counts.planned}</strong></span>`;
+      const statsEl = document.getElementById('stats');
+      if (statsEl) {
+        statsEl.innerHTML =
+          `<span>Active vs Vanilla: <strong>${counts.enabled}/${visibleFlags.length}</strong></span>` +
+          `<span>Toggleable Now: <strong>${counts.toggleable}</strong></span>` +
+          `<span>Built (Bundled): <strong>${counts.built}</strong></span>` +
+          `<span>Unbuilt / Planned: <strong>${counts.planned}</strong></span>` +
+          ((!isPublicFlavor && counts.localOnly > 0)
+            ? `<span>Local Only: <span class="badge b-local">${counts.localOnly} hidden on GitHub Pages</span></span>`
+            : '');
+      }
 
       const container = document.getElementById('categories');
       container.innerHTML = '';
 
       const matchesFilter = f => {
+        if (isPublicFlavor && f.visibility === 'local') return false;
         if (state.filter === 'ready') return f.status !== 'planned';
         if (state.filter === 'planned') return f.status === 'planned';
         return true;
@@ -1032,8 +1444,9 @@
         listEl.className = gridClass;
         card.appendChild(listEl);
         for (const f of items) {
+          const isLocalOnly = !isPublicFlavor && f.visibility === 'local';
           const item = document.createElement('div');
-          item.className = 'flag-item' + (f.status === 'planned' ? ' is-planned' : '');
+          item.className = 'flag-item' + (f.status === 'planned' ? ' is-planned' : '') + (isLocalOnly ? ' is-local-only' : '');
           const missingReq = f.requires.filter(r => !state.values[r]);
           const isLocked = Boolean(f.coupled) || missingReq.length > 0;
           const controlId = `ctrl-${f.id}`;
@@ -1046,10 +1459,20 @@
             const opts = f.options.map(o => `<option value="${o}" ${state.values[f.id] === o ? 'selected' : ''}>${o}</option>`).join('');
             controlHtml = `<select id="${controlId}" ${isLocked ? 'disabled' : ''}>${opts}</select>`;
           }
+          const localBadgeHtml = isLocalOnly
+            ? '<span class="badge b-local">Local Only · Hidden on GitHub Pages</span>'
+            : '';
+          const localBannerHtml = isLocalOnly
+            ? '<div class="local-only-banner" role="note">Local Only — Not Published on GitHub Pages <span class="local-sub">Omitted from public builds until marked public.</span></div>'
+            : '';
           item.innerHTML = `
+            ${localBannerHtml}
             <div class="flag-head">
               <label class="flag-title" for="${controlId}">${controlHtml} <span>${f.label}</span></label>
-              ${badgeFor(f)}
+              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                ${localBadgeHtml}
+                ${badgeFor(f)}
+              </div>
             </div>
             <div class="flag-desc">${f.description}</div>
             ${f.coupled ? `<div class="flag-req">Coupled to Barba Mode — switches automatically with Barba Mode.</div>` : (missingReq.length ? `<div class="flag-req">Requires: ${missingReq.map(r => byId[r].label).join(', ')}</div>` : '')}
@@ -1079,27 +1502,34 @@
       }
 
       // 2. All non-visual options & tunables in their own dedicated section below
-      const nonVisualItems = catalog.flags.filter(f => !f.preview && matchesFilter(f));
+      const nonVisualRank = f => (
+        f.coupled ? 0 :
+        f.status === 'built' ? 1 :
+        f.status === 'toggleable' ? 2 : 3
+      );
+      const nonVisualItems = catalog.flags
+        .filter(f => !f.preview && matchesFilter(f))
+        .sort((a, b) => (nonVisualRank(a) - nonVisualRank(b)) || a.label.localeCompare(b.label));
       renderFlagCard('Non-Visual Options, Audio & Tunables', nonVisualItems, 'flag-grid-2');
     }
 
-    document.getElementById('seed-input').oninput = e => {
+    document.getElementById('seed-input')?.addEventListener('input', e => {
       state.seed = e.target.value.trim() || 'BARBA2026';
       render();
-    };
-    document.getElementById('roll-seed').onclick = () => {
+    });
+    document.getElementById('roll-seed')?.addEventListener('click', () => {
       state.seed = Math.random().toString(36).slice(2, 10).toUpperCase();
       render();
       setToast(`Rolled seed: ${state.seed}`);
-    };
-    document.getElementById('apply-flagstring').onclick = () => {
+    });
+    document.getElementById('apply-flagstring')?.addEventListener('click', () => {
       try { decodeFlagstring(document.getElementById('flagstring').value); }
       catch (err) { setToast(err.message); }
-    };
-    document.getElementById('copy-flagstring').onclick = () => {
+    });
+    document.getElementById('copy-flagstring')?.addEventListener('click', () => {
       navigator.clipboard?.writeText(document.getElementById('flagstring').value);
       setToast('Copied flagstring to clipboard.');
-    };
+    });
     document.getElementById('copy-cli')?.addEventListener('click', () => {
       navigator.clipboard?.writeText(document.getElementById('cli-cmd').value);
       setToast('Copied CLI command to clipboard.');
@@ -1118,9 +1548,7 @@
     // Tab switching
     const switchTab = tab => {
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-      for (const id of ['fe', 'patcher', 'waldo', 'feud', 'duck', 'titles']) {
-        document.getElementById(`view-${id}`)?.classList.toggle('hidden', tab !== id);
-      }
+      document.querySelectorAll('[id^="view-"]').forEach(el => el.classList.toggle('hidden', el.id !== `view-${tab}`));
       if (tab === 'fe') {
         ensureTicking();
       } else {
@@ -1137,69 +1565,6 @@
     });
     const reqTab = new URLSearchParams(location.search).get('tab') || location.hash.replace('#', '');
     if (document.getElementById(`view-${reqTab}`)) switchTab(reqTab);
-
-    // Client-side BPS ROM Patcher
-    (() => {
-      const bps = window.BARBA_BPS;
-      if (!bps) return;
-      let romBytes = null;
-      let patchBytes = null;
-      const romInput = document.getElementById('bps-rom-file');
-      const patchInput = document.getElementById('bps-patch-file');
-      const romStatus = document.getElementById('bps-rom-status');
-      const patchStatus = document.getElementById('bps-patch-status');
-      const applyBtn = document.getElementById('bps-apply-btn');
-      const outStatus = document.getElementById('bps-out-status');
-
-      const updateReady = () => {
-        applyBtn.disabled = !(romBytes && patchBytes);
-      };
-
-      romInput.onchange = async () => {
-        const file = romInput.files[0];
-        if (!file) { romBytes = null; romStatus.textContent = 'Select clean Zelda II (.nes)'; updateReady(); return; }
-        romBytes = new Uint8Array(await file.arrayBuffer());
-        const crc = bps.crc32(romBytes).toString(16).padStart(8, '0');
-        const sha = await bps.sha256Hex(romBytes);
-        const shaMatch = sha ? (sha === bps.Z2_SOURCE_SHA256 ? 'SHA-256 OK' : 'SHA-256 differs') : 'CRC32 only';
-        romStatus.textContent = `${file.name} (${romBytes.length.toLocaleString()} B, CRC32 ${crc}, ${shaMatch})`;
-        romStatus.style.color = (sha === null || sha === bps.Z2_SOURCE_SHA256) ? 'var(--green)' : 'var(--amber)';
-        updateReady();
-      };
-
-      patchInput.onchange = async () => {
-        const file = patchInput.files[0];
-        if (!file) { patchBytes = null; patchStatus.textContent = 'Select barba.bps'; updateReady(); return; }
-        patchBytes = new Uint8Array(await file.arrayBuffer());
-        try {
-          const hdr = bps.parseBpsHeader(patchBytes);
-          patchStatus.textContent = `${file.name} -> ${hdr.targetSize.toLocaleString()} B${hdr.metadata ? ` (${hdr.metadata})` : ''}`;
-          patchStatus.style.color = 'var(--green)';
-        } catch (err) {
-          patchBytes = null;
-          patchStatus.textContent = err.message;
-          patchStatus.style.color = 'var(--ember)';
-        }
-        updateReady();
-      };
-
-      applyBtn.onclick = () => {
-        if (!romBytes || !patchBytes) return;
-        try {
-          const res = bps.applyBps(romBytes, patchBytes);
-          const blob = new Blob([res.target], { type: 'application/octet-stream' });
-          const a = document.createElement('a');
-          a.href = URL.createObjectURL(blob);
-          a.download = 'barba.nes';
-          a.click();
-          outStatus.textContent = `Patched! ${res.targetSize.toLocaleString()} B, CRC32 ${res.targetCrc.toString(16).padStart(8, '0')}`;
-          outStatus.style.color = 'var(--green)';
-        } catch (err) {
-          outStatus.textContent = `Error: ${err.message}`;
-          outStatus.style.color = 'var(--ember)';
-        }
-      };
-    })();
 
     // DEV_WALDO_JS_START
     // Where's Barba? Tile State Tagger

@@ -71,6 +71,8 @@ def checkpoint_writes(scene: dict) -> tuple[dict,dict]:
         expected[0x648B]=0x57
         for a in (0x63B1,0x63B2,0x63B3,0x63B4,0x63B5,0x63B7,0x63B8,0x63B9,0x63BA):
             expected[a]=1
+        expected[0x6806]=0xFF
+        expected[0x6807]=0x03
     if p.get('ngplus'):
         expected[0x7A0]=1
     expected.update({0x785+i:int(i in p['items']) for i in range(8)})

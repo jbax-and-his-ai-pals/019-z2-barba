@@ -6,8 +6,9 @@
 -- 5) Both behind-curtain fireball poses reach Zelda, then disappear as she turns to ash.
 dofile(TEST_DIR..'/newgame.lua')
 local frame=0
-local mem=emu.memType.nesMemory
+local mem,ppu=emu.memType.nesMemory,emu.memType.nesPpuMemory
 local function r(a)return emu.read(a,mem)end
+local function p(a)return emu.read(a,ppu)end
 local function w(a,v)emu.write(a,v,mem)end
 local report=assert(io.open(OUTPUT_DIR..'/ending.txt','w'))
 local errors=0
@@ -22,6 +23,10 @@ local sawBarbaAndZelda=false
 local endingTrailInFront,endingTrailBehind=false,false
 local sawNoLinkTiles=true
 local sawCleanPaletteInS2=true
+local sawPalacePalette=false
+local sawPurpleDrapes=false
+local sawCleanChrR0=true
+local sawNoOwFoliage=true
 local sawFireballPose={}
 local fireballReachedZelda=false
 local sawZeldaAsh=false
@@ -51,6 +56,12 @@ emu.addEventCallback(function()
     end
     if triggered and not finished then
         local s=r(0x0761)
+        if (s==5 or s==6) and r(0x076C)==4 and r(0x0736)==5 and r(0x0726)==0 then
+            if p(0x3F00)==0x0F then sawPalacePalette=true end
+            if p(0x3F0D)==0x23 and p(0x3F0E)==0x03 then sawPurpleDrapes=true end
+            if p(0x00F0)~=0x7C or p(0x00F8)~=0x02 then sawCleanChrR0=false end
+            if r(0x63A1)~=0 then sawNoOwFoliage=false end
+        end
         if s>=1 and s<=8 then
             local trail=true
             for i,tile in ipairs({0x15,0x3F,0x45,0x31}) do
@@ -125,6 +136,10 @@ emu.addEventCallback(function()
                 frame,s,r(0x076C),r(0x07A0),r(0x0033),r(0x0037),r(0x0027),r(0x0028),r(0x05F8),r(0x05F9)))
             check(sawBarbaWait,'Ending renders 24x48 Barba OAM sprites')
             check(sawBarbaAndZelda,'Ending renders Barba alongside woken Zelda')
+            check(sawPalacePalette,'Ending renders black palace background ($3F00 == $0F)')
+            check(sawPurpleDrapes,'Ending renders purple drapes ($3F0D/$3F0E == $23/$03)')
+            check(sawCleanChrR0,'Ending preserves CHR bank 0F R0 (? tile intact)')
+            check(sawNoOwFoliage,'Overworld foliage pass stays idle during ending ($63A1 == 0)')
             check(endingTrailInFront and endingTrailBehind,'Ending torso and tail follow the curtain priority')
             check(sawNoLinkTiles,'Ending OAM contains zero Link tiles ($E0-$E6)')
             check(sawNoCloserStep,'Barba stays in place without stepping closer to Zelda')

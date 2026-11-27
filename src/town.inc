@@ -3,7 +3,7 @@
 ; Every mutation requires an explicit outdoor room in world 1 or 2. Invisible triggers
 ; ($0C, $21..$23) and $0B always keep their native routines.
 .segment "TOWN"
-.export TownUpdate, TownEligible, TownBurnable, TownOutdoorRooms, TownEnd, TownDialog, TownFearText, TownFearPointers, TownHide
+.export TownUpdate, TownEligible, TownBurnable, TownOutdoorRooms, TownEnd, TownDialog, TownHide, LoadTownDlg3
 .export TownNativeDialog, TownSetNpcDialog, TownFastDialogReady, TownAsh, TownDoorCoords, TownDoorEmerged, TownNativeTalk
 .export TownDoorRender
 .include "ash_layout.inc"
@@ -952,11 +952,10 @@ TownDialog:
     lda $12
     eor $A1,x
     and #$07
-    asl
-    tay
-    lda TownFearPointers,y
+    jsr LoadTownDlg3
+    lda #<ARCADE_DLG_BUF
     sta $0569
-    lda TownFearPointers+1,y
+    lda #>ARCADE_DLG_BUF
     sta $056A
     lda #$0A
     sta $0566
@@ -977,14 +976,17 @@ TownNativeDialog:
 @check_healer:
     cpy #$17
     bne @check_magic
-    lda #<TownHealerText
-    ldy #>TownHealerText
-    jmp TownSetNpcDialog
+    lda #$09
+    jsr LoadTownDlg3
+    jmp TownSetArcadeBuf
 @check_magic:
     cpy #$18
     bne TownNativeIndex
-    lda #<TownMagicText
-    ldy #>TownMagicText
+    lda #$0A
+    jsr LoadTownDlg3
+TownSetArcadeBuf:
+    lda #<ARCADE_DLG_BUF
+    ldy #>ARCADE_DLG_BUF
 TownSetNpcDialog:
     sta $0569
     sty $056A
@@ -999,6 +1001,15 @@ TownNativeIndex:
     tay
     lda $0707
     jmp $B5FD
+
+LoadTownDlg3:
+    pha
+    lda #>(CopyTownDlg8 - 1)
+    pha
+    lda #<(CopyTownDlg8 - 1)
+    pha
+    lda #$08
+    jmp $FFCC
 
 .include "town_dialogue.inc"
 TownEnd:

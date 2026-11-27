@@ -1,4 +1,4 @@
-"""Build standalone Mapper 4 (MMC3) subgame ROMs into play/nes/<game>-mmc3.nes."""
+"""Build standalone Mapper 4 (MMC3) subgame ROMs into play/compat/nes/<game>-compat.nes."""
 from __future__ import annotations
 
 import argparse
@@ -15,7 +15,7 @@ from build_history import HISTORY_FILE, next_subgame_build_number, record_subgam
 import hashlib
 
 ROOT = _TOOLS_DIR.parent
-DEFAULT_OUT_DIR = ROOT / 'play' / 'nes'
+DEFAULT_OUT_DIR = ROOT / 'play' / 'compat' / 'nes'
 
 # Subgames that run on standard Mapper 4 (MMC3) without FK23C ($5FF0/$5FF1) extensions.
 # Excluded (FK23C / Mapper 176 required):
@@ -23,13 +23,8 @@ DEFAULT_OUT_DIR = ROOT / 'play' / 'nes'
 MMC3_GAMES: tuple[str, ...] = (
     'dk',
     'duck',
-    'f13',
     'feud',
-    'mm2',
-    'mtpo',
-    'smb',
     'waldo',
-    'zelda',
 )
 
 FK23C_ONLY_GAMES: dict[str, str] = {
@@ -38,14 +33,14 @@ FK23C_ONLY_GAMES: dict[str, str] = {
 
 
 def build_game_mmc3(game: str, out_dir: Path = DEFAULT_OUT_DIR) -> Path:
-    """Build one subgame as a Mapper 4 (MMC3) ROM at <out_dir>/<game>-mmc3.nes."""
+    """Build one subgame as a Mapper 4 (MMC3) ROM at <out_dir>/<game>-compat.nes."""
     if game not in MMC3_GAMES:
         reason = FK23C_ONLY_GAMES.get(game, 'unknown game')
         raise ValueError(f'{game!r} cannot be built as standard MMC3 ({reason})')
 
     out_dir.mkdir(parents=True, exist_ok=True)
     build_number = next_subgame_build_number(HISTORY_FILE, game)
-    out_path = out_dir / f'{game}-mmc3.nes'
+    out_path = out_dir / f'{game}-compat.nes'
 
     if game == 'dk':
         import pack_dk
@@ -55,7 +50,7 @@ def build_game_mmc3(game: str, out_dir: Path = DEFAULT_OUT_DIR) -> Path:
         pack_duck.build_standalone(out_path, ROOT / 'roms/duck.nes', ROOT / 'roms/z2.nes', mapper='mmc3', build_number=build_number)
     elif game == 'f13':
         import f13_build
-        built = f13_build.build(count_build=False, build_number=build_number)
+        built = f13_build.build(count_build=False, build_number=build_number, write_play=False)
         shutil.copyfile(built, out_path)
     elif game == 'feud':
         import pack_feud
@@ -78,7 +73,7 @@ def build_game_mmc3(game: str, out_dir: Path = DEFAULT_OUT_DIR) -> Path:
         pack_smb.build_standalone(out_path, ROOT / 'roms/smb.nes', ROOT / 'roms/z2.nes', mapper='mmc3', build_number=build_number)
     elif game == 'waldo':
         import build_waldo
-        built = build_waldo.build(count_build=False, build_number=build_number)
+        built = build_waldo.build(count_build=False, build_number=build_number, write_play=False)
         shutil.copyfile(built, out_path)
     elif game == 'zelda':
         import pack_zelda
@@ -90,7 +85,7 @@ def build_game_mmc3(game: str, out_dir: Path = DEFAULT_OUT_DIR) -> Path:
         raise AssertionError(f'{out_path}: expected Mapper 4 (MMC3), got Mapper {mapper_num}')
     record_subgame_build(HISTORY_FILE, game, build_number, 'mmc3', out_path, hashlib.sha256(rom).hexdigest())
     bps_path = (
-        ROOT / 'play' / 'bps' / f'{game}-mmc3.bps'
+        ROOT / 'play' / 'compat' / 'bps' / f'{game}-compat.bps'
         if out_dir.resolve() == DEFAULT_OUT_DIR.resolve()
         else None
     )
@@ -98,7 +93,7 @@ def build_game_mmc3(game: str, out_dir: Path = DEFAULT_OUT_DIR) -> Path:
         ROOT / 'roms' / f'{game}.nes',
         out_path,
         out_bps_path=bps_path,
-        metadata=f'{game}-mmc3 | Barba Edition (MMC3)',
+        metadata=f'{game}-compat | Barba Edition (MMC3)',
     )
     return out_path
 

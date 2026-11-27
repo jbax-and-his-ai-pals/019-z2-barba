@@ -14,14 +14,13 @@ import portal_pool  # noqa: E402
 
 
 class PortalPoolTests(unittest.TestCase):
-    def test_default_assignments_match_waldo_and_f13(self) -> None:
+    def test_default_assignments_match_waldo(self) -> None:
         slots = portal_pool.build_portal_assignments()
-        self.assertEqual([s.subgame.id for s in slots], ['waldo', 'f13'])
+        self.assertEqual([s.subgame.id for s in slots], ['waldo'])
         self.assertEqual(slots[0].door.id, 'arcade_waldo')
-        self.assertEqual(slots[1].door.id, 'arcade_f13')
 
     def test_seeded_assignments_pick_distinct_doors(self) -> None:
-        slots = portal_pool.build_portal_assignments(['waldo', 'f13'], seed=42)
+        slots = portal_pool.build_portal_assignments(['waldo', 'feud'], seed=42)
         self.assertEqual(len(slots), 2)
         self.assertNotEqual(slots[0].door.id, slots[1].door.id)
 
@@ -31,9 +30,8 @@ class PortalPoolTests(unittest.TestCase):
             out = portal_pool.write_portal_manifest(Path(tmp) / 'portal-manifest.json', slots, seed=7)
             data = json.loads(out.read_text(encoding='utf-8'))
             self.assertEqual(data['seed'], 7)
-            self.assertEqual(len(data['slots']), 2)
+            self.assertEqual(len(data['slots']), 1)
             self.assertEqual(data['slots'][0]['boot']['boot_addr'], 0xE000)
-            self.assertEqual(data['slots'][1]['boot']['boot_addr'], 0x8000)
 
     def test_no_portal_overlaps_service_spell_or_quest_doors(self) -> None:
         # (town_id, room, page) for all Zelda II spell houses, healers ($17),
@@ -78,6 +76,7 @@ class PortalPoolTests(unittest.TestCase):
 
         all_ids = [s.id for s in portal_pool.SUBGAME_POOL]
         slots = portal_pool.build_portal_assignments(all_ids)
+        seen_hyrule: set[tuple[int, int, int, int, int]] = set()
         for slot in slots:
             loc = (slot.door.town_id, slot.door.room, slot.door.page)
             self.assertNotIn(
@@ -85,6 +84,16 @@ class PortalPoolTests(unittest.TestCase):
                 reserved_doors,
                 f'Subgame {slot.subgame.id} overlaps {reserved_doors.get(loc)}',
             )
+            h = slot.hyrule
+            h_key = (h.world, h.sub_id, h.room, h.page, h.x_lo)
+            self.assertNotIn(h_key, seen_hyrule, f'Duplicate Hyrule spot {h_key}')
+            seen_hyrule.add(h_key)
+            if h.world in (1, 2):
+                self.assertNotIn(
+                    (h.sub_id, h.room, h.page),
+                    reserved_doors,
+                    f'Hyrule spot {h.id} overlaps {reserved_doors.get((h.sub_id, h.room, h.page))}',
+                )
 
 
 if __name__ == '__main__':

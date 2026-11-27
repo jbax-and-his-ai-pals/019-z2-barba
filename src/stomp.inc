@@ -8,10 +8,10 @@
 BarbaPickup:
     ldx #$05
 @item_loop:
-    ldy $B6,x
+    ldy $A1,x
     dey
     bne @item_next
-    ldy $A1,x
+    ldy $B6,x
     dey
     bne @item_next
     lda $AF,x

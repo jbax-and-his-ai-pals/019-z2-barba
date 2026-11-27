@@ -60,6 +60,18 @@ emu.addEventCallback(function()
         else
             emu.setInput({}, 0)
         end
+    elseif phase == 'enter_arcade' then
+        local af = frame - enterStart
+        emu.setInput({up = (af >= 10 and af < 14)}, 0)
+    elseif phase == 'walk_booth' then
+        local curX = read(0x4D)
+        if curX < 0x4C then
+            emu.setInput({right = true}, 0)
+        elseif curX > 0x54 then
+            emu.setInput({left = true}, 0)
+        else
+            emu.setInput({}, 0)
+        end
     elseif phase == 'enter' then
         local ef = frame - enterStart
         emu.setInput({
@@ -89,9 +101,27 @@ emu.addEventCallback(function()
         elseif frame > 1100 and read(0x3B) == 1 and read(0x4D) >= 0x26 then
             for slot = 0, 5 do write(0xB6 + slot, 0) end
             write(0x4D, 40); write(0x70, 0)
+            phase = 'enter_arcade'
+            enterStart = frame
+        end
+    elseif phase == 'enter_arcade' then
+        local af = frame - enterStart
+        if af > 30 and read(0x561) == 0x1C and read(0x726) == 0 and read(0x736) == 0x0B then
+            phase = 'walk_booth'
+            enterStart = frame
+        elseif af > 180 then
+            check(false, 'Timed out entering Barba Arcade R$1C')
+            finish()
+        end
+    elseif phase == 'walk_booth' then
+        if read(0x3B) == 0 and math.abs(read(0x4D) - 0x50) <= 4 and read(0x29) == 0xB0 then
+            write(0x70, 0)
             departure = location()
             phase = 'enter'
             enterStart = frame
+        elseif frame - enterStart > 300 then
+            check(false, 'Timed out walking to Waldo booth in R$1C')
+            finish()
         end
     elseif phase == 'enter' then
         local ef = frame - enterStart
@@ -131,12 +161,10 @@ emu.addEventCallback(function()
             local arrival = location()
             check(arrival == departure, 'Exact Rauru return: ' .. arrival .. ' == ' .. departure)
             check(read(0xFFFA) ~= 0x03, 'Held Up did not reopen the portal')
-            check(read(0x74C) == 0x02, 'Return opened villager-style message box ($074C=2)')
-        elseif rf == 240 then
-            check(read(0x524) == 0x09 and read(0x766) == 0x01, 'Message box finished typing and awaits B')
+            check(read(0x74C) == 0x00 and read(0x524) == 0x00 and read(0xDE) == 0x00,
+                'Start+Select returned silently with no dialogue box')
+            check(read(0x6804) == 0x00, 'Start+Select left $6804=0')
             screenshot('barba-after-waldo')
-        elseif rf == 280 then
-            check(read(0x74C) == 0x00 and read(0x524) == 0x00, 'Pressing B dismissed the return message box')
             finish()
         end
     end

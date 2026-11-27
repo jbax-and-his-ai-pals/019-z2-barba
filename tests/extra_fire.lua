@@ -18,7 +18,7 @@ local function check(ok,message)
 end
 local function base()
     helperCalls=0
-    w(0x769,4);w(0x707,4);w(0x5FF,1);w(0x480,0xF8)
+    w(0x769,4);w(0x707,4);w(0x5FF,1);w(0x645C,1);w(0x480,0xF8)
     w(0x72C,0);w(0x72A,0);w(0xCD,0x80);w(0x57D,0x37)
     w(0x10,3);w(0x11,0x79);w(0xB9,1);w(0x411,0)
     w(0x51,0);w(0x3F,1);w(0x2D,0x80) -- enemy slot 3 at world X=$100
@@ -43,9 +43,10 @@ local function add(name,kind,entry,setup,verify)
     cases[#cases+1]={name=name,kind=kind,entry=entry,setup=setup,verify=verify}
 end
 for _,kind in ipairs({'enemy','shield'})do
-    add(kind..' alias and copy-back',kind,kind=='enemy' and LABELS.BarbaEnemyFire or LABELS.BarbaShieldFire,
+    add(kind..' alias and copy-back',kind,kind=='enemy' and LABELS.EnemyFireGateway or LABELS.BarbaShieldFire,
         function()base()end,function(name)
-            check(helperCalls==4,name..': original pair once plus all three extras')
+            local expectCalls=kind=='shield' and 3 or 4
+            check(helperCalls==expectCalls,name..': expected native/extra helper calls ('..helperCalls..'/'..expectCalls..')')
             for slot=0,2 do
                 local a=0x6400+slot*16
                 check(r(a)==0 and r(a+1)==0x81+slot*8 and r(a+7)==0xD3 and r(a+8)==1,
@@ -53,13 +54,23 @@ for _,kind in ipairs({'enemy','shield'})do
             end
             preserved(name)
             local state=emu.getState()
-            check(state['cpu.a']==0x5A and state['cpu.y']==0xA6 and state['cpu.x']==3
-                and (state['cpu.ps']&0xCF)==(0x65&0xCF) and r(0x10)==3 and r(0x11)==0x79,
-                name..': original helper register/flag result restored')
+            if kind=='shield' then
+                check(r(0x10)==3 and r(0x11)==0x79,
+                    name..': scratch preserved across gateway')
+            else
+                check(state['cpu.y']==0xA6 and state['cpu.x']==3 and r(0x10)==3 and r(0x11)==0x79,
+                    name..': original helper Y/X/scratch preserved across gateway')
+            end
         end)
 end
+add('shield gateway fast path with EXTRA_LIVE=0','enemy',LABELS.ShieldFireGateway,
+    function()base();w(0x645C,0);w(0x51,0x80);w(0x3F,0);w(0x2D,0x80);w(0x447,0)end,
+    function(name)
+        check(helperCalls==0,name..': skips Bank 0 when EXTRA_LIVE==0')
+        preserved(name)
+    end)
 local skips={
-    {name='uninitialized SRAM guard',apply=function()w(0x5FF,0)end},
+    {name='inactive EXTRA_LIVE guard',apply=function()w(0x645C,0)end},
     {name='inactive records',apply=function()for a=0x6400,0x6420,16 do w(a,0)end end},
     {name='disintegrating records',apply=function()for a=0x6400,0x6420,16 do w(a,0x80)end end},
     {name='inactive enemy',apply=function()w(0xB9,0)end},
@@ -68,17 +79,17 @@ local skips={
     {name='enemy already injured',apply=function()w(0x411,0x30)end},
 }
 for _,c in ipairs(skips)do
-    add(c.name,'enemy',LABELS.BarbaEnemyFire,function()base();c.apply()end,function(name)
-        -- An inactive enemy now skips the native helper entirely (the original
-        -- E48B returns immediately for it too); others call it exactly once.
-        local expected=c.name=='inactive enemy' and 0 or 1
+    add(c.name,'enemy',LABELS.EnemyFireGateway,function()base();c.apply()end,function(name)
+        -- Inactive or injured enemies skip the native helper in EnemyFireGateway too;
+        -- others call $E498 exactly once without bank-swapping into Bank 0.
+        local expected=(c.name=='inactive enemy' or c.name=='enemy already injured') and 0 or 1
         check(helperCalls==expected,name..': avoids all extra native bank round trips')
         preserved(name)
     end)
 end
 add('injury does not bypass shield checks','shield',LABELS.BarbaShieldFire,
     function()base();w(0x411,0x30)end,function(name)
-        check(helperCalls==4,name..': all live extras still pass through shield helper')
+        check(helperCalls==3,name..': all live extras still pass through shield helper')
         preserved(name)
     end)
 
@@ -89,7 +100,7 @@ for _,test in ipairs({
     {name='Fire-only target without Fire',class=0xD2,attr=0x20,hit=false},
     {name='Fire-only target with Fire',class=0,attr=0x20,hit=true},
 })do
-    add(test.name,'damage',LABELS.BarbaEnemyFire,function()
+    add(test.name,'damage',LABELS.EnemyFireGateway,function()
         base();w(0x8D,0);w(0x8E,0);saved[0x8D]=0;saved[0x8E]=0
         w(0x6410,0);w(0x6420,0)
         w(0xA4,4);w(0xC5,8);w(0xAB,0);w(0x1D,1);w(0x447,0);w(0x411,0)
@@ -149,7 +160,7 @@ for slot=0,2 do
             for a=0x41A,0x43C do w(a,0)end
             for a=0x6400,0x6420,16 do w(a,0)end
             local a=0x6400+slot*16
-            w(a,1);w(a+1,0x90);w(a+2,0x48);w(a+3,0)
+            w(a,1);w(a+1,0x90);w(a+2,0x48);w(a+3,0);w(0x12,slot)
             w(0x786,glove);w(0x80,5);w(0x47E,0xA6);w(0x70,0x13);w(0xED,0)
             w(0x6074,blockTile);w(0x607A,blockTile)
         end,function(name)
@@ -179,7 +190,7 @@ local function nativeHelper()
     local c=cases[index]
     if not running or (c.kind~='enemy' and c.kind~='shield')then return end
     helperCalls=helperCalls+1
-    if helperCalls>1 then
+    if c.kind=='shield' or helperCalls>1 then
         check(r(0x8E)==0 and emu.getState()['cpu.x']==3 and r(0x10)==3,
             c.name..': alias excludes real slot one and retains enemy index')
         w(0x8D,0);w(0x36,(r(0x36)+1)%256);w(0x5CA,(r(0x5CA)+1)%256)
@@ -187,8 +198,8 @@ local function nativeHelper()
     end
     emu.setState({['cpu.pc']=0x609,['cpu.a']=0x5A,['cpu.y']=0xA6,['cpu.x']=3,['cpu.ps']=0x65})
 end
-emu.addMemoryCallback(nativeHelper,emu.callbackType.exec,LABELS.NativeEnemyFire)
-emu.addMemoryCallback(nativeHelper,emu.callbackType.exec,LABELS.NativeShieldFire)
+emu.addMemoryCallback(nativeHelper,emu.callbackType.exec,0xE498)
+emu.addMemoryCallback(nativeHelper,emu.callbackType.exec,LABELS.ExtraShieldOne0)
 emu.addMemoryCallback(function()
     if running then local c=cases[index];c.verify(c.name);nextCase()end
 end,emu.callbackType.exec,0x606)

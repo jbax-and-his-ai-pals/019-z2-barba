@@ -8,7 +8,8 @@ _TOOLS_DIR = Path(__file__).resolve().parent
 if str(_TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(_TOOLS_DIR))
 
-from pack_f13 import Asm6502
+from asm6502 import Asm6502
+from portal_transitions import TransitionAsm, build_return_helper, emit_clean_apu_mute, emit_wavy_transition
 import roar_sample
 import wheel_art
 import wheel_puzzles
@@ -26,7 +27,9 @@ WHEEL_SET_BANK_BODY  = 0x78B0
 WHEEL_PPUSCROLL_NT0  = 0x7900
 WHEEL_PPUSCROLL_NT1  = 0x790C
 WHEEL_RETURN         = 0x7960
+WHEEL_TRANS_CORE     = 0x79D8
 WHEEL_BOOT           = 0x7AE0
+WHEEL_WIPE_CHECK     = 0x7B50
 WHEEL_ROM_5FF1       = 0xFE14  # 16-byte common-ROM helper in all 4 banks: A=$5FF1 -> unlock, STA $5FF1, WRAM=$A3
 
 # Bank 0 Wheel of Barba helpers ($FC48-$FE13) and relocated Bonus Prize bank in Block 0 MMC3 bank 2
@@ -39,6 +42,11 @@ WHEEL_PRIZE_BANK     = 0x02    # Unused 8KB MMC3 bank 2 inside Block 0
 WHEEL_BANK0_R6       = 0x1C    # Wheel Bank 0 $8000-$9FFF MMC3 bank index
 
 # Guest WRAM state bytes (in guest WRAM bank)
+WHEEL_TR_FRAME       = 0x7FF5
+WHEEL_TR_CUT         = 0x7FF6
+WHEEL_TR_BAND        = 0x7FF7
+WHEEL_TR_DIR         = 0x7FF8
+WHEEL_WIPE_DONE      = 0x7FF9
 WHEEL_NT_BIT         = 0x7FFA  # Precomputed effective PPUCTRL bit 0: (($7FFD & $10) >> 4) ^ $7FFB
 WHEEL_NT_XOR         = 0x7FFB  # Per-screen nametable XOR (1 for $926B/$B774 under Vertical mirroring)
 WHEEL_PPUCTRL        = 0x7FFC  # Shadow of $2000 write with bit 0 masked off
@@ -129,6 +137,8 @@ def make_wheel_wram_code(
     reward_addr: int = WHEEL_REWARD_ADDR,
     reward_magic: int = WHEEL_REWARD_MAGIC,
     build_number: int | None = None,
+    enable_transitions: bool = False,
+    game_id: int | None = None,
 ) -> bytes:
     """Assemble the 1024-byte ($7800-$7BFF) WRAM helper for Wheel of Fortune."""
     out = bytearray(b'\xFF' * 0x400)
@@ -243,6 +253,8 @@ def make_wheel_wram_code(
     a.emit(0xA5, WHEEL_PAD1_ZP, 0x29, WHEEL_START_SELECT, 0xC9, WHEEL_START_SELECT)
     a.branch(0xF0, 'do_return')                                 # BEQ do_return
     a.label('normal_nmi')
+    if enable_transitions:
+        a.emit(0x20, WHEEL_WIPE_CHECK & 0xFF, WHEEL_WIPE_CHECK >> 8)
     a.emit(0xAD, WHEEL_AX_SHADOW & 0xFF, WHEEL_AX_SHADOW >> 8)  # LDA $7FFD
     a.emit(0x29, 0x03)                                          # AND #$03
     a.branch(0xF0, 'nmi_b0')                                    # BEQ nmi_b0
@@ -273,29 +285,49 @@ def make_wheel_wram_code(
     # 7. WHEEL_RETURN ($7960): silence APU/PPU/IRQ, copy RAM trampoline to $0300, restore Barba/standalone
     a = Asm6502(WHEEL_RETURN)
     a.emit(0x78)                                                # SEI
+    if enable_transitions:
+        ta = TransitionAsm(WHEEL_RETURN)
+        ta.buf = a.buf
+        ta.lda(WHEEL_PPUCTRL)
+        ta.and_imm(0x7E)
+        ta.ora(WHEEL_NT_BIT)
+        ta.sta(0x2000)
+        emit_clean_apu_mute(ta)
+        ta.jsr_abs(WHEEL_TRANS_CORE)                            # A = 0 -> melt-out
     a.emit(0xA9, 0x00)
     a.emit(0x8D, 0x00, 0x20)                                    # STA $2000 (disable NMI)
     a.emit(0x8D, 0x01, 0x20)                                    # STA $2001 (disable rendering)
-    a.emit(0x8D, 0x15, 0x40)                                    # STA $4015 (mute APU)
-    a.emit(0x8D, 0x00, 0xE0)                                    # STA $E000 (disable MMC3 IRQ)
+    if not enable_transitions:
+        a.emit(0x8D, 0x15, 0x40)                                # STA $4015 (mute APU)
+        a.emit(0x8D, 0x00, 0xE0)                                # STA $E000 (disable MMC3 IRQ)
     a.emit(0xAE, WHEEL_WIN_FLAG & 0xFF, WHEEL_WIN_FLAG >> 8)    # LDX $7FFE (preserve win flag across $A001 switch)
-    tramp = (
-        bytes.fromhex(
-            'a9 80 8d 01 a0 '                                   # LDA #$80; STA $A001 (unlock $5FFx)
-            'a9 01 8d f0 5f '                                   # LDA #$01; STA $5FF0 (CHR-ROM mode)
-            'a9 00 8d f1 5f 8d f2 5f '                          # LDA #$00; STA $5FF1; STA $5FF2
-            'a9 a0 8d 01 a0 '                                   # LDA #$A0; STA $A001 (Barba WRAM bank 0)
-            '8a f0 03 '                                         # TXA; BEQ +3
-            '8d'
+    if enable_transitions:
+        tramp = build_return_helper(
+            restore_addr,
+            reward_addr,
+            game_id=game_id,
+            win_reg='x',
+            restore_r6=restore_r6,
+            restore_r7=restore_r7,
         )
-        + reward_addr.to_bytes(2, 'little')                     # STA reward_addr
-        + bytes([
-            0xA9, 0x06, 0x8D, 0x00, 0x80, 0xA9, restore_r6, 0x8D, 0x01, 0x80,
-            0xA9, 0x07, 0x8D, 0x00, 0x80, 0xA9, restore_r7, 0x8D, 0x01, 0x80,
-            0x4C,
-        ])
-        + restore_addr.to_bytes(2, 'little')
-    )
+    else:
+        tramp = (
+            bytes.fromhex(
+                'a9 80 8d 01 a0 '                               # LDA #$80; STA $A001 (unlock $5FFx)
+                'a9 01 8d f0 5f '                               # LDA #$01; STA $5FF0 (CHR-ROM mode)
+                'a9 00 8d f1 5f 8d f2 5f '                      # LDA #$00; STA $5FF1; STA $5FF2
+                'a9 a0 8d 01 a0 '                               # LDA #$A0; STA $A001 (Barba WRAM bank 0)
+                '8a f0 03 '                                     # TXA; BEQ +3
+                '8d'
+            )
+            + reward_addr.to_bytes(2, 'little')                 # STA reward_addr
+            + bytes([
+                0xA9, 0x06, 0x8D, 0x00, 0x80, 0xA9, restore_r6, 0x8D, 0x01, 0x80,
+                0xA9, 0x07, 0x8D, 0x00, 0x80, 0xA9, restore_r7, 0x8D, 0x01, 0x80,
+                0x4C,
+            ])
+            + restore_addr.to_bytes(2, 'little')
+        )
     a.emit(0xA0, len(tramp) - 1)                                # LDY #(len(tramp)-1)
     a.label('cp_tramp')
     a.abs_ref(0xB9, 'tramp_data')                               # LDA tramp_data,Y
@@ -305,7 +337,24 @@ def make_wheel_wram_code(
     a.emit(0x4C, 0x00, 0x03)                                    # JMP $0300
     a.label('tramp_data')
     a.emit(*tramp)
-    place(WHEEL_RETURN, a.finish(), WHEEL_BOOT)
+    place(WHEEL_RETURN, a.finish(), WHEEL_TRANS_CORE if enable_transitions else WHEEL_BOOT)
+
+    if enable_transitions:
+        at = TransitionAsm(WHEEL_TRANS_CORE)
+        emit_wavy_transition(
+            at,
+            prefix='wh',
+            frame_addr=WHEEL_TR_FRAME,
+            cut_addr=WHEEL_TR_CUT,
+            band_addr=WHEEL_TR_BAND,
+            dir_addr=WHEEL_TR_DIR,
+            ppuctrl_addr=WHEEL_PPUCTRL,
+            ppuctrl_mask=0x7E,
+            ppuctrl_or_addr=WHEEL_NT_BIT,
+            ppumask_const=0x1E,
+            end_on_vblank=False,
+        )
+        place(WHEEL_TRANS_CORE, at.finish(), WHEEL_BOOT)
 
     # 8. WHEEL_BOOT ($7AE0): init FK23C ($5FF0=$21 via $0320 once at boot), PPU/APU/MMC3 Vertical mirroring,
     #    map Wheel Bank 0 ($1C, $1D) and jump to Wheel Reset ($8030).
@@ -340,22 +389,48 @@ def make_wheel_wram_code(
     a.emit(0x8D, WHEEL_AX_SHADOW & 0xFF, WHEEL_AX_SHADOW >> 8)
     a.emit(0x8D, WHEEL_WIN_FLAG & 0xFF, WHEEL_WIN_FLAG >> 8)
     a.emit(0x8D, WHEEL_DEBOUNCE & 0xFF, WHEEL_DEBOUNCE >> 8)
+    if enable_transitions:
+        a.emit(0x8D, WHEEL_WIPE_DONE & 0xFF, WHEEL_WIPE_DONE >> 8)
     a.emit(0x4C, WHEEL_RESET_TARGET & 0xFF, WHEEL_RESET_TARGET >> 8)  # JMP $8030
     a.label('ram5_data')
     a.emit(*ram_fk23c)
-    place(WHEEL_BOOT, a.finish(), 0x7C00)
+    place(WHEEL_BOOT, a.finish(), WHEEL_WIPE_CHECK if enable_transitions else 0x7C00)
+
+    if enable_transitions:
+        ac = TransitionAsm(WHEEL_WIPE_CHECK)
+        ac.lda(WHEEL_WIPE_DONE)
+        ac.branch(0xD0, 'wchk_ret')
+        ac.lda(WHEEL_DEBOUNCE)
+        ac.cmp_imm(0x08)
+        ac.branch(0x90, 'wchk_ret')
+        ac.emit(0x8A, 0x48, 0x98, 0x48)                         # TXA; PHA; TYA; PHA
+        ac.inc(WHEEL_WIPE_DONE)
+        ac.lda_imm(0x01)
+        ac.jsr_abs(WHEEL_TRANS_CORE)
+        ac.emit(0x68, 0xA8, 0x68, 0xAA)                         # PLA; TAY; PLA; TAX
+        ac.label('wchk_ret')
+        ac.emit(0x60)
+        place(WHEEL_WIPE_CHECK, ac.finish(), 0x7C00)
 
     if build_number is not None:
-        tb_addr = 0x7980
-        tb_tiles = bytes(ord(c) for c in f'B{build_number}')
+        tb_addr = 0x7BA0
+        tb_tiles = bytes(0x16 if c == 'B' else 0x04 + int(c) for c in f'B{build_number}')
         a_tb = Asm6502(tb_addr)
+        a_tb.emit(0xA5, 0x0E, 0xC9, 0xCE)
+        a_tb.branch(0xD0, 'tb_skip')
         a_tb.emit(0x2C, 0x02, 0x20)
         a_tb.emit(0xA9, 0x23, 0x8D, 0x06, 0x20)
         a_tb.emit(0xA9, 0x9A, 0x8D, 0x06, 0x20)
         for ch_byte in tb_tiles:
             a_tb.emit(0xA9, ch_byte, 0x8D, 0x07, 0x20)
+        a_tb.emit(0xA9, 0x00, 0x8D, 0x06, 0x20, 0x8D, 0x06, 0x20)
+        a_tb.emit(0x8D, 0x05, 0x20, 0xA5, 0x16, 0x8D, 0x05, 0x20)
+        a_tb.emit(0xAD, WHEEL_PPUCTRL & 0xFF, WHEEL_PPUCTRL >> 8)
+        a_tb.emit(0x0D, WHEEL_NT_BIT & 0xFF, WHEEL_NT_BIT >> 8)
+        a_tb.emit(0x8D, 0x00, 0x20)
+        a_tb.label('tb_skip')
         a_tb.emit(0xAD, 0x00, 0x03, 0x60)
-        place(tb_addr, a_tb.finish(), 0x7A00)
+        place(tb_addr, a_tb.finish(), 0x7C00)
 
     return bytes(out)
 
@@ -372,6 +447,8 @@ def make_wheel_boot_bank0(
     reward_addr: int = WHEEL_REWARD_ADDR,
     reward_magic: int = WHEEL_REWARD_MAGIC,
     build_number: int | None = None,
+    enable_transitions: bool = False,
+    game_id: int | None = None,
 ) -> bytes:
     """Build 8KB loader bank 0 ($8000-$9FFF): copies $8100-$84FF -> $7800-$7BFF and jumps to WHEEL_BOOT."""
     bank0 = bytearray(b'\xFF' * 8192)
@@ -406,6 +483,8 @@ def make_wheel_boot_bank0(
         reward_addr=reward_addr,
         reward_magic=reward_magic,
         build_number=build_number,
+        enable_transitions=enable_transitions,
+        game_id=game_id,
     )
     return bytes(bank0)
 
@@ -606,7 +685,7 @@ def patch_wheel(
             wheel_puzzles.apply_puzzle_patches_bank0(prg)
             wheel_art.apply_art_patches_bank0(prg)
             if build_number is not None:
-                patch(0x8DA9, bytes.fromhex('20 80 79'), bytes.fromhex('ad 00 03'))
+                patch(0x8DA9, bytes.fromhex('20 a0 7b'), bytes.fromhex('ad 00 03'))
         elif b == 1:
             # Matching Bank 1 half of fast $917C -> $8CC8 -> Bank 0 return trampoline
             b1_start = 0xFE24 + 15  # exact length of fast_b0_bytes (5+5+5)
@@ -628,9 +707,10 @@ def patch_wheel(
             wheel_puzzles.apply_puzzle_patches_bank2(prg)
             wheel_art.apply_art_patches_bank2(prg)
 
-        banks.append(bytes(prg))
+        banks.append(prg)
 
-    return banks
+    wheel_art.patch_s2_wheel_barba(banks[1], banks[2])
+    return [bytes(b) for b in banks]
 
 
 def patch_wheel_for_combined(
@@ -642,6 +722,8 @@ def patch_wheel_for_combined(
     reward_addr: int = WHEEL_REWARD_ADDR,
     reward_magic: int = WHEEL_REWARD_MAGIC,
     z2_bytes: bytes | None = None,
+    enable_transitions: bool = False,
+    game_id: int | None = None,
 ) -> bytes:
     """Build 1024KB PRG (4 x 256KB outer blocks) for Wheel of Barba inside barba.nes."""
     banks = patch_wheel(wheel_bytes, base_5ff1=base_5ff1, z2_bytes=z2_bytes)
@@ -654,6 +736,8 @@ def patch_wheel_for_combined(
         restore_r7=0x0D,
         reward_addr=reward_addr,
         reward_magic=reward_magic,
+        enable_transitions=enable_transitions,
+        game_id=game_id,
     )
     prg1024[WHEEL_PRIZE_BANK * 8192 : (WHEEL_PRIZE_BANK + 1) * 8192] = build_wheel_prize_bank(wheel_bytes)
     for b in range(4):
@@ -722,6 +806,7 @@ def build_standalone(
         restore_r6=0x00,
         restore_r7=0x01,
         standalone_stub=True,
+        build_number=build_number,
     )
     prg1024[WHEEL_PRIZE_BANK * 8192 : (WHEEL_PRIZE_BANK + 1) * 8192] = build_wheel_prize_bank(wheel_bytes)
     for b in range(4):

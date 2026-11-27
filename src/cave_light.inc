@@ -100,7 +100,7 @@ CaveFireLight1:
     sta $05                     ; rotating H/V-flip ($00/$40/$C0/$80)
     lda #$00
     sta $02                     ; live fireball count
-    ldx CLOUD_OAM_START         ; scan below Barba's trail down to $60
+    ldx HALO_OAM_START          ; scan below Barba's trail down to $60
     lda $8D
     beq :+
     bmi :+
@@ -300,7 +300,7 @@ CavePlaceHalo1:
     dex
     rts
 
-.segment "BANK2_CAVE"
+.segment "BANK2_SMOKE"
 ; 4 palettes x 18 bytes = 72 bytes:
 ;   BG1(3), BG2(3), BG3(3), Pal2(3), Pal3(3), Pal0/Barba(3)
 ; Combined with $2001 emphasis ($E0/$20/$00) for 10 smooth levels (0..9):
@@ -323,6 +323,7 @@ CaveLightPalettes:
 CavePendToOff:
     .byte 0, 18, 18, 18, 36, 36, 36, 54, 54, 54
 
+.segment "BANK2_CAVE"
 CaveApplyPal2:
     lda CAVE_PAL_PEND
     and #$0F

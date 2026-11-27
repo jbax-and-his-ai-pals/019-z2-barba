@@ -68,8 +68,6 @@ local function input()
             if actionFrame and frame==actionFrame then b.b=true end
         elseif phase=='step_onto_melted' then
             if actionFrame and frame>=actionFrame and frame<actionFrame+22 then b.up=true end
-        elseif phase=='turn_right' then
-            if actionFrame and frame>=actionFrame and frame<actionFrame+4 then b.right=true end
         elseif phase=='melt_adjacent' then
             if actionFrame and frame==actionFrame then b.b=true end
         end
@@ -95,23 +93,17 @@ local function tick()
             local pal=(attrByte>>shift)&0x03
             check(pal==3,string.format('live PPU attr $%04X shift %d updated to Desert pal 3 (got %d, byte=$%02X)',aAddr,shift,pal,attrByte))
             screenshot('ow-mtn-melt')
+            mtnPos=r(0x73)
             phase='step_onto_melted'
             actionFrame=frame+2
         elseif phase=='step_onto_melted' and actionFrame and frame==actionFrame+26 then
             local curEnd=rleEndAddr()
-            check(r(0x7D)==0,'Barba walked onto melted Mountain tile ($7D==0)')
+            check(r(0x7D)==0 and mtnPos~=nil and r(0x73)==mtnPos-1,
+                string.format('Barba walked onto melted Mountain tile ($7D=%d y=%d->%d)', r(0x7D), mtnPos or -1, r(0x73)))
+            check(r(0x0563)==0x0B,'facing Mountain (31,30) after stepping onto melted tile, got '..r(0x0563))
             preMeltEnd=curEnd
-            phase='turn_right'
+            phase='melt_adjacent'
             actionFrame=frame+2
-        elseif phase=='turn_right' and actionFrame and frame==actionFrame+6 then
-            if r(0x0563)==0x0B then
-                phase='melt_adjacent'
-                actionFrame=frame+2
-            else
-                report:write('RESULT '..(errors==0 and 'PASS' or 'FAIL')..'\n')
-                report:close()
-                stopScenario(errors==0 and 0 or 1)
-            end
         elseif phase=='melt_adjacent' and actionFrame and frame==actionFrame+10 then
             local postEnd=rleEndAddr()
             local growth=postEnd-preMeltEnd

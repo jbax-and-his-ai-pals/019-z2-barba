@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from feud_art import build_cast_rom_banks, patch_chr0b_blue_k
-from pack_f13 import Asm6502
+from asm6502 import Asm6502
 
 WRAM_EXTRA_ORG = 0x7B00
 BANK4_EXTRA_OFF = 0x0400

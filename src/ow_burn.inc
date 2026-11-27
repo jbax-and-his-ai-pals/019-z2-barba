@@ -49,8 +49,8 @@ BarbaBurnTile0:
     iny
     jsr @can_merge_y
     bcc @restore_y_nomerge
-    lda $03             ; remaining = left_count
     dey
+    lda $03             ; remaining = left_count (set Z after dey)
     jmp @finish_merge
 @restore_y_nomerge:
     dey
@@ -379,10 +379,10 @@ OwAttrUpdate4:
     jsr OwAttrSetup4
     lda #$01
     sta $030E
-    lda $74
+    lda $76
     sec
     sbc $03
-    sta $08             ; base_x = facing_map_x ($74) - quad_x
+    sta $08             ; base_x = facing_map_x ($76) - quad_x
     lda $04
     sec
     sbc $06

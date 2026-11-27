@@ -8,11 +8,24 @@ import re
 import zipfile
 
 ROOT = Path(__file__).resolve().parent.parent
-_BUILD_SUFFIX_RE = re.compile(r'-b\d+$')
+_BUILD_SUFFIX_RE = re.compile(r'-b(\d+)$')
 
 
 def _strip_build_suffix(stem: str) -> str:
     return _BUILD_SUFFIX_RE.sub('', stem)
+
+
+def _extract_build_num(stem: str) -> int:
+    match = _BUILD_SUFFIX_RE.search(stem)
+    return int(match.group(1)) if match else -1
+
+
+def _normalize_subgame_base(base: str) -> str:
+    if base.endswith('-barba'):
+        return base[:-len('-barba')]
+    if base.endswith('-mmc3'):
+        return base[:-len('-mmc3')] + '-compat'
+    return base
 
 
 def _stamp_dir(
@@ -20,13 +33,21 @@ def _stamp_dir(
     suffix: str,
     default_build: int,
     subgame_builds: dict[str, int] | None = None,
+    *,
+    only_bases: set[str] | None = None,
+    normalize_legacy: bool = False,
 ) -> None:
     if not directory.is_dir():
         return
     by_base: dict[str, list[Path]] = {}
     for path in sorted(directory.iterdir()):
         if path.is_file() and path.suffix.lower() == suffix:
-            by_base.setdefault(_strip_build_suffix(path.stem), []).append(path)
+            base = _strip_build_suffix(path.stem)
+            if normalize_legacy:
+                base = _normalize_subgame_base(base)
+            if only_bases is not None and base not in only_bases:
+                continue
+            by_base.setdefault(base, []).append(path)
     for base, paths in by_base.items():
         game_key = base.split('-', 1)[0]
         build_number = (
@@ -34,9 +55,15 @@ def _stamp_dir(
             if subgame_builds and game_key in subgame_builds
             else default_build
         )
-        # Prefer an un-numbered (newly built) file if both un-numbered and old-numbered exist.
-        unnumbered = [p for p in paths if p.stem == base]
-        source = unnumbered[-1] if unnumbered else paths[-1]
+        # Prefer canonical un-numbered, then legacy un-numbered, then highest numeric build.
+        unnumbered_canonical = [p for p in paths if p.stem == base]
+        unnumbered_legacy = [p for p in paths if _extract_build_num(p.stem) == -1]
+        if unnumbered_canonical:
+            source = unnumbered_canonical[-1]
+        elif unnumbered_legacy:
+            source = unnumbered_legacy[-1]
+        else:
+            source = max(paths, key=lambda p: (_extract_build_num(p.stem), p.stem.startswith(f'{base}-b')))
         target = directory / f'{base}-b{build_number}{suffix}'
         if source != target:
             if target.exists():
@@ -52,45 +79,44 @@ def stamp_play_artifacts(
     build_number: int,
     subgame_builds: dict[str, int] | None = None,
 ) -> None:
-    """Ensure all .nes and .bps files in play/, play/nes/, and play/bps/ carry -b<N>."""
+    """Ensure all .nes and .bps files in play/, play/nes/, play/bps/, and play/compat/{nes,bps}/ carry -b<N>."""
     play_dir = root / 'play'
     for ext in ('.nes', '.bps'):
-        if play_dir.is_dir():
-            for path in sorted(play_dir.iterdir()):
-                if path.is_file() and path.suffix.lower() == ext and _strip_build_suffix(path.stem) == 'barba':
-                    target = play_dir / f'barba-b{build_number}{ext}'
-                    if path != target:
-                        if target.exists():
-                            target.unlink()
-                        path.rename(target)
-    _stamp_dir(play_dir / 'nes', '.nes', build_number, subgame_builds)
-    _stamp_dir(play_dir / 'bps', '.bps', build_number, subgame_builds)
+        _stamp_dir(play_dir, ext, build_number, only_bases={'barba'})
+    _stamp_dir(play_dir / 'nes', '.nes', build_number, subgame_builds, normalize_legacy=True)
+    _stamp_dir(play_dir / 'bps', '.bps', build_number, subgame_builds, normalize_legacy=True)
+    _stamp_dir(play_dir / 'compat' / 'nes', '.nes', build_number, subgame_builds, normalize_legacy=True)
+    _stamp_dir(play_dir / 'compat' / 'bps', '.bps', build_number, subgame_builds, normalize_legacy=True)
 
 
 def collect_bps_files(root: Path = ROOT) -> list[Path]:
-    """Return sorted .bps paths from play/barba*.bps and play/bps/*.bps (latest per base)."""
+    """Return sorted .bps paths from play/barba*.bps, play/bps/*.bps, and play/compat/bps/*.bps (latest per base)."""
     files: list[Path] = []
     play_dir = root / 'play'
     if play_dir.is_dir():
-        barba_bps = sorted(
+        barba_bps = [
             p for p in play_dir.iterdir()
             if p.is_file() and p.suffix.lower() == '.bps' and _strip_build_suffix(p.stem) == 'barba'
-        )
+        ]
         if barba_bps:
-            files.append(barba_bps[-1])
-    bps_dir = play_dir / 'bps'
-    if bps_dir.is_dir():
-        by_base: dict[str, Path] = {}
-        for path in sorted(p for p in bps_dir.iterdir() if p.is_file() and p.suffix.lower() == '.bps'):
-            by_base[_strip_build_suffix(path.stem)] = path
-        files.extend(by_base[k] for k in sorted(by_base))
+            unnumbered = [p for p in barba_bps if p.stem == 'barba']
+            files.append(unnumbered[-1] if unnumbered else max(barba_bps, key=lambda p: _extract_build_num(p.stem)))
+    by_base: dict[str, list[Path]] = {}
+    for bps_dir in (play_dir / 'bps', play_dir / 'compat' / 'bps'):
+        if bps_dir.is_dir():
+            for path in sorted(p for p in bps_dir.iterdir() if p.is_file() and p.suffix.lower() == '.bps'):
+                by_base.setdefault(_strip_build_suffix(path.stem), []).append(path)
+    for k in sorted(by_base):
+        paths = by_base[k]
+        unnumbered = [p for p in paths if p.stem == k]
+        files.append(unnumbered[-1] if unnumbered else max(paths, key=lambda p: _extract_build_num(p.stem)))
     return files
 
 
 def build_flat_zip(out_path: Path, bps_files: list[Path]) -> Path:
     """Write a flat zip containing only the basename of each .bps file."""
     if not bps_files:
-        raise FileNotFoundError('No .bps files found under play/ or play/bps/')
+        raise FileNotFoundError('No .bps files found under play/, play/bps/, or play/compat/bps/')
     seen: dict[str, Path] = {}
     for path in bps_files:
         if path.name in seen:
@@ -111,7 +137,9 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.build_number is not None:
-        stamp_play_artifacts(ROOT, args.build_number)
+        from build_history import HISTORY_FILE, get_all_subgame_build_numbers
+        subgame_builds = get_all_subgame_build_numbers(HISTORY_FILE) if HISTORY_FILE.is_file() else None
+        stamp_play_artifacts(ROOT, args.build_number, subgame_builds)
 
     out_path = args.out
     if out_path is None:

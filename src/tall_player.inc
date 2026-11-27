@@ -752,6 +752,7 @@ DownstabBandCol3:
     tay
     lda ($0E),y
     rts
+.segment "BANK3_SIGN"
 DownstabWagAttr3:
     lda $12
     and #$04
@@ -761,10 +762,14 @@ DownstabWagAttr3:
     and #$7F
     rts
 
+.segment "BANK3_DLG"
 ; Called from FinishSceneOam6 via Bank 3 hop. Return to Bank 6 via $FFCC.
 DrawDownstabTail3:
     lda $0736
     cmp #$05
+    bne :+
+    lda $076C
+    cmp #$01
     bne :+
     lda #>(OwSparkle4-1)
     pha
@@ -983,38 +988,6 @@ BarbaDisplayRight:
 ; Return through the fixed mapper routine to restore Bank 6.
 DrawPlayerTrailReturn6:
     jmp DrawEncounterTorso
-
-; Three frames behind Barba and a further three behind the torso. Refill
-; after a transition or a displacement outside normal six-frame travel.
-SampleEncounterTrail:
-    ldx TRAIL_INDEX
-    beq @refill
-    cpx #$07
-    bcs @refill
-    tya
-    sec
-    sbc TRAIL_HISTORY-1,x
-    clc
-    adc #$30
-    cmp #$61
-    bcs @refill
-    lda TRAIL_HISTORY-1,x
-    sta $03
-    tya
-    sta TRAIL_HISTORY-1,x
-    lda TrailHalfCycle-1,x
-    tay
-    lda TRAIL_HISTORY-1,y
-    sta $00
-    inx
-    cpx #$07
-    bne @save
-    ldx #$01
-@save:
-    stx TRAIL_INDEX
-    rts
-@refill:
-    jmp EncounterTrailRefill
 
 .ifdef SAMPLED_ROAR
 RoarTorsoHop:

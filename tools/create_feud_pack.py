@@ -1,4 +1,4 @@
-"""Create a save-state pack for standalone Family Feud: Barba Edition (play/nes/feud-barba.nes)."""
+"""Create a save-state pack for standalone Family Feud: Barba Edition (play/nes/feud.nes)."""
 from __future__ import annotations
 
 import argparse
@@ -6,7 +6,7 @@ from pathlib import Path
 
 from subgame_pack import ROOT, create_pack, find_play_rom, prepare_profile, run_cli
 
-ROM_PATH = ROOT / 'play/nes/feud-barba.nes'
+ROM_PATH = ROOT / 'play/nes/feud.nes'
 PACK_DIR = ROOT / 'build/feud-pack'
 PROFILE_DIR = ROOT / 'build/mesen-scenarios/feud'
 SCENARIOS = ROOT / 'tools/scenarios/feud_scenarios.lua'
@@ -28,11 +28,11 @@ SLOTS = [
 def _paths(mmc3: bool = False) -> tuple[Path, Path, Path]:
     if mmc3:
         return (
-            find_play_rom('feud-mmc3'),
+            find_play_rom('feud-compat'),
             ROOT / 'build/feud-mmc3-pack',
             ROOT / 'build/mesen-scenarios/feud-mmc3',
         )
-    return find_play_rom('feud-barba'), PACK_DIR, PROFILE_DIR
+    return find_play_rom('feud'), PACK_DIR, PROFILE_DIR
 
 
 def _build(mmc3: bool, rom_path: Path) -> None:
@@ -70,7 +70,7 @@ def prepare(force: bool = False, mmc3: bool = False) -> tuple[Path, dict]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--mmc3', action='store_true', help='Use play/nes/feud-mmc3.nes instead of standalone.')
+    parser.add_argument('--mmc3', action='store_true', help='Use play/compat/nes/feud-compat.nes instead of standalone.')
     parser.add_argument('--force', action='store_true', help='Regenerate all save states.')
     parser.add_argument('--prepare-only', action='store_true', help='Prepare profile without opening Mesen.')
     args = parser.parse_args()

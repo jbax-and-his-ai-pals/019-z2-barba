@@ -1,14 +1,15 @@
-; Bank 0 samples the body motion. Bank 1 borrows the existing Geldarm pad
-; for the shadow OAM art and slot decisions.
+; Bank 0 sprite trail behind tall encountered Barba.
+; EncounterDarkCheck3 -> DrawPlayerTrailReturn6 -> DrawEncounterTorso;
+; FinishSceneOam6 (Bank 6) draws behind-BG clouds first, then hops here via
+; EncounterTorsoHop6. Both ResetEncounterTrail and DrawEncounterTrailSprites
+; exit via SwapToBank6 so Bank 6 callers and tall_geometry.lua return in PRG 6.
 .segment "BANK0"
-
+.export DrawEncounterTorso
 ResetEncounterTrail:
     lda #$00
     sta TRAIL_INDEX
     jmp SwapToBank6
 
-; Sample torso and tip motion for the bank-1 shadow OAM pass.
-.export DrawEncounterTorso
 DrawEncounterTorso:
     lda $13                   ; skip the native fairy/transform draw paths
     ora $048D
@@ -151,18 +152,130 @@ DrawEncounterTrailSprites:
 
 .segment "BANK6"
 ; Sprite priority on a crowded scanline: Barba, his fireballs, projectiles,
-; enemies and the HUD markers first, then the trail. The trail never moves
-; another sprite: it takes the four highest free shadow entries, with the near
-; torso in the lowest of them so it still outranks the outer torso and tips.
-; The tail gives way on full scanlines instead of the enemies. Entries below
-; TRAIL_FLOOR (Barba, fireballs, projectiles) are never used; with too few
-; free entries the tips are skipped first. Clouds, smoke and the downstab
-; tail are placed later, in the free entries below the trail.
+; enemies and the HUD markers first, then the trail, and finally behind-BG
+; clouds (which already wrote down from $FC and updated CLOUD_OAM_START).
+; Entries below TRAIL_FLOOR (Barba, fireballs, projectiles) are never used.
+; When 3+ hostile foreground actors/fireballs crowd the tip scanline band,
+; trim only the two outer tips ($0E/$0F) so torso pieces stay solid.
 TRAIL_FLOOR = $50
 TRAIL_SLOTS = $02             ; $02-$05: free entries found, highest first
 TRAIL_FREE = $06              ; visible pieces / upper bound in TRAIL_SLOTS
 TRAIL_POS = $07               ; next slot index in TRAIL_SLOTS
 DrawEncounterTrailSprites6:
+    lda $0707                 ; keep all 4 body columns in towns ($0707 = 1, 2)
+    beq @trim_chk
+    cmp #$03
+    bcc @no_trim
+@trim_chk:
+    lda $0E
+    cmp #$F0
+    bcs @no_trim
+    ; Trim outer tips ($0E/$0F) when Barba's lower row + live fireballs +
+    ; Y-overlapping enemies reach >= 6 foreground sprites on tipY.
+    ldy #$03
+    ldx $8D
+    beq :+
+    dey
+:
+    ldx $8E
+    beq :+
+    dey
+:
+    ldx EXTRA_LIVE
+    beq :+
+    dey
+    beq @do_trim
+:
+    ldx #$05
+@crowd_loop:
+    lda $B6,x
+    cmp #$01
+    bne @crowd_next
+    lda $A1,x
+    cmp #$02
+    bcc @crowd_next           ; skip fairy/jar drops
+    lda $2A,x
+    sec
+    sbc $0E
+    clc
+    adc #$18
+    cmp #$31
+    bcs @crowd_next
+    dey
+    beq @do_trim
+@crowd_next:
+    dex
+    bpl @crowd_loop
+    bmi @no_trim
+@do_trim:
+    lda #$F8
+    sta $0E
+    sta $0F
+@no_trim:
+    jmp DrawTrailFast6
+DrawTrailFast4Go6:
+    lda #$EC
+    sta HALO_OAM_START
+    ldy #$03
+    jmp DrawTrailFastLoop6
+
+.segment "BANK6_EXTRA"
+DrawTrailFast6:
+    lda CLOUD_OAM_START
+    cmp #$FC
+    bne @slow
+    lda $0C
+    cmp #$F0
+    bcs @slow
+    lda $65F8
+    and $65FC
+    cmp #$F0
+    bcc @slow
+    jmp DrawTrailFastSplit6
+@slow:
+    jmp DrawTrailPlace6
+
+.segment "PALACE_SHAKE"
+DrawTrailFastSplit6:
+    lda $0E
+    cmp #$F0
+    bcc @chk4
+    lda #$F4
+    sta HALO_OAM_START
+    ldy #$01
+    bne DrawTrailFastLoop6
+@chk4:
+    jmp CheckTrailFast4_6
+DrawTrailFastLoop6:
+    ldx #$0C
+@loop:
+    lda $000C,y
+    sta $65F0,x
+    lda $0008,y
+    sta $65F3,x
+    lda TrailPieceTiles,y
+    sta $65F1,x
+    lda $01
+    sta $65F2,x
+    dex
+    dex
+    dex
+    dex
+    dey
+    bpl @loop
+    rts
+
+.segment "BANK6_CLOUD"
+CheckTrailFast4_6:
+    lda $0F
+    cmp #$F0
+    bcs DrawTrailPlace6
+    lda $65F0
+    and $65F4
+    cmp #$F0
+    bcc DrawTrailPlace6
+    jmp DrawTrailFast4Go6
+DrawTrailPlace6:
     ldy #$03
     lda #$00
     sta TRAIL_FREE
@@ -176,17 +289,10 @@ DrawEncounterTrailSprites6:
     bpl @count
     ldy TRAIL_FREE
     beq @done
-    ldx #$FC
-    bne @scan
-@found:
-    dey
-    stx TRAIL_SLOTS,y
-    beq @found_all
-    txa
-    sbc #$04                  ; C=1 from cmp #$F0
-    tax
-    cmp #TRAIL_FLOOR
-    bcc @scanned
+    ldx CLOUD_OAM_START
+    cpx #TRAIL_FLOOR
+    bcc @done
+@found_check:
 @scan:
     lda $6500,x
     cmp #$F0
@@ -196,15 +302,23 @@ DrawEncounterTrailSprites6:
     tax
     cmp #TRAIL_FLOOR
     bcs @scan
-@scanned:
-    stx CLOUD_OAM_START
-    sty TRAIL_POS
-    bpl @start_pieces
+    bcc @scanned
+@found:
+    dey
+    stx TRAIL_SLOTS,y
+    beq @found_all
+    txa
+    sbc #$04                  ; C=1 from cmp #$F0
+    tax
+    cmp #TRAIL_FLOOR
+    bcs @scan
+    bcc @scanned
 @found_all:
     txa
-    sbc #$04                  ; C=1 from cmp #$F0 -> clouds start below last trail slot
-    sta CLOUD_OAM_START
-    sty TRAIL_POS             ; Y = 0
+    sbc #$04                  ; C=1 from cmp #$F0 -> lower-priority tail/cave halos start below trail
+@scanned:
+    sta HALO_OAM_START
+    sty TRAIL_POS
 @start_pieces:
     ldy #$00                  ; piece: near torso first, into the lowest entry found
 @piece:
@@ -250,13 +364,43 @@ EncounterTrailRefill:
 TrailHalfCycle:
     .byte 4, 5, 6, 1, 2, 3
 
+SampleEncounterTrail:
+    ldx TRAIL_INDEX
+    beq @refill
+    cpx #$07
+    bcs @refill
+    tya
+    sec
+    sbc TRAIL_HISTORY-1,x
+    clc
+    adc #$30
+    cmp #$61
+    bcs @refill
+    lda TRAIL_HISTORY-1,x
+    sta $03
+    tya
+    sta TRAIL_HISTORY-1,x
+    lda TrailHalfCycle-1,x
+    tay
+    lda TRAIL_HISTORY-1,y
+    sta $00
+    inx
+    cpx #$07
+    bne @save
+    ldx #$01
+@save:
+    stx TRAIL_INDEX
+    rts
+@refill:
+    jmp EncounterTrailRefill
+
 ; The rotated trail sways vertically across the same three poses as the
 ; upright torso. Sample the sway so the second joint gets it later too.
 SampleWigglingTrail:
     lda $6519
 .ifdef SAMPLED_ROAR
     cmp #TRAIL_BEND_CENTER
-    beq @refill               ; the raised-head roar draws its own floor-level bend
+    beq EncounterTrailRefill ; the raised-head roar draws its own floor-level bend
 .endif
     cmp #TRAIL_CORRIDOR_BEND
     bne @walk
@@ -267,21 +411,19 @@ SampleWigglingTrail:
     sec
     sbc #$09
     tay
-@refill:
     jmp EncounterTrailRefill
 @walk:
     lda $80
     cmp #$01
     beq @up
     cmp #$02
-    bne @sample
+    bne SampleEncounterTrail
     iny
     iny
-    bne @sample
+    bne SampleEncounterTrail
 @up:
     dey
     dey
-@sample:
     jmp SampleEncounterTrail
 
 .segment "PALACE_ROAR"
@@ -320,11 +462,12 @@ DrawDarkTrail4:
     clc
     adc #$10
     bcc @place
-    bcs @done
+    bcs @exit
 @right:
     sec
     sbc #$10
-    bcc @done
+    bcs @place
+    bcc @exit
 @place:
     sta $02
     lda $6561                ; bend fits the idle, walk and standing attack rows
@@ -345,6 +488,23 @@ DrawDarkTrail4:
     lda #$F8
     sta $6500,y
 @draw:
+    lda $8D
+    ora $8E
+    ora EXTRA_LIVE
+    beq @default4
+    lda $29
+    sec
+    sbc $00
+    clc
+    adc #$18
+    cmp #$31
+    bcc @trim2
+@default4:
+    lda #$04
+    .byte $2C                 ; BIT abs skips lda #$02
+@trim2:
+    lda #$02                  ; trim outer tips when Barba + fireballs overlap Dark Barba's tail row
+    sta $06
     ldy #$00
     ldx #$FC
 @find:
@@ -360,7 +520,7 @@ DrawDarkTrail4:
     lda $02
     sta $6503,x
     iny
-    cpy #$04
+    cpy $06
     beq @done
     clc
     adc $03
@@ -386,5 +546,6 @@ DrawDarkTrail4:
     lda #$00
     jmp $FFCC
 
+.segment "BANK4_GEAR"
 DarkTrailTiles:
     .byte TRAIL_TORSO_LEFT, TRAIL_TORSO_RIGHT, TRAIL_TIP, TRAIL_TIP_FAR

@@ -114,9 +114,33 @@ BarbaBlockRun:
     ora $0706
     beq BarbaTownBurn
 @native_block:
+    lda $0786
+    beq BarbaBlockDone
+    lda $0480
+    clc
+    adc #$03
+    sta $39
+    lda $047E
+    clc
+    adc #$04
+    adc $072C
+    sta $5D
+    lda $072A
+    adc #$00
+    sta $4B
+    ldx #$10
+    ldy #$1C
+    jsr $EAE8
+    ldy $0769
+    cpy #$06
+    bcs BarbaBlockDone
+    cmp BreakBlockTileByBank,y
+    bne BarbaBlockDone
     lda #$09
     sta $80
     jmp $E1DD
+BreakBlockTileByBank:
+    .byte $00, $61, $61, $00, $4C, $4E
 BarbaBlockDone:
     rts
 

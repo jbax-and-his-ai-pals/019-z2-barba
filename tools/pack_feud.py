@@ -5,7 +5,8 @@ import argparse
 import json
 from pathlib import Path
 
-from pack_f13 import Asm6502
+from asm6502 import Asm6502
+from portal_transitions import build_return_helper, emit_clean_apu_mute, emit_wavy_transition
 from subgame_pack import make_rom_header
 
 
@@ -50,72 +51,72 @@ _T2 = "@0123456789/'()+*[]-&           "
 # 35 Zelda II-themed Main Round puzzles: (prefix_idx, question, [(answer, pts), ...])
 # prefix_idx ($AFFD): 0=none, 1="Name the ", 2="Name something ", 3="Name a ", 4="Name an ", 5="Tell me ", 6="How many "
 ZELDA2_MAIN_PUZZLES: list[tuple[int, str, list[tuple[str, int]]]] = [
-    (3, 'PALACE BOSS', [('HORSE[+]HEAD', 18), ('HELMET[+]HEAD', 16), ('REBONACK', 14), ('CAROCK', 13), ('GOOMA', 12), ('BARBA', 11), ('THUNDER[+]BIRD', 8), ('DARK[+]LINK/SHADOW[+]LINK', 8)]),
-    (3, 'KEY ITEM', [('CANDLE/TORCH', 18), ('GLOVE/POWER+GLOVE', 16), ('RAFT', 14), ('BOOTS/WATER+BOOTS', 13), ('FLUTE/WHISTLE', 12), ('CROSS', 11), ('HAMMER', 8), ('MAGIC+KEY', 8)]),
-    (3, 'SPELL IN ZELDA II', [('SHIELD', 18), ('JUMP', 16), ('LIFE', 14), ('FAIRY', 13), ('FIRE', 12), ('REFLECT', 11), ('SPELL', 8), ('THUNDER', 8)]),
-    (3, 'LINK ATTACK TYPE', [('SWORD/SLASH/THRUST', 28), ('DOWN[+]STAB/DOWNWARD+THRUST', 24), ('UP[+]STAB/UPWARD+THRUST', 18), ('BEAM/SWORD+BEAM', 12), ('FIRE[BALLs]', 10), ('THUNDER', 8)]),
-    (3, 'PALACE IN HYRULE', [('PARAPA[+PALACE]', 22), ('MIDORO[+PALACE]', 18), ('ISLAND[+PALACE]', 16), ('MAZE[+PALACE]', 14), ('OCEAN[+PALACE]', 12), ('THREE[-]EYE[+ROCK]', 10), ('GREAT[+PALACE]', 8)]),
-    (3, 'TOWN IN HYRULE', [('RAURU', 18), ('RUTO', 16), ('SARIA', 15), ('MIDO', 14), ('NABOORU', 12), ('DARUNIA', 10), ('NEW+KASUTO', 8), ('OLD+KASUTO', 7)]),
-    (4, 'ATTACK LEVEL XP', [('200', 22), ('500', 18), ('1000', 16), ('2000', 14), ('3000', 12), ('5000', 10), ('8000', 8)]),
-    (3, 'MAGIC LEVEL XP', [('100', 22), ('300', 18), ('700', 16), ('1200', 14), ('2200', 12), ('3500', 10), ('6000', 8)]),
-    (3, 'LIFE LEVEL XP', [('50', 22), ('150', 18), ('400', 16), ('800', 14), ('1500', 12), ('2500', 10), ('4000', 8)]),
-    (3, 'PARAPA PALACE ENEMY', [('STALFOS', 28), ('IRON[+]KNUCKLEs', 24), ('BOTs', 18), ('BITs', 14), ('BUBBLEs', 10), ('RAs', 6)]),
-    (3, 'MIDORO OR ISLAND ENEMY', [('IRON[+]KNUCKLEs', 26), ('STALFOS', 22), ('GORIYAs', 18), ('DOOM[+]KNOCKERs', 14), ('MAUs', 12), ('BUBBLEs', 8)]),
-    (3, 'MAZE OR OCEAN ENEMY', [('WIZZROBEs', 28), ('MAGOs', 22), ('IRON[+]KNUCKLEs', 18), ('STALFOS', 14), ('BUBBLEs', 10), ('MOAs', 8)]),
-    (3, 'GREAT PALACE ENEMY', [('FOKKAs', 30), ('FOKKERUs', 24), ('BUBBLEs', 18), ('BOTs', 12), ('THUNDER[+]BIRD', 10), ('DARK[+]LINK/SHADOW[+]LINK', 6)]),
-    (3, 'DEATH MTN ENEMY', [('DARIA[s]', 30), ('TEKTITEs', 24), ('OCTO[ROK]s', 18), ('GORIYAs', 16), ('BUBBLEs', 12)]),
-    (4, 'OVERWORLD TILE THAT SPAWNS ENCOUNTERS', [('GRASS/PLAINS', 26), ('SWAMP', 22), ('DESERT', 18), ('FOREST/WOODS', 14), ('GRAVEYARD', 12), ('LA(V/B)A', 8)]),
-    (2, 'FOUND IN A TOWN', [('HEALER/[TOWN+]LADY/[OLD+]WOMAN/VILLAGERs/PEOPLE', 28), ('ERROR', 24), ('SAGE/WISE+MAN/OLD+MAN', 18), ('BAGU', 12), ('KNIGHT', 10), ('CHIMNEY', 8)]),
-    (3, 'WAY TO CROSS WATER', [('RAFT', 40), ('BOOTS/WATER+BOOTS', 34), ('FAIRY[+SPELL]', 16), ('BRIDGE', 10)]),
-    (3, 'DROP FROM AN ENEMY', [('P[-]BAG/POINT+BAG/XP+BAG/EXP+BAG', 38), ('RED[+MAGIC]+JAR/RED+POTION', 26), ('BLUE[+MAGIC]+JAR/BLUE+POTION/[MAGIC+]JAR/POTION', 20), ('KEY', 16)]),
-    (3, 'WAY TO HEAL LINK', [('FAIRY', 34), ('LIFE[+SPELL]', 28), ('TOWN+LADY/HEALER', 22), ('LEVEL+UP', 16)]),
-    (2, 'THAT GUARDS THE TRIFORCE', [('THUNDER[+]BIRD', 45), ('DARK[+]LINK/SHADOW[+]LINK', 35), ('OLD+MAN/SAGE/IMPA', 20)]),
-    (3, 'PLACE YOU FIND A HEART CONTAINER', [('CAVE', 28), ('WATER/OCEAN/RIVER', 24), ('DESERT', 20), ('SWAMP/BUSH', 16), ('TOWN/KASUTO', 12)]),
-    (3, 'PLACE YOU FIND A MAGIC CONTAINER', [('DEATH+M(T/TN/OUNTAIN)', 26), ('CAVE', 24), ('RAURU/NORTH+CASTLE', 20), ('MAZE+ISLAND', 16), ('OLD+KASUTO/FOREST', 14)]),
-    (3, 'STAT YOU CAN LEVEL UP', [('ATTACK', 38), ('MAGIC', 32), ('LIFE', 30)]),
-    (3, 'CHARACTER IN ZELDA II', [('LINK', 24), ('ZELDA', 20), ('BARBA', 18), ('ERROR', 14), ('GAN[N]ON', 10), ('BAGU', 8), ('IMPA', 6)]),
-    (2, 'ON THE ZELDA II OVERWORLD', [('ROAD/PATH', 24), ('BRIDGE', 20), ('CAVE', 18), ('TOWN', 16), ('PALACE', 12), ('RIVER/WATER', 10)]),
-    (3, 'TRIFORCE', [('COURAGE', 40), ('POWER', 30), ('WISDOM', 30)]),
-    (3, 'VANILLA WEST HYRULE SPELL', [('SHIELD', 30), ('JUMP', 26), ('LIFE', 24), ('FAIRY', 20)]),
-    (3, 'VANILLA EAST HYRULE SPELL', [('FIRE', 30), ('REFLECT', 26), ('SPELL', 22), ('THUNDER', 22)]),
-    (3, 'FLYING CREATURE', [('FAIRY', 28), ('FOKKA', 22), ('THUNDER[+]BIRD', 18), ('FOKKERU', 12), ('ACHE', 10), ('MOA/BUBBLE', 10)]),
-    (3, 'REASON TO VISIT A TOWN', [('HEAL/LIFE', 30), ('LEARN+SPELL/GET+SPELL', 28), ('MAGIC', 18), ('TALK/CLUE', 14), ('QUEST/ITEM', 10)]),
-    (3, 'WAY TO GET EXTRA XP', [('P[-]BAG/POINT+BAG', 40), ('KILL+ENEMIES', 28), ('PALACE+CRYSTAL/CRYSTAL', 20), ('BOSS', 12)]),
-    (4, 'ENEMY WITH A SHIELD OR ARMOR', [('IRON[+]KNUCKLE', 42), ('STALFOS', 24), ('REBONACK', 16), ('FOKKA', 10), ('DOOM[+]KNOCKER', 8)]),
-    (2, 'YOU USE THE HAMMER ON', [('ROCK/BOULDER', 48), ('TREE[s]/FOREST/WOODS', 32), ('SPECTACLE+ROCK', 20)]),
-    (3, 'DESERT OR SWAMP ENEMY', [('GELDARM', 32), ('LEEVER', 24), ('MOBLIN', 20), ('OCTO[ROK]', 14), ('BOT', 10)]),
-    (3, 'HIGH[-]COST MAGIC SPELL', [('THUNDER', 40), ('FAIRY', 25), ('SPELL', 20), ('LIFE', 15)]),
+    (3, 'PALACE BOSS', [('HORSE[+]HEAD', 29), ('HELMET[+]HEAD', 20), ('REBONACK', 14), ('CAROCK', 11), ('GOOMA', 9), ('BARBA', 7), ('THUNDER[+]BIRD', 6), ('DARK[+]LINK/SHADOW[+]LINK', 4)]),
+    (3, 'KEY ITEM', [('CANDLE/TORCH', 26), ('GLOVE/POWER+GLOVE', 19), ('RAFT', 16), ('BOOTS/WATER+BOOTS', 13), ('FLUTE/WHISTLE', 9), ('CROSS', 7), ('HAMMER', 6), ('MAGIC+KEY', 4)]),
+    (3, 'SPELL IN ZELDA II', [('SHIELD', 24), ('JUMP', 21), ('LIFE', 17), ('FAIRY', 13), ('FIRE', 10), ('REFLECT', 7), ('SPELL', 5), ('THUNDER', 3)]),
+    (3, 'LINK ATTACK TYPE', [('SWORD/SLASH/THRUST', 37), ('DOWN[+]STAB/DOWNWARD+THRUST', 26), ('UP[+]STAB/UPWARD+THRUST', 16), ('BEAM/SWORD+BEAM', 11), ('FIRE[BALLs]', 6), ('THUNDER', 4)]),
+    (3, 'PALACE IN HYRULE', [('PARAPA[+PALACE]', 30), ('MIDORO[+PALACE]', 19), ('ISLAND[+PALACE]', 17), ('MAZE[+PALACE]', 13), ('OCEAN[+PALACE]', 9), ('THREE[-]EYE[+ROCK]', 8), ('GREAT[+PALACE]', 4)]),
+    (3, 'TOWN IN HYRULE', [('RAURU', 27), ('RUTO', 18), ('SARIA', 16), ('MIDO', 13), ('NABOORU', 11), ('DARUNIA', 7), ('NEW+KASUTO', 5), ('OLD+KASUTO', 3)]),
+    (4, 'ATTACK LEVEL XP', [('200', 32), ('500', 21), ('1000', 16), ('2000', 12), ('3000', 9), ('5000', 6), ('8000', 4)]),
+    (3, 'MAGIC LEVEL XP', [('100', 28), ('300', 23), ('700', 17), ('1200', 13), ('2200', 10), ('3500', 6), ('6000', 3)]),
+    (3, 'LIFE LEVEL XP', [('50', 33), ('150', 21), ('400', 15), ('800', 11), ('1500', 9), ('2500', 7), ('4000', 4)]),
+    (3, 'PARAPA PALACE ENEMY', [('STALFOS', 36), ('IRON[+]KNUCKLEs', 27), ('BOTs', 17), ('BITs', 10), ('BUBBLEs', 6), ('RAs', 4)]),
+    (3, 'MIDORO OR ISLAND ENEMY', [('IRON[+]KNUCKLEs', 32), ('STALFOS', 23), ('GORIYAs', 19), ('DOOM[+]KNOCKERs', 13), ('MAUs', 8), ('BUBBLEs', 5)]),
+    (3, 'MAZE OR OCEAN ENEMY', [('WIZZROBEs', 38), ('MAGOs', 22), ('IRON[+]KNUCKLEs', 16), ('STALFOS', 12), ('BUBBLEs', 7), ('MOAs', 5)]),
+    (3, 'GREAT PALACE ENEMY', [('FOKKAs', 40), ('FOKKERUs', 23), ('BUBBLEs', 14), ('BOTs', 11), ('THUNDER[+]BIRD', 8), ('DARK[+]LINK/SHADOW[+]LINK', 4)]),
+    (3, 'DEATH MTN ENEMY', [('DARIA[s]', 41), ('TEKTITEs', 24), ('OCTO[ROK]s', 17), ('GORIYAs', 12), ('BUBBLEs', 6)]),
+    (4, 'OVERWORLD TILE THAT SPAWNS ENCOUNTERS', [('GRASS/PLAINS', 31), ('SWAMP', 24), ('DESERT', 17), ('FOREST/WOODS', 13), ('GRAVEYARD', 9), ('LA(V/B)A', 6)]),
+    (2, 'FOUND IN A TOWN', [('HEALER/[TOWN+]LADY/[OLD+]WOMAN/VILLAGERs/PEOPLE', 34), ('ERROR', 27), ('SAGE/WISE+MAN/OLD+MAN', 17), ('BAGU', 11), ('KNIGHT', 7), ('CHIMNEY', 4)]),
+    (3, 'WAY TO CROSS WATER', [('RAFT', 43), ('BOOTS/WATER+BOOTS', 36), ('FAIRY[+SPELL]', 14), ('BRIDGE', 7)]),
+    (3, 'DROP FROM AN ENEMY', [('P[-]BAG/POINT+BAG/XP+BAG/EXP+BAG', 46), ('RED[+MAGIC]+JAR/RED+POTION', 27), ('BLUE[+MAGIC]+JAR/BLUE+POTION/[MAGIC+]JAR/POTION', 19), ('KEY', 8)]),
+    (3, 'WAY TO HEAL LINK', [('FAIRY', 39), ('LIFE[+SPELL]', 31), ('TOWN+LADY/HEALER', 19), ('LEVEL+UP', 11)]),
+    (2, 'THAT GUARDS THE TRIFORCE', [('THUNDER[+]BIRD', 51), ('DARK[+]LINK/SHADOW[+]LINK', 36), ('OLD+MAN/SAGE/IMPA', 13)]),
+    (3, 'PLACE YOU FIND A HEART CONTAINER', [('CAVE', 34), ('WATER/OCEAN/RIVER', 26), ('DESERT', 19), ('SWAMP/BUSH', 13), ('TOWN/KASUTO', 8)]),
+    (3, 'PLACE YOU FIND A MAGIC CONTAINER', [('DEATH+M(T/TN/OUNTAIN)', 33), ('CAVE', 27), ('RAURU/NORTH+CASTLE', 18), ('MAZE+ISLAND', 13), ('OLD+KASUTO/FOREST', 9)]),
+    (3, 'STAT YOU CAN LEVEL UP', [('ATTACK', 43), ('MAGIC', 31), ('LIFE', 26)]),
+    (3, 'CHARACTER IN ZELDA II', [('LINK', 36), ('ZELDA', 22), ('BARBA', 16), ('ERROR', 11), ('GAN[N]ON', 7), ('BAGU', 5), ('IMPA', 3)]),
+    (2, 'ON THE ZELDA II OVERWORLD', [('ROAD/PATH', 29), ('BRIDGE', 23), ('CAVE', 18), ('TOWN', 14), ('PALACE', 9), ('RIVER/WATER', 7)]),
+    (3, 'TRIFORCE', [('COURAGE', 47), ('POWER', 29), ('WISDOM', 24)]),
+    (3, 'VANILLA WEST HYRULE SPELL', [('SHIELD', 36), ('JUMP', 27), ('LIFE', 23), ('FAIRY', 14)]),
+    (3, 'VANILLA EAST HYRULE SPELL', [('FIRE', 37), ('REFLECT', 28), ('SPELL', 19), ('THUNDER', 16)]),
+    (3, 'FLYING CREATURE', [('FAIRY', 34), ('FOKKA', 24), ('THUNDER[+]BIRD', 19), ('FOKKERU', 11), ('ACHE', 6), ('MOA/BUBBLE', 6)]),
+    (3, 'REASON TO VISIT A TOWN', [('HEAL/LIFE', 37), ('LEARN+SPELL/GET+SPELL', 29), ('MAGIC', 16), ('TALK/CLUE', 11), ('QUEST/ITEM', 7)]),
+    (3, 'WAY TO GET EXTRA XP', [('P[-]BAG/POINT+BAG', 44), ('KILL+ENEMIES', 29), ('PALACE+CRYSTAL/CRYSTAL', 18), ('BOSS', 9)]),
+    (4, 'ENEMY WITH A SHIELD OR ARMOR', [('IRON[+]KNUCKLE', 50), ('STALFOS', 23), ('REBONACK', 13), ('FOKKA', 8), ('DOOM[+]KNOCKER', 6)]),
+    (2, 'YOU USE THE HAMMER ON', [('ROCK/BOULDER', 53), ('TREE[s]/FOREST/WOODS', 33), ('SPECTACLE+ROCK', 14)]),
+    (3, 'DESERT OR SWAMP ENEMY', [('GELDARM', 38), ('LEEVER', 25), ('MOBLIN', 18), ('OCTO[ROK]', 12), ('BOT', 7)]),
+    (3, 'HIGH[-]COST MAGIC SPELL', [('THUNDER', 48), ('FAIRY', 24), ('SPELL', 17), ('LIFE', 11)]),
 ]
 
 # 27 Zelda II-themed Fast Money puzzles
 ZELDA2_FM_PUZZLES: list[tuple[int, str, list[tuple[str, int]]]] = [
-    (3, 'BARBA EDITION SPELL', [('SCALES', 35), ('METEOR', 30), ('INFERNO', 25), ('WYRML[I]NG', 10)]),
-    (3, 'P-BAG XP VALUE', [('200', 40), ('100', 25), ('50', 20), ('500', 15)]),
-    (4, 'IRONKNUCKLE COLOR', [('ORANGE', 45), ('RED', 35), ('BLUE', 20)]),
-    (3, 'TOWN QUEST ITEM', [('TROPHY', 35), ('MIRROR', 25), ('MEDICINE/WATER+OF+LIFE', 25), ('KID/CHILD', 15)]),
-    (2, 'SHOWN ON THE HUD', [('LIFE', 30), ('MAGIC', 25), ('ATTACK', 20), ('XP/EXP/EXPERIENCE', 15), ('NEXT/LEVEL', 10)]),
-    (4, 'OVERWORLD ENEMY', [('MOBLINs', 35), ('OCTO[ROK]s', 25), ('TEKTITEs', 25), ('LEEVERs', 15)]),
-    (3, 'HYRULE REGION', [('WEST+HYRULE', 35), ('EAST+HYRULE', 30), ('DEATH+M(T/TN/OUNTAIN)', 20), ('MAZE+ISLAND', 15)]),
-    (3, 'WAY TO GET A 1-UP', [('1[-]UP[+DOLL]/DOLL', 65), ('9000+XP/9000+EXPERIENCE', 35)]),
-    (3, 'COLOR OF MAGIC JAR', [('RED', 55), ('BLUE', 45)]),
-    (3, 'DANGEROUS LIQUID', [('LA(V/B)A', 65), ('WATER', 20), ('SWAMP', 15)]),
-    (3, 'GIFT FROM A FAIRY', [('LIFE/HEALTH/HEALING', 65), ('MAGIC', 35)]),
-    (2, 'ON BARBA TITLE SCREEN', [('BARBA/DRAGON', 45), ('LA(V/B)A', 25), ('CLIFF', 15), ('SWORD', 10), ('STAR[s]', 5)]),
-    (2, 'ON GAME OVER SCREEN', [('GAN[N]ON', 35), ('GAME+OVER', 25), ('RETURN+OF+GAN[N]ON/LINK+KEEPS+LA(V/B)A', 20), ('LAUGH', 10), ('LINK', 10)]),
-    (4, 'ENEMY PROJECTILE', [('ROCK', 25), ('FIRE[BALLs]', 25), ('AXE/MACE', 20), ('SPEAR/CLUB', 15), ('BOOMERANG', 10), ('BEAM/LIGHTNING', 5)]),
-    (3, 'GIFT FROM A WISE MAN', [('SPELL/MAGIC', 45), ('UP[+]STAB/UPWARD+THRUST', 25), ('DOWN[+]STAB/DOWNWARD+THRUST', 20), ('CLUE/HINT', 10)]),
-    (3, 'PLACE IN WEST HYRULE', [('PARAPA[+PALACE]', 30), ('RAURU', 25), ('DEATH+M(T/TN/OUNTAIN)', 25), ('MIDORO[+SWAMP]', 20)]),
-    (3, 'PLACE IN EAST HYRULE', [('NABOORU', 30), ('DARUNIA', 25), ('MAZE+ISLAND', 25), ('GREAT[+PALACE]', 20)]),
-    (0, 'MAX LEVELS FOR A STAT', [('8/EIGHT', 75), ('9/NINE', 25)]),
-    (2, 'BARBA BURNS', [('SIGN[s]', 30), ('VILLAGER[s]/PEOPLE', 25), ('FOREST/TREES', 20), ('TOWN[s]', 15), ('ENEMIES', 10)]),
-    (4, 'IMPORTANT NPC', [('ERROR', 30), ('BAGU', 25), ('IMPA', 20), ('ZELDA', 15), ('WISE+MAN/OLD+MAN', 10)]),
-    (3, 'DIRECTION YOU CAN STAB', [('FORWARD/STRAIGHT', 40), ('DOWN', 35), ('UP', 25)]),
-    (2, 'IN PALACE 6', [('BARBA', 35), ('LA(V/B)A', 25), ('WIZZROBE', 15), ('MAGO', 15), ('CRYSTAL', 10)]),
-    (3, 'BOSS THAT SHOOTS PROJECTILES', [('BARBA', 35), ('CAROCK', 30), ('THUNDER[+]BIRD', 20), ('HELMET[+]HEAD', 15)]),
-    (3, 'COLOR OF AN ENEMY IN ZELDA II', [('RED', 35), ('BLUE', 30), ('ORANGE', 20), ('GREEN', 15)]),
-    (2, 'THAT REFILLS AT A PALACE CRYSTAL', [('LIFE', 45), ('MAGIC', 35), ('XP/LEVEL', 20)]),
-    (3, 'CREATURE THAT JUMPS AROUND', [('TEKTITE', 40), ('BOT', 25), ('BIT', 15), ('IRON[+]KNUCKLE', 10), ('DARK[+]LINK/SHADOW[+]LINK', 10)]),
-    (4, 'INSTANT[-]DEATH HAZARD', [('PIT/FALLING', 50), ('LA(V/B)A', 35), ('WATER', 15)]),
+    (3, 'BARBA EDITION SPELL', [('SCALES', 38), ('METEOR', 29), ('INFERNO', 24), ('WYRML[I]NG', 9)]),
+    (3, 'P-BAG XP VALUE', [('200', 43), ('100', 27), ('50', 19), ('500', 11)]),
+    (4, 'IRONKNUCKLE COLOR', [('ORANGE', 49), ('RED', 34), ('BLUE', 17)]),
+    (3, 'TOWN QUEST ITEM', [('TROPHY', 37), ('MIRROR', 28), ('MEDICINE/WATER+OF+LIFE', 22), ('KID/CHILD', 13)]),
+    (2, 'SHOWN ON THE HUD', [('LIFE', 34), ('MAGIC', 27), ('ATTACK', 18), ('XP/EXP/EXPERIENCE', 14), ('NEXT/LEVEL', 7)]),
+    (4, 'OVERWORLD ENEMY', [('MOBLINs', 39), ('OCTO[ROK]s', 28), ('TEKTITEs', 21), ('LEEVERs', 12)]),
+    (3, 'HYRULE REGION', [('WEST+HYRULE', 40), ('EAST+HYRULE', 31), ('DEATH+M(T/TN/OUNTAIN)', 18), ('MAZE+ISLAND', 11)]),
+    (3, 'WAY TO GET A 1-UP', [('1[-]UP[+DOLL]/DOLL', 67), ('9000+XP/9000+EXPERIENCE', 33)]),
+    (3, 'COLOR OF MAGIC JAR', [('RED', 57), ('BLUE', 43)]),
+    (3, 'DANGEROUS LIQUID', [('LA(V/B)A', 69), ('WATER', 19), ('SWAMP', 12)]),
+    (3, 'GIFT FROM A FAIRY', [('LIFE/HEALTH/HEALING', 64), ('MAGIC', 36)]),
+    (2, 'ON BARBA TITLE SCREEN', [('BARBA/DRAGON', 50), ('LA(V/B)A', 26), ('CLIFF', 13), ('SWORD', 7), ('STAR[s]', 4)]),
+    (2, 'ON GAME OVER SCREEN', [('GAN[N]ON', 40), ('GAME+OVER', 24), ('RETURN+OF+GAN[N]ON/LINK+KEEPS+LA(V/B)A', 17), ('LAUGH', 12), ('LINK', 7)]),
+    (4, 'ENEMY PROJECTILE', [('ROCK', 29), ('FIRE[BALLs]', 26), ('AXE/MACE', 19), ('SPEAR/CLUB', 13), ('BOOMERANG', 9), ('BEAM/LIGHTNING', 4)]),
+    (3, 'GIFT FROM A WISE MAN', [('SPELL/MAGIC', 47), ('UP[+]STAB/UPWARD+THRUST', 26), ('DOWN[+]STAB/DOWNWARD+THRUST', 19), ('CLUE/HINT', 8)]),
+    (3, 'PLACE IN WEST HYRULE', [('PARAPA[+PALACE]', 34), ('RAURU', 29), ('DEATH+M(T/TN/OUNTAIN)', 21), ('MIDORO[+SWAMP]', 16)]),
+    (3, 'PLACE IN EAST HYRULE', [('NABOORU', 33), ('DARUNIA', 27), ('MAZE+ISLAND', 24), ('GREAT[+PALACE]', 16)]),
+    (0, 'MAX LEVELS FOR A STAT', [('8/EIGHT', 79), ('9/NINE', 21)]),
+    (2, 'BARBA BURNS', [('SIGN[s]', 36), ('VILLAGER[s]/PEOPLE', 28), ('FOREST/TREES', 17), ('TOWN[s]', 12), ('ENEMIES', 7)]),
+    (4, 'IMPORTANT NPC', [('ERROR', 35), ('BAGU', 27), ('IMPA', 19), ('ZELDA', 13), ('WISE+MAN/OLD+MAN', 6)]),
+    (3, 'DIRECTION YOU CAN STAB', [('FORWARD/STRAIGHT', 44), ('DOWN', 37), ('UP', 19)]),
+    (2, 'IN PALACE 6', [('BARBA', 42), ('LA(V/B)A', 26), ('WIZZROBE', 14), ('MAGO', 11), ('CRYSTAL', 7)]),
+    (3, 'BOSS THAT SHOOTS PROJECTILES', [('BARBA', 40), ('CAROCK', 29), ('THUNDER[+]BIRD', 19), ('HELMET[+]HEAD', 12)]),
+    (3, 'COLOR OF AN ENEMY IN ZELDA II', [('RED', 39), ('BLUE', 32), ('ORANGE', 18), ('GREEN', 11)]),
+    (2, 'THAT REFILLS AT A PALACE CRYSTAL', [('LIFE', 47), ('MAGIC', 36), ('XP/LEVEL', 17)]),
+    (3, 'CREATURE THAT JUMPS AROUND', [('TEKTITE', 46), ('BOT', 27), ('BIT', 14), ('IRON[+]KNUCKLE', 8), ('DARK[+]LINK/SHADOW[+]LINK', 5)]),
+    (4, 'INSTANT[-]DEATH HAZARD', [('PIT/FALLING', 54), ('LA(V/B)A', 33), ('WATER', 13)]),
 ]
 
 
@@ -994,22 +995,97 @@ def build_standalone(
 
 
 FEUD_PORTAL_NMI      = 0x7500
-FEUD_PORTAL_WIN      = 0x7560
-FEUD_PORTAL_RETURN   = 0x7570
+FEUD_PORTAL_WIN      = 0x7580
+FEUD_PORTAL_RETURN   = 0x7590
+FEUD_PORTAL_WIPE     = 0x75FC
 FEUD_PORTAL_PAD_TMP  = 0x75FD
 FEUD_PORTAL_DEB      = 0x75FE
 FEUD_PORTAL_WIN_FLAG = 0x75FF
+FEUD_B3_WIPE_IN      = 0x8100
+FEUD_B3_MELT_OUT     = 0x8200
+
+
+def _assemble_feud_portal_bank3(
+    restore_addr: int,
+    *,
+    reward_addr: int = FEUD_REWARD_ADDR,
+    restore_r6: int = 0x0C,
+    restore_r7: int = 0x0D,
+    game_id: int | None = None,
+) -> bytes:
+    """Assemble Bank 3 ($8100-$84FF) wipe-in and melt-out routines for Feud combined mode."""
+    out = bytearray(b'\xFF' * 0x400)
+
+    def place(addr: int, data: bytes, limit: int) -> None:
+        off = addr - FEUD_B3_WIPE_IN
+        assert off + len(data) <= limit - FEUD_B3_WIPE_IN, (
+            f'Feud Bank 3 overflow at ${addr:04X}: ${addr + len(data):04X} > ${limit:04X}'
+        )
+        out[off : off + len(data)] = data
+
+    # 1. FEUD_B3_WIPE_IN ($8100): 30-frame top-down wavy reveal ending at VBlank start
+    aw = Asm6502(FEUD_B3_WIPE_IN)
+    emit_wavy_transition(
+        aw,
+        prefix='fw',
+        frame_addr=0x75F8,
+        cut_addr=0x75F9,
+        band_addr=0x75FA,
+        direction='in',
+        ppuctrl_addr=0x0C,
+        ppuctrl_mask=0x7C,
+        ppumask_addr=0x0D,
+        end_on_vblank=True,
+    )
+    place(FEUD_B3_WIPE_IN, aw.finish(), FEUD_B3_MELT_OUT)
+
+    # 2. FEUD_B3_MELT_OUT ($8200): 30-frame bottom-up melt, blank PPU, run $0300 return helper
+    am = Asm6502(FEUD_B3_MELT_OUT)
+    emit_wavy_transition(
+        am,
+        prefix='fm',
+        frame_addr=0x75F8,
+        cut_addr=0x75F9,
+        band_addr=0x75FA,
+        direction='out',
+        ppuctrl_addr=0x0C,
+        ppuctrl_mask=0x7C,
+        ppumask_addr=0x0D,
+        emit_rts=False,
+    )
+    am.emit(0xA9, 0x00, 0x8D, 0x00, 0x20, 0x8D, 0x01, 0x20)  # $2000=0, $2001=0
+    am.emit(0xAE, FEUD_PORTAL_WIN_FLAG & 0xFF, FEUD_PORTAL_WIN_FLAG >> 8)
+    tramp = build_return_helper(
+        restore_addr,
+        reward_addr,
+        game_id=game_id,
+        win_reg='x',
+        restore_r6=restore_r6,
+        restore_r7=restore_r7,
+    )
+    am.emit(0xA0, len(tramp) - 1)
+    am.label('cp')
+    am.abs_ref(0xB9, 'tramp_data')
+    am.emit(0x99, 0x00, 0x03, 0x88)
+    am.branch(0x10, 'cp')
+    am.emit(0x4C, 0x00, 0x03)
+    am.label('tramp_data')
+    am.emit(*tramp)
+    place(FEUD_B3_MELT_OUT, am.finish(), FEUD_B3_WIPE_IN + 0x400)
+    return bytes(out)
 
 
 def _assemble_feud_portal_wram(
     restore_addr: int,
     *,
+    base_5ff1: int = 0x40,
     reward_addr: int = FEUD_REWARD_ADDR,
     reward_magic: int = FEUD_REWARD_MAGIC,
     restore_r6: int = 0x0C,
     restore_r7: int = 0x0D,
 ) -> bytes:
     """Assemble the $7500-$75FF portal NMI/win/return helper for Barba's Beef."""
+    del restore_addr, reward_addr, restore_r6, restore_r7
     out = bytearray(b'\xFF' * 0x100)
 
     def place(addr: int, data: bytes, limit: int) -> None:
@@ -1017,7 +1093,7 @@ def _assemble_feud_portal_wram(
         assert off + len(data) <= limit - FEUD_PORTAL_NMI, f'Feud portal WRAM overflow at ${addr:04X}'
         out[off : off + len(data)] = data
 
-    # 1. FEUD_PORTAL_NMI ($7500): 60-frame debounce, then Start+Select -> FEUD_PORTAL_RETURN
+    # 1. FEUD_PORTAL_NMI ($7500): 60-frame debounce, Start+Select -> FEUD_PORTAL_RETURN, and first-frame wipe-in
     a = Asm6502(FEUD_PORTAL_NMI)
     a.emit(0xAD, FEUD_PORTAL_DEB & 0xFF, FEUD_PORTAL_DEB >> 8)
     a.emit(0xC9, 0x3C)
@@ -1040,37 +1116,50 @@ def _assemble_feud_portal_wram(
     a.emit(0xA9, 0x00, 0x8D, FEUD_PORTAL_WIN_FLAG & 0xFF, FEUD_PORTAL_WIN_FLAG >> 8)
     a.emit(0x4C, FEUD_PORTAL_RETURN & 0xFF, FEUD_PORTAL_RETURN >> 8)
     a.label('resume')
+    a.emit(0xAD, FEUD_PORTAL_WIPE & 0xFF, FEUD_PORTAL_WIPE >> 8)
+    a.branch(0xD0, 'nmi_rti')
+    a.emit(0xA5, 0x0D, 0x29, 0x08)
+    a.branch(0xF0, 'nmi_rti')
+    a.emit(0xAD, FEUD_PORTAL_DEB & 0xFF, FEUD_PORTAL_DEB >> 8, 0xC9, 0x04)
+    a.branch(0x90, 'nmi_rti')
+    a.emit(0xEE, FEUD_PORTAL_WIPE & 0xFF, FEUD_PORTAL_WIPE >> 8)
+    a.emit(0xA5, 0x0C, 0x29, 0x7F, 0x8D, 0x00, 0x20)
+    a.emit(0xA9, 0x06, 0x8D, 0x00, 0x80, 0xA9, 0x03, 0x8D, 0x01, 0x80)
+    a.emit(0x20, FEUD_B3_WIPE_IN & 0xFF, FEUD_B3_WIPE_IN >> 8)
+    a.emit(0xA9, 0x06, 0x8D, 0x00, 0x80, 0xA9, 0x00, 0x8D, 0x01, 0x80)
+    a.emit(0xA5, 0x0C, 0x8D, 0x00, 0x20)
+    a.label('nmi_rti')
     a.emit(0x68, 0xA8, 0x68, 0xAA, 0x68, 0x40)  # PLA; TAY; PLA; TAX; PLA; RTI
     place(FEUD_PORTAL_NMI, a.finish(), FEUD_PORTAL_WIN)
 
-    # 2. FEUD_PORTAL_WIN ($7560)
+    # 2. FEUD_PORTAL_WIN ($7570)
     a = Asm6502(FEUD_PORTAL_WIN)
     a.emit(0xA9, reward_magic, 0x8D, FEUD_PORTAL_WIN_FLAG & 0xFF, FEUD_PORTAL_WIN_FLAG >> 8)
     a.emit(0x4C, FEUD_PORTAL_RETURN & 0xFF, FEUD_PORTAL_RETURN >> 8)
     place(FEUD_PORTAL_WIN, a.finish(), FEUD_PORTAL_RETURN)
 
-    # 3. FEUD_PORTAL_RETURN ($7570)
+    # 3. FEUD_PORTAL_RETURN ($7580): mute APU, restore base $5FF1 via $0340, map R6=3 -> FEUD_B3_MELT_OUT
     a = Asm6502(FEUD_PORTAL_RETURN)
-    a.emit(0x78, 0xA9, 0x00, 0x8D, 0x00, 0x20, 0x8D, 0x01, 0x20, 0x8D, 0x15, 0x40, 0x8D, 0x00, 0xE0)
-    a.emit(0xAE, FEUD_PORTAL_WIN_FLAG & 0xFF, FEUD_PORTAL_WIN_FLAG >> 8)
-    tramp = (
-        bytes.fromhex('a9 80 8d 01 a0 8a f0 03 8d')
-        + reward_addr.to_bytes(2, 'little')
-        + bytes.fromhex('a9 01 8d f0 5f a9 00 8d f1 5f 8d f2 5f')
-        + bytes([0xA9, 0x06, 0x8D, 0x00, 0x80, 0xA9, restore_r6, 0x8D, 0x01, 0x80])
-        + bytes([0xA9, 0x07, 0x8D, 0x00, 0x80, 0xA9, restore_r7, 0x8D, 0x01, 0x80])
-        + bytes.fromhex('a9 a0 8d 01 a0 4c')
-        + restore_addr.to_bytes(2, 'little')
-    )
-    a.emit(0xA0, len(tramp) - 1)
-    a.label('cp')
-    a.abs_ref(0xB9, 'tramp_data')
-    a.emit(0x99, 0x00, 0x03, 0x88)
-    a.branch(0x10, 'cp')
-    a.emit(0x4C, 0x00, 0x03)
-    a.label('tramp_data')
-    a.emit(*tramp)
-    place(FEUD_PORTAL_RETURN, a.finish(), FEUD_PORTAL_NMI + 0x100)
+    a.emit(0x78)
+    a.emit(0xA5, 0x0C, 0x29, 0x7F, 0x8D, 0x00, 0x20)
+    emit_clean_apu_mute(a)
+    fix_stub = bytes([
+        0xA9, 0x80, 0x8D, 0x01, 0xA0,        # unlock $5FFx
+        0xA9, base_5ff1, 0x8D, 0xF1, 0x5F,   # restore base_5ff1 (in case roar_5ff1 active)
+        0xA9, 0x83, 0x8D, 0x01, 0xA0,        # keep WRAM bank 3 + $5FFx unlocked
+        0x60,                                # RTS
+    ])
+    a.emit(0xA2, len(fix_stub) - 1)
+    a.label('cp_fix')
+    a.abs_ref(0xBD, 'fix_data')
+    a.emit(0x9D, 0x40, 0x03, 0xCA)
+    a.branch(0x10, 'cp_fix')
+    a.emit(0x20, 0x40, 0x03)
+    a.emit(0xA9, 0x06, 0x8D, 0x00, 0x80, 0xA9, 0x03, 0x8D, 0x01, 0x80)
+    a.emit(0x4C, FEUD_B3_MELT_OUT & 0xFF, FEUD_B3_MELT_OUT >> 8)
+    a.label('fix_data')
+    a.emit(*fix_stub)
+    place(FEUD_PORTAL_RETURN, a.finish(), FEUD_PORTAL_WIPE)
     return bytes(out)
 
 
@@ -1085,6 +1174,8 @@ def patch_feud_for_combined(
     reward_addr: int = 0x63B2,
     reward_magic: int = FEUD_REWARD_MAGIC,
     barba_json: Path | None = None,
+    enable_transitions: bool = False,
+    game_id: int | None = None,
 ) -> tuple[bytes, bytes, bytes]:
     """Build (prg_256k, roar_prg_256k, chr_128k) for Family Feud: Barba Edition inside barba.nes."""
     assert feud_bytes[:4] == b'NES\x1a'
@@ -1126,8 +1217,15 @@ def patch_feud_for_combined(
     assert len(wram_code) <= 0x300
     portal_wram = _assemble_feud_portal_wram(
         restore_addr,
+        base_5ff1=base_5ff1,
         reward_addr=reward_addr,
         reward_magic=reward_magic,
+    )
+    del enable_transitions  # Always active in combined build; kept for uniform signature
+    portal_bank3 = _assemble_feud_portal_bank3(
+        restore_addr,
+        reward_addr=reward_addr,
+        game_id=game_id,
     )
 
     # Copy stub ($8300 in PRG bank 4): copy wram_code, wram_extra, pal_wram, celeb_wram, and Bank 3 portal_wram
@@ -1153,6 +1251,7 @@ def patch_feud_for_combined(
     a_cp.emit(0xE8)
     a_cp.branch(0xD0, 'cp_loop')
     a_cp.emit(0xA9, 0x00)
+    a_cp.emit(0x8D, FEUD_PORTAL_WIPE & 0xFF, FEUD_PORTAL_WIPE >> 8)
     a_cp.emit(0x8D, FEUD_PORTAL_DEB & 0xFF, FEUD_PORTAL_DEB >> 8)
     a_cp.emit(0x8D, FEUD_PORTAL_WIN_FLAG & 0xFF, FEUD_PORTAL_WIN_FLAG >> 8)
     a_cp.emit(0xA9, base_5ff1, 0x8D, 0xF1, 0x5F)
@@ -1164,6 +1263,7 @@ def patch_feud_for_combined(
     prg256 = bytearray(b'\xFF' * (256 * 1024))
     prg256[0 : 16384] = prg[0:16384]
     prg256[3 * 8192 : 3 * 8192 + 0x100] = portal_wram
+    prg256[3 * 8192 + 0x100 : 3 * 8192 + 0x100 + len(portal_bank3)] = portal_bank3
     prg256[32768 : 32768 + len(wram_code)] = wram_code
     prg256[32768 + 0x300 : 32768 + 0x300 + len(copy_stub)] = copy_stub
     prg256[32768 + 0x400 : 32768 + 0x400 + len(dyn['wram_extra'])] = dyn['wram_extra']
@@ -1191,7 +1291,7 @@ if __name__ == '__main__':
     parser.add_argument('--out', type=Path, default=None)
     parser.add_argument('--mapper', choices=('176', 'mmc3'), default='176')
     args = parser.parse_args()
-    default_out = root / ('play/nes/feud-mmc3.nes' if args.mapper == 'mmc3' else 'build/subgames/feud.nes')
+    default_out = root / ('play/compat/nes/feud-compat.nes' if args.mapper == 'mmc3' else 'build/subgames/feud.nes')
     out = build_standalone(
         args.out or default_out,
         root / 'roms/feud.nes',
@@ -1201,14 +1301,14 @@ if __name__ == '__main__':
     )
     if args.mapper == '176' and args.out is None:
         from bps import write_bps
-        play_out = root / 'play/nes/feud-barba.nes'
+        play_out = root / 'play/nes/feud.nes'
         play_out.parent.mkdir(parents=True, exist_ok=True)
         play_out.write_bytes(out.read_bytes())
         write_bps(
             root / 'roms/feud.nes',
             play_out,
-            out_bps_path=root / 'play/bps/feud-barba.bps',
-            metadata='feud-barba | Barba Edition',
+            out_bps_path=root / 'play/bps/feud.bps',
+            metadata='feud | Barba Edition',
         )
         print(f'Built {out} ({out.stat().st_size} bytes) and {play_out}')
     else:
@@ -1217,7 +1317,7 @@ if __name__ == '__main__':
             write_bps(
                 root / 'roms/feud.nes',
                 out,
-                out_bps_path=root / 'play/bps/feud-mmc3.bps',
-                metadata='feud-mmc3 | Barba Edition (MMC3)',
+                out_bps_path=root / 'play/compat/bps/feud-compat.bps',
+                metadata='feud-compat | Barba Edition (MMC3)',
             )
         print(f'Built {out} ({out.stat().st_size} bytes, mapper={args.mapper})')

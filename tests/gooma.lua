@@ -33,9 +33,10 @@ emu.addMemoryCallback(function()
         local y,tile,attr,x=sprite(0x6500,offset)
         local fire=fireSlots[offset] and tile~=0xBB and tile~=0xBD
         for line=y+1,math.min(y+16,239) do
-            local row=lines[line] or {count=0,visible={}}
+            local row=lines[line] or {count=0,preFireCount=0,visible={}}
             lines[line]=row
             row.count=row.count+1
+            if offset<0x38 then row.preFireCount=row.preFireCount+1 end
             row.firePresent=row.firePresent or fire
             if row.count<=8 then
                 row.visible[#row.visible+1]={y=y,tile=tile,attr=attr,x=x}
@@ -67,7 +68,7 @@ emu.addMemoryCallback(function()
         if row and row.count>8 then crowdedLines=crowdedLines+1 end
         if row and row.firePresent then
             fireOverlapLines=fireOverlapLines+1
-            if not row.fireDrawn then missingFireLines=missingFireLines+1 end
+            if not row.fireDrawn and row.preFireCount<8 then missingFireLines=missingFireLines+1 end
         end
     end
     weapon=nil

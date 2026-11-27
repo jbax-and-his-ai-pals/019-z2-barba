@@ -35,15 +35,15 @@ def make_waldo_nmi_hook() -> bytes:
 
 
 def make_waldo_win_hook() -> bytes:
-    """Assemble Waldo's $F620 Moon Ending hook (set Barba WRAM $648B = $57, then melt out)."""
+    """Assemble Waldo's Moon Ending hook (set Barba WRAM $648B=$57, $6804=1, then melt out)."""
     # A9 A0       LDA #$A0
     # 8D 01 A0    STA $A001      ; WRAM bank 0 (keep $5FF0-$5FF3 locked)
     # A9 57       LDA #$57
     # 8D 8B 64    STA $648B      ; WALDO_HAT = WALDO_HAT_MAGIC
-    # A9 A2       LDA #$A2
-    # 8D 01 A0    STA $A001      ; restore WRAM bank 2 for Waldo
-    # 4C A4 F9    JMP $F9A4      ; normal melt-out & return
-    return bytes.fromhex('a9 a0 8d 01 a0 a9 57 8d 8b 64 a9 a2 8d 01 a0 4c a4 f9')
+    # A9 01       LDA #$01
+    # 8D 04 68    STA $6804      ; RA_LAST_WIN_GAME = 1 (waldo)
+    # 4C A4 F9    JMP $F9A4      ; melt-out & return ($F9A4/$8C00 never reads WRAM)
+    return bytes.fromhex('a9 a0 8d 01 a0 a9 57 8d 8b 64 a9 01 8d 04 68 4c a4 f9')
 
 
 def make_waldo_seed_rng() -> bytes:
@@ -90,7 +90,8 @@ def make_waldo_melt_out() -> bytes:
         emit(0x4C, 0, 0)
         fixups.append(('abs', len(buf) - 2, target))
 
-    emit(0x78, 0xA9, 0x00, 0x8D, 0x15, 0x40, 0x8D, 0x00, 0xE0, 0x85, 0x08)  # SEI; $4015=0; $E000=0; $08=0
+    emit(0x78, 0xA9, 0x00, 0x8D, 0x15, 0x40, 0x8D, 0x11, 0x40, 0x8D, 0x00, 0xE0, 0x85, 0x08)  # SEI; $4015=0; $4011=0; $E000=0; $08=0
+    emit(0xA9, 0x40, 0x8D, 0x17, 0x40)                                      # $4017 = $40 (silence APU frame IRQ)
     label('frame_loop')
     emit(0xA9, 30, 0x38, 0xE5, 0x08, 0x85, 0x09)                            # $09 = 30 - frame
     emit(0x2C, 0x02, 0x20)                                                  # BIT $2002
@@ -173,7 +174,8 @@ def pack_combined(barba: bytes, restore_addr: int, waldo: bytes,
                   alternate_laugh_data: bytes | None = None,
                   f13: bytes | None = None,
                   extra_ids: list[str] | None = None,
-                  roms_dir: Path | None = None) -> bytes:
+                  roms_dir: Path | None = None,
+                  portal_bank: bytes | None = None) -> bytes:
     """Combine a waldo_portal-enabled Barba ROM and modded Waldo ROM into Mapper 176."""
     assert waldo[:4] == b'NES\x1a' and waldo[4] in (8, 16) and waldo[5] in (0x10, 0x20)
     w_prg_size = waldo[4] * 16384
@@ -215,21 +217,21 @@ def pack_combined(barba: bytes, restore_addr: int, waldo: bytes,
     hook = make_waldo_nmi_hook()
     win_hook = make_waldo_win_hook()
     seed_hook = make_waldo_seed_rng()
-    assert len(hook) <= 0x1D and len(win_hook) <= 0x12 and len(seed_hook) <= 0x22
-    assert all(x == 0 for x in w_prg[e000_off + 0x1603 : e000_off + 0x1632 + len(seed_hook)])
+    assert len(hook) <= 0x1D and len(seed_hook) <= 0x22 and len(win_hook) <= 0x13
+    assert all(x == 0 for x in w_prg[e000_off + 0x1603 : e000_off + 0x1641 + len(win_hook)])
     w_prg[e000_off + 0x1603 : e000_off + 0x1603 + len(hook)] = hook
-    w_prg[e000_off + 0x1620 : e000_off + 0x1620 + len(win_hook)] = win_hook
-    w_prg[e000_off + 0x1632 : e000_off + 0x1632 + len(seed_hook)] = seed_hook
+    w_prg[e000_off + 0x161F : e000_off + 0x161F + len(seed_hook)] = seed_hook
+    w_prg[e000_off + 0x1641 : e000_off + 0x1641 + len(win_hook)] = win_hook
     assert w_prg[e000_off + 0x1FFA : e000_off + 0x1FFC] == bytes.fromhex('37 e2')
     w_prg[e000_off + 0x1FFA : e000_off + 0x1FFC] = bytes.fromhex('03 f6')
 
     # Seed Waldo's RNG ($0200-$0202) from Barba's $7FF0-$7FF2 at boot ($E09A)
     assert w_prg[e000_off + 0x009A : e000_off + 0x00A6] == bytes.fromhex('ad 00 07 8d 00 02 ad 01 07 8d 01 02')
-    w_prg[e000_off + 0x009A : e000_off + 0x00A6] = bytes.fromhex('20 32 f6') + b'\xEA' * 9
+    w_prg[e000_off + 0x009A : e000_off + 0x00A6] = bytes.fromhex('20 1f f6') + b'\xEA' * 9
 
-    # Hook end of Moon Ending ($A1B3 in Bank 0: JMP $E4EC -> JMP $F620) so it sets WALDO_HAT and waves out to Barba
+    # Hook end of Moon Ending ($A1B3 in Bank 0: JMP $E4EC -> JMP $F641) so it sets WALDO_HAT and waves out to Barba
     assert w_prg[0x01B3:0x01B6] == bytes.fromhex('4c ec e4')
-    w_prg[0x01B3:0x01B6] = bytes.fromhex('4c 20 f6')
+    w_prg[0x01B3:0x01B6] = bytes.fromhex('4c 41 f6')
 
     # Hook end of Game Over ($E1D9 in Fixed Bank: JMP $E0F2 -> JMP $F9A4) so it skips the main menu and returns to Barba
     assert w_prg[e000_off + 0x01D9 : e000_off + 0x01DC] == bytes.fromhex('4c f2 e0')
@@ -250,10 +252,14 @@ def pack_combined(barba: bytes, restore_addr: int, waldo: bytes,
 
     # Build 512KB PRG:
     #   0..128KB   : Barba
+    #   128..144KB : Barba Bank 8 (PORTAL_BANK)
     #   240..256KB : Barba fixed bank ($C000-$FFFF)
     #   256..512KB : Where's Barba? (banks 0..13, bank 16 DPCM+roar+wipe+tramp, banks 30..31 fixed)
     prg512 = bytearray(b'\xFF' * (512 * 1024))
     prg512[0 : 128 * 1024] = b_prg
+    if portal_bank is not None:
+        assert len(portal_bank) <= 16 * 1024
+        prg512[128 * 1024 : 128 * 1024 + len(portal_bank)] = portal_bank
     prg512[240 * 1024 : 256 * 1024] = b_prg[112 * 1024 : 128 * 1024]
     if alternate_laugh_data is not None:
         assert len(alternate_laugh_data) == SAMPLE_CAPACITY
@@ -371,7 +377,7 @@ def pack_combined(barba: bytes, restore_addr: int, waldo: bytes,
         if f13 is not None:
             import pack_f13
             f13_extra, f13_prg, f13_chr = pack_f13.patch_f13(f13)
-            f13_bank0 = pack_f13.make_f13_bank0(restore_addr)
+            f13_bank0 = pack_f13.make_f13_bank0(restore_addr, reward_addr=0x63B1, reward_magic=0x01)
             prg4096[512 * 1024 : 520 * 1024] = f13_bank0
             prg4096[712 * 1024 : 736 * 1024] = f13_extra
             prg4096[736 * 1024 : 768 * 1024] = f13_prg
@@ -381,7 +387,8 @@ def pack_combined(barba: bytes, restore_addr: int, waldo: bytes,
         if 'dk' in extras:
             import pack_dk
             dk_prg, dk_chr = pack_dk.patch_dk_for_combined(
-                (roms_dir / 'dk.nes').read_bytes(), z2_orig, restore_addr, reward_addr=0x63B3,
+                (roms_dir / 'dk.nes').read_bytes(), z2_orig, restore_addr, reward_addr=0x63B3, reward_magic=0x01,
+                enable_transitions=True, game_id=4,
             )
             base = 7 * 256 * 1024
             prg4096[base : base + len(dk_prg)] = dk_prg
@@ -389,7 +396,8 @@ def pack_combined(barba: bytes, restore_addr: int, waldo: bytes,
         if 'smb' in extras:
             import pack_smb
             smb_prg, smb_chr = pack_smb.patch_smb_for_combined(
-                (roms_dir / 'smb.nes').read_bytes(), z2_orig, restore_addr, reward_addr=0x63B4,
+                (roms_dir / 'smb.nes').read_bytes(), z2_orig, restore_addr, reward_addr=0x63B4, reward_magic=0x01,
+                enable_transitions=True, game_id=5,
             )
             base = 6 * 256 * 1024
             prg4096[base : base + len(smb_prg)] = smb_prg
@@ -397,7 +405,8 @@ def pack_combined(barba: bytes, restore_addr: int, waldo: bytes,
         if 'duck' in extras:
             import pack_duck
             duck_prg, duck_chr = pack_duck.patch_duck_for_combined(
-                (roms_dir / 'duck.nes').read_bytes(), z2_orig, restore_addr, reward_addr=0x63B5,
+                (roms_dir / 'duck.nes').read_bytes(), z2_orig, restore_addr, reward_addr=0x63B5, reward_magic=0x01,
+                enable_transitions=True, game_id=6,
             )
             base = 12 * 256 * 1024
             prg4096[base : base + len(duck_prg)] = duck_prg
@@ -405,7 +414,8 @@ def pack_combined(barba: bytes, restore_addr: int, waldo: bytes,
         if 'mm2' in extras:
             import pack_mm2
             mm2_prg = pack_mm2.patch_mm2(
-                (roms_dir / 'mm2.nes').read_bytes(), restore_addr, reward_addr=0x63B7, z2_bytes=z2_orig,
+                (roms_dir / 'mm2.nes').read_bytes(), restore_addr, reward_addr=0x63B7, reward_magic=0x01, z2_bytes=z2_orig,
+                enable_transitions=True, game_id=7,
             )
             base = 3 * 256 * 1024
             prg4096[base : base + 256 * 1024] = mm2_prg
@@ -417,6 +427,9 @@ def pack_combined(barba: bytes, restore_addr: int, waldo: bytes,
                 base_5ff0=0x29,
                 base_5ff1=0x00,
                 reward_addr=0x63B8,
+                reward_magic=0x01,
+                enable_transitions=True,
+                game_id=8,
             )
             base = 8 * 256 * 1024
             prg4096[base : base + 1024 * 1024] = wheel_prg
@@ -430,17 +443,26 @@ def pack_combined(barba: bytes, restore_addr: int, waldo: bytes,
                 roar_5ff1=0x50,
                 base_5ff2=0x80,
                 reward_addr=0x63B2,
+                reward_magic=0x01,
+                enable_transitions=True,
+                game_id=3,
             )
             prg4096[4 * 256 * 1024 : 5 * 256 * 1024] = feud_prg
             prg4096[5 * 256 * 1024 : 6 * 256 * 1024] = feud_roar
             chr2048[1024 * 1024 : 1024 * 1024 + len(feud_chr)] = feud_chr
         if 'zelda' in extras:
             import pack_zelda
-            z1_prg = pack_zelda.patch_zelda((roms_dir / 'zelda.nes').read_bytes(), restore_addr, reward_addr=0x63B9)
+            z1_prg = pack_zelda.patch_zelda(
+                (roms_dir / 'zelda.nes').read_bytes(), restore_addr, reward_addr=0x63B9, reward_magic=0x01,
+                enable_transitions=True, game_id=9,
+            )
             prg4096[14 * 256 * 1024 : 14 * 256 * 1024 + len(z1_prg)] = z1_prg
         if 'mtpo' in extras:
             import pack_mtpo
-            mtpo_prg, mtpo_chr = pack_mtpo.patch_mtpo((roms_dir / 'mtpo.nes').read_bytes(), restore_addr, reward_addr=0x63BA)
+            mtpo_prg, mtpo_chr = pack_mtpo.patch_mtpo(
+                (roms_dir / 'mtpo.nes').read_bytes(), restore_addr, reward_addr=0x63BA, reward_magic=0x01,
+                enable_transitions=True, game_id=10,
+            )
             prg4096[15 * 256 * 1024 : 15 * 256 * 1024 + len(mtpo_prg)] = mtpo_prg
             chr2048[1152 * 1024 : 1152 * 1024 + len(mtpo_chr)] = mtpo_chr
         prg_out = bytes(prg4096)
@@ -451,7 +473,7 @@ def pack_combined(barba: bytes, restore_addr: int, waldo: bytes,
     elif f13 is not None:
         import pack_f13
         f13_extra, f13_prg, f13_chr = pack_f13.patch_f13(f13)
-        f13_bank0 = pack_f13.make_f13_bank0(restore_addr)
+        f13_bank0 = pack_f13.make_f13_bank0(restore_addr, reward_addr=0x63B1, reward_magic=0x01)
         prg1024 = bytearray(b'\xFF' * (1024 * 1024))
         prg1024[0 : 512 * 1024] = prg512
         prg1024[512 * 1024 : 520 * 1024] = f13_bank0

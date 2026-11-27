@@ -1,6 +1,7 @@
 """Build the Barba-as-Waldo ROM hack (`build/waldo_barba.nes`) from `roms/waldo.nes`."""
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import zlib
@@ -16,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 WALDO_PATH = ROOT / 'roms/waldo.nes'
 Z2_PATH = ROOT / 'roms/z2.nes'
 OUT_PATH = ROOT / 'build/waldo_barba.nes'
-PLAY_PATH = ROOT / 'play/nes/waldo-barba.nes'
+PLAY_PATH = ROOT / 'play/nes/waldo.nes'
 BARBA_JSON = ROOT / 'assets/barba.json'
 CROWD_JSON = ROOT / 'assets/waldo_crowd.json'
 ASH_JSON = ROOT / 'assets/ash.json'
@@ -2103,7 +2104,7 @@ def _patch_ticket_lava(out: bytearray, waldo: bytes) -> None:
             put(out, nt_off + r * 32 + 7, bytes(row_tids), expected=expected_rows[r])
 
 
-def build(count_build: bool = True, build_number: int | None = None) -> Path:
+def build(count_build: bool = True, build_number: int | None = None, write_play: bool = True) -> Path:
     from build_history import HISTORY_FILE, get_subgame_build_number, next_subgame_build_number, record_subgame_build
     if build_number is None:
         build_number = next_subgame_build_number(HISTORY_FILE, 'waldo') if count_build else get_subgame_build_number(HISTORY_FILE, 'waldo')
@@ -3438,28 +3439,39 @@ def build(count_build: bool = True, build_number: int | None = None) -> Path:
         # Bank 3 ($A03C): Title Screen Start roar
         put(prg_256, 0x0603C, bytes.fromhex('20 6a c9'), expected=bytes.fromhex('20 ed e5'))
 
+        # Subtle title build number (B<N>) as OAM sprites in CHR Bank 198 ($C6) at bottom-right white margin.
+        tb_tag = f'B{build_number}'
+        tb_font = {
+            'B': ['11110000', '10001000', '10001000', '11110000', '10001000', '10001000', '11110000', '00000000'],
+            '0': ['01110000', '10001000', '10011000', '10101000', '11001000', '10001000', '01110000', '00000000'],
+            '1': ['00100000', '01100000', '00100000', '00100000', '00100000', '00100000', '01110000', '00000000'],
+            '2': ['01110000', '10001000', '00001000', '00110000', '01000000', '10000000', '11111000', '00000000'],
+            '3': ['01110000', '10001000', '00001000', '00110000', '00001000', '10001000', '01110000', '00000000'],
+            '4': ['00010000', '00110000', '01010000', '10010000', '11111000', '00010000', '00010000', '00000000'],
+            '5': ['11111000', '10000000', '11110000', '00001000', '00001000', '10001000', '01110000', '00000000'],
+            '6': ['01110000', '10000000', '11110000', '10001000', '10001000', '10001000', '01110000', '00000000'],
+            '7': ['11111000', '00001000', '00010000', '00100000', '01000000', '01000000', '01000000', '00000000'],
+            '8': ['01110000', '10001000', '10001000', '01110000', '10001000', '10001000', '01110000', '00000000'],
+            '9': ['01110000', '10001000', '10001000', '01111000', '00001000', '00010000', '01100000', '00000000'],
+        }
+        tb_oam_extra = bytearray()
+        tb_x0 = 248 - len(tb_tag) * 8
+        for idx_ch, ch in enumerate(tb_tag):
+            tid = 0x0C + idx_ch
+            put_1k_tile(198, tid, [row.replace('1', '2') for row in tb_font[ch]])
+            tb_oam_extra.extend([0xE4, tid, 0x01, tb_x0 + idx_ch * 8])
+        full_title_oam = title_stamp_oam + bytes(tb_oam_extra)
+        assert 0x20CB2 + len(full_title_oam) <= 0x20D00, f'title_stamp_oam too large: {len(full_title_oam)}'
+        prg_256[0x20CB2 : 0x20CB2 + len(full_title_oam)] = full_title_oam
+        # Update LDX #(len-1) in title_stamp_init (0xA2, 0x2F)
+        ldx_off = title_stamp_init.index(bytes([0xA2, 0x2F]))
+        assert prg_256[0x20C60 + ldx_off : 0x20C60 + ldx_off + 2] == bytes([0xA2, 0x2F])
+        prg_256[0x20C60 + ldx_off + 1] = len(full_title_oam) - 1
+
         # Bank 16 ($CD00 at 0x20D00): Search-level crowd fleeing from Barba
         crowd_code, crowd_labels = make_crowd_flee_code(0xCD00)
         assert len(crowd_code) <= 0x1260, f'crowd_code too large: {len(crowd_code)}'
         prg_256[0x20D00:0x20D00 + len(crowd_code)] = crowd_code
-
-        # Subtle title build number (B<N>) at $23BA (row 29, col 26) right after title_stamp_init ($CCE2..$CCFF, 30B)
-        tb_addr = 0xCCE2
-        tb_tiles = bytes(0x93 if ch == 'B' else 0x88 + int(ch) for ch in f'B{build_number}')
-        tb_data_addr = tb_addr + 25
-        tb_code = bytes([
-            0xA9, 0x23, 0x8D, 0x06, 0x20,
-            0xA9, 0xBA, 0x8D, 0x06, 0x20,
-            0xA2, len(tb_tiles) - 1,
-            0xBD, tb_data_addr & 0xFF, tb_data_addr >> 8,
-            0x8D, 0x07, 0x20,
-            0xCA, 0x10, 0xF9,
-            0xA2, 0x03, 0xA9, 0xA3, 0x60,
-        ]) + tb_tiles
-        assert len(tb_code) <= 0x1E, f'waldo tb_code too large: {len(tb_code)}'
-        prg_256[0x20CE2 : 0x20CE2 + len(tb_code)] = tb_code
-        # Jump from end of title_stamp_init ($CC60 + 0x4D) to tb_addr
-        prg_256[0x20C60 + 0x4D : 0x20C60 + 0x52] = bytes([0x4C, tb_addr & 0xFF, tb_addr >> 8, 0xEA, 0xEA])
 
         def jsr(name: str) -> bytes:
             a = crowd_labels[name]
@@ -3482,17 +3494,28 @@ def build(count_build: bool = True, build_number: int | None = None) -> Path:
 
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     OUT_PATH.write_bytes(out)
-    PLAY_PATH.parent.mkdir(parents=True, exist_ok=True)
-    PLAY_PATH.write_bytes(out)
+    if write_play:
+        PLAY_PATH.parent.mkdir(parents=True, exist_ok=True)
+        PLAY_PATH.write_bytes(out)
     if count_build:
-        record_subgame_build(HISTORY_FILE, 'waldo', build_number, 'mmc3', PLAY_PATH, hashlib.sha256(out).hexdigest())
-    write_bps(
-        WALDO_PATH,
-        PLAY_PATH,
-        out_bps_path=ROOT / 'play/bps/waldo-barba.bps',
-        metadata="Where's Barba? | Barba Edition",
-    )
-    print(f'Wrote {OUT_PATH} and {PLAY_PATH} ({len(out)} bytes)')
+        record_subgame_build(
+            HISTORY_FILE,
+            'waldo',
+            build_number,
+            'mmc3',
+            PLAY_PATH if write_play else OUT_PATH,
+            hashlib.sha256(out).hexdigest(),
+        )
+    if write_play:
+        write_bps(
+            WALDO_PATH,
+            PLAY_PATH,
+            out_bps_path=ROOT / 'play/bps/waldo.bps',
+            metadata="Where's Barba? | Barba Edition",
+        )
+        print(f'Wrote {OUT_PATH} and {PLAY_PATH} ({len(out)} bytes)')
+    else:
+        print(f'Wrote {OUT_PATH} ({len(out)} bytes)')
     return OUT_PATH
 
 

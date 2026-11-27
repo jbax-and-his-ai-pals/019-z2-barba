@@ -95,10 +95,8 @@ local function tick()
         check(true,'reached side-view play')
         for i=0,7 do write(0x77B+i,1) end
         write(0x648B,0x57) -- DECOY (8)
-        write(0x63B1,1)    -- AXE (9)
         write(0x63B2,1)    -- DOUBLE (10)
-        write(0x63B9,1)    -- CLOCK (16)
-        write(0x63BA,1)    -- HEAVY (17)
+        write(0x63B8,1)    -- LUCKY (15)
         write(0x773,0x80)  -- full magic
         write(0x778,8)     -- Magic Level 8
         write(0x749,0)     -- start at SCALES (0)
@@ -119,21 +117,21 @@ local function tick()
             screenshot('spell-menu-2col')
         end
         if dt==41 then check(read(0x749)==8,'Right moves cursor to DECOY (8)') end
-        if dt==56 then check(read(0x749)==9,'Down moves cursor to AXE (9)') end
+        if dt==56 then check(read(0x749)==10,'Down moves cursor to DOUBLE (10)') end
         if dt==71 then check(read(0x749)==8,'Up moves cursor back to DECOY (8)') end
         if dt==86 then
-            check(read(0x749)==17,'Up wraps to HEAVY (17)')
-            screenshot('spell-menu-2col-heavy')
+            check(read(0x749)==15,'Up wraps to LUCKY (15)')
+            screenshot('spell-menu-2col-lucky')
         end
-        if dt==106 then check(read(0x749)==7,'Left from HEAVY (17) moves to INFERNO (7)') end
+        if dt==106 then check(read(0x749)==7,'Left from LUCKY (15) moves to INFERNO (7)') end
         if dt==165 then
             check(read(0x524)==0,'Start closes pause menu cleanly')
             check(read(0x6697)==0,'SPELL_MENU_ACTIVE cleared on close')
             screenshot('spell-menu-2col-closed')
-            write(0x749,17)
+            write(0x749,15)
         end
         if dt==180 then
-            check((read(0x6681)&0x02)==0x02,'Select casts HEAVY (17) after 2-col menu')
+            check((read(0x6680)&0x80)==0x80,'Select casts LUCKY (15) after 2-col menu')
             -- Phase 2: Warp inside Palace 2 (Green Palace, room $0F)
             gpState='warped'
             gpTimer=0
@@ -198,7 +196,7 @@ local function tick()
             check(readBoxTile(3,10)==0xCF and readBoxTile(3,11)==0xD1 and readBoxTile(3,12)==0xD6,'SCALES cost 16 at Mag 6')
             check(readBoxTile(10,10)==0xD1 and readBoxTile(10,11)==0xD2 and readBoxTile(10,12)==0xD0,'INFERNO cost 120 at Mag 6')
             check(readBoxTile(3,22)==0xCF and readBoxTile(3,23)==0xCF and readBoxTile(3,24)==0xD4,'DECOY cost 4 at Mag 6')
-            check(readBoxTile(12,22)==0xCF and readBoxTile(12,23)==0xD1 and readBoxTile(12,24)==0xD4,'HEAVY cost 14 at Mag 6')
+            check(readBoxTile(10,22)==0xCF and readBoxTile(10,23)==0xCF and readBoxTile(10,24)==0xD6,'LUCKY cost 6 at Mag 6')
             local badPal=0
             for mr=1,10 do
                 for mc=0,12 do

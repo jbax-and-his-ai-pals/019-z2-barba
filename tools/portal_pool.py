@@ -129,6 +129,74 @@ CANDIDATE_DOORS_BY_ID: dict[str, CandidateDoor] = {d.id: d for d in CANDIDATE_DO
 
 
 @dataclass(frozen=True)
+class HyruleSpot:
+    """A Hyrule progression doorway or hidden spot where a subgame is discovered."""
+
+    id: str
+    world: int          # $0707 (0=OW/cave, 1=West town, 2=East town)
+    sub_id: int         # $056B for worlds 1/2; $0706 for world 0
+    room: int           # $0561
+    page: int           # $3B
+    x_lo: int           # $4D min
+    x_hi: int           # $4D max
+    note: str
+
+
+HYRULE_SPOTS_BY_SUBGAME: dict[str, HyruleSpot] = {
+    'waldo': HyruleSpot(
+        id='hyrule_rauru_arcade',
+        world=0x01, sub_id=0x00, room=0x1C, page=0x00, x_lo=0x48, x_hi=0x60,
+        note="Rauru — Barba's Arcade (open immediately)",
+    ),
+    'f13': HyruleSpot(
+        id='hyrule_bagu_cabin',
+        world=0x01, sub_id=0x03, room=0x18, page=0x00, x_lo=0xA8, x_hi=0xC0,
+        note="Bagu's Hidden Forest Cabin (side booth beside Bagu's door)",
+    ),
+    'feud': HyruleSpot(
+        id='hyrule_saria_house',
+        world=0x01, sub_id=0x02, room=0x1B, page=0x00, x_lo=0x68, x_hi=0x80,
+        note='Saria — Mini-Arcade (entered via East Saria street R$08 p2 col 12)',
+    ),
+    'dk': HyruleSpot(
+        id='hyrule_ruto_house',
+        world=0x01, sub_id=0x01, room=0x19, page=0x00, x_lo=0x68, x_hi=0x80,
+        note='Ruto — Mini-Arcade (entered via West Ruto street R$04 p1 col 7)',
+    ),
+    'smb': HyruleSpot(
+        id='hyrule_ocean_island',
+        world=0x00, sub_id=0x02, room=0x07, page=0x01, x_lo=0x48, x_hi=0x90,
+        note='East Hyrule Ocean Island (Boots-gated Heart Container island, 0 enemies)',
+    ),
+    'duck': HyruleSpot(
+        id='hyrule_mido_house',
+        world=0x01, sub_id=0x03, room=0x36, page=0x00, x_lo=0x68, x_hi=0x80,
+        note='Mido — Mini-Arcade (entered via West Mido street R$09 p2 col 5)',
+    ),
+    'mm2': HyruleSpot(
+        id='hyrule_darunia_house',
+        world=0x02, sub_id=0x05, room=0x3D, page=0x00, x_lo=0x68, x_hi=0x80,
+        note='Darunia — Mini-Arcade (entered via Center Darunia street R$10 p2 col 3)',
+    ),
+    'wheel': HyruleSpot(
+        id='hyrule_nabooru_house',
+        world=0x02, sub_id=0x04, room=0x3B, page=0x00, x_lo=0x68, x_hi=0x80,
+        note='Nabooru — Mini-Arcade (entered via Center Nabooru street R$0D p1 col 5)',
+    ),
+    'zelda': HyruleSpot(
+        id='hyrule_new_kasuto_house',
+        world=0x02, sub_id=0x06, room=0x3E, page=0x00, x_lo=0x68, x_hi=0x80,
+        note='New Kasuto — Mini-Arcade (entered via Center New Kasuto street R$13 p2 col 11)',
+    ),
+    'mtpo': HyruleSpot(
+        id='hyrule_old_kasuto_house',
+        world=0x02, sub_id=0x07, room=0x23, page=0x02, x_lo=0x68, x_hi=0x80,
+        note='Old Kasuto — Empty ruined interior R$23 p2 (via open door R$16 p1 col 7)',
+    ),
+}
+
+
+@dataclass(frozen=True)
 class SubgameSpec:
     """Metadata and Mapper 176 boot parameters for a pool subgame."""
 
@@ -142,6 +210,7 @@ class SubgameSpec:
     r6_bank: int            # MMC3 R6 ($8000-$9FFF) initial bank
     boot_addr: int          # Guest entry address after outer-bank switch
     default_door_id: str
+    game_id: int = 1        # Frozen RA ACTIVE_GAME_ID (1..10)
     reward_addr: int = 0x63B0
     name_label: str = 'ArcadeName00'
     status: str = 'greenlit'  # 'candidate' | 'round1' | 'greenlit'
@@ -159,6 +228,7 @@ SUBGAME_POOL: list[SubgameSpec] = [
         r6_bank=0x00,
         boot_addr=0xE000,
         default_door_id='arcade_waldo',
+        game_id=1,
         reward_addr=0x648B,
         name_label='ArcadeName00',
         status='greenlit',
@@ -174,6 +244,7 @@ SUBGAME_POOL: list[SubgameSpec] = [
         r6_bank=0x00,
         boot_addr=0x8000,
         default_door_id='arcade_f13',
+        game_id=2,
         reward_addr=0x63B1,
         name_label='ArcadeName01',
         status='greenlit',
@@ -189,6 +260,7 @@ SUBGAME_POOL: list[SubgameSpec] = [
         r6_bank=0x04,
         boot_addr=0x8300,
         default_door_id='arcade_feud',
+        game_id=3,
         reward_addr=0x63B2,
         name_label='ArcadeName02',
         status='greenlit',
@@ -204,6 +276,7 @@ SUBGAME_POOL: list[SubgameSpec] = [
         r6_bank=0x00,
         boot_addr=0x8000,
         default_door_id='arcade_dk',
+        game_id=4,
         reward_addr=0x63B3,
         name_label='ArcadeName03',
         status='round1',
@@ -219,6 +292,7 @@ SUBGAME_POOL: list[SubgameSpec] = [
         r6_bank=0x00,
         boot_addr=0x8000,
         default_door_id='arcade_smb',
+        game_id=5,
         reward_addr=0x63B4,
         name_label='ArcadeName04',
         status='round1',
@@ -234,6 +308,7 @@ SUBGAME_POOL: list[SubgameSpec] = [
         r6_bank=0x00,
         boot_addr=0x8000,
         default_door_id='arcade_duck',
+        game_id=6,
         reward_addr=0x63B5,
         name_label='ArcadeName05',
         status='round1',
@@ -249,6 +324,7 @@ SUBGAME_POOL: list[SubgameSpec] = [
         r6_bank=0x1C,
         boot_addr=0xF450,
         default_door_id='arcade_mm2',
+        game_id=7,
         reward_addr=0x63B7,
         name_label='ArcadeName07',
         status='round1',
@@ -264,6 +340,7 @@ SUBGAME_POOL: list[SubgameSpec] = [
         r6_bank=0x00,
         boot_addr=0x8000,
         default_door_id='arcade_wheel',
+        game_id=8,
         reward_addr=0x63B8,
         name_label='ArcadeName08',
         status='round1',
@@ -279,6 +356,7 @@ SUBGAME_POOL: list[SubgameSpec] = [
         r6_bank=0x00,
         boot_addr=0x8000,
         default_door_id='arcade_zelda',
+        game_id=9,
         reward_addr=0x63B9,
         name_label='ArcadeName09',
         status='candidate',
@@ -294,6 +372,7 @@ SUBGAME_POOL: list[SubgameSpec] = [
         r6_bank=0x00,
         boot_addr=0x8000,
         default_door_id='arcade_mtpo',
+        game_id=10,
         reward_addr=0x63BA,
         name_label='ArcadeName10',
         status='candidate',
@@ -304,21 +383,24 @@ SUBGAME_POOL_BY_ID: dict[str, SubgameSpec] = {s.id: s for s in SUBGAME_POOL}
 
 @dataclass(frozen=True)
 class PortalAssignment:
-    """Resolved portal slot pairing a SubgameSpec with a CandidateDoor."""
+    """Resolved portal slot pairing a SubgameSpec with a CandidateDoor and HyruleSpot."""
 
     slot: int
     subgame: SubgameSpec
     door: CandidateDoor
+    hyrule: HyruleSpot
 
     def to_manifest_dict(self) -> dict:
         return {
             'slot': self.slot,
+            'game_id': self.subgame.game_id,
             'id': self.subgame.id,
             'name': self.subgame.name,
             'mapper_class': self.subgame.mapper_class,
             'status': self.subgame.status,
             'reward_addr': self.subgame.reward_addr,
             'door': asdict(self.door),
+            'hyrule': asdict(self.hyrule),
             'boot': {
                 'wram_bank': self.subgame.wram_bank,
                 'reg_5ff0': self.subgame.reg_5ff0,
@@ -338,7 +420,7 @@ def build_portal_assignments(
     selected_ids: list[str] | None = None,
     *,
     seed: int | None = None,
-    include_f13: bool = True,
+    include_f13: bool = False,
     roms_dir: Path | None = None,
 ) -> list[PortalAssignment]:
     """Build ordered portal slot assignments."""
@@ -347,7 +429,7 @@ def build_portal_assignments(
         if include_f13:
             ids.append('f13')
         if roms_dir is not None:
-            for sid in ('feud', 'dk', 'smb', 'duck', 'mm2', 'wheel', 'zelda', 'mtpo'):
+            for sid in ('feud', 'dk', 'duck', 'wheel'):
                 if (roms_dir / f'{sid}.nes').is_file() and (TOOLS_DIR / f'pack_{sid}.py').is_file():
                     ids.append(sid)
     else:
@@ -367,7 +449,7 @@ def build_portal_assignments(
         doors = rng.sample(CANDIDATE_DOORS, len(specs))
 
     return [
-        PortalAssignment(slot=idx, subgame=spec, door=door)
+        PortalAssignment(slot=idx, subgame=spec, door=door, hyrule=HYRULE_SPOTS_BY_SUBGAME[spec.id])
         for idx, (spec, door) in enumerate(zip(specs, doors))
     ]
 
@@ -378,39 +460,49 @@ def patch_portal_tables(
     assignments: list[PortalAssignment],
     prg_offset_fn,
 ) -> None:
-    """Patch Barba's PortalTbl* arrays in-place from resolved PortalAssignments."""
+    """Patch Barba's PortalTbl* and HyruleTbl* arrays in-place from resolved PortalAssignments."""
     if not assignments:
         return
     if len(assignments) > MAX_PORTAL_SLOTS:
         raise ValueError(f'Portal table supports at most {MAX_PORTAL_SLOTS} slots (got {len(assignments)})')
 
-    def put_b2(name: str, data: bytes) -> None:
-        off = prg_offset_fn(2, labels[name])
+    def put_b8(name: str, data: bytes) -> None:
+        off = prg_offset_fn(8, labels[name])
         rom[off : off + len(data)] = data
 
     n = len(assignments)
-    put_b2('PortalCount', bytes([n]))
-    put_b2('PortalTblTown', bytes(a.door.town_id for a in assignments))
-    put_b2('PortalTblRoom', bytes(a.door.room for a in assignments))
-    put_b2('PortalTblPage', bytes(a.door.page for a in assignments))
-    put_b2('PortalTblXlo', bytes(a.door.x_lo for a in assignments))
-    put_b2('PortalTblXhi', bytes(a.door.x_hi for a in assignments))
+    put_b8('PortalCount', bytes([n]))
+    put_b8('PortalTblTown', bytes(a.door.town_id for a in assignments))
+    put_b8('PortalTblRoom', bytes(a.door.room for a in assignments))
+    put_b8('PortalTblPage', bytes(a.door.page for a in assignments))
+    put_b8('PortalTblXlo', bytes(a.door.x_lo for a in assignments))
+    put_b8('PortalTblXhi', bytes(a.door.x_hi for a in assignments))
 
-    put_b2('PortalTblWram', bytes(a.subgame.wram_bank for a in assignments))
-    put_b2('PortalTbl5FF0', bytes(a.subgame.reg_5ff0 for a in assignments))
-    put_b2('PortalTbl5FF1', bytes(a.subgame.reg_5ff1 for a in assignments))
-    put_b2('PortalTbl5FF2', bytes(a.subgame.reg_5ff2 for a in assignments))
-    put_b2('PortalTblR6', bytes(a.subgame.r6_bank for a in assignments))
-    put_b2('PortalTblBootLo', bytes(a.subgame.boot_addr & 0xFF for a in assignments))
-    put_b2('PortalTblBootHi', bytes((a.subgame.boot_addr >> 8) & 0xFF for a in assignments))
+    if 'PortalTblGameId' in labels:
+        put_b8('PortalTblGameId', bytes(a.subgame.game_id for a in assignments))
+    if 'HyruleTblWorld' in labels:
+        put_b8('HyruleTblWorld', bytes(a.hyrule.world for a in assignments))
+        put_b8('HyruleTblSub', bytes(a.hyrule.sub_id for a in assignments))
+        put_b8('HyruleTblRoom', bytes(a.hyrule.room for a in assignments))
+        put_b8('HyruleTblPage', bytes(a.hyrule.page for a in assignments))
+        put_b8('HyruleTblXlo', bytes(a.hyrule.x_lo for a in assignments))
+        put_b8('HyruleTblXhi', bytes(a.hyrule.x_hi for a in assignments))
+
+    put_b8('PortalTblWram', bytes(a.subgame.wram_bank for a in assignments))
+    put_b8('PortalTbl5FF0', bytes(a.subgame.reg_5ff0 for a in assignments))
+    put_b8('PortalTbl5FF1', bytes(a.subgame.reg_5ff1 for a in assignments))
+    put_b8('PortalTbl5FF2', bytes(a.subgame.reg_5ff2 for a in assignments))
+    put_b8('PortalTblR6', bytes(a.subgame.r6_bank for a in assignments))
+    put_b8('PortalTblBootLo', bytes(a.subgame.boot_addr & 0xFF for a in assignments))
+    put_b8('PortalTblBootHi', bytes((a.subgame.boot_addr >> 8) & 0xFF for a in assignments))
     if 'PortalTblNameLo' in labels and 'PortalTblNameHi' in labels:
         name_addrs = [labels[a.subgame.name_label] for a in assignments]
-        put_b2('PortalTblNameLo', bytes(addr & 0xFF for addr in name_addrs))
-        put_b2('PortalTblNameHi', bytes((addr >> 8) & 0xFF for addr in name_addrs))
+        put_b8('PortalTblNameLo', bytes(addr & 0xFF for addr in name_addrs))
+        put_b8('PortalTblNameHi', bytes((addr >> 8) & 0xFF for addr in name_addrs))
     if 'PortalTblSignLo' in labels and 'PortalTblSignHi' in labels:
         sign_addrs = [labels[a.subgame.name_label.replace('Name', 'Sign')] for a in assignments]
-        put_b2('PortalTblSignLo', bytes(addr & 0xFF for addr in sign_addrs))
-        put_b2('PortalTblSignHi', bytes((addr >> 8) & 0xFF for addr in sign_addrs))
+        put_b8('PortalTblSignLo', bytes(addr & 0xFF for addr in sign_addrs))
+        put_b8('PortalTblSignHi', bytes((addr >> 8) & 0xFF for addr in sign_addrs))
 
 
 def write_portal_manifest(path: Path, assignments: list[PortalAssignment], *, seed: int | None = None) -> Path:

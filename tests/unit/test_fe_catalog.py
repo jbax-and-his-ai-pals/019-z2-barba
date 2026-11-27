@@ -29,7 +29,8 @@ class TestFeCatalog(unittest.TestCase):
         self.assertFalse(resolved["spell_inferno"])
         self.assertFalse(resolved["spell_meteor"])
         self.assertFalse(resolved["lava_wade"])
-        self.assertFalse(resolved["title_and_ending"])
+        self.assertFalse(resolved["title_screen"])
+        self.assertFalse(resolved["ending_sequence"])
         self.assertFalse(resolved["palace_roar_shake"])
         self.assertFalse(resolved["rauru_sage_basement"])
         self.assertFalse(resolved["town_chaos"])
@@ -50,7 +51,45 @@ class TestFeCatalog(unittest.TestCase):
         self.assertTrue(web_json.exists())
         data = json.loads(web_json.read_text())
         self.assertEqual(data["version"], 1)
-        self.assertEqual(len(data["flags"]), len(fe_catalog.FLAGS))
+        public_flags = [f for f in fe_catalog.FLAGS if f.get("visibility", "public") != "local"]
+        self.assertEqual(len(data["flags"]), len(public_flags))
+
+    def test_local_only_flag_filtered_from_public_catalog_and_presets(self) -> None:
+        synthetic_flags = [
+            {
+                "id": "pub_flag",
+                "code": "Pb",
+                "category": "barba_core",
+                "label": "Public Flag",
+                "type": "bool",
+                "status": "built",
+                "vanilla": False,
+                "barba": True,
+                "requires": [],
+                "description": "Public",
+            },
+            {
+                "id": "secret_flag",
+                "code": "Sc",
+                "category": "barba_options",
+                "label": "Secret Local Flag",
+                "type": "bool",
+                "status": "built",
+                "visibility": "local",
+                "vanilla": False,
+                "barba": True,
+                "requires": [],
+                "description": "Local only",
+            },
+        ]
+        pub = fe_catalog.catalog_payload(include_local=False, flags_override=synthetic_flags)
+        loc = fe_catalog.catalog_payload(include_local=True, flags_override=synthetic_flags)
+        self.assertEqual([f["id"] for f in pub["flags"]], ["pub_flag"])
+        self.assertEqual([f["id"] for f in loc["flags"]], ["pub_flag", "secret_flag"])
+        self.assertNotIn("secret_flag", pub["presets"]["barba"]["values"])
+        self.assertNotIn("Sc", pub["presets"]["barba"]["flagstring"])
+        self.assertIn("secret_flag", loc["presets"]["barba"]["values"])
+        self.assertIn("Sc", loc["presets"]["barba"]["flagstring"])
 
     def test_prototype_build_cli_args_and_manifest_accuracy(self) -> None:
         vals = fe_catalog.preset_values("barba_lite")

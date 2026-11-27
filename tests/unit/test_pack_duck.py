@@ -64,6 +64,18 @@ class PackDuckTests(unittest.TestCase):
         stream = duck_code.build_title_ppu_stream()
         self.assertEqual(stream[-1], 0x00)
 
+    def test_title_stream_build_number_uses_black_palette(self) -> None:
+        tag_write = bytes([0x20, 0x3A, 0x03, 0x0B, 0x02, 0x04])
+        attr_write = bytes([0x23, 0xC6, 0x02, 0x0C, 0x0F])
+
+        stream_with = duck_code.build_title_ppu_stream(24)
+        self.assertIn(tag_write, stream_with)
+        self.assertIn(attr_write, stream_with)
+
+        stream_without = duck_code.build_title_ppu_stream(None)
+        self.assertNotIn(tag_write, stream_without)
+        self.assertNotIn(attr_write, stream_without)
+
     @unittest.skipUnless(DUCK_ROM.is_file() and Z2_ROM.is_file(), 'ROMs required for combined pack test')
     def test_patch_duck_for_combined_contract(self) -> None:
         prg_256k, chr_data = pack_duck.patch_duck_for_combined(

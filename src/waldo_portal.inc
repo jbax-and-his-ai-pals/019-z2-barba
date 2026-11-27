@@ -17,9 +17,10 @@ PORTAL_GAME      = $648A
 WALDO_HAT        = $648B
 WALDO_HAT_MAGIC  = $57
 SUBGAME_REWARDS  = $63B0   ; 16 bytes ($63B0-$63BF): per-slot completion flags
-ARCADE_DLG_BUF   = $63C0   ; 64 bytes ($63C0-$63FF): dynamic booth enter dialogue
+ARCADE_DLG_BUF   = $63C0   ; 64 bytes ($63C0-$63FF): dynamic booth enter / return dialogue
 ARCADE_SIGN_LO   = $6360   ; 1 byte: arcade door marquee drawn bitmask (slots 0..7)
 ARCADE_SIGN_HI   = $6361   ; 1 byte: arcade door marquee drawn bitmask (slots 8..15)
+ARCADE_SIGN_ROOM = $6362   ; 1 byte: last room ($0561) drawn by UpdateArcadeSigns8
 
 .macro WaldoLine text, terminator
     .assert .strlen(text) <= 14, error, "Waldo dialogue line is too wide"
@@ -72,46 +73,73 @@ ARCADE_SIGN_HI   = $6361   ; 1 byte: arcade door marquee drawn bitmask (slots 8.
 .export BarbaWaldoPortal6, UpdateWaldoHatChr6
 
 BarbaWaldoPortal6:
-    lda $0707
-    cmp #$01
-    bne @clear_quick
     lda $0736
     cmp #$0B
     bne @clear_quick
-    lda #>(BarbaWaldoPortal2 - 1)
+    lda $0707
+    cmp #$03
+    bcs @clear_quick
+    lda #>(BarbaWaldoPortal8 - 1)
     pha
-    lda #<(BarbaWaldoPortal2 - 1)
+    lda #<(BarbaWaldoPortal8 - 1)
     pha
-    lda #$02
+    lda #$08
     jmp $FFCC
 @clear_quick:
     lda #$00
     sta WALDO_ENTER_MSG
     sta PORTAL_DEBOUNCE
-    sta ARCADE_SIGN_LO
-    sta ARCADE_SIGN_HI
+    lda #$FF
+    sta ARCADE_SIGN_ROOM
     rts
 
-.segment "BANK2_SMOKE"
-BarbaWaldoPortal2:
-    jsr ArcadeNpcTick2
-    jsr UpdateArcadeSigns2
-@in_rauru:
+.segment "PORTAL_BANK"
+BarbaWaldoPortal8:
+    lda RA_DISCOVERY_LO
+    ora #$01                ; slot 0 (Where's Barba?) is always open
+    sta RA_DISCOVERY_LO
+    lda $0707
+    bne @active_world
+    ; World 0: only run portal logic on East Hyrule Ocean Island ($0706=2, $0561=$07).
+    lda $0706
+    cmp #$02
+    bne @w0_exit
+    lda $0561
+    cmp #$07
+    beq @active_world
+@w0_exit:
+    lda #$00
+    sta WALDO_ENTER_MSG
+    sta PORTAL_DEBOUNCE
+    lda #$FF
+    sta ARCADE_SIGN_ROOM
+    lda #$06
+    jmp $FFCC
+@active_world:
+    jsr ArcadeNpcTick8
+    jsr DiscoverHyruleSpot8
+    jsr UpdateArcadeSigns8
+@in_world:
     lda WALDO_ENTER_MSG
     bne @wait_enter_msg
     lda $074C
+    ora $0479               ; must be grounded & not in dialogue
     bne @clear_deb
-    lda $29
-    cmp #$B0
-    bne @clear_deb
-    jsr CheckPortalDoor2
+    jsr CheckPortalDoor8
     lda WALDO_ENTER_MSG
     beq @clear_deb
-    jsr PollUpKey2
+    jsr PollUpKey8
     beq @clear_enter_flag
 @on_door:
     lda PORTAL_DEBOUNCE
     bne @clear_enter_flag
+    lda $0707
+    bne @town_enter_dlg
+    ; World 0 (East Hyrule Ocean Island): Bank 3 dialogue engine does not run here, so launch directly.
+    lda #$00
+    sta WALDO_ENTER_MSG
+    jmp BarbaWaldoEnter8
+@town_enter_dlg:
     lda #$02
     sta $074C               ; Dialog Type = Talking
     sta $DE                 ; Freeze player/actors
@@ -144,15 +172,26 @@ BarbaWaldoPortal2:
 @wait_enter_msg:
     lda $074C
     bne @done
+    lda WALDO_ENTER_MSG
+    cmp #$02                ; 2 = "OUT OF ORDER!" info box (do not launch)
+    beq @info_closed
     lda #$00
     sta WALDO_ENTER_MSG
-    jmp BarbaWaldoEnter2
+    jmp BarbaWaldoEnter8
+@info_closed:
+    lda #$00
+    sta WALDO_ENTER_MSG
+    lda #$01
+    sta PORTAL_DEBOUNCE
+    bne @done
 
 @clear_deb:
+    jsr PollUpKey8
+    bne @done
     lda #$00
     sta PORTAL_DEBOUNCE
 @done:
-    jsr ArcadeStageDlg2
+    jsr ArcadeStageDlg8
     lda #$06
     jmp $FFCC
 @clear_enter_flag:
@@ -177,7 +216,7 @@ GetEffectiveHead6:
     and #$03
     rts
 
-; Swap MMC3 R2 ($1000-$13FF) to Waldo-hat (155) or Hockey-mask (181) CHR bank.
+; Swap MMC3 R2 ($1000-$13FF) to Waldo-hat (155) or Hockey-mask (181) CHR bank directly in Bank 6.
 UpdateWaldoHatChr6:
     jsr GetEffectiveHead6
     cmp #$01
@@ -185,41 +224,19 @@ UpdateWaldoHatChr6:
     cmp #$02
     bne @hat_done
 @need_swap:
-    lda #>(UpdateWaldoHatChr3 - 1)
-    pha
-    jmp WaldoHatHop6
-@hat_done:
-    rts
-
-.segment "WALDO_HAT_1"
-WaldoHatHop6:
-    lda #<(UpdateWaldoHatChr3 - 1)
-    pha
-    lda #$03
-    jmp $FFCC
-
-.segment "BANK3_PAD"
-UpdateWaldoHatChr3:
-    lda $0736
-    cmp #$06
-    bcc @ret
-    lda BARBA_GEAR
-    bpl @waldo
-    and #$03
+    ldy $0736
+    cpy #$06
+    bcc @hat_done
     cmp #$02
     bne @waldo
     lda #181
-    bne @set_r2
+    .byte $2C
 @waldo:
     lda #155
-@set_r2:
     ldx #$02
-    stx $64D5
-    stx $8000
-    sta $8001
-@ret:
-    lda #$06
-    jmp $FFCC
+    jmp WriteChrReg6
+@hat_done:
+    rts
 
 .segment "ITEM_ROAR"
 ; Draw Waldo hat ($1D + $5F) above Barba's head in side-view ($6500 OAM shadow) when equipped.
@@ -501,28 +518,18 @@ DrawTie4:
     beq :+
     lda #$09
 :
-    clc
-    adc $6500,y
+    jsr GearCheckY4
     bcs @chk_belt
-    cmp #$20
-    bcc @chk_belt
-    cmp #$F0
-    bcs @chk_belt
-    sta $00
-    lda $6502,y
     cpx #$00
-    beq :+
-    ldx $12
-    txa
+    beq @tie_attr_ok
+    lda $12
     and #$04
-    beq :+
-    lda $6502,y
+    beq @tie_attr_ok
+    lda $02
     eor #$40
-    dec $00
-    .byte $2C
-:
-    lda $6502,y
     sta $02
+    dec $00
+@tie_attr_ok:
     lda $6503,y
     bit $02
     bvs @tie_r
@@ -554,24 +561,16 @@ DrawBelt4:
 @crouch_y:
     lda #$0C
 @add_y:
-    clc
-    adc $6500,y
+    jsr GearCheckY4
     bcs @done2
-    cmp #$20
-    bcc @done2
-    cmp #$F0
-    bcs @done2
-    sta $00
     lda $12
     and #$1C
-    bne @belt_pal0
-    lda $6502,y
+    bne @belt_pal_ok
+    lda $02
     and #$FC
     ora #$03
-    .byte $2C
-@belt_pal0:
-    lda $6502,y
     sta $02
+@belt_pal_ok:
     lda $6503,y
     bit $02
     bvs @belt_r
@@ -589,6 +588,24 @@ DrawBelt4:
     lda #$7D                  ; Championship Belt ($7C non-town, $FC town)
     jmp PlaceGearSprite4
 @done2:
+    rts
+
+.segment "PALACE_ROAR"
+GearCheckY4:
+    clc
+    adc $6500,y
+    bcs @bad
+    cmp #$20
+    bcc @bad
+    cmp #$F0
+    bcs @bad
+    sta $00
+    lda $6502,y
+    sta $02
+    clc
+    rts
+@bad:
+    sec
     rts
 
 PlaceGearSprite4:
@@ -625,28 +642,38 @@ PlaceGearSprite4:
 
 BarbaWaldoRestore6:
     sei
-    lda #>(BarbaWaldoRestore2 - 1)
+    lda #>(BarbaWaldoRestore8 - 1)
     pha
-    lda #<(BarbaWaldoRestore2 - 1)
+    lda #<(BarbaWaldoRestore8 - 1)
     pha
-    lda #$02
+    lda #$08
     jmp $FFCC
 
-.segment "BANK2_SMOKE"
-BarbaWaldoEnter2:
+.segment "PORTAL_BANK"
+BarbaWaldoEnter8:
     sei
     lda #$00
     sta $4015
+    sta $4011
     sta $E000
+    lda #$40
+    sta $4017
 
-    jsr BarbaMelt2
+    jsr BarbaMelt8
 
     lda #$00
     sta $2000
     sta $2001
 
-BarbaWaldoSaveAndLaunch2:
-    ldy PORTAL_GAME
+BarbaWaldoSaveAndLaunch8:
+    ldx PORTAL_GAME
+    lda PortalTblGameId,x
+    sta ACTIVE_GAME_ID
+    lda #$00
+    sta RA_LAST_WIN_GAME
+    jsr SetSlotDiscovered8
+    txa
+    tay
     lda #$A1
     sta $A001
     tsx
@@ -719,8 +746,8 @@ BarbaWaldoSaveAndLaunch2:
     dex
     bne @clear_nt
 
-    ; Clear portal state ($7FFF) in target WRAM bank happens in PortalTramp2
-    jmp PortalTramp2
+    ; Clear portal state ($7FFF) in target WRAM bank happens in PortalTramp8
+    jmp PortalTramp8
 
 @save_nt_1k:
     sta $2006
@@ -741,8 +768,9 @@ BarbaWaldoSaveAndLaunch2:
     bne @nt_read
     rts
 
-.segment "BANK2_SMOKE"
+.segment "PORTAL_BANK"
 .export PortalCount, PortalTblTown, PortalTblRoom, PortalTblPage, PortalTblXlo, PortalTblXhi
+.export PortalTblGameId, HyruleTblWorld, HyruleTblSub, HyruleTblRoom, HyruleTblPage, HyruleTblXlo, HyruleTblXhi
 MAX_PORTAL_SLOTS = 16
 PortalCount:     .byte $02
 PortalTblTown:   .res MAX_PORTAL_SLOTS, $00
@@ -750,55 +778,225 @@ PortalTblRoom:   .res MAX_PORTAL_SLOTS, $00
 PortalTblPage:   .res MAX_PORTAL_SLOTS, $00
 PortalTblXlo:    .res MAX_PORTAL_SLOTS, $00
 PortalTblXhi:    .res MAX_PORTAL_SLOTS, $00
+PortalTblGameId: .byte $01, $02, $03, $04, $05, $06, $07, $08, $09, $0A, $01, $01, $01, $01, $01, $01
+HyruleTblWorld:  .res MAX_PORTAL_SLOTS, $01
+HyruleTblSub:    .res MAX_PORTAL_SLOTS, $00
+HyruleTblRoom:   .res MAX_PORTAL_SLOTS, $1C
+HyruleTblPage:   .res MAX_PORTAL_SLOTS, $00
+HyruleTblXlo:    .res MAX_PORTAL_SLOTS, $00
+HyruleTblXhi:    .res MAX_PORTAL_SLOTS, $00
 
-CheckPortalDoor2:
-    lda #$00
-    sta WALDO_ENTER_MSG
-    ldx PortalCount
+; Set persistent discovery bit for slot X (preserves X). Must be in WRAM Bank 0.
+SetSlotDiscovered8:
+    ldy PortalTblGameId,x
     beq @done
-    dex
-@chk:
-    lda $056B
-    cmp PortalTblTown,x
-    bne @next
-    lda $0561
-    cmp PortalTblRoom,x
-    bne @next
-    lda $3B
-    cmp PortalTblPage,x
-    bne @next
-    lda $4D
-    cmp PortalTblXlo,x
-    bcc @next
-    cmp PortalTblXhi,x
-    bcs @next
-    stx PORTAL_GAME
-    lda PortalTblNameLo,x
-    sta $00
-    lda PortalTblNameHi,x
-    sta $01
-    ldy #$00
-@copy_name:
-    lda ($00),y
-    sta ARCADE_DLG_BUF,y
-    cmp #$FF
-    beq @copied
-    iny
-    cpy #$3F
-    bcc @copy_name
-    lda #$FF
-    sta ARCADE_DLG_BUF,y
-@copied:
-    lda #$01
-    sta WALDO_ENTER_MSG
-    bne @done
-@next:
-    dex
-    bpl @chk
+    dey
+    cpy #$08
+    bcs @hi
+    lda SignBitMask,y
+    ora RA_DISCOVERY_LO
+    sta RA_DISCOVERY_LO
+    rts
+@hi:
+    tya
+    sec
+    sbc #$08
+    tay
+    lda SignBitMask,y
+    ora RA_DISCOVERY_HI
+    sta RA_DISCOVERY_HI
 @done:
     rts
 
-PollUpKey2:
+; Check persistent discovery bit for slot X. Returns A != 0 (Z=0) if discovered (preserves X).
+IsSlotDiscovered8:
+    ldy PortalTblGameId,x
+    beq @no
+    dey
+    cpy #$08
+    bcs @hi
+    lda SignBitMask,y
+    and RA_DISCOVERY_LO
+    rts
+@hi:
+    tya
+    sec
+    sbc #$08
+    tay
+    lda SignBitMask,y
+    and RA_DISCOVERY_HI
+    rts
+@no:
+    lda #$00
+    rts
+
+; Check whether slot X's reward is unlocked. Returns A != 0 (Z=0) if cleared (preserves X).
+IsSlotCleared8:
+    ldy PortalTblGameId,x
+    beq @no
+    cpy #$01
+    bne @non_waldo
+    lda WALDO_HAT
+    cmp #WALDO_HAT_MAGIC
+    beq @yes
+@no:
+    lda #$00
+    rts
+@yes:
+    lda #$01
+    rts
+@non_waldo:
+    lda RewardTblOff - 2,y
+    tay
+    lda SUBGAME_REWARDS,y
+    rts
+RewardTblOff:
+    .byte $01, $02, $03, $04, $05, $07, $08, $09, $0A
+
+; Automatically mark slot X discovered when Barba visits its Hyrule spot.
+DiscoverHyruleSpot8:
+    ldx PortalCount
+    beq @done
+    dex
+@loop:
+    lda PortalTblGameId,x
+    cmp #$01
+    beq @next               ; waldo is always discovered
+    lda $0707
+    cmp HyruleTblWorld,x
+    bne @next
+    ora #$00
+    beq @world0_sub
+    lda $056B
+    jmp @cmp_sub
+@world0_sub:
+    lda $0706
+@cmp_sub:
+    cmp HyruleTblSub,x
+    bne @next
+    lda $0561
+    cmp HyruleTblRoom,x
+    bne @next
+    cmp #$23                ; Old Kasuto R$23: require page 2 so other doors don't prematurely mark
+    bne @mark
+    lda $3B
+    cmp HyruleTblPage,x
+    bne @next
+@mark:
+    jsr SetSlotDiscovered8
+@next:
+    dex
+    bpl @loop
+@done:
+    rts
+
+CopyDlgBuf8:
+    sta $00
+    sty $01
+    ldy #$00
+@loop:
+    lda ($00),y
+    sta ARCADE_DLG_BUF,y
+    cmp #$FF
+    beq @done
+    iny
+    cpy #$3F
+    bcc @loop
+    lda #$FF
+    sta ARCADE_DLG_BUF,y
+@done:
+    rts
+
+CheckPortalDoor8:
+    lda #$00
+    sta WALDO_ENTER_MSG
+    ldx PortalCount
+    bne @have_slots
+    rts
+@have_slots:
+    dex
+    lda $0707
+    cmp #$01
+    bne @hyrule_loop
+    lda $056B
+    bne @hyrule_loop
+    lda $0561
+    cmp #$1C
+    bne @hyrule_loop
+    ; Inside Rauru's Barba's Arcade (R$1C): check Arcade booths
+@arcade_chk:
+    lda PortalTblTown,x
+    bne @arcade_next
+    lda PortalTblRoom,x
+    cmp #$1C
+    bne @arcade_next
+    lda $3B
+    cmp PortalTblPage,x
+    bne @arcade_next
+    lda $4D
+    cmp PortalTblXlo,x
+    bcc @arcade_next
+    cmp PortalTblXhi,x
+    bcs @arcade_next
+    jsr IsSlotDiscovered8
+    bne @arcade_open
+    lda #<OutOfOrderText
+    ldy #>OutOfOrderText
+    jsr CopyDlgBuf8
+    lda #$02                ; 2 = info-only ("OUT OF ORDER!")
+    sta WALDO_ENTER_MSG
+    rts
+@arcade_open:
+    stx PORTAL_GAME
+    lda PortalTblNameLo,x
+    ldy PortalTblNameHi,x
+    jsr CopyDlgBuf8
+    lda #$01
+    sta WALDO_ENTER_MSG
+    rts
+@arcade_next:
+    dex
+    bpl @arcade_chk
+    rts
+
+@hyrule_loop:
+    lda $0707
+    cmp HyruleTblWorld,x
+    bne @hyrule_next
+    ora #$00
+    beq @h_w0
+    lda $056B
+    jmp @h_cmp_sub
+@h_w0:
+    lda $0706
+@h_cmp_sub:
+    cmp HyruleTblSub,x
+    bne @hyrule_next
+    lda $0561
+    cmp HyruleTblRoom,x
+    bne @hyrule_next
+    lda $3B
+    cmp HyruleTblPage,x
+    bne @hyrule_next
+    lda $4D
+    cmp HyruleTblXlo,x
+    bcc @hyrule_next
+    cmp HyruleTblXhi,x
+    bcs @hyrule_next
+    jsr SetSlotDiscovered8
+    stx PORTAL_GAME
+    lda PortalTblNameLo,x
+    ldy PortalTblNameHi,x
+    jsr CopyDlgBuf8
+    lda #$01
+    sta WALDO_ENTER_MSG
+    rts
+@hyrule_next:
+    dex
+    bpl @hyrule_loop
+    rts
+
+PollUpKey8:
     lda #$01
     sta $4016
     lsr a
@@ -812,7 +1010,7 @@ PollUpKey2:
     and #$01
     rts
 
-.segment "BANK2_SMOKE"
+.segment "PORTAL_BANK"
 .export PortalTblWram, PortalTbl5FF0, PortalTbl5FF1, PortalTbl5FF2, PortalTblR6
 .export PortalTblBootLo, PortalTblBootHi, PortalTblNameLo, PortalTblNameHi
 .export PortalTblSignLo, PortalTblSignHi
@@ -880,39 +1078,108 @@ ArcadeSignDefault:
     ArcadeSignLine "ARCADE "
     ArcadeSignLine " BOOTH "
 
+ArcadeSignOutOfOrder:
+    ArcadeSignLine "OUT OF "
+    ArcadeSignLine " ORDER "
+
+ClearSignRow1Tbl:
+    ArcadeSignLine "WHERES "  ; 1: waldo
+    ArcadeSignLine "FRI 13 "  ; 2: f13
+    ArcadeSignLine "BARBA'S"  ; 3: feud
+    ArcadeSignLine "B.KONG "  ; 4: dk
+    ArcadeSignLine "S.BARBA"  ; 5: smb
+    ArcadeSignLine "M.HUNT "  ; 6: duck
+    ArcadeSignLine "B.MAN 2"  ; 7: mm2
+    ArcadeSignLine "WHEEL  "  ; 8: wheel
+    ArcadeSignLine "LEGEND "  ; 9: zelda
+    ArcadeSignLine "PUNCH! "  ; 10: mtpo
+ClearSignRow1Lo:
+    .repeat 10, idx
+    .byte <(ClearSignRow1Tbl + idx*7)
+    .endrep
+ClearSignRow1Hi:
+    .repeat 10, idx
+    .byte >(ClearSignRow1Tbl + idx*7)
+    .endrep
+ClearSignRow2Town:
+    ArcadeSignLine " CLEAR!"
+ClearSignRow2Ow:
+    ArcadeSignLine " CLEAR "
+
 SignBitMask:
     .byte $01, $02, $04, $08, $10, $20, $40, $80
 
-UpdateArcadeSigns2:
-    lda $056B
-    bne @clear_all
+; Scratch ZP used locally during UpdateArcadeSigns8:
+; $00/$01 = row1 ptr, $08/$09 = row2 ptr, $0A = sign_col, $0B = page, $0C = xlo, $0D = mode (0=arcade, 1=hyrule)
+UpdateArcadeSigns8:
     lda $0561
-    cmp #$1C
-    beq @in_arcade
-@clear_all:
+    cmp ARCADE_SIGN_ROOM
+    beq @same_room
+    sta ARCADE_SIGN_ROOM
     lda #$00
     sta ARCADE_SIGN_LO
     sta ARCADE_SIGN_HI
-    rts
-@in_arcade:
+@same_room:
     lda $074C
     ora $0301
     bne @early_done
     ldx PortalCount
     beq @early_done
     dex
+    lda $0707
+    cmp #$01
+    bne @hyrule_mode
+    lda $056B
+    bne @hyrule_mode
+    lda $0561
+    cmp #$1C
+    bne @hyrule_mode
+    lda #$00
+    beq @start_loop
+@hyrule_mode:
+    lda #$01
+@start_loop:
+    sta $0D
 @loop:
+    lda $0D
+    bne @chk_hyrule
     lda PortalTblTown,x
     bne @next_hop
     lda PortalTblRoom,x
     cmp #$1C
-    beq @in_room
+    bne @next_hop
+    lda PortalTblPage,x
+    sta $0B
+    lda PortalTblXlo,x
+    sta $0C
+    jmp @have_coords
+@chk_hyrule:
+    lda $0707
+    cmp HyruleTblWorld,x
+    bne @next_hop
+    ora #$00
+    beq @h_w0
+    lda $056B
+    jmp @h_cmp_sub
+@h_w0:
+    lda $0706
+@h_cmp_sub:
+    cmp HyruleTblSub,x
+    bne @next_hop
+    lda $0561
+    cmp HyruleTblRoom,x
+    bne @next_hop
+    lda HyruleTblPage,x
+    sta $0B
+    lda HyruleTblXlo,x
+    sta $0C
+    jmp @have_coords
 @next_hop:
     jmp @next
 @early_done:
     rts
-@in_room:
-    lda PortalTblXlo,x
+@have_coords:
+    lda $0C
     clc
     adc #$08
     and #$F0
@@ -921,10 +1188,10 @@ UpdateArcadeSigns2:
     lsr a
     sec
     sbc #$03
-    sta $02                 ; $02 = sign_col
-    lda PortalTblPage,x
+    sta $0A                 ; $0A = sign_col
+    lda $0B
     sta $05
-    lda $02
+    lda $0A
     asl a
     asl a
     asl a
@@ -957,7 +1224,7 @@ UpdateArcadeSigns2:
     lda $072A
     ora $072C
     bne @check_far_right
-    lda PortalTblPage,x
+    lda $0B
     cmp #$02
     bcc @ready
 @check_far_right:
@@ -977,26 +1244,29 @@ UpdateArcadeSigns2:
     cpx #$08
     bcs @test_hi
     and ARCADE_SIGN_LO
-    bne @next
+    bne @next_hop2
     lda SignBitMask,y
     ora ARCADE_SIGN_LO
     sta ARCADE_SIGN_LO
     jmp @queue_sign
 @test_hi:
     and ARCADE_SIGN_HI
-    bne @next
+    bne @next_hop2
     lda SignBitMask,y
     ora ARCADE_SIGN_HI
     sta ARCADE_SIGN_HI
+    jmp @queue_sign
+@next_hop2:
+    jmp @next
 @queue_sign:
-    lda PortalTblPage,x
+    lda $0B
     and #$01
     asl a
     asl a
     ora #$22
     sta $0302
     sta $030C
-    lda $02
+    lda $0A
     clc
     adc #$20
     sta $0303
@@ -1006,23 +1276,67 @@ UpdateArcadeSigns2:
     lda #$07
     sta $0304
     sta $030E
+    ; Pick 2-row marquee text based on discovery & completion state
+    lda $0D
+    bne @chk_cleared        ; Hyrule spot itself is always discovered on entry
+    jsr IsSlotDiscovered8
+    bne @chk_cleared
+    lda #<ArcadeSignOutOfOrder
+    sta $00
+    lda #>ArcadeSignOutOfOrder
+    sta $01
+    lda #<(ArcadeSignOutOfOrder + 7)
+    sta $08
+    lda #>(ArcadeSignOutOfOrder + 7)
+    sta $09
+    bne @copy_rows
+@chk_cleared:
+    jsr IsSlotCleared8
+    beq @normal_sign
+    ldy PortalTblGameId,x
+    dey
+    lda ClearSignRow1Lo,y
+    sta $00
+    lda ClearSignRow1Hi,y
+    sta $01
+    lda $0707
+    beq @ow_clear
+    lda #<ClearSignRow2Town
+    sta $08
+    lda #>ClearSignRow2Town
+    sta $09
+    bne @copy_rows
+@ow_clear:
+    lda #<ClearSignRow2Ow
+    sta $08
+    lda #>ClearSignRow2Ow
+    sta $09
+    bne @copy_rows
+@normal_sign:
     lda PortalTblSignLo,x
     sta $00
     lda PortalTblSignHi,x
     sta $01
+    clc
+    lda $00
+    adc #$07
+    sta $08
+    lda $01
+    adc #$00
+    sta $09
+@copy_rows:
     ldy #$06
 @copy_r1:
     lda ($00),y
     sta $0305,y
     dey
     bpl @copy_r1
-    ldy #$0D
+    ldy #$06
 @copy_r2:
-    lda ($00),y
-    sta $0308,y
+    lda ($08),y
+    sta $030F,y
     dey
-    cpy #$07
-    bcs @copy_r2
+    bpl @copy_r2
     lda #$FF
     sta $0316
     lda #$14
@@ -1088,7 +1402,62 @@ ArcadeNameDefault:
     WaldoLine "NOT", $FD
     WaldoLine "RIGHT...", $FF
 
-PortalTramp2:
+OutOfOrderText:
+    WaldoLine "OUT OF ORDER!", $FD
+    WaldoLine "FIND THIS GAME", $FD
+    WaldoLine "OUT IN HYRULE.", $FF
+
+WinReturnText01:
+    WaldoLine "WHERE'S BARBA?", $FD
+    WaldoLine "CLEARED! GOT", $FD
+    WaldoLine "DECOY AND HAT!", $FF
+WinReturnText02:
+    WaldoLine "FRIDAY 13TH", $FD
+    WaldoLine "CLEARED! GOT", $FD
+    WaldoLine "AXE AND MASK!", $FF
+WinReturnText03:
+    WaldoLine "BARBA'S BEEF", $FD
+    WaldoLine "CLEARED! GOT", $FD
+    WaldoLine "DOUBLE SPELL!", $FF
+WinReturnText04:
+    WaldoLine "BARBA KONG", $FD
+    WaldoLine "CLEARED! GOT", $FD
+    WaldoLine "BARREL AND TIE", $FF
+WinReturnText05:
+    WaldoLine "SUPER BARBA", $FD
+    WaldoLine "CLEARED! GOT", $FD
+    WaldoLine "STAR SPELL!", $FF
+WinReturnText06:
+    WaldoLine "MONSTER HUNT", $FD
+    WaldoLine "CLEARED! GOT", $FD
+    WaldoLine "LOCK SPELL!", $FF
+WinReturnText07:
+    WaldoLine "BARBA MAN 2", $FD
+    WaldoLine "CLEARED! GOT", $FD
+    WaldoLine "BLADE AND HELM", $FF
+WinReturnText08:
+    WaldoLine "WHEEL OF BARBA", $FD
+    WaldoLine "CLEARED! GOT", $FD
+    WaldoLine "LUCKY SPELL!", $FF
+WinReturnText09:
+    WaldoLine "LEGEND OF", $FD
+    WaldoLine "BARBA", $FD
+    WaldoLine "CLEARED! GOT", $FD
+    WaldoLine "CLOCK SPELL!", $FF
+WinReturnText10:
+    WaldoLine "BARBA'S", $FD
+    WaldoLine "PUNCH OUT!!", $FD
+    WaldoLine "CLEARED! GOT", $FD
+    WaldoLine "HEAVY AND BELT", $FF
+
+WinReturnTextLo:
+    .byte <WinReturnText01, <WinReturnText02, <WinReturnText03, <WinReturnText04, <WinReturnText05
+    .byte <WinReturnText06, <WinReturnText07, <WinReturnText08, <WinReturnText09, <WinReturnText10
+WinReturnTextHi:
+    .byte >WinReturnText01, >WinReturnText02, >WinReturnText03, >WinReturnText04, >WinReturnText05
+    .byte >WinReturnText06, >WinReturnText07, >WinReturnText08, >WinReturnText09, >WinReturnText10
+
+PortalTramp8:
     pla
     tax                     ; X = portal slot index (0..MAX_PORTAL_SLOTS-1)
     lda PortalTblWram,x
@@ -1150,14 +1519,17 @@ PortalTramp_Boot:
     jmp $E000
 PortalTrampEnd:
 
-.segment "BANK2_SMOKE"
+.segment "PORTAL_BANK"
 
-BarbaWaldoRestore2:
+BarbaWaldoRestore8:
     lda #$00
     sta $2000
     sta $2001
     sta $4015
+    sta $4011
     sta $E000
+    lda #$40
+    sta $4017
 
     lda #$A1
     sta $A001               ; WRAM bank 1 = Barba snapshot
@@ -1168,10 +1540,10 @@ BarbaWaldoRestore2:
     bit $2002
     lda #$20
     ldx #$68
-    jsr @rest_nt_1k
+    jsr RestNt1k8
     lda #$24
     ldx #$6C
-    jsr @rest_nt_1k
+    jsr RestNt1k8
 
     ; Restore PPU palettes
     bit $2002
@@ -1224,16 +1596,17 @@ BarbaWaldoRestore2:
     lda $076E
     jsr $FFB1               ; Restore CHR banks
 
-    lda #$01
-    sta PORTAL_DEBOUNCE
-    sta WALDO_RETURN_MSG
-    lda #$02
-    sta $074C               ; Dialog Type = Talking
-    sta $DE                 ; Lock movement while message box is open
     lda #$00
+    sta ACTIVE_GAME_ID
+    sta ARCADE_SIGN_LO
+    sta ARCADE_SIGN_HI
     sta $0400               ; Clear slash/breath frame
     sta $0524               ; Dialog routine counter = 0
     sta $0525               ; Dialog routine delay = 0
+    lda #$FF
+    sta ARCADE_SIGN_ROOM
+    lda #$01
+    sta PORTAL_DEBOUNCE
     lda #$03
     sta $80                 ; Barba standing pose
     lda #$05
@@ -1246,11 +1619,57 @@ BarbaWaldoRestore2:
     sta $F5
 
 @wait_up_rel:
-    jsr PollUpKey2
+    jsr PollUpKey8
     bne @wait_up_rel
 
-    jsr BarbaWipeIn2
+    lda RA_LAST_WIN_GAME
+    beq @silent_return
+    cmp #11
+    bcs @silent_return
+    ; Milestone win return: victory chime + flash + context-aware unlock UX
+    tay
+    lda #$04
+    sta $EC                 ; magic/unlock chime SFX
+    lda #$20
+    sta $074B               ; short celebration flash
+.ifdef SAMPLED_ROAR
+    lda $05EE
+    ora #$40
+    sta $05EE
+.endif
+    lda $0707
+    beq @world0_win_return
+    lda WinReturnTextLo - 1,y
+    pha
+    lda WinReturnTextHi - 1,y
+    tay
+    pla
+    jsr CopyDlgBuf8
+    lda #$01
+    sta WALDO_RETURN_MSG
+    lda #$02
+    sta $074C               ; Dialog Type = Talking
+    sta $DE                 ; Lock movement while celebration box is open
+    jsr BarbaWipeIn8
+    jmp @resume_z2
 
+@world0_win_return:
+    lda #$00
+    sta WALDO_RETURN_MSG
+    sta $074C
+    sta $DE
+    jsr BarbaWipeIn8
+    jsr ShowNonTownWinBox8
+    jmp @resume_z2
+
+@silent_return:
+    lda #$00
+    sta WALDO_RETURN_MSG
+    sta $074C
+    sta $DE
+    jsr BarbaWipeIn8
+
+@resume_z2:
     bit $2002
 @vwait:
     bit $2002
@@ -1261,7 +1680,7 @@ BarbaWaldoRestore2:
     lda #$06
     jmp $FFCC               ; Resume NmiVblankSetup6 in bank 6; it swaps to PRG0
 
-@rest_nt_1k:
+RestNt1k8:
     sta $2006
     lda #$00
     sta $2006
@@ -1279,17 +1698,177 @@ BarbaWaldoRestore2:
     bne @nt_write
     rts
 
+; Non-town (EH $07) celebration box: draws a framed 3-line win box onto visible NT using CHR 5
+; font ($D0-$F4 + $CA/$CB/$CC), waits for A/B press, then restores NT from WRAM Bank 1 snapshot.
+ShowNonTownWinBox8:
+    lda $00
+    pha
+    lda $01
+    pha
+    lda $02
+    pha
+    bit $2002
+@vb0:
+    bit $2002
+    bpl @vb0
+    lda #$00
+    sta $2001
+    ; Calculate NT base row = $20/$24 (from $0746 & 1) + row 8 ($0100) + col off
+    lda $0746
+    and #$01
+    asl a
+    asl a
+    ora #$21                ; row 8..15 lives in $21xx / $25xx
+    sta $02
+    ; Draw 7 rows x 18 cols starting at ($02:$07) with 1-tile space border on all 4 sides
+    ldx #$00
+@row_lp:
+    bit $2002
+    lda $02
+    sta $2006
+    lda NonTownRowLo,x
+    sta $2006
+    ldy #$00
+    lda #$CA                ; box edge
+    sta $2007
+    iny
+@col_lp:
+    cpx #$00
+    beq @top_bot
+    cpx #$06
+    beq @top_bot
+    lda #$F4                ; blank interior tile
+    jmp @char_out
+@top_bot:
+    lda #$CB                ; horizontal border
+@char_out:
+    sta $2007
+    iny
+    cpy #17
+    bcc @col_lp
+    lda #$CA
+    sta $2007
+    inx
+    cpx #$07
+    bcc @row_lp
+    ; Overwrite text rows 2..4 cleanly via pointer (14 chars, 1-tile padding all around)
+    ldx #$00
+@msg_row:
+    bit $2002
+    lda $02
+    sta $2006
+    lda NonTownTextAddrLo,x
+    sta $2006
+    lda NonTownLinePtrLo,x
+    sta $00
+    lda NonTownLinePtrHi,x
+    sta $01
+    ldy #$00
+@msg_ch:
+    lda ($00),y
+    sta $2007
+    iny
+    cpy #14
+    bcc @msg_ch
+    inx
+    cpx #$03
+    bcc @msg_row
+    ; Reset scroll & turn rendering back on with clean (0,0) box scroll
+    bit $2002
+    lda #$00
+    sta $2006
+    sta $2006
+    sta $2005
+    sta $2005
+    lda $0746
+    and #$01
+    sta $00
+    lda $FF
+    and #$7C
+    ora $00
+    sta $2000
+    lda $FE
+    sta $2001
+    ; Wait 20 frames, then wait for A/B press + release
+    ldx #20
+@hold_vb:
+    bit $2002
+    bpl @hold_vb
+    dex
+    bne @hold_vb
+@wait_ab:
+    bit $2002
+    bpl @wait_ab
+    jsr @poll_ab
+    beq @wait_ab
+@wait_rel:
+    bit $2002
+    bpl @wait_rel
+    jsr @poll_ab
+    bne @wait_rel
+    ; Restore pristine NT from WRAM Bank 1 ($6800-$6FFF)
+    bit $2002
+@vb_rest:
+    bit $2002
+    bpl @vb_rest
+    lda #$00
+    sta $2001
+    lda #$A1
+    sta $A001
+    bit $2002
+    lda #$20
+    ldx #$68
+    jsr RestNt1k8
+    lda #$24
+    ldx #$6C
+    jsr RestNt1k8
+    lda #$A0
+    sta $A001
+    lda $076E
+    jsr $FFB1
+    pla
+    sta $02
+    pla
+    sta $01
+    pla
+    sta $00
+    rts
+@poll_ab:
+    lda #$01
+    sta $4016
+    lsr a
+    sta $4016
+    lda $4016               ; A
+    ora $4016               ; B (Wait: $4016 reads A then B)
+    and #$01
+    rts
+
+NonTownRowLo:
+    .byte $07, $27, $47, $67, $87, $A7, $C7
+NonTownTextAddrLo:
+    .byte $49, $69, $89
+NonTownLinePtrLo:
+    .byte <NonTownWinL1, <NonTownWinL2, <NonTownWinL3
+NonTownLinePtrHi:
+    .byte >NonTownWinL1, >NonTownWinL2, >NonTownWinL3
+NonTownWinL1:
+    .byte $EC,$EE,$E9,$DE,$EB,$F4,$DB,$DA,$EB,$DB,$DA,$F4,$F4,$F4  ; "SUPER BARBA   "
+NonTownWinL2:
+    .byte $DC,$E5,$DE,$DA,$EB,$DE,$DD,$F4,$E2,$ED,$F4,$E0,$E8,$ED  ; "CLEARED IT GOT"
+NonTownWinL3:
+    .byte $ED,$E1,$DE,$F4,$EC,$ED,$DA,$EB,$F4,$EC,$E9,$DE,$E5,$E5  ; "THE STAR SPELL"
+
 ; Bottom-up wavy horizontal melt + wipe away (30 frames, 0.5s).
-; Preserves $0000-$07FF and PPU VRAM so BarbaWaldoSaveAndLaunch2 can snapshot cleanly afterward.
-BarbaMelt2:
+; Preserves $0000-$07FF and PPU VRAM so BarbaWaldoSaveAndLaunch8 can snapshot cleanly afterward.
+BarbaMelt8:
     lda #$00
     sta MELT_DIR
     sta MELT_FRAME
     jmp BarbaMeltFrameLoop
 
 ; Top-down wavy horizontal wipe-in (30 frames, 0.5s) on return to Barba.
-; Populates PPU OAM from $6500 before revealing the restored Rauru scene.
-BarbaWipeIn2:
+; Populates PPU OAM from $6500 before revealing the restored scene.
+BarbaWipeIn8:
     lda #$01
     sta MELT_DIR
     lda #29
@@ -1451,8 +2030,8 @@ WaldoDialogCheck:
     beq @check_enter
     lda #$00
     sta WALDO_RETURN_MSG
-    lda #<WaldoReturnText
-    ldy #>WaldoReturnText
+    lda #<ARCADE_DLG_BUF
+    ldy #>ARCADE_DLG_BUF
     jmp TownSetNpcDialog
 @check_enter:
     lda WALDO_ENTER_MSG
@@ -1476,7 +2055,7 @@ WaldoDialogCheck:
     sta $048C
     jmp $B487
 
-.segment "BANK2_SMOKE"
+.segment "PORTAL_BANK"
 BarbaArcadeEnemies:
     .byte BarbaArcadeEnemiesEnd - BarbaArcadeEnemies
     .byte $75, $1E            ; Page 0, X=$50, Red Young Lad - Walking
@@ -1485,11 +2064,16 @@ BarbaArcadeEnemies:
     .byte $76, $C0 | $1B      ; Page 3, X=$60, Red Old Woman - Walking
 BarbaArcadeEnemiesEnd:
 
-ArcadeNpcTick2:
+ArcadeNpcTick8:
+    lda $0707
+    cmp #$01
+    bne @done
+    lda $056B
+    bne @done
     lda $0561
     cmp #$1C
     beq @in_arcade
-    ; Outside room $1C in Rauru/towns: stage BarbaArcadeEnemies in $73E0
+    ; Outside room $1C in Rauru: stage BarbaArcadeEnemies in $73E0
     ; so room $1C enemy pointer ($85D9 -> $73E0) is ready before room entry.
     ldy #BarbaArcadeEnemiesEnd - BarbaArcadeEnemies - 1
 @copy_enemies:
@@ -1553,7 +2137,12 @@ ArcadeNpcTick2:
 @done:
     rts
 
-ArcadeStageDlg2:
+ArcadeStageDlg8:
+    lda $0707
+    cmp #$01
+    bne @dlg_done
+    lda $056B
+    bne @dlg_done
     lda $0561
     cmp #$1C
     bne @dlg_done
@@ -1621,18 +2210,7 @@ ArcadeStageDlg2:
     lda #<ArcadeDlg3
     ldy #>ArcadeDlg3
 @copy_dlg:
-    sta $00
-    sty $01
-    ldy #$00
-@copy_dlg_loop:
-    lda ($00),y
-    sta ARCADE_DLG_BUF,y
-    cmp #$FF
-    beq @dlg_done
-    iny
-    cpy #$3F
-    bcc @copy_dlg_loop
-    rts
+    jmp CopyDlgBuf8
 
 ArcadeDlg0:
     WaldoLine "I LOVE THIS", $FD
@@ -1651,9 +2229,17 @@ ArcadeDlg3:
     WaldoLine "MY RUPEES", $FD
     WaldoLine "PLAYING HERE!", $FF
 
-WaldoReturnText:
-    TownLine "WELL THAT", $FD
-    TownLine "WAS WEIRD.", $FF
+.segment "BANK3_PAD"
+.export MiniArcadeArea, BaguCabinArea
+MiniArcadeArea:
+    .byte @end - MiniArcadeArea, $00, $18, $30
+    .byte $F0, $00, $F1, $3E, $50, $8E, $86, $00, $F6, $01
+@end:
+
+BaguCabinArea:
+    .byte @end - BaguCabinArea, $00, $A0, $09
+    .byte $F0, $1F, $64, $29, $80, $99, $83, $01, $84, $00
+@end:
 
 .segment "TOWN"
 .export BarbaArcadeArea
