@@ -151,7 +151,7 @@
         "on_w": 256,
         "on_h": 176,
         "on_label": "INFERNO",
-        "frames": 64,
+        "frames": 84,
         "fps": 20
       }
     },
@@ -289,7 +289,7 @@
         "on_w": 256,
         "on_h": 176,
         "on_label": "Crystal Pulse & Shake",
-        "frames": 112,
+        "frames": 192,
         "fps": 20
       }
     },

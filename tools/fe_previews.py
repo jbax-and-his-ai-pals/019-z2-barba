@@ -135,15 +135,30 @@ def draw_full_barba(
     y: int,
     tail_flick: bool = False,
 ) -> None:
-    """Draw 24x48 Barba facing right WITH the elbow, horizontal torso, and flicking tail."""
-    # Delayed-Y trail behind Barba's left (back) side
-    bend = bytes_to_8x16(graphics[assets.ENCOUNTER_CONNECTOR_PAIRS[0]])
-    torso = bytes_to_8x16(graphics[assets.ENCOUNTER_TRAIL_PAIRS[0]])
-    tip = bytes_to_8x16(graphics[assets.ENCOUNTER_TRAIL_PAIRS[2 if not tail_flick else 3]])
-    blit_rows(c, tip, pal, x - 16, y + (32 if tail_flick else 34), flip_x=True)
-    blit_rows(c, torso, pal, x - 8, y + 32, flip_x=True)
-    blit_rows(c, bend, pal, x, y + 32, flip_x=True)
-    blit_rows(c, barba_frames[pose], pal, x, y, flip_x=True)
+    """Draw 24x48 Barba facing right WITH the curved junction, horizontal torso, and flicking tail."""
+    # Delayed-Y trail behind Barba's left (back) side:
+    # near torso (x-8), outer torso (x-16), near tip (x-24), far tip (x-32).
+    torso_near = bytes_to_8x16(graphics[assets.ENCOUNTER_TRAIL_PAIRS[0]])
+    torso_far = bytes_to_8x16(graphics[assets.ENCOUNTER_TRAIL_PAIRS[1]])
+    tip_near = bytes_to_8x16(graphics[assets.ENCOUNTER_TRAIL_PAIRS[2]])
+    tip_far = bytes_to_8x16(graphics[assets.ENCOUNTER_TRAIL_PAIRS[3]])
+    tip_y = y + (31 if tail_flick else 33)
+    blit_rows(c, tip_far, pal, x - 32, tip_y, flip_x=True)
+    blit_rows(c, tip_near, pal, x - 24, tip_y, flip_x=True)
+    blit_rows(c, torso_far, pal, x - 16, y + 32, flip_x=True)
+    blit_rows(c, torso_near, pal, x - 8, y + 32, flip_x=True)
+
+    # Clip the bottom 16px of the upright 24x48 frame so the curved junction
+    # pieces (TRAIL_BEND_BACK at x, TRAIL_BEND_CENTER at x+8) replace the standing feet.
+    clipped = [
+        ("0" * 24) if iy >= 32 else row
+        for iy, row in enumerate(barba_frames[pose])
+    ]
+    blit_rows(c, clipped, pal, x, y, flip_x=True)
+    bend_center = bytes_to_8x16(graphics[assets.ENCOUNTER_CONNECTOR_PAIRS[0]])
+    bend_back = bytes_to_8x16(graphics[assets.ENCOUNTER_CONNECTOR_PAIRS[1]])
+    blit_rows(c, bend_back, pal, x, y + 32, flip_x=True)
+    blit_rows(c, bend_center, pal, x + 8, y + 32, flip_x=True)
 
 
 def build_link_frames(rom: bytes) -> list[list[list[RGBA]]]:
@@ -180,7 +195,7 @@ def build_barba_frames(barba_frames: dict[str, list[str]], graphics: dict[int, b
     for pose, flick in seq:
         c = new_canvas(64, 56)
         paint_z2_grass_bg(c, 46)
-        draw_full_barba(c, barba_frames, graphics, pose, PAL_BARBA, 26, 0, tail_flick=flick)
+        draw_full_barba(c, barba_frames, graphics, pose, PAL_BARBA, 36, 0, tail_flick=flick)
         frames.append(c)
     return frames
 
@@ -235,7 +250,7 @@ def build_palette_shuffle_frames(barba_frames: dict[str, list[str]], graphics: d
     for i, pal in enumerate(pals):
         c = new_canvas(64, 56)
         paint_z2_grass_bg(c, 46)
-        draw_full_barba(c, barba_frames, graphics, "idle", pal, 26, 0, tail_flick=(i % 2 == 1))
+        draw_full_barba(c, barba_frames, graphics, "idle", pal, 36, 0, tail_flick=(i % 2 == 1))
         frames.append(c)
     return frames
 

@@ -96,7 +96,7 @@ FLAGS: list[dict[str, Any]] = [
         "barba": True,
         "requires": ["barba_protagonist"],
         "description": "Replaces Thunder with a 4-wave 4-way firestorm (previewed at Thunderbird).",
-        "preview": {"off": "previews/cap_vanilla_spell_inferno.png", "off_w": 256, "off_h": 176, "off_label": "Vanilla Thunder", "on": "previews/cap_barba_spell_inferno.png", "on_w": 256, "on_h": 176, "on_label": "INFERNO", "frames": 64, "fps": 20},
+        "preview": {"off": "previews/cap_vanilla_spell_inferno.png", "off_w": 256, "off_h": 176, "off_label": "Vanilla Thunder", "on": "previews/cap_barba_spell_inferno.png", "on_w": 256, "on_h": 176, "on_label": "INFERNO", "frames": 84, "fps": 20},
     },
     {
         "id": "upstab_breath",
@@ -178,7 +178,7 @@ FLAGS: list[dict[str, Any]] = [
         "barba": True,
         "requires": ["barba_protagonist"],
         "description": "Crystal floor pulse, Palace 6 drop roar, and Lava Link entrance camera/HUD shake.",
-        "preview": {"off": "previews/cap_vanilla_palace_roar.png", "off_w": 256, "off_h": 176, "off_label": "Vanilla Crystal", "on": "previews/cap_barba_palace_roar.png", "on_w": 256, "on_h": 176, "on_label": "Crystal Pulse & Shake", "frames": 112, "fps": 20},
+        "preview": {"off": "previews/cap_vanilla_palace_roar.png", "off_w": 256, "off_h": 176, "off_label": "Vanilla Crystal", "on": "previews/cap_barba_palace_roar.png", "on_w": 256, "on_h": 176, "on_label": "Crystal Pulse & Shake", "frames": 192, "fps": 20},
     },
     {
         "id": "rauru_sage_basement",

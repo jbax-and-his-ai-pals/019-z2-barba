@@ -101,6 +101,8 @@
       margin: 0; font-size: 1.05rem; border-bottom: 1px solid var(--border);
       padding-bottom: 8px; color: var(--gold);
     }
+    .flag-list { display: flex; flex-direction: column; gap: 12px; }
+    .flag-grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 12px; }
     .flag-item {
       display: flex; flex-direction: column; gap: 8px; padding: 11px;
       border-radius: 10px; background: var(--panel-alt); border: 1px solid transparent;
@@ -1021,11 +1023,14 @@
         return true;
       };
 
-      const renderFlagCard = (title, items) => {
+      const renderFlagCard = (title, items, gridClass = 'flag-list') => {
         if (!items.length) return;
         const card = document.createElement('section');
         card.className = 'card';
         card.innerHTML = `<h2>${title}</h2>`;
+        const listEl = document.createElement('div');
+        listEl.className = gridClass;
+        card.appendChild(listEl);
         for (const f of items) {
           const item = document.createElement('div');
           item.className = 'flag-item' + (f.status === 'planned' ? ' is-planned' : '');
@@ -1054,7 +1059,7 @@
           if (previewNode) item.appendChild(previewNode);
           const audioNode = buildAudioNode(f, isEnabled);
           if (audioNode) item.appendChild(audioNode);
-          card.appendChild(item);
+          listEl.appendChild(item);
 
           const ctrl = item.querySelector(`#${controlId}`);
           ctrl.onchange = () => {
@@ -1070,12 +1075,12 @@
       // 1. Visual / animated features grouped by category
       for (const cat of catalog.categories) {
         const visualItems = catalog.flags.filter(f => f.category === cat.id && f.preview && matchesFilter(f));
-        renderFlagCard(cat.title, visualItems);
+        renderFlagCard(cat.title, visualItems, 'flag-list');
       }
 
       // 2. All non-visual options & tunables in their own dedicated section below
       const nonVisualItems = catalog.flags.filter(f => !f.preview && matchesFilter(f));
-      renderFlagCard('Non-Visual Options, Audio & Tunables', nonVisualItems);
+      renderFlagCard('Non-Visual Options, Audio & Tunables', nonVisualItems, 'flag-grid-2');
     }
 
     document.getElementById('seed-input').oninput = e => {

@@ -29,12 +29,12 @@ SCENES = [
     ("spell_scales", 256, 176, 48, 20),
     ("spell_wyrmling", 256, 176, 48, 20),
     ("spell_meteor", 256, 176, 104, 20),
-    ("spell_inferno", 256, 176, 64, 20),
+    ("spell_inferno", 256, 176, 84, 20),
     ("saria_town", 256, 176, 64, 20),
     ("town_chaos", 256, 176, 64, 20),
     ("crossover_portals", 256, 176, 96, 20),
     ("ironknuckle_rebound", 256, 176, 96, 20),
-    ("palace_roar", 256, 176, 112, 20),
+    ("palace_roar", 256, 176, 192, 20),
     ("boss_meter", 256, 208, 64, 20),
     ("game_over", 256, 176, 64, 15),
 ]
@@ -252,14 +252,13 @@ emu.addEventCallback(function()
         local dive = (dt >= 68 and dt < 130)
         emu.setInput({select = cast, a = jump, down = dive, b = dive}, 0)
     elseif phase == 'spell_inferno' then
-        local px = r(0x3B) * 256 + r(0x4D)
         if not thunderCastDt then
             local jump = (dt % 38 >= 12 and dt % 38 < 32)
-            emu.setInput({right = (r(0x728) == 0 and px < 640), a = jump}, 0)
+            emu.setInput({right = true, a = jump}, 0)
         else
             local fdt = dt - thunderCastDt
-            local cast = (fdt >= 60 and fdt < 64)
-            local fire = (fdt >= 90) and (fdt % 14 < 4)
+            local cast = (fdt >= 205 and fdt < 209)
+            local fire = (fdt >= 235) and (fdt % 14 < 4)
             emu.setInput({select = cast, b = fire}, 0)
         end
     elseif phase == 'saria_ow' then
@@ -278,8 +277,8 @@ emu.addEventCallback(function()
         local b = (dt >= 250 and dt < 254)
         emu.setInput({up = up, right = right, b = b}, 0)
     elseif phase == 'ironknuckle_rebound' then
-        local jump = (dt >= 6 and dt < 14) or (dt >= 110 and dt < 118)
-        local fire = (dt >= 22 and dt < 26) or (dt >= 124 and dt < 128)
+        local jump = (dt >= 20 and dt < 26) or (dt >= 110 and dt < 116)
+        local fire = (dt >= 58 and dt < 62) or (dt >= 138 and dt < 142)
         emu.setInput({a = jump, b = fire}, 0)
     elseif phase == 'palace_roar' then
         local jump = (dt >= 10 and dt < 22) or (dt >= 40 and dt < 52)
@@ -451,15 +450,12 @@ emu.addEventCallback(function()
     elseif phase == 'spell_inferno' then
         local dt = frame - phaseStart
         local px = r(0x3B) * 256 + r(0x4D)
-        local hasTB = false
-        for s = 0, 5 do
-            if r(0xB6 + s) == 1 and r(0xA1 + s) == 0x22 then hasTB = true end
-        end
-        if not thunderCastDt and ((hasTB and px >= 440) or dt >= 360) then thunderCastDt = dt end
-        if thunderCastDt and dt >= thunderCastDt + 40 and (dt - thunderCastDt) % 2 == 0 and captured < 64 then
+        local py = r(0x29)
+        if not thunderCastDt and ((px >= 352 and py == 144 and r(0x479) == 0) or dt >= 360) then thunderCastDt = dt end
+        if thunderCastDt and dt >= thunderCastDt + 115 and (dt - thunderCastDt) % 2 == 0 and captured < 84 then
             dumpCrop('spell_inferno', 0, 32, 256, 176)
             captured = captured + 1
-            if captured >= 64 then enterPalaceRoom(0x0D, 1); phase = 'boss_meter_wait'; phaseStart = frame; captured = 0; bossFightDt = nil end
+            if captured >= 84 then enterPalaceRoom(0x0D, 1); phase = 'boss_meter_wait'; phaseStart = frame; captured = 0; bossFightDt = nil end
         end
     elseif phase == 'saria_ow_wait' then
         if frame >= phaseStart + 12 and r(0x736) == 5 then
@@ -531,18 +527,18 @@ emu.addEventCallback(function()
             for s = 0, 5 do if r(0xB6 + s) == 1 and r(0xA1 + s) ~= 0x02 then w(0xB6 + s, 0) end end
             w(0x3B, 0); w(0x4D, 152); w(0x29, 176); w(0x9F, 1); w(0x5F, 1); w(0x70, 0); w(0x479, 0); w(0x57D, 0)
             w(0xB6 + 1, 1); w(0xA1 + 1, 0x18)
-            w(0x4E + 1, 188); w(0x3C + 1, 0); w(0x2A + 1, 176)
-            w(0xC2 + 1, 0x10); w(0x0444 + 1, 1); w(0x60 + 1, 1)
+            w(0x4E + 1, 192); w(0x3C + 1, 0); w(0x2A + 1, 176)
+            w(0xC2 + 1, 0x10); w(0x0444 + 1, 1); w(0x60 + 1, 2)
             w(0x040E + 1, 0); w(0x71 + 1, 0)
             w(0xB6 + 2, 1); w(0xA1 + 2, 0x04); w(0xC2 + 2, 4)
-            w(0x4E + 2, 129); w(0x3C + 2, 0); w(0x2A + 2, 160)
+            w(0x4E + 2, 138); w(0x3C + 2, 0); w(0x2A + 2, 176)
             w(0x040E + 2, 0); w(0x71 + 2, 0); w(0x1A + 2, 1)
             w(0xA8 + 2, 0); w(0xAF + 2, 0); w(0x057E + 2, 0)
         end
         if dt > 2 then
-            w(0x4E + 1, 188); w(0x0444 + 1, 1); w(0x60 + 1, 1); w(0x71 + 1, 0)
+            w(0x4E + 1, 192); w(0x0444 + 1, 1); w(0x60 + 1, 2); w(0x71 + 1, 0)
             if r(0xB6 + 2) == 1 then
-                w(0x4E + 2, 129); w(0x2A + 2, 160); w(0x71 + 2, 0)
+                w(0x4E + 2, 138); w(0x2A + 2, 176); w(0x71 + 2, 0)
             end
         end
         if dt >= 4 and dt % 2 == 0 and captured < 96 then
@@ -559,10 +555,10 @@ emu.addEventCallback(function()
         end
     elseif phase == 'palace_roar' then
         local dt = frame - phaseStart
-        if dt >= 24 and dt % 3 == 0 and captured < 112 then
+        if dt >= 24 and dt % 3 == 0 and captured < 192 then
             dumpCrop('palace_roar', 0, 32, 256, 176)
             captured = captured + 1
-            if captured >= 112 then
+            if captured >= 192 then
                 enterThunderbird()
                 phase = 'spell_inferno_wait'; phaseStart = frame; captured = 0; thunderCastDt = nil
             end
