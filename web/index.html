@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Zelda II: Barba Enterprise — Visual Flag &amp; Seed Builder</title>
+  <title>Zelda II: Barba Enterprise — Visual Flag & Seed Builder</title>
   <style>
     :root {
       --bg: #0e1015;
@@ -332,18 +332,18 @@
     <header>
       <div>
         <h1>Zelda II: <span>Barba Enterprise</span></h1>
-        <div class="subtitle">Composable ROM flag builder &amp; seed generator — Vanilla Z2 baseline to full Barba Mode</div>
+        <div class="subtitle">Composable ROM flag builder &amp; seed showcase — Vanilla Z2 baseline to full Barba Mode</div>
       </div>
       <div class="preset-bar" id="presets"></div>
     </header>
 
+    
+
     <nav class="tab-bar" aria-label="Workspace Views">
       <button type="button" class="tab-btn active" data-tab="fe">Barba Enterprise (Flags &amp; Seed)</button>
-      <button type="button" class="tab-btn" data-tab="titles">Title Screen Review</button>
+      <button type="button" class="tab-btn" data-tab="titles">Title Screens</button>
       <button type="button" class="tab-btn" data-tab="patcher">ROM Patcher (Local BPS)</button>
-      <button type="button" class="tab-btn" data-tab="waldo">Where's Barba? Tile Tagger</button>
-      <button type="button" class="tab-btn" data-tab="feud">Family Feud Cast</button>
-      <button type="button" class="tab-btn" data-tab="duck">Barba's Hunt Tiles</button>
+
     </nav>
 
     <div id="view-fe">
@@ -376,11 +376,7 @@
         <button id="apply-flagstring" type="button">Apply</button>
         <button id="copy-flagstring" class="primary" type="button">Copy Flags</button>
       </div>
-      <div class="row">
-        <label for="cli-cmd">CLI Build</label>
-        <input id="cli-cmd" class="mono" readonly>
-        <button id="copy-cli" type="button">Copy CLI</button>
-      </div>
+
       <div class="stats" id="stats"></div>
       <div class="toast" id="toast" role="status" aria-live="polite"></div>
     </section>
@@ -410,241 +406,7 @@
       </section>
     </div>
 
-    <div id="view-waldo" class="hidden">
-      <section class="top-box" aria-label="Waldo Crowd Tile Tagger">
-        <div class="row">
-          <label for="waldo-level">Level</label>
-          <select id="waldo-level"></select>
-          <label for="waldo-band" style="min-width:48px;">Band</label>
-          <select id="waldo-band">
-            <option value="all">All Bands</option>
-            <option value="0">Band 0</option>
-            <option value="1">Band 1</option>
-            <option value="2">Band 2</option>
-          </select>
-          <label for="waldo-state" style="min-width:48px;">State</label>
-          <select id="waldo-state">
-            <option value="all">All States</option>
-            <option value="flee">Flee (People / Pets)</option>
-            <option value="static">Static (BG Props)</option>
-            <option value="hide">Hide (Ambiguous)</option>
-            <option value="scrap">1x1 Auto-Scrap</option>
-          </select>
-        </div>
-        <div class="row">
-          <span class="subtitle" style="margin:0;">Click any tile card to cycle <strong>Flee → Static → Hide</strong>, or click a state pill directly.</span>
-          <div style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;">
-            <button id="waldo-reset" type="button">Reset</button>
-            <button id="waldo-copy" type="button">Copy waldo_crowd.json</button>
-            <button id="waldo-download" class="primary" type="button">Download waldo_crowd.json</button>
-          </div>
-        </div>
-        <div class="stats" id="waldo-stats"></div>
-        <div class="toast" id="waldo-toast" role="status" aria-live="polite"></div>
-      </section>
-      <section class="waldo-grid" id="waldo-grid"></section>
-    </div>
-
-    <div id="view-feud" class="hidden">
-      <section class="feud-stage-box" aria-label="Live 5-Seat Family Feud Stage Preview">
-        <div>
-          <canvas id="feud-stage-canvas" class="nes-canvas" width="512" height="208"></canvas>
-        </div>
-        <div class="feud-stage-side">
-          <div>
-            <div class="stage-title">Live 5-Seat Stage Podium Preview</div>
-            <div class="subtitle" style="margin:0;">
-              Real-time NES stage composite. Click any sprite card&apos;s <strong>Stage</strong> button to place it center-stage (Seat 3) and check contrast &amp; colors in context.
-            </div>
-          </div>
-          <div class="row">
-            <label for="feud-stage-pool" style="min-width:44px;">Team</label>
-            <select id="feud-stage-pool">
-              <option value="barba">Barba Team (Left)</option>
-              <option value="z2" selected>Zelda II Team (Right)</option>
-            </select>
-            <label for="feud-pose" style="min-width:44px;">Pose</label>
-            <select id="feud-pose">
-              <option value="animate">Animate (Idle / Roar / Wiggle)</option>
-              <option value="0">Idle</option>
-              <option value="1">Roar</option>
-              <option value="2">Wiggle</option>
-            </select>
-            <button id="feud-roll-stage" class="primary" type="button">Roll 5 Lineup</button>
-          </div>
-          <div class="feud-seat-chips" id="feud-seat-chips"></div>
-        </div>
-      </section>
-
-      <section class="feud-pal-panel" aria-label="NES Palette Slot Editor">
-        <div class="row" style="justify-content:space-between;">
-          <div class="row">
-            <strong style="color:var(--gold);font-size:0.9rem;">NES Palette Slots (Real-Time)</strong>
-            <button type="button" class="feud-mini-btn" id="feud-pal-tab-barba">Barba Slots (Left)</button>
-            <button type="button" class="feud-mini-btn active" id="feud-pal-tab-z2">Zelda II Slots (Right)</button>
-          </div>
-          <div class="row">
-            <label for="feud-var-sel" style="min-width:68px;">Preview Var</label>
-            <select id="feud-var-sel">
-              <option value="0">Variation 1</option>
-              <option value="1">Variation 2</option>
-              <option value="2">Variation 3</option>
-              <option value="3">Variation 4</option>
-            </select>
-          </div>
-        </div>
-        <div class="feud-pal-slots" id="feud-pal-slots"></div>
-        <div class="feud-picker hidden" id="feud-nes-picker"></div>
-      </section>
-
-      <section class="top-box" aria-label="Family Feud Cast Controls">
-        <div class="row">
-          <label for="feud-filter-pool" style="min-width:42px;">Pool</label>
-          <select id="feud-filter-pool">
-            <option value="all">All Cast (46)</option>
-            <option value="barba">Barba Cast — Left (13)</option>
-            <option value="z2">Zelda II Cast — Right (33)</option>
-          </select>
-          <label for="feud-filter-status" style="min-width:52px;">Status</label>
-          <select id="feud-filter-status">
-            <option value="all">All</option>
-            <option value="included">Included Only</option>
-            <option value="excluded">Excluded Only</option>
-          </select>
-          <label for="feud-filter-type" style="min-width:42px;">Type</label>
-          <select id="feud-filter-type">
-            <option value="all">All Types</option>
-            <option value="full">Full Sprite</option>
-            <option value="top_half">Top Half (Behind Table)</option>
-          </select>
-          <label for="feud-bg" style="min-width:42px;">Backdrop</label>
-          <select id="feud-bg">
-            <option value="stage">Stage Wall ($16)</option>
-            <option value="dark">Dark (#0d1017)</option>
-            <option value="checker">Checkerboard</option>
-          </select>
-          <label for="feud-zoom" style="min-width:42px;">Zoom</label>
-          <select id="feud-zoom">
-            <option value="2">2x</option>
-            <option value="3" selected>3x</option>
-            <option value="4">4x</option>
-          </select>
-        </div>
-        <div class="row">
-          <span class="subtitle" style="margin:0;">Save downloaded JSON to <code>assets/feud_cast.json</code>, then rebuild (<code>python tools/pack_feud.py</code> or <code>python tools/build.py</code>).</span>
-          <div style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;">
-            <button id="feud-include-all" type="button">Include All</button>
-            <button id="feud-reset" type="button">Reset</button>
-            <button id="feud-copy" type="button">Copy feud_cast.json</button>
-            <button id="feud-download" class="primary" type="button">Download feud_cast.json</button>
-          </div>
-        </div>
-        <div class="stats" id="feud-stats"></div>
-        <div class="toast" id="feud-toast" role="status" aria-live="polite"></div>
-      </section>
-
-      <section class="feud-grid" id="feud-grid"></section>
-    </div>
-
-    <div id="view-duck" class="hidden">
-      <div class="tab-bar" id="duck-subtabs" style="margin-bottom:10px;">
-        <button type="button" class="tab-btn active" data-duck-tab="all">All Sprites</button>
-        <button type="button" class="tab-btn" data-duck-tab="barba">Barba &amp; Hero/UI</button>
-        <button type="button" class="tab-btn" data-duck-tab="dh_enemies">Duck Hunt Enemies (Ported)</button>
-        <button type="button" class="tab-btn" data-duck-tab="z2_ref">Z2 Reference &amp; Bosses</button>
-      </div>
-      <section class="top-box" aria-label="Barba's Hunt Tile Controls">
-        <div class="row">
-          <label for="duck-cat" style="min-width:64px;">Category</label>
-          <select id="duck-cat">
-            <option value="all">All Sprites (29)</option>
-            <option value="villager">Flying Enemies (16)</option>
-            <option value="clay">Clay Targets (2)</option>
-            <option value="barba">Barba Poses (8)</option>
-            <option value="link">Villainous Link (1)</option>
-            <option value="shared">Shared R0 (2)</option>
-          </select>
-          <label for="duck-tag-filter" style="min-width:42px;">Tag</label>
-          <select id="duck-tag-filter">
-            <option value="all">All</option>
-            <option value="flagged">Flagged Issues Only</option>
-            <option value="ok">OK Only</option>
-            <option value="inspect_chr">Inspect CHR</option>
-            <option value="top_half_only">Is Top Half Only</option>
-            <option value="needs_bottom_half">Needs Bottom Half</option>
-            <option value="wrong_tiles">Wrong Source Tiles</option>
-            <option value="wrong_pal">Wrong Palette</option>
-            <option value="misaligned">Misaligned / Clipped</option>
-            <option value="duplicate">Duplicate / Nix</option>
-          </select>
-          <label for="duck-bg" style="min-width:64px;">Backdrop</label>
-          <select id="duck-bg">
-            <option value="sky">Sky ($21)</option>
-            <option value="forest">Forest ($0F)</option>
-            <option value="dark">Dark (#0d1017)</option>
-            <option value="checker">Checkerboard</option>
-          </select>
-          <label for="duck-zoom" style="min-width:42px;">Zoom</label>
-          <select id="duck-zoom">
-            <option value="2">2x</option>
-            <option value="3">3x</option>
-            <option value="4" selected>4x</option>
-            <option value="6">6x</option>
-          </select>
-          <label for="duck-anim" style="min-width:48px;">Frame</label>
-          <select id="duck-anim">
-            <option value="0">Frame 0</option>
-            <option value="1">Frame 1</option>
-            <option value="animate" selected>Animate (2 Hz)</option>
-          </select>
-          <label style="display:flex;align-items:center;gap:6px;min-width:auto;cursor:pointer;">
-            <input type="checkbox" id="duck-grid" checked> 8x8 Grid &amp; Tile IDs
-          </label>
-          <div style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;">
-            <button id="duck-reset-tags" type="button">Reset Tags</button>
-            <button id="duck-copy-tags" class="primary" type="button">Copy Flagged JSON</button>
-          </div>
-        </div>
-        <div class="stats" id="duck-stats"></div>
-        <div class="toast" id="duck-toast" role="status" aria-live="polite"></div>
-      </section>
-
-      <section class="duck-grid" id="duck-sprite-grid"></section>
-
-      <section class="feud-pal-panel" style="margin-top:16px;">
-        <div class="row" style="justify-content:space-between;">
-          <strong style="color:var(--gold);font-size:0.95rem;">Patched BG &amp; HUD Tile Diffs (Vanilla vs Patched vs Z2 Source)</strong>
-          <div class="row" style="margin:0;">
-            <label for="duck-bg-pal" style="min-width:56px;">Palette</label>
-            <select id="duck-bg-pal"></select>
-          </div>
-        </div>
-        <div class="duck-diff-grid" id="duck-bg-diffs"></div>
-      </section>
-
-      <section class="feud-pal-panel" id="duck-chr-panel" style="margin-top:16px;">
-        <div class="row">
-          <strong style="color:var(--gold);font-size:0.95rem;">CHR Bank Inspector</strong>
-          <label for="duck-bank-sel" style="min-width:42px;">Bank</label>
-          <select id="duck-bank-sel"></select>
-          <label for="duck-bank-pal" style="min-width:52px;">Palette</label>
-          <select id="duck-bank-pal"></select>
-          <label for="duck-bank-zoom" style="min-width:42px;">Zoom</label>
-          <select id="duck-bank-zoom">
-            <option value="2">2x</option>
-            <option value="3" selected>3x</option>
-            <option value="4">4x</option>
-          </select>
-        </div>
-        <div class="duck-chr-wrap">
-          <canvas id="duck-chr-canvas" class="duck-chr-canvas"></canvas>
-          <div class="duck-chr-zoom-box">
-            <div class="duck-meta" id="duck-chr-hover">Hover any tile to inspect its $ID</div>
-            <canvas id="duck-chr-zoom" width="64" height="64"></canvas>
-          </div>
-        </div>
-      </section>
-    </div>
+    
 
     <div id="view-titles" class="hidden">
       <section class="top-box" aria-label="Title Screen Controls">
@@ -659,10 +421,7 @@
             <option value="1">1x (256px)</option>
             <option value="2" selected>2x (512px)</option>
           </select>
-          <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;">
-            <button id="titles-copy-md" class="primary" type="button">Copy Feedback (Markdown)</button>
-            <button id="titles-copy-json" type="button">Copy Feedback (JSON)</button>
-          </div>
+
         </div>
         <div class="toast" id="titles-toast" role="status" aria-live="polite"></div>
       </section>
@@ -670,16 +429,14 @@
     </div>
   </div>
 
+  <script>window.BARBA_DASHBOARD_FLAVOR = "public";</script>
   <script src="catalog.js"></script>
   <script src="bps.js"></script>
-  <script src="waldo_tagger.js"></script>
-  <script src="feud_cast_data.js"></script>
-  <script src="feud_cast_ui.js"></script>
-  <script src="duck_tiles_data.js"></script>
-  <script src="duck_tiles_ui.js"></script>
   <script src="title_review_data.js"></script>
   <script src="title_review_ui.js"></script>
+
   <script>
+
     const catalog = window.BARBA_FE_CATALOG;
     const state = { values: {}, seed: 'BARBA2026', filter: 'all', preset: 'barba' };
     const byId = Object.fromEntries(catalog.flags.map(f => [f.id, f]));
@@ -1005,7 +762,8 @@
       document.getElementById('seed-input').value = state.seed;
       const fs = encodeFlagstring();
       document.getElementById('flagstring').value = fs;
-      document.getElementById('cli-cmd').value = `python tools/fe_catalog.py --flags "${fs}" --build`;
+      const cliEl = document.getElementById('cli-cmd');
+      if (cliEl) cliEl.value = `python tools/fe_catalog.py --flags "${fs}" --build`;
 
       const counts = { toggleable: 0, built: 0, planned: 0, enabled: 0 };
       for (const f of catalog.flags) {
@@ -1089,10 +847,10 @@
       navigator.clipboard?.writeText(document.getElementById('flagstring').value);
       setToast('Copied flagstring to clipboard.');
     };
-    document.getElementById('copy-cli').onclick = () => {
+    document.getElementById('copy-cli')?.addEventListener('click', () => {
       navigator.clipboard?.writeText(document.getElementById('cli-cmd').value);
       setToast('Copied CLI command to clipboard.');
-    };
+    });
     document.querySelectorAll('.filter-btn').forEach(btn => {
       btn.onclick = () => {
         document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
@@ -1107,12 +865,9 @@
     // Tab switching
     const switchTab = tab => {
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-      document.getElementById('view-fe').classList.toggle('hidden', tab !== 'fe');
-      document.getElementById('view-patcher').classList.toggle('hidden', tab !== 'patcher');
-      document.getElementById('view-waldo').classList.toggle('hidden', tab !== 'waldo');
-      document.getElementById('view-feud').classList.toggle('hidden', tab !== 'feud');
-      document.getElementById('view-duck').classList.toggle('hidden', tab !== 'duck');
-      document.getElementById('view-titles').classList.toggle('hidden', tab !== 'titles');
+      for (const id of ['fe', 'patcher', 'waldo', 'feud', 'duck', 'titles']) {
+        document.getElementById(`view-${id}`)?.classList.toggle('hidden', tab !== id);
+      }
       if (tab === 'fe') {
         ensureTicking();
       } else {
@@ -1128,7 +883,7 @@
       btn.onclick = () => switchTab(btn.dataset.tab);
     });
     const reqTab = new URLSearchParams(location.search).get('tab') || location.hash.replace('#', '');
-    if (['fe', 'titles', 'patcher', 'waldo', 'feud', 'duck'].includes(reqTab)) switchTab(reqTab);
+    if (document.getElementById(`view-${reqTab}`)) switchTab(reqTab);
 
     // Client-side BPS ROM Patcher
     (() => {
@@ -1193,126 +948,7 @@
       };
     })();
 
-    // Where's Barba? Tile State Tagger
-    const waldoData = window.WALDO_TAGGER_DATA;
-    if (waldoData) {
-      const initialStates = waldoData.descriptors.map(d => d.state);
-      const lvlSel = document.getElementById('waldo-level');
-      for (const lv of waldoData.levels) {
-        const opt = document.createElement('option');
-        opt.value = lv.bank;
-        opt.textContent = lv.name;
-        lvlSel.appendChild(opt);
-      }
-
-      const setWaldoToast = msg => { document.getElementById('waldo-toast').textContent = msg; };
-
-      const exportCrowdJson = () => {
-        const flee = [];
-        const hide = [];
-        for (const d of waldoData.descriptors) {
-          if (d.state === 'flee') flee.push([d.bank, d.band, d.idx]);
-          else if (d.state === 'hide') hide.push([d.bank, d.band, d.idx]);
-        }
-        return JSON.stringify({ flee, hide });
-      };
-
-      const renderWaldo = () => {
-        const bank = Number(lvlSel.value);
-        const bandFilter = document.getElementById('waldo-band').value;
-        const stateFilter = document.getElementById('waldo-state').value;
-        const levelItems = waldoData.descriptors.filter(d => d.bank === bank);
-        const counts = { flee: 0, static: 0, hide: 0, scrap: 0 };
-        for (const d of levelItems) counts[d.state]++;
-        document.getElementById('waldo-stats').innerHTML =
-          `<span>Level Total: <strong>${levelItems.length}</strong></span>` +
-          `<span>Flee: <strong>${counts.flee}</strong></span>` +
-          `<span>Static: <strong>${counts.static}</strong></span>` +
-          `<span>Hide: <strong>${counts.hide}</strong></span>` +
-          `<span>1x1 Scrap: <strong>${counts.scrap}</strong></span>`;
-
-        const filtered = levelItems.filter(d =>
-          (bandFilter === 'all' || d.band === Number(bandFilter)) &&
-          (stateFilter === 'all' || d.state === stateFilter)
-        );
-
-        const grid = document.getElementById('waldo-grid');
-        grid.innerHTML = '';
-        const scale = 2;
-        for (const d of filtered) {
-          const card = document.createElement('div');
-          card.className = `waldo-card st-${d.state}`;
-
-          const wrap = document.createElement('div');
-          wrap.className = 'waldo-sprite-wrap';
-          const spr = document.createElement('div');
-          spr.className = 'waldo-sprite';
-          spr.style.width = `${d.pw * scale}px`;
-          spr.style.height = `${d.ph * scale}px`;
-          spr.style.backgroundImage = "url('previews/waldo_atlas.png')";
-          spr.style.backgroundSize = `${waldoData.atlas_w * scale}px ${waldoData.atlas_h * scale}px`;
-          spr.style.backgroundPosition = `-${d.ax * scale}px -${d.ay * scale}px`;
-          wrap.appendChild(spr);
-          card.appendChild(wrap);
-
-          const meta = document.createElement('div');
-          meta.className = 'waldo-meta';
-          meta.textContent = `[${d.bank},${d.band},${d.idx}] ${d.w}x${d.h}`;
-          card.appendChild(meta);
-
-          if (d.state === 'scrap') {
-            const note = document.createElement('div');
-            note.className = 'waldo-meta';
-            note.textContent = '1x1 auto-scrap';
-            card.appendChild(note);
-          } else {
-            const pills = document.createElement('div');
-            pills.className = 'waldo-pills';
-            for (const st of ['flee', 'static', 'hide']) {
-              const btn = document.createElement('button');
-              btn.type = 'button';
-              btn.textContent = st;
-              if (d.state === st) btn.className = `sel-${st}`;
-              btn.onclick = e => {
-                e.stopPropagation();
-                d.state = st;
-                renderWaldo();
-              };
-              pills.appendChild(btn);
-            }
-            card.appendChild(pills);
-            card.onclick = () => {
-              const order = ['flee', 'static', 'hide'];
-              d.state = order[(order.indexOf(d.state) + 1) % order.length];
-              renderWaldo();
-            };
-          }
-          grid.appendChild(card);
-        }
-      };
-
-      lvlSel.onchange = renderWaldo;
-      document.getElementById('waldo-band').onchange = renderWaldo;
-      document.getElementById('waldo-state').onchange = renderWaldo;
-      document.getElementById('waldo-reset').onclick = () => {
-        waldoData.descriptors.forEach((d, i) => { d.state = initialStates[i]; });
-        renderWaldo();
-        setWaldoToast('Reset to assets/waldo_crowd.json');
-      };
-      document.getElementById('waldo-copy').onclick = () => {
-        navigator.clipboard?.writeText(exportCrowdJson());
-        setWaldoToast('Copied waldo_crowd.json to clipboard.');
-      };
-      document.getElementById('waldo-download').onclick = () => {
-        const blob = new Blob([exportCrowdJson()], { type: 'application/json' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'waldo_crowd.json';
-        a.click();
-        setWaldoToast('Downloaded waldo_crowd.json');
-      };
-      renderWaldo();
-    }
+    
   </script>
 </body>
 </html>

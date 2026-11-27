@@ -336,11 +336,10 @@ def _draw_smb_barba_sign(smb_base: list[list[tuple[int, int, int]]]) -> list[lis
     peach = smb_base[76][154]  # exact BROS. peach color
     shadow = (0, 0, 0)
 
-    # Extract exact B (x=148..164) and R (x=166..182) from BROS., and A (x=68..84) from MARIO!
-    # Sample y=72..111 (40px tall)
+    # Sample y=72..115 (44px tall, including full 4px bottom drop shadow)
     def extract_glyph(x0: int, x1: int) -> list[list[str]]:
         g: list[list[str]] = []
-        for y in range(72, 112):
+        for y in range(72, 116):
             row: list[str] = []
             for x in range(x0, x1):
                 c = smb_base[y][x]
@@ -357,21 +356,20 @@ def _draw_smb_barba_sign(smb_base: list[list[tuple[int, int, int]]]) -> list[lis
     g_R = extract_glyph(153, 169)
     g_A = extract_glyph(73, 89)
 
-    # Clear MARIO area cleanly (x=48..134, y=70..113)
-    _fill_rect(out, 48, 70, 134, 114, sign_bg)
+    # Clear MARIO area cleanly including full bottom shadow (x=48..135, y=70..116)
+    _fill_rect(out, 48, 70, 136, 116, sign_bg)
 
-    # Place B A R B A across x=49..133 matching BROS. exact pitch & baseline
+    # Place B A R B A across x=49..134 matching BROS. exact pitch & baseline
     glyphs = [g_B, g_A, g_R, g_B, g_A]
     cur_x = 49
     for g in glyphs:
-        gw = len(g[0])
         for dy, row in enumerate(g):
             for dx, ch in enumerate(row):
                 if ch == 'P':
                     out[72 + dy][cur_x + dx] = peach
                 elif ch == 'S':
                     out[72 + dy][cur_x + dx] = shadow
-        cur_x += gw + 1
+        cur_x += 17
     return out
 
 
@@ -427,61 +425,62 @@ def _draw_zelda_barba(zelda_base: list[list[tuple[int, int, int]]]) -> list[list
             else:
                 out[y][x] = sky_pink
 
-    # Chiseled ZELDA-style 9x12 glyphs (bold slab serifs, beveled corners)
+    # Angled/chiseled ZELDA-style 12x10 glyphs (sweeping diagonals, angled serifs, wide legs)
     z_glyphs = {
         'B': [
-            '111111100',
-            '011000110',
-            '011000110',
-            '011000110',
-            '011111100',
-            '011000110',
-            '011000110',
-            '011000110',
-            '011000110',
-            '111111110',
+            '111111111000',
+            '011100011100',
+            '011100001110',
+            '011100011100',
+            '011111110000',
+            '011100011100',
+            '011100001110',
+            '011100001110',
+            '011100011100',
+            '111111111000',
         ],
         'A': [
-            '001111100',
-            '011000110',
-            '011000110',
-            '110000011',
-            '110000011',
-            '111111111',
-            '110000011',
-            '110000011',
-            '110000011',
-            '111000111',
+            '000011110000',
+            '000111111000',
+            '001110011100',
+            '011100001110',
+            '011100001110',
+            '111111111111',
+            '111000000111',
+            '111000000111',
+            '111000000111',
+            '111100001111',
         ],
         'R': [
-            '111111100',
-            '011000110',
-            '011000110',
-            '011000110',
-            '011111100',
-            '011011000',
-            '011001100',
-            '011000110',
-            '011000110',
-            '111000111',
+            '111111111000',
+            '011100011100',
+            '011100001110',
+            '011100011100',
+            '011111110000',
+            '011101110000',
+            '011100111000',
+            '011100011100',
+            '011100001110',
+            '111100001111',
         ],
     }
-    # Scale 2.8x -> 24px wide x 28px tall (matches ZELDA height y=64..91)
-    scale_x, scale_y = 3, 2.8
+    # Scale -> ~26px wide x 28px tall (matches ZELDA height y=64..91)
+    scale_x, scale_y = 2.4, 2.8
     word = 'BARBA'
-    start_x, start_y = 56, 64
+    start_x, start_y = 54, 64
     face = [[False] * 256 for _ in range(240)]
     for idx, ch in enumerate(word):
         g = z_glyphs[ch]
-        bx = start_x + idx * 29
+        bx = start_x + idx * 30
         for gy, row in enumerate(g):
             for gx, bit in enumerate(row):
                 if bit == '1':
                     y0 = int(start_y + gy * scale_y)
                     y1 = int(start_y + (gy + 1) * scale_y)
+                    x0 = int(bx + gx * scale_x)
+                    x1 = int(bx + (gx + 1) * scale_x)
                     for py in range(y0, y1):
-                        for px_off in range(scale_x):
-                            px_x = bx + gx * scale_x + px_off
+                        for px_x in range(x0, x1):
                             if 0 <= px_x < 256 and 0 <= py < 240:
                                 face[py][px_x] = True
 
@@ -503,42 +502,85 @@ def _draw_zelda_barba(zelda_base: list[list[tuple[int, int, int]]]) -> list[list
 def _draw_wheel_s1_barba(wheel_s1: list[list[tuple[int, int, int]]]) -> list[list[tuple[int, int, int]]]:
     """Replace FORTUNE with BARBA on Wheel Screen 1 preserving pink+white-outline font."""
     out = _copy_px(wheel_s1)
-    # Clear FORTUNE (x=128..224, y=63..89), keeping PRESENTS above (y<=62) and ® at x>=225
-    _fill_rect(out, 128, 63, 224, 90, (0, 0, 0))
+    # Clear FORTUNE (x=134..225, y=77..95), keeping PRES above (y<=69) and ® at x>=225
+    _fill_rect(out, 134, 77, 225, 95, (0, 0, 0))
     # Clear BARBA EDITION subtitle below if we're unifying to WHEEL OF BARBA
-    _fill_rect(out, 60, 92, 200, 104, (0, 0, 0))
+    _fill_rect(out, 60, 95, 200, 108, (0, 0, 0))
 
     pink = (254, 110, 204)
     white = (255, 255, 255)
-    # Tall condensed 5x9 glyphs scaled 2x wide x 2.5x tall (~10x22px, matching WHEEL)
+    # 11x14 pink face (3px vertical stems, 2px horizontal bars) + 1px white outline = 16px tall (matches WHEEL)
     glyphs = {
-        'B': ['11110', '10001', '10001', '11110', '10001', '10001', '10001', '11110'],
-        'A': ['01110', '10001', '10001', '11111', '10001', '10001', '10001', '10001'],
-        'R': ['11110', '10001', '10001', '11110', '10100', '10010', '10001', '10001'],
+        'B': [
+            '11111111110',
+            '11111111111',
+            '11100000111',
+            '11100000111',
+            '11100000111',
+            '11100000111',
+            '11111111110',
+            '11111111110',
+            '11100000111',
+            '11100000111',
+            '11100000111',
+            '11100000111',
+            '11111111111',
+            '11111111110',
+        ],
+        'A': [
+            '00111111100',
+            '01111111110',
+            '11100000111',
+            '11100000111',
+            '11100000111',
+            '11100000111',
+            '11111111111',
+            '11111111111',
+            '11100000111',
+            '11100000111',
+            '11100000111',
+            '11100000111',
+            '11100000111',
+            '11100000111',
+        ],
+        'R': [
+            '11111111110',
+            '11111111111',
+            '11100000111',
+            '11100000111',
+            '11100000111',
+            '11100000111',
+            '11111111110',
+            '11111111100',
+            '11100111000',
+            '11100011100',
+            '11100001110',
+            '11100000111',
+            '11100000111',
+            '11100000111',
+        ],
     }
     face = [[False] * 256 for _ in range(240)]
     for idx, ch in enumerate('BARBA'):
         g = glyphs[ch]
-        bx = 132 + idx * 17
+        bx = 138 + idx * 17
         for gy, row in enumerate(g):
+            py = 79 + gy
             for gx, bit in enumerate(row):
                 if bit == '1':
-                    for sy in range(3):
-                        py = 63 + gy * 3 + sy
-                        for sx in range(3):
-                            px_x = bx + gx * 3 + sx
-                            if px_x < 222 and py < 88:
-                                face[py][px_x] = True
+                    px_x = bx + gx
+                    if px_x < 224 and py < 93:
+                        face[py][px_x] = True
     # 1px white outline around face, then pink fill
-    for y in range(61, 90):
-        for x in range(130, 224):
+    for y in range(77, 95):
+        for x in range(135, 225):
             if face[y][x]:
                 for dy in (-1, 0, 1):
                     for dx in (-1, 0, 1):
                         if not face[y + dy][x + dx]:
                             out[y + dy][x + dx] = white
-    for y in range(61, 90):
-        for x in range(130, 224):
+    for y in range(77, 95):
+        for x in range(135, 225):
             if face[y][x]:
                 out[y][x] = pink
     return out
@@ -559,45 +601,75 @@ def _draw_wheel_s2_barba(wheel_s2: list[list[tuple[int, int, int]]]) -> list[lis
             elif 120 < r < 200 and abs(r - g) < 15 and abs(g - b) < 15:
                 grey = (r, g, b)
 
-    # Erase FORTUNE pixels along the bottom arc (radius 34..60 around center (128, 108), y >= 110)
+    # Erase FORTUNE pixels along the bottom arc (radius 34..62 around center (128, 108), y >= 110)
     # Preserve blue/purple stars (where b > r + 20) and preserve the inner orange/grey wheel ring (r < 34)
     cx, cy = 128.0, 108.0
     for y in range(110, 174):
         for x in range(56, 200):
             dist = math.hypot(x - cx, y - cy)
-            if 34.5 <= dist <= 61.0:
+            if 34.5 <= dist <= 62.0:
                 r, g, b = out[y][x]
                 if b > r + 20:  # keep purple/blue perimeter stars
                     continue
                 out[y][x] = (0, 0, 0)
 
-    # Polar-map 'BARBA' onto the bottom arc: theta from 142 deg (left) to 38 deg (right)
-    # In screen coords (y down): sin(theta) > 0 is bottom!
+    # Straight-edged rotated rectangular 8x8 glyphs matching WHEEL's wedge-block geometry on top arc
     glyphs = {
-        'B': ['11110', '10001', '10001', '11110', '10001', '10001', '10001', '11110'],
-        'A': ['01110', '10001', '10001', '11111', '10001', '10001', '10001', '10001'],
-        'R': ['11110', '10001', '10001', '11110', '10100', '10010', '10001', '10001'],
+        'B': [
+            '11111111',
+            '11111111',
+            '11100111',
+            '11111110',
+            '11111110',
+            '11100111',
+            '11111111',
+            '11111111',
+        ],
+        'A': [
+            '11111111',
+            '11111111',
+            '11100111',
+            '11111111',
+            '11111111',
+            '11100111',
+            '11100111',
+            '11100111',
+        ],
+        'R': [
+            '11111111',
+            '11111111',
+            '11100111',
+            '11111111',
+            '11111110',
+            '11101111',
+            '11100111',
+            '11100111',
+        ],
     }
     face = [[False] * 256 for _ in range(240)]
     word = 'BARBA'
-    # Each letter spans ~18 deg with 3 deg gap -> total ~102 deg centered at 90 deg (bottom)
-    for y in range(115, 174):
-        for x in range(56, 200):
-            dx, dy = x - cx, y - cy
-            dist = math.hypot(dx, dy)
-            if 36.0 <= dist <= 58.0:
-                ang = math.degrees(math.atan2(dy, dx))  # 90 is straight down, 180 is left, 0 is right
-                # Map ang from [142 .. 38] -> u in [0 .. 5]
-                u = (142.0 - ang) / 21.0
-                idx = int(math.floor(u))
-                if 0 <= idx < 5:
-                    lu = u - idx
-                    if 0.08 <= lu <= 0.90:
-                        gx = int((lu - 0.08) / 0.82 * 5)
-                        gy = int((dist - 36.0) / 22.0 * 8)
-                        if 0 <= gx < 5 and 0 <= gy < 8:
-                            if glyphs[word[idx]][gy][gx] == '1':
-                                face[y][x] = True
+    # Each letter is a straight-edged rotated rectangle centered at radius 47 along the bottom arc
+    angles = [140.0, 115.0, 90.0, 65.0, 40.0]
+    box_w, box_h = 17.0, 22.0
+    rad_c = 47.0
+    for ch, deg in zip(word, angles):
+        th = math.radians(deg)
+        lx = cx + rad_c * math.cos(th)
+        ly = cy + rad_c * math.sin(th)
+        # Local axes: right = (sin, -cos), up = (-cos, -sin)
+        rx, ry = math.sin(th), -math.cos(th)
+        ux, uy = -math.cos(th), -math.sin(th)
+        g = glyphs[ch]
+        for y in range(114, 176):
+            for x in range(52, 204):
+                dx, dy = x - lx, y - ly
+                u = dx * rx + dy * ry
+                v = dx * ux + dy * uy
+                if -box_w / 2 <= u <= box_w / 2 and -box_h / 2 <= v <= box_h / 2:
+                    gx = int((u + box_w / 2) / box_w * 8)
+                    gy = int((box_h / 2 - v) / box_h * 8)
+                    if 0 <= gx < 8 and 0 <= gy < 8 and g[gy][gx] == '1':
+                        face[y][x] = True
 
     # Drop shadow (+2, +2), orange 1px outline, grey fill
     for y in range(115, 174):
@@ -617,9 +689,57 @@ def _draw_wheel_s2_barba(wheel_s2: list[list[tuple[int, int, int]]]) -> list[lis
             if face[y][x]:
                 out[y][x] = grey
 
-    # Also update bottom marquee 'PRESENTS - WHEEL • of • BARBA'
-    _fill_rect(out, 100, 212, 230, 234, (0, 0, 0))
-    _draw_block_text(out, 'WHEEL OF BARBA', 102, 217, orange, scale=1)
+    # Keep vanilla scrolling 'PRESENTS - WHEEL • o' intact, complete 'f • BARBA' in the exact 14px orange+white font
+    _fill_rect(out, 187, 215, 256, 233, (0, 0, 0))
+    mq_glyphs = {
+        'f': [
+            '00111', '01111', '01100', '11111', '11111', '01100',
+            '01100', '01100', '01100', '01100', '01100', '01100',
+            '01100', '01100',
+        ],
+        'B': [
+            '111111110', '111111111', '110000011', '110000011', '110000011', '110000011',
+            '111111110', '111111110', '110000011', '110000011', '110000011', '110000011',
+            '111111111', '111111110',
+        ],
+        'A': [
+            '001111100', '011111110', '110000011', '110000011', '110000011', '110000011',
+            '111111111', '111111111', '110000011', '110000011', '110000011', '110000011',
+            '110000011', '110000011',
+        ],
+        'R': [
+            '111111110', '111111111', '110000011', '110000011', '110000011', '110000011',
+            '111111110', '111111100', '110011000', '110001100', '110000110', '110000011',
+            '110000011', '110000011',
+        ],
+    }
+    mq_face = [[False] * 256 for _ in range(240)]
+    for gy, row in enumerate(mq_glyphs['f']):
+        for gx, bit in enumerate(row):
+            if bit == '1':
+                mq_face[217 + gy][187 + gx] = True
+    # Small diamond dot '•' at x=194..196, y=222..225
+    for dy, dx in ((0, 1), (1, 0), (1, 1), (1, 2), (2, 1)):
+        mq_face[222 + dy][194 + dx] = True
+    for idx, ch in enumerate('BARBA'):
+        g = mq_glyphs[ch]
+        bx = 200 + idx * 11
+        for gy, row in enumerate(g):
+            for gx, bit in enumerate(row):
+                if bit == '1' and bx + gx < 255:
+                    mq_face[217 + gy][bx + gx] = True
+    white = (255, 255, 255)
+    for y in range(216, 232):
+        for x in range(187, 255):
+            if mq_face[y][x]:
+                for dy in (-1, 0, 1):
+                    for dx in (-1, 0, 1):
+                        if 0 <= x + dx < 256 and not mq_face[y + dy][x + dx]:
+                            out[y + dy][x + dx] = white
+    for y in range(216, 232):
+        for x in range(187, 255):
+            if mq_face[y][x]:
+                out[y][x] = orange
     return out
 
 
@@ -650,14 +770,36 @@ def _draw_mm2_rooftop_candidates(
                     fixed_base[ty * 8 + dy][tx * 8 + dx] = logo_pal[trows[dy][dx]]
 
     # Rooftop wall background around x=196..224, y=118..146 (light grey building parapet)
-    sky_grey = fixed_base[124][218]
+    sky_grey = fixed_base[124][230]
     barba_pal = {'1': NES_RGB[0x16], '2': NES_RGB[0x27], '3': NES_RGB[0x30]}
 
-    # Candidate A: Full-Body Barba (32x40 with junction and tail) on rooftop
+    # Candidate A: Full-Body 3x3-metatile (48x48) Barba: head + vertical torso + junction + horizontal torso + tail
     cand_a = _copy_px(fixed_base)
     _fill_rect(cand_a, 198, 118, 224, 144, sky_grey)
-    _, _, _, poses = mm2_art.compile_barba_gameplay(z2_bytes)
-    _draw_grid(cand_a, poses['idle'], 194, 108, barba_pal, scale=1)
+    import assets
+    from nes import encode_tile
+    frames24 = boss_art.make_frames(z2_bytes, width=24)
+    walk0_r0 = frames24['walk0'][16:32]
+    gfx = {
+        0x06: encode_tile([r[8:16] for r in walk0_r0[:8]]) + encode_tile([r[8:16] for r in walk0_r0[8:16]]),
+        0x08: encode_tile([r[16:24] for r in walk0_r0[:8]]) + encode_tile([r[16:24] for r in walk0_r0[8:16]]),
+    }
+    elbow_16 = assets.encounter_connector_rows(gfx)
+    trail_32 = assets.encounter_trail_rows(gfx)
+    # Assemble 48x48 (3x3 metatile) Barba: head+vertical torso (24x32) at (0,0),
+    # junction (16x16) at (8,32), horizontal torso+tail (32x16) at (24,32)
+    full_barba = [['0'] * 56 for _ in range(48)]
+    for y in range(32):
+        for x in range(24):
+            full_barba[y][x] = frames24['idle'][y][x]
+    for y in range(16):
+        for x in range(16):
+            if elbow_16[y][x] != '0':
+                full_barba[32 + y][8 + x] = elbow_16[y][x]
+        for x in range(32):
+            if trail_32[y][x] != '0':
+                full_barba[32 + y][24 + x] = trail_32[y][x]
+    _draw_grid(cand_a, [''.join(r) for r in full_barba], 188, 100, barba_pal, scale=1)
 
     # Candidate B: Mega Man blue body & helmet with Barba dragon head + snout sticking out!
     cand_b = _copy_px(fixed_base)
@@ -747,8 +889,143 @@ def _copy_if_exists(src: Path, dst: Path) -> None:
         shutil.copy2(src, dst)
 
 
-def generate_all() -> dict:
+_VANILLA_SPECS: list[tuple[str, str, list[str], str]] = [
+    (
+        'f13',
+        'f13.nes',
+        ['f13_vanilla_title.png'],
+        """
+local f = 0
+emu.addEventCallback(function()
+    f = f + 1
+    if f == 420 then
+        local pf = assert(io.open(OUTPUT_DIR .. '/f13_vanilla_title.png', 'wb'))
+        pf:write(emu.takeScreenshot()); pf:close()
+        emu.stop(0)
+    end
+end, emu.eventType.endFrame)
+""",
+    ),
+    (
+        'smb',
+        'smb.nes',
+        ['smb_vanilla_title.png'],
+        """
+local f = 0
+emu.addEventCallback(function()
+    f = f + 1
+    if f == 45 then
+        local pf = assert(io.open(OUTPUT_DIR .. '/smb_vanilla_title.png', 'wb'))
+        pf:write(emu.takeScreenshot()); pf:close()
+        emu.stop(0)
+    end
+end, emu.eventType.endFrame)
+""",
+    ),
+    (
+        'mtpo',
+        'mtpo.nes',
+        ['mtpo_vanilla_title2.png'],
+        """
+local f = 0
+local inp = {}
+emu.addEventCallback(function() emu.setInput(inp, 0) end, emu.eventType.inputPolled)
+emu.addEventCallback(function()
+    f = f + 1
+    inp = {}
+    if f >= 180 and f < 185 then inp.start = true end
+    if f >= 240 and f < 245 then inp.start = true end
+    if f == 300 then
+        local pf = assert(io.open(OUTPUT_DIR .. '/mtpo_vanilla_title2.png', 'wb'))
+        pf:write(emu.takeScreenshot()); pf:close()
+        emu.stop(0)
+    end
+end, emu.eventType.endFrame)
+""",
+    ),
+    (
+        'mm2',
+        'mm2.nes',
+        ['mm2_vanilla_title.png'],
+        """
+local f = 0
+local inp = {}
+emu.addEventCallback(function() emu.setInput(inp, 0) end, emu.eventType.inputPolled)
+emu.addEventCallback(function()
+    f = f + 1
+    inp = {}
+    if f >= 180 and f < 185 then inp.start = true end
+    if f == 300 then
+        local pf = assert(io.open(OUTPUT_DIR .. '/mm2_vanilla_title.png', 'wb'))
+        pf:write(emu.takeScreenshot()); pf:close()
+        emu.stop(0)
+    end
+end, emu.eventType.endFrame)
+""",
+    ),
+    (
+        'wheel',
+        'wheel.nes',
+        ['wheel_vanilla_s1.png', 'wheel_vanilla_s2.png'],
+        """
+local f = 0
+emu.addEventCallback(function()
+    f = f + 1
+    if f == 180 then
+        local pf = assert(io.open(OUTPUT_DIR .. '/wheel_vanilla_s1.png', 'wb'))
+        pf:write(emu.takeScreenshot()); pf:close()
+    elseif f == 1000 then
+        local pf = assert(io.open(OUTPUT_DIR .. '/wheel_vanilla_s2.png', 'wb'))
+        pf:write(emu.takeScreenshot()); pf:close()
+        emu.stop(0)
+    end
+end, emu.eventType.endFrame)
+""",
+    ),
+    (
+        'zelda',
+        'zelda.nes',
+        ['zelda_vanilla_title.png'],
+        """
+local f = 0
+emu.addEventCallback(function()
+    f = f + 1
+    if f == 120 then
+        local pf = assert(io.open(OUTPUT_DIR .. '/zelda_vanilla_title.png', 'wb'))
+        pf:write(emu.takeScreenshot()); pf:close()
+        emu.stop(0)
+    end
+end, emu.eventType.endFrame)
+""",
+    ),
+]
+
+
+def capture_vanilla(force: bool = False) -> None:
+    """Capture genuine vanilla title screenshots directly from roms/*.nes via Mesen."""
+    import emulator_test
+
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+    build_dir = ROOT / 'build'
+    build_dir.mkdir(exist_ok=True)
+    for key, rom_name, out_files, lua in _VANILLA_SPECS:
+        if not force and all((OUT_DIR / f).exists() for f in out_files):
+            continue
+        rom_path = ROOT / 'roms' / rom_name
+        if not rom_path.exists():
+            raise FileNotFoundError(f'Missing vanilla ROM: {rom_path}')
+        lua_path = build_dir / f'capture_vanilla_{key}.lua'
+        lua_path.write_text(lua, encoding='utf-8')
+        rc = emulator_test.run(lua_path, rom_path, timeout=30)
+        if rc != 0:
+            raise RuntimeError(f'Vanilla title capture failed for {rom_name} (exit {rc})')
+        for fname in out_files:
+            shutil.copy2(build_dir / fname, OUT_DIR / fname)
+
+
+def generate_all(recapture_vanilla: bool = False) -> dict:
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    capture_vanilla(force=recapture_vanilla)
     z2_bytes = load_source(ROOT / 'roms' / 'z2.nes')
     barba_frames = boss_art.make_frames(z2_bytes, width=24)
     barba_pal = {'1': NES_RGB[0x16], '2': NES_RGB[0x27], '3': NES_RGB[0x30]}
@@ -782,7 +1059,7 @@ def generate_all() -> dict:
     f13_base = _read_png(OUT_DIR / 'f13_current_title.png')
     f13_a = _copy_px(f13_base)
     _draw_grid(f13_a, barba_frames['attack'], 6, 70, barba_pal, scale=2)
-    _draw_f13_brush_text(f13_a, 'CAMP BARBA', 60, 128, barba_stripes, NES_RGB[0x06], scale=2)
+    _draw_f13_brush_text(f13_a, 'CAMP BARBA', 60, 134, barba_stripes, NES_RGB[0x06], scale=2)
     write_png(OUT_DIR / 'f13_cand_a.png', f13_a)
 
     # Alternate striping rhythm (gold/crimson alternating bands)
@@ -793,7 +1070,7 @@ def generate_all() -> dict:
     ]
     f13_b = _copy_px(f13_base)
     _draw_grid(f13_b, barba_frames['idle'], 6, 70, barba_pal, scale=2)
-    _draw_f13_brush_text(f13_b, 'CAMP BARBA', 60, 128, alt_stripes, NES_RGB[0x06], scale=2)
+    _draw_f13_brush_text(f13_b, 'CAMP BARBA', 60, 134, alt_stripes, NES_RGB[0x06], scale=2)
     write_png(OUT_DIR / 'f13_cand_b.png', f13_b)
 
     # 2b. Dedicated Jason Mask Lab (4 dragon-head mask studies at 4x on 160x96)
@@ -828,10 +1105,99 @@ def generate_all() -> dict:
     go_cropped = [r[2:78] for r in go_grid[2:78]]
     go_pal = {'3': (0, 0, 0), '1': NES_RGB[0x16], '2': NES_RGB[0x27]}
     _draw_grid(mtpo_a, go_cropped, 89, 49, go_pal, scale=1)
-    # Match MIKE TYSON bold centered positioning (above LINK IS WAITING at y=176)
-    _fill_rect(mtpo_a, 88, 138, 168, 174, (0, 0, 0))
-    _draw_block_text(mtpo_a, 'EVIL', 106, 138, NES_RGB[0x27], scale=2)
-    _draw_block_text(mtpo_a, 'LINK', 106, 156, NES_RGB[0x27], scale=2)
+    # Match MIKE TYSON bold green + 1px white outline font & positioning (above LINK IS WAITING at y=176)
+    _fill_rect(mtpo_a, 80, 134, 176, 172, (0, 0, 0))
+    mtpo_glyphs = {
+        'E': [
+            '1111111',
+            '1111111',
+            '1110000',
+            '1111110',
+            '1111110',
+            '1110000',
+            '1111111',
+            '1111111',
+        ],
+        'V': [
+            '11100111',
+            '11100111',
+            '11100111',
+            '11100111',
+            '01111110',
+            '01111110',
+            '00111100',
+            '00011000',
+        ],
+        'I': [
+            '111',
+            '111',
+            '111',
+            '111',
+            '111',
+            '111',
+            '111',
+            '111',
+        ],
+        'L': [
+            '1110000',
+            '1110000',
+            '1110000',
+            '1110000',
+            '1110000',
+            '1110000',
+            '1111111',
+            '1111111',
+        ],
+        'N': [
+            '11100111',
+            '11110111',
+            '11111111',
+            '11111111',
+            '11101111',
+            '11100111',
+            '11100111',
+            '11100111',
+        ],
+        'K': [
+            '11100111',
+            '11101110',
+            '11111100',
+            '11111000',
+            '11111100',
+            '11101110',
+            '11100111',
+            '11100111',
+        ],
+    }
+    mtpo_face = [[False] * 256 for _ in range(240)]
+    for word, wy in (('LINK', 145),):
+        total_w = sum(len(mtpo_glyphs[c][0]) * 2 for c in word) + (len(word) - 1) * 2
+        cx = 128 - total_w // 2
+        for ch in word:
+            g = mtpo_glyphs[ch]
+            for gy, row in enumerate(g):
+                for gx, bit in enumerate(row):
+                    if bit == '1':
+                        for sy in range(2):
+                            for sx in range(2):
+                                py = wy + gy * 2 + sy
+                                px_x = cx + gx * 2 + sx
+                                if 0 <= px_x < 256 and 0 <= py < 240:
+                                    mtpo_face[py][px_x] = True
+            cx += len(g[0]) * 2 + 2
+    mtpo_green = (0, 148, 0)
+    mtpo_white = (236, 238, 236)
+    for y in range(134, 172):
+        for x in range(76, 180):
+            if mtpo_face[y][x]:
+                for dy in (-1, 0, 1):
+                    for dx in (-1, 0, 1):
+                        if not mtpo_face[y + dy][x + dx]:
+                            mtpo_a[y + dy][x + dx] = mtpo_white
+    for y in range(134, 172):
+        for x in range(76, 180):
+            if mtpo_face[y][x]:
+                mtpo_a[y][x] = mtpo_green
     write_png(OUT_DIR / 'mtpo_cand_a.png', mtpo_a)
 
     # 5. Mega Barba 2 (Fixed trailing A + Full-Body vs Helmet-Snout candidates)
@@ -853,15 +1219,36 @@ def generate_all() -> dict:
     write_png(OUT_DIR / 'zelda_cand_a.png', zelda_a)
 
     zelda_b = _copy_px(zelda_a)
+    import assets
+    from nes import CHR_OFFSET, decode_tile
+    lava_tiles = [
+        decode_tile(z2_bytes[CHR_OFFSET + assets.TITLE_CHR_BANK * 4096 + tid * 16 : CHR_OFFSET + assets.TITLE_CHR_BANK * 4096 + (tid + 1) * 16])
+        for tid in assets.TITLE_LAVA_TILES[:2]
+    ]
+    z2_lava_pal = {
+        0: (0, 0, 0),
+        1: (234, 158, 34),   # $27 amber
+        2: (181, 49, 32),    # $16 crimson
+        3: (108, 6, 0),      # $06 dark red
+    }
     for y in range(180, 240):
-        for x in range(72, 120):
-            r, g, b = zelda_b[y][x]
-            # Keep vanilla bright white foam/highlights untouched!
+        for x in range(80, 112):
+            r, g, b = zelda_base[y][x]
+            # Keep only the top 2 rows of each white foam crest; thin out lower foam into lava
             if r > 220 and g > 220 and b > 220:
+                is_top_crest = any(
+                    y - dy >= 180 and not (zelda_base[y - dy][x][0] > 220 and zelda_base[y - dy][x][1] > 220 and zelda_base[y - dy][x][2] > 220)
+                    for dy in (1, 2)
+                )
+                if is_top_crest:
+                    continue
+                tile = lava_tiles[((x // 8) + (y // 8)) % 2]
+                zelda_b[y][x] = z2_lava_pal[tile[y % 8][x % 8]]
                 continue
-            # Recolor mint/cyan water body into flowing Palace VI crimson/amber lava
+            # Recolor mint/cyan water body using actual Z2 title lava tiles (8x8)
             if g > 140 and b > 140:
-                zelda_b[y][x] = NES_RGB[0x27] if ((y // 4 + x // 8) % 3 == 0) else NES_RGB[0x16]
+                tile = lava_tiles[((x // 8) + (y // 8)) % 2]
+                zelda_b[y][x] = z2_lava_pal[tile[y % 8][x % 8]]
     write_png(OUT_DIR / 'zelda_cand_b.png', zelda_b)
 
     catalog = {
@@ -871,161 +1258,87 @@ def generate_all() -> dict:
             {'id': 'feud', 'name': "Barba's Beef", 'note': 'Title, cast & ordinal rounds done.'},
             {'id': 'waldo', 'name': "Where's Barba?", 'note': 'Title screen & crowd tagger done.'},
         ],
-        'jason_mask_lab': [
-            {
-                'id': 'jmask_lab',
-                'name': 'Jason Mask Lab (Friday the 13th Intro)',
-                'status': 'prototype',
-                'status_label': 'Dedicated Mask R&D',
-                'summary': 'Fitting a round human hockey mask onto Barba’s elongated 32x16 dragon head & snout.',
-                'context_note': '4 mask geometry studies at 4x scale (white mask + crimson chevrons on Barba’s head).',
-                'current': [
-                    {'id': 'f13_cur_mask', 'label': 'Vanilla Intro Mask (Frame 120)', 'img': 'previews/titles/f13_current_mask.png', 'caption': 'Vanilla blue Jason hockey mask'},
-                ],
-                'candidates': jmask_cands,
-            },
-        ],
         'games': [
             {
                 'id': 'f13',
                 'name': 'Friday the 13th: Camp Barba',
-                'status': 'prototype',
-                'status_label': 'CAMP BARBA + Left Barba',
-                'summary': 'Folded Candidate B’s left-side Barba (now in vanilla Barba colors) with CAMP BARBA in the jagged F13 brush font striped with Barba’s torso/head palette. Jason mask moved to its own Jason Mask Lab tab.',
-                'context_note': 'F13 uses 4KB CHR bank 7 for the blood-red logo ($C0..$FE) and sprite palettes for Barba.',
-                'current': [
-                    {'id': 'f13_cur_title', 'label': 'Current Title (Frame 420)', 'img': 'previews/titles/f13_current_title.png', 'caption': 'Vanilla FRIDAY THE 13TH logo'},
-                ],
-                'candidates': [
+                'status_label': 'CAMP BARBA + Attack Barba',
+                'summary': 'Left-side Attack Barba in vanilla colors with CAMP BARBA in the jagged F13 brush font striped with Barba’s torso/head palette.',
+                'screens': [
                     {
-                        'id': 'f13_cand_a',
-                        'label': 'Candidate A: Attack Barba + Striped CAMP BARBA',
-                        'img': 'previews/titles/f13_cand_a.png',
-                        'caption': 'Left-side Barba in vanilla colors + CAMP BARBA in F13 brush font with Barba torso/head striping.',
-                    },
-                    {
-                        'id': 'f13_cand_b',
-                        'label': 'Candidate B: Idle Barba + Gold-Band CAMP BARBA',
-                        'img': 'previews/titles/f13_cand_b.png',
-                        'caption': 'Idle Barba pose + alternate gold/crimson Barba palette striping on CAMP BARBA.',
+                        'title': 'Title Screen',
+                        'vanilla': {'label': 'Vanilla', 'img': 'previews/titles/f13_vanilla_title.png', 'caption': 'Vanilla FRIDAY THE 13TH logo'},
+                        'ours': {'label': 'Our Version', 'img': 'previews/titles/f13_cand_a.png', 'caption': 'Attack Barba + Striped CAMP BARBA'},
                     },
                 ],
             },
             {
                 'id': 'smb',
                 'name': 'Super Barba Bros.',
-                'status': 'fixed_needs_title',
-                'status_label': 'Ready for SUPER BARBA BROS. Sign',
-                'summary': 'BARBA now matches the exact condensed beveled font & style of BROS. Demo mode keeps tiny Wyrmling (it grows on mushroom/jar pickup). Note: the "10" + tile above Barba in the roar shot is SMB’s "1000" floating score popup on the first grow-toggle frame.',
-                'context_note': 'B, R, and A glyphs sampled directly from BROS. / MARIO on the wooden title sign.',
-                'current': [
-                    {'id': 'smb_cur_title', 'label': 'Current Title (Demo Wyrmling)', 'img': 'previews/titles/smb_current_title.png', 'caption': 'Still says SUPER MARIO BROS.'},
-                    {'id': 'smb_fix_roar', 'label': 'Mushroom Roar Frame (1000 popup)', 'img': 'previews/titles/smb_fixed_roar.png', 'caption': 'Roaring on first grow frame ("10" is the 1000 score popup)'},
-                    {'id': 'smb_fix_big', 'label': 'Full-Body Super Barba', 'img': 'previews/titles/smb_fixed_big.png', 'caption': 'Crisp 24x32 + trail Super Barba'},
-                ],
-                'candidates': [
+                'status_label': 'SUPER BARBA BROS. Sign',
+                'summary': 'BARBA matched pixel-for-pixel to BROS. font, bevels, and 3D drop shadow; keeps tiny Wyrmling in demo mode.',
+                'screens': [
                     {
-                        'id': 'smb_cand_a',
-                        'label': 'Candidate A: SUPER BARBA BROS. Sign',
-                        'img': 'previews/titles/smb_cand_a.png',
-                        'caption': 'BARBA matched pixel-for-pixel to BROS. font, bevels, and 3D drop shadow; keeps tiny Barba in demo mode.',
+                        'title': 'Title Screen',
+                        'vanilla': {'label': 'Vanilla', 'img': 'previews/titles/smb_vanilla_title.png', 'caption': 'SUPER MARIO BROS. sign'},
+                        'ours': {'label': 'Our Version', 'img': 'previews/titles/smb_cand_a.png', 'caption': 'SUPER BARBA BROS. sign'},
                     },
                 ],
             },
             {
                 'id': 'mtpo',
                 'name': "Barba's Punch-Out!!",
-                'status': 'needs_rework',
-                'status_label': 'Needs Rework (Z2 Game Over Link)',
-                'summary': 'Rebuilt Link portrait from Zelda 2’s Game Over Link silhouette + EVIL LINK matching MIKE TYSON positioning.',
-                'context_note': 'Uses game_over_art.compile_game_over_link() 80x96 silhouette inside the Title2 portrait frame.',
-                'current': [
-                    {'id': 'mtpo_cur_t2', 'label': 'Current Title2 (Evil Link)', 'img': 'previews/titles/mtpo_current_title2.png', 'caption': 'Rough Link portrait & blocky font'},
-                    {'id': 'mtpo_zoom', 'label': 'Context: Current Link Portrait (2x)', 'img': 'previews/titles/mtpo_link_zoom.png', 'caption': 'Flat green silhouette needs Z2 Game Over detail'},
-                ],
-                'candidates': [
+                'status_label': 'Z2 Game Over Link + EVIL LINK',
+                'summary': 'Looming Zelda 2 Game Over Link silhouette inside the Title2 portrait frame with EVIL LINK in MIKE TYSON positioning.',
+                'screens': [
                     {
-                        'id': 'mtpo_cand_a',
-                        'label': 'Candidate A: Z2 Game Over Link Silhouette + EVIL LINK',
-                        'img': 'previews/titles/mtpo_cand_a.png',
-                        'caption': 'Looming Z2 Game Over Link silhouette + EVIL LINK centered in MIKE TYSON position.',
+                        'title': 'Title2 Screen',
+                        'vanilla': {'label': 'Vanilla', 'img': 'previews/titles/mtpo_vanilla_title2.png', 'caption': "Vanilla MIKE TYSON'S PUNCH-OUT!! Title2"},
+                        'ours': {'label': 'Our Version', 'img': 'previews/titles/mtpo_cand_a.png', 'caption': 'Z2 Game Over Link Silhouette + EVIL LINK'},
                     },
                 ],
             },
             {
                 'id': 'mm2',
                 'name': 'Mega Barba 2 (Barba Man 2)',
-                'status': 'discussion',
-                'status_label': 'Fixed Clipped A + 2 Rooftop Directions',
-                'summary': 'Fixed the missing top-right corner of the trailing A in MEGA BARBA II (tools/mm2_art.py). Two rooftop character directions below for iteration: full-body Barba with junction/tail vs Mega Man with Barba snout sticking out of the helmet.',
-                'context_note': 'Logo fix is already applied in tools/mm2_art.py; zoom below previews the unclipped A.',
-                'current': [
-                    {'id': 'mm2_cur', 'label': 'Current ROM Title (Clipped A)', 'img': 'previews/titles/mm2_current_title.png', 'caption': 'Pre-fix capture (trailing A top-right clipped)'},
-                    {'id': 'mm2_zoom', 'label': 'Fixed Logo Zoom (Unclipped A)', 'img': 'previews/titles/mm2_logo_zoom.png', 'caption': 'Fixed in mm2_art.py: trailing A + shadow fully inside nametable span'},
-                ],
-                'candidates': [
+                'status_label': 'MEGA BARBA II + Rooftop Barba',
+                'summary': 'Unclipped trailing A in MEGA BARBA II with full-body Barba standing on the skyscraper rooftop.',
+                'screens': [
                     {
-                        'id': 'mm2_cand_a',
-                        'label': 'Candidate A: Full-Body Barba (Junction + Tail)',
-                        'img': 'previews/titles/mm2_cand_a.png',
-                        'caption': '32x40 full-body Barba with neck junction and tail on the skyscraper rooftop.',
-                    },
-                    {
-                        'id': 'mm2_cand_b',
-                        'label': 'Candidate B: Mega Man Helmet + Barba Snout',
-                        'img': 'previews/titles/mm2_cand_b.png',
-                        'caption': 'Mega Man armor & blue helmet with Barba’s dragon snout poking out.',
+                        'title': 'Title Screen',
+                        'vanilla': {'label': 'Vanilla', 'img': 'previews/titles/mm2_vanilla_title.png', 'caption': 'Vanilla MEGA MAN II title screen'},
+                        'ours': {'label': 'Our Version', 'img': 'previews/titles/mm2_cand_a.png', 'caption': 'Unclipped MEGA BARBA II + Full-Body Rooftop Barba'},
                     },
                 ],
             },
             {
                 'id': 'wheel',
                 'name': 'Wheel of Barba',
-                'status': 'align',
-                'status_label': 'Aligned: WHEEL OF BARBA',
+                'status_label': 'WHEEL OF BARBA',
                 'summary': 'Replaces FORTUNE with BARBA on both Screen 1 and the Screen 2 bottom wheel arc, preserving the exact fonts, colors, and curved wheel geometry.',
-                'context_note': 'Screen 1 keeps pink/white-outlined WHEEL • of • BARBA; Screen 2 curves BARBA along the bottom arc in grey/orange.',
-                'current': [
-                    {'id': 'wheel_cur_s1', 'label': 'Current Screen 1 (Splash)', 'img': 'previews/titles/wheel_current_s1.png', 'caption': 'WHEEL of FORTUNE / BARBA EDITION'},
-                    {'id': 'wheel_cur_s2', 'label': 'Current Screen 2 (Big Wheel)', 'img': 'previews/titles/wheel_current_s2.png', 'caption': 'Still says FAMILY EDITION + WHEEL OF FORTUNE'},
-                ],
-                'candidates': [
+                'screens': [
                     {
-                        'id': 'wheel_cand_s1',
-                        'label': 'Candidate Screen 1: WHEEL • of • BARBA',
-                        'img': 'previews/titles/wheel_cand_s1.png',
-                        'caption': 'Replaces FORTUNE with BARBA in the exact pink/white-outline font.',
+                        'title': 'Screen 1 (Splash)',
+                        'vanilla': {'label': 'Vanilla', 'img': 'previews/titles/wheel_vanilla_s1.png', 'caption': 'Vanilla WHEEL of FORTUNE FAMILY EDITION'},
+                        'ours': {'label': 'Our Version', 'img': 'previews/titles/wheel_cand_s1.png', 'caption': 'WHEEL • of • BARBA'},
                     },
                     {
-                        'id': 'wheel_cand_s2',
-                        'label': 'Candidate Screen 2: Curved Bottom-Arc BARBA',
-                        'img': 'previews/titles/wheel_cand_s2.png',
-                        'caption': 'Replaces bottom-arc FORTUNE with curved BARBA in grey + orange outline + shadow.',
+                        'title': 'Screen 2 (Big Wheel)',
+                        'vanilla': {'label': 'Vanilla', 'img': 'previews/titles/wheel_vanilla_s2.png', 'caption': 'Vanilla WHEEL OF FORTUNE'},
+                        'ours': {'label': 'Our Version', 'img': 'previews/titles/wheel_cand_s2.png', 'caption': 'Curved Bottom-Arc BARBA'},
                     },
                 ],
             },
             {
                 'id': 'zelda',
                 'name': 'The Legend of Barba (Zelda 1)',
-                'status': 'not_started',
-                'status_label': 'ZELDA-Matched Font + White-Foam Lava',
-                'summary': 'BARBA now matches ZELDA’s chiseled serif font, warm brown fill, and 3D black shadow. Candidate B preserves the vanilla waterfall’s bright white foam highlights inside the flowing lava.',
-                'context_note': 'Zelda 1 uses CHR-RAM; title tiles and waterfall palette patch cleanly in pack_zelda.py.',
-                'current': [
-                    {'id': 'zelda_cur', 'label': 'Current Title (Vanilla Z1)', 'img': 'previews/titles/zelda_current_title.png', 'caption': 'Unmodified THE LEGEND OF ZELDA'},
-                ],
-                'candidates': [
+                'status_label': 'THE LEGEND OF BARBA + Lava Falls',
+                'summary': 'Chiseled brown+black BARBA matching ZELDA’s font plus flowing Palace VI crimson/amber lava falls keeping the vanilla white foam crests.',
+                'screens': [
                     {
-                        'id': 'zelda_cand_a',
-                        'label': 'Candidate A: THE LEGEND OF BARBA (ZELDA Font)',
-                        'img': 'previews/titles/zelda_cand_a.png',
-                        'caption': 'Chiseled brown+black BARBA matching ZELDA’s look & feel.',
-                    },
-                    {
-                        'id': 'zelda_cand_b',
-                        'label': 'Candidate B: Lava Falls (With White Foam)',
-                        'img': 'previews/titles/zelda_cand_b.png',
-                        'caption': 'Flowing Palace VI crimson/amber lava keeping the vanilla waterfall’s white foam.',
+                        'title': 'Title Screen',
+                        'vanilla': {'label': 'Vanilla', 'img': 'previews/titles/zelda_vanilla_title.png', 'caption': 'THE LEGEND OF ZELDA'},
+                        'ours': {'label': 'Our Version', 'img': 'previews/titles/zelda_cand_b.png', 'caption': 'THE LEGEND OF BARBA + Lava Falls (with white foam)'},
                     },
                 ],
             },
@@ -1038,4 +1351,8 @@ def generate_all() -> dict:
 
 
 if __name__ == '__main__':
-    generate_all()
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--capture-vanilla', action='store_true', help='Re-capture all vanilla title PNGs from roms/*.nes')
+    args = parser.parse_args()
+    generate_all(recapture_vanilla=args.capture_vanilla)

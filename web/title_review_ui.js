@@ -2,6 +2,7 @@
   const data = window.TITLE_REVIEW_DATA;
   if (!data) return;
 
+  const isPublic = window.BARBA_DASHBOARD_FLAVOR === 'public';
   const STORAGE_KEY = 'barba_title_review_v2';
 
   function loadState() {
@@ -81,6 +82,12 @@
       const curStatus = ui.gameStatus[g.id] || 'approved';
       const head = document.createElement('div');
       head.className = 'flag-head';
+      const statusSelectHtml = isPublic ? '' : `
+          <select class="title-game-status" data-game="${g.id}">
+            <option value="needs_work" ${curStatus === 'needs_work' ? 'selected' : ''}>Needs Work</option>
+            <option value="in_review" ${curStatus === 'in_review' ? 'selected' : ''}>In Review</option>
+            <option value="approved" ${curStatus === 'approved' ? 'selected' : ''}>Sign Off / Approved</option>
+          </select>`;
       head.innerHTML = `
         <div>
           <h2 style="border:none;padding:0;margin:0;">${g.name}</h2>
@@ -88,11 +95,7 @@
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           <span class="badge b-built">${g.status_label}</span>
-          <select class="title-game-status" data-game="${g.id}">
-            <option value="needs_work" ${curStatus === 'needs_work' ? 'selected' : ''}>Needs Work</option>
-            <option value="in_review" ${curStatus === 'in_review' ? 'selected' : ''}>In Review</option>
-            <option value="approved" ${curStatus === 'approved' ? 'selected' : ''}>Sign Off / Approved</option>
-          </select>
+          ${statusSelectHtml}
         </div>
       `;
       card.appendChild(head);
@@ -111,13 +114,15 @@
         card.appendChild(pairRow);
       }
 
-      const noteWrap = document.createElement('div');
-      noteWrap.style.cssText = 'display:flex;flex-direction:column;gap:4px;margin-top:4px;';
-      noteWrap.innerHTML = `
-        <label style="font-size:0.82rem;color:var(--muted);">Notes for ${g.name}</label>
-        <textarea class="title-game-note" data-game="${g.id}" rows="2" placeholder="Optional tweak or sign-off notes..." style="width:100%;font:inherit;color:var(--text);background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:8px 10px;">${ui.gameNotes[g.id] || ''}</textarea>
-      `;
-      card.appendChild(noteWrap);
+      if (!isPublic) {
+        const noteWrap = document.createElement('div');
+        noteWrap.style.cssText = 'display:flex;flex-direction:column;gap:4px;margin-top:4px;';
+        noteWrap.innerHTML = `
+          <label style="font-size:0.82rem;color:var(--muted);">Notes for ${g.name}</label>
+          <textarea class="title-game-note" data-game="${g.id}" rows="2" placeholder="Optional tweak or sign-off notes..." style="width:100%;font:inherit;color:var(--text);background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;padding:8px 10px;">${ui.gameNotes[g.id] || ''}</textarea>
+        `;
+        card.appendChild(noteWrap);
+      }
       listEl.appendChild(card);
     }
 

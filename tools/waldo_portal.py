@@ -66,7 +66,7 @@ def run_stage(emulator: Path, stage: str, headless: bool) -> str:
     }
     script.write_text(
         ''.join(f'{key} = {json.dumps(value, ensure_ascii=False)}\n' for key, value in variables.items())
-        + (ROOT / 'tools/waldo_portal.lua').read_text(encoding='utf-8'),
+        + (ROOT / 'tools/scenarios/waldo_portal.lua').read_text(encoding='utf-8'),
         encoding='utf-8',
     )
     rom = WALDO if stage == 'waldo' else BARBA

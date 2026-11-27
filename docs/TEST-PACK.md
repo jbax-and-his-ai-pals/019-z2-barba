@@ -10,7 +10,7 @@ message with **B**. Play through the Moon landing or press **Start + Select**
 at the same position and scroll. Press **B** to dismiss the return message.
 
 For a 10-slot F1–F10 save-state pack **inside Waldo inside Zelda II** on the
-combined `barba.nes`, double-click **play/arcade-tests/Test Wheres Barba in Z2.cmd**
+combined `barba.nes`, double-click **play/cmd/Test Wheres Barba in Z2.cmd**
 (or run `python tools/create_waldo_z2_pack.py --force`): F1–F8 cover Title Screen,
 Moon Ticket, Overworld Map, Train Station, **Before Level 5: The Subway** (**F5**),
 The Castle, and the two Slots stages (`slots-two-barbas` and `slots-jackpot`);
@@ -21,14 +21,14 @@ station wave out and Rauru wave in, then dismiss the return message with **B**.
 
 For the default Barba silhouette, launch **play/Play Barba.cmd** and look at the
 dragon on the title cliff. Start a file to see the same elbow, horizontal
-torso and flicking tail in North Palace, or use **play/zelda2-tests/Test Core.cmd**, **F1**.
-In **play/zelda2-tests/Test Tricky Movement.cmd**, load **F7** and walk right into
+torso and flicking tail in North Palace, or use **play/cmd/Test Core.cmd**, **F1**.
+In **play/cmd/Test Tricky Movement.cmd**, load **F7** and walk right into
 the Palace 6 shaft. Watch for three inverted torso sections and a tapered
 tip above the downward-facing head as Barba and his shadow fall. Listen for
 the music to cut as the shaft animation starts. Barba roars once, and the
 palace theme starts in the lower room.
 
-For the palace victory roar, double-click **play/zelda2-tests/Test Gem Celebration.cmd**
+For the palace victory roar, double-click **play/cmd/Test Gem Celebration.cmd**
 and press **F1**. Barba starts beside the Palace 6 crystal statue, past the boss,
 with the final gem still unplaced. Walk right: the native gem sequence plays its
 fanfare, immediately followed by the roar with Barba looking up. Watch the
@@ -51,7 +51,7 @@ regular attack cycle.
 `tests/link_boss.lua` checks the entrance and `tests/palace_roar.lua` checks the
 floor pulse in all six crystal rooms.
 
-For game-over checks, double-click **play/zelda2-tests/Test Edge Scenarios.cmd**.
+For game-over checks, double-click **play/cmd/Test Edge Scenarios.cmd**.
 It rebuilds the ROM as needed and installs a separate `edges` test profile:
 
 | Key | Checkpoint | What to test |
@@ -66,7 +66,7 @@ isolated. Generated files are in `build/test-pack/<ROM hash>/edges/`.
 To prepare without opening an emulator:
 `powershell -File tools/launch.ps1 -TestPack -CheckpointSet edges -PrepareOnly`.
 
-On Windows, double-click **play/zelda2-tests/Test Core.cmd**, or run:
+On Windows, double-click **play/cmd/Test Core.cmd**, or run:
 
 ```powershell
 ./tools/launch.ps1 -TestPack
@@ -134,7 +134,7 @@ retain fake door tiles made by the retired villager animation.
 
 ## Busy Areas checkpoints
 
-Open **play/zelda2-tests/Test Busy Areas.cmd** and press F1–F10 in Mesen. The set
+Open **play/cmd/Test Busy Areas.cmd** and press F1–F10 in Mesen. The set
 combines rooms with high frame cost or heavy sprite overlap in the busy-room
 probe with three Palace 5 Mago rooms for the red-duplicate playtest.
 
@@ -168,8 +168,8 @@ handled by odd-frame OAM priority rotation. For historical profiling logs, see
 ## Playthrough checkpoint sets
 
 Core remains the default. Use **Test All Spells.cmd**, **Test Palaces.cmd**, **Test Endgame.cmd**, **Test Bosses.cmd**,
-**Test Towns and World.cmd**, or **Test Tricky Movement.cmd** in `play/zelda2-tests/` (all beside
-`Test Core.cmd`), or the arcade/standalone launchers in `play/arcade-tests/` and `play/standalone/`.
+**Test Towns and World.cmd**, **Test Tricky Movement.cmd**, and the arcade/standalone launchers in `play/cmd/` (beside
+`Test Core.cmd`).
 Each opens its own isolated local profile and maps that set to F1-F10.
 Unused F-keys do not point at another set's states. Script equivalent:
 
@@ -239,7 +239,7 @@ Crystals are $078D-$0792, in palace order; $0794 is 6 minus placed. Keys $0793=0
 
 ### ngplus
 
-Launch **play/zelda2-tests/Test NG+.cmd** (`./tools/launch.ps1 -NoRebuild -TestPack -CheckpointSet ngplus`) for 8 New Game+ (`$07A0=1`) checkpoints (F1–F8):
+Launch **play/cmd/Test NG+.cmd** (`./tools/launch.ps1 -NoRebuild -TestPack -CheckpointSet ngplus`) for 8 New Game+ (`$07A0=1`) checkpoints (F1–F8):
 
 | Key | Where | Focus |
 | --- | --- | --- |
@@ -254,7 +254,7 @@ Launch **play/zelda2-tests/Test NG+.cmd** (`./tools/launch.ps1 -NoRebuild -TestP
 
 ### fireballs
 
-Launch **play/zelda2-tests/Test Fireballs.cmd** (`./tools/launch.ps1 -NoRebuild -TestPack -CheckpointSet fireballs`) for 10 fireball-focused checkpoints (F1–F10) covering dark/lit caves, big ledges and bridges, elevated wall targets, breakable blocks, Ironknuckle rebounds, low ceilings, and crowded corridors:
+Launch **play/cmd/Test Fireballs.cmd** (`./tools/launch.ps1 -NoRebuild -TestPack -CheckpointSet fireballs`) for 10 fireball-focused checkpoints (F1–F10) covering dark/lit caves, big ledges and bridges, elevated wall targets, breakable blocks, Ironknuckle rebounds, low ceilings, and crowded corridors:
 
 | Key | Where | Focus |
 | --- | --- | --- |
@@ -271,7 +271,7 @@ Launch **play/zelda2-tests/Test Fireballs.cmd** (`./tools/launch.ps1 -NoRebuild 
 
 ### spells
 
-Launch **play/zelda2-tests/Test All Spells.cmd** (`./tools/launch.ps1 -NoRebuild -TestPack -CheckpointSet spells`) for 10 tailored rooms (F1–F10) with all 18 spells (8 Hyrule + 10 Arcade), all 8 key items, and Magic-8/Life-8 meters. Each slot pre-selects a fitting spell (press **Space** to cast immediately, or **Enter** to pick another):
+Launch **play/cmd/Test All Spells.cmd** (`./tools/launch.ps1 -NoRebuild -TestPack -CheckpointSet spells`) for 10 tailored rooms (F1–F10) with all 18 spells (8 Hyrule + 10 Arcade), all 8 key items, and Magic-8/Life-8 meters. Each slot pre-selects a fitting spell (press **Space** to cast immediately, or **Enter** to pick another):
 
 | Key | Where | Pre-selected | Look for |
 | --- | --- | --- | --- |

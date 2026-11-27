@@ -106,6 +106,8 @@ def apply_feud_prg_hooks(
     prg_buf: bytearray,
     w: dict[str, int],
     c: dict[str, int] | None = None,
+    *,
+    mmc3_4x12_fo: bool = False,
 ) -> None:
     """Install all dynamic-cast, palette, idle-anim, name, and lose hooks."""
     rng_prefix = bytes.fromhex('20BB9BADFA012903')
@@ -125,9 +127,10 @@ def apply_feud_prg_hooks(
     _patch_bytes(prg_buf, 0x8108, oam_prefix, _jsr(w['W_LOAD_OAM_PAL']) + bytes([0xEA] * 7))
     _patch_bytes(prg_buf, 0x9AF2, bytes.fromhex('A20FBDCFD1'), _jmp(w['W_LOAD_OAM_PAL']))
     _patch_bytes(prg_buf, 0xB515, bytes.fromhex('208684'), _jsr(w['W_LOAD_FACEOFF']))
-    _patch_bytes(prg_buf, 0xB972, bytes.fromhex('A9059DC705'), bytes.fromhex('A9039DC705'))
-    _patch_bytes(prg_buf, 0xB98F, bytes.fromhex('A9129DE505'), bytes.fromhex('A9159DE505'))
-    _patch_bytes(prg_buf, 0xBA4E, bytes.fromhex('20D8BBEAEAA9DC'), _jmp(w['W_FACEOFF_ATTR']))
+    if not mmc3_4x12_fo:
+        _patch_bytes(prg_buf, 0xB972, bytes.fromhex('A9059DC705'), bytes.fromhex('A9039DC705'))
+        _patch_bytes(prg_buf, 0xB98F, bytes.fromhex('A9129DE505'), bytes.fromhex('A9159DE505'))
+    _patch_bytes(prg_buf, 0xBA4E, bytes.fromhex('A9238D0620A9DC'), _jmp(w['W_FACEOFF_ATTR']))
     _patch_bytes(prg_buf, 0xC931, bytes.fromhex('20BB9BADFA012907'), _jmp(w['W_ZELDA_LOSE']))
     _patch_bytes(prg_buf, 0xC9DE, rng_prefix, _jmp(w['W_ROLL_BOTH']))
     _patch_bytes(prg_buf, 0xCA0C, rng_prefix, _jmp(w['W_ROLL_P1']))

@@ -511,6 +511,8 @@ def build_duck_chr_and_tables(duck_bytes: bytes, z2_bytes: bytes) -> dict:
         rows = _decode_tile(bytes(forest_bg[hud_tid * 16 : (hud_tid + 1) * 16]))
         remapped = [''.join('2' if c == 0 else str(c) for c in r) for r in rows]
         forest_bg[hud_tid * 16 : (hud_tid + 1) * 16] = encode_tile(remapped)
+    # Thematic HUD backdrop tile ($50): solid color 3 (Pal 2 dark green $09)
+    forest_bg[0x50 * 16 : 0x51 * 16] = encode_tile(['33333333'] * 8)
 
     # 1c. Game A/B Overworld Grass Encounter BG (1KB banks 32..35)
     grass_bg = bytearray(game_bg)
@@ -524,6 +526,8 @@ def build_duck_chr_and_tables(duck_bytes: bytes, z2_bytes: bytes) -> dict:
     for dst_tid, src_tid in grass_tile_map:
         src_off = z2_chr_base + src_tid * 16
         grass_bg[dst_tid * 16 : (dst_tid + 1) * 16] = z2_bytes[src_off : src_off + 16]
+    # Thematic HUD backdrop tile ($50): solid color 3 (Pal 2 mid green $19)
+    grass_bg[0x50 * 16 : 0x51 * 16] = encode_tile(['33333333'] * 8)
 
     # 1d. Game A/B Desert Encounter BG (1KB banks 36..39)
     desert_bg = bytearray(game_bg)
@@ -537,6 +541,8 @@ def build_duck_chr_and_tables(duck_bytes: bytes, z2_bytes: bytes) -> dict:
     for dst_tid, src_tid in desert_tile_map:
         src_off = z2_chr_base + src_tid * 16
         desert_bg[dst_tid * 16 : (dst_tid + 1) * 16] = z2_bytes[src_off : src_off + 16]
+    # Thematic HUD backdrop tile ($50): solid color 3 (Pal 2 sand $36)
+    desert_bg[0x50 * 16 : 0x51 * 16] = encode_tile(['33333333'] * 8)
 
     # 2. Title BG (1KB banks 4..7): copy gameplay BG + custom rounded "BARBA'S" logo tiles ($C0..$CD)
     title_bg = bytearray(game_bg)

@@ -166,14 +166,21 @@ def apply_art_patches_bank1(b1: bytearray, z2_bytes: bytes) -> None:
     walk_bytes = a_walk.finish()
     b1[fast_walk_addr - 0x8000 : fast_walk_addr - 0x8000 + len(walk_bytes)] = walk_bytes
 
-    # Fast unrolled VBlank CHR-RAM uploader replacing $0680 ($8C8F[0])
-    # Supports all 6 Barba upright poses (192B each = Q0:128B, Q1:64B, Q2:0B, Q3:0B).
+    # Fast unrolled VBlank CHR-RAM uploader replacing $0680 ($8C8F[0] and direct JMP $0680 callers)
+    # Supports all 6 Barba upright poses (192B each = Q0:64B, Q1:64B, Q2:64B, Q3:0B).
     assert b1[0x8C8F - 0x8000] == 0x80 and b1[0x8C97 - 0x8000] == 0x06, (
         f'Unexpected $8C8F[0]: ${b1[0x8C97 - 0x8000]:02X}{b1[0x8C8F - 0x8000]:02X}'
     )
     fast_addr = 0xC200
     b1[0x8C8F - 0x8000] = fast_addr & 0xFF
     b1[0x8C97 - 0x8000] = fast_addr >> 8
+    for jmp_addr in (0x8C2E, 0x8E80, 0x8EA4):
+        off = jmp_addr - 0x8000
+        assert b1[off : off + 3] == bytes([0x4C, 0x80, 0x06]), (
+            f'Unexpected JMP $0680 at 1:${jmp_addr:04X}: {b1[off : off + 3].hex(" ")}'
+        )
+        b1[off + 1] = fast_addr & 0xFF
+        b1[off + 2] = fast_addr >> 8
 
     a = Asm6502(fast_addr)
     a.emit(0xA5, 0xA8, 0x8D, 0x06, 0x20)          # LDA $A8; STA $2006
@@ -185,8 +192,11 @@ def apply_art_patches_bank1(b1: bytearray, z2_bytes: bytes) -> None:
 
     pose_idx = {name: i * 2 for i, name in enumerate(BARBA_POSE_ORDER)}
 
-    def emit_dispatch_iny(q_label: str, ptr_label: str) -> None:
+    def emit_dispatch_iny(q_label: str, ptr_label: str, *, set_mid_addr: bool = False) -> None:
         a.label(q_label)
+        if set_mid_addr:
+            a.emit(0xA5, 0xA8, 0x8D, 0x06, 0x20)  # LDA $A8; STA $2006 ($17 or $19)
+            a.emit(0xA9, 0x00, 0x8D, 0x06, 0x20)  # LDA #$00; STA $2006 ($1700 or $1900)
         a.emit(0xA5, 0xAB, 0x29, 0x7F)            # LDA $AB; AND #$7F
         a.emit(0xC9, 0x22)                        # CMP #34
         a.branch(0x90, f'{q_label}_ok')           # BCC ok
@@ -206,13 +216,13 @@ def apply_art_patches_bank1(b1: bytearray, z2_bytes: bytes) -> None:
     a.label('q0_or_q2')
     a.emit(0xA5, 0xA8, 0x29, 0x01)                # LDA $A8; AND #$01
     a.branch(0xF0, 'q0')                          # BEQ q0
-    a.emit(0x60)                                  # q2: RTS (covered by static body/tail)
+    emit_dispatch_iny('q2', 'q2_ptrs', set_mid_addr=True)
     emit_dispatch_iny('q0', 'q0_ptrs')
 
     a.label('frame_pose_tbl')
     a.emit(*[pose_idx[name] for name in _FRAME_TO_POSE_NAME])
 
-    for q in range(2):
+    for q in range(3):
         a.label(f'q{q}_ptrs')
         for name in BARBA_POSE_ORDER:
             a.fixups.append(('abs', len(a.buf), f'{name}_{q}'))
@@ -220,7 +230,8 @@ def apply_art_patches_bank1(b1: bytearray, z2_bytes: bytes) -> None:
 
     for name in BARBA_POSE_ORDER:
         chr_192 = poses[name]
-        for q, (start, end) in enumerate(((0, 128), (128, 192))):
+        # q0: bytes 0..64 ($16C0/$18C0), q1: bytes 128..192 ($1740/$1940), q2: bytes 64..128 ($1700/$1900)
+        for q, (start, end) in enumerate(((0, 64), (128, 192), (64, 128))):
             a.label(f'{name}_{q}')
             prev = None
             for byte in chr_192[start:end]:
@@ -250,6 +261,7 @@ def apply_art_patches_bank1(b1: bytearray, z2_bytes: bytes) -> None:
     for ppu_hi in (0x16, 0x18):
         a.emit(0xA9, ppu_hi, 0x8D, 0x06, 0x20, 0xA9, 0xC0, 0x8D, 0x06, 0x20)
         a.abs_ref(0x20, 'idle_0')
+        a.abs_ref(0x20, 'idle_2')
         a.abs_ref(0x20, 'idle_1')
         a.abs_ref(0x20, 'static_body')
     a.emit(0x60)

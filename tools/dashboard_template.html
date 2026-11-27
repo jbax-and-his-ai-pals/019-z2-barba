@@ -1,0 +1,1311 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{PAGE_TITLE}}</title>
+  <style>
+    :root {
+      --bg: #0e1015;
+      --panel: #161a23;
+      --panel-alt: #1d222e;
+      --border: #2a3142;
+      --text: #eef1f7;
+      --muted: #9aa4b8;
+      --ember: #ff6b35;
+      --gold: #f5b841;
+      --green: #3ddc97;
+      --cyan: #5bc0eb;
+      --amber: #f4a261;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+    }
+    .wrap { max-width: 1320px; margin: 0 auto; padding: 24px 18px 64px; }
+    header {
+      display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; align-items: flex-end;
+      border-bottom: 1px solid var(--border); padding-bottom: 18px; margin-bottom: 20px;
+    }
+    h1 { margin: 0; font-size: 1.75rem; letter-spacing: 0.02em; }
+    h1 span { color: var(--ember); }
+    .subtitle { color: var(--muted); font-size: 0.92rem; margin-top: 4px; }
+    .preset-bar, .filter-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    button, select, input {
+      font: inherit; color: var(--text); background: var(--panel-alt);
+      border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px;
+    }
+    button { cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+    button:hover { border-color: var(--ember); }
+    button.primary { background: var(--ember); border-color: var(--ember); color: #111; font-weight: 600; }
+    button.active { border-color: var(--gold); background: #262218; color: var(--gold); }
+
+    /* Live Hero Stage */
+    .stage {
+      background: linear-gradient(135deg, #171b26 0%, #12151e 100%);
+      border: 1px solid var(--border); border-radius: 14px;
+      padding: 16px 18px; margin-bottom: 18px;
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 18px;
+    }
+    .stage-title { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gold); margin-bottom: 6px; }
+    .stage-slots { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+    .stage-slot {
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+      background: #0d1017; border: 1px solid var(--border); border-radius: 10px;
+      padding: 10px 14px; min-width: 118px;
+    }
+    .stage-slot span { font-size: 0.78rem; color: var(--muted); text-align: center; }
+    .stage-slot strong { font-size: 0.82rem; color: var(--text); }
+
+    /* Smooth canvas NES player */
+    canvas.nes-canvas {
+      display: block;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      border-radius: 6px;
+      background: #0b0d13;
+      max-width: 100%;
+      height: auto;
+    }
+
+    .top-box {
+      background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+      padding: 16px; margin-bottom: 20px; display: grid; gap: 12px;
+    }
+    .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .row label { font-size: 0.85rem; color: var(--muted); min-width: 82px; }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.88rem; flex: 1; min-width: 240px;
+    }
+    .stats { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.84rem; color: var(--muted); }
+    .badge {
+      display: inline-block; font-size: 0.72rem; font-weight: 600; padding: 2px 8px;
+      border-radius: 999px; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap;
+    }
+    .b-toggleable { background: rgba(61, 220, 151, 0.15); color: var(--green); border: 1px solid rgba(61, 220, 151, 0.35); }
+    .b-built { background: rgba(91, 192, 235, 0.15); color: var(--cyan); border: 1px solid rgba(91, 192, 235, 0.35); }
+    .b-coupled { background: rgba(255, 107, 53, 0.14); color: var(--ember); border: 1px solid rgba(255, 107, 53, 0.35); }
+    .b-planned { background: rgba(244, 162, 97, 0.14); color: var(--amber); border: 1px solid rgba(244, 162, 97, 0.35); }
+
+    .grid { display: grid; grid-template-columns: 1fr; gap: 18px; margin-top: 16px; }
+    .card {
+      background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+      padding: 16px; display: flex; flex-direction: column; gap: 12px;
+    }
+    .card h2 {
+      margin: 0; font-size: 1.05rem; border-bottom: 1px solid var(--border);
+      padding-bottom: 8px; color: var(--gold);
+    }
+    .flag-item {
+      display: flex; flex-direction: column; gap: 8px; padding: 11px;
+      border-radius: 10px; background: var(--panel-alt); border: 1px solid transparent;
+    }
+    .flag-item.is-planned { opacity: 0.82; border-style: dashed; border-color: var(--border); }
+    .flag-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .flag-title { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 0.93rem; cursor: pointer; }
+    .flag-desc { font-size: 0.82rem; color: var(--muted); }
+    .flag-req { font-size: 0.76rem; color: var(--amber); }
+
+    /* Visual Choice / Preview Strip inside cards */
+    .preview-compare {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 2px;
+    }
+    .preview-single {
+      display: flex; align-items: center; gap: 12px; margin-top: 2px;
+      background: #121620; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+    }
+    .preview-single.is-active { border-color: rgba(255, 107, 53, 0.55); background: #19161b; }
+    .preview-single.is-inactive { opacity: 0.45; }
+    .choice-tile {
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+      background: #121620; border: 1px solid var(--border); border-radius: 8px;
+      padding: 8px; cursor: pointer; transition: border-color 0.15s, opacity 0.15s, transform 0.1s;
+    }
+    .choice-tile:hover { border-color: var(--gold); }
+    .choice-tile.is-selected {
+      border-color: var(--ember);
+      background: radial-gradient(circle at top, rgba(255, 107, 53, 0.14), #131621);
+      box-shadow: 0 0 0 1px rgba(255, 107, 53, 0.35);
+    }
+    .choice-tile.is-dimmed { opacity: 0.48; }
+    .choice-label { font-size: 0.75rem; color: var(--muted); display: flex; align-items: center; gap: 5px; }
+    .choice-tile.is-selected .choice-label { color: var(--text); font-weight: 600; }
+    .pill-on {
+      font-size: 0.65rem; background: var(--ember); color: #111; font-weight: 700;
+      padding: 1px 5px; border-radius: 4px; text-transform: uppercase;
+    }
+    .audio-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 2px; }
+    .audio-btn {
+      font-size: 0.78rem; padding: 5px 10px; border-radius: 6px;
+      display: inline-flex; align-items: center; gap: 5px;
+    }
+    .audio-btn.is-active { border-color: var(--ember); color: var(--gold); }
+    .pitch-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--muted); }
+    .pitch-wrap input[type="range"] { width: 88px; padding: 0; accent-color: var(--ember); }
+    .toast { font-size: 0.84rem; color: var(--green); min-height: 1.2em; }
+
+    /* Tabs & Waldo Tile Tagger */
+    .tab-bar { display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+    .tab-btn.active { background: var(--ember); border-color: var(--ember); color: #111; font-weight: 700; }
+    .hidden { display: none !important; }
+    .waldo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 14px; }
+    .waldo-card {
+      background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+      padding: 10px; display: flex; flex-direction: column; align-items: center; gap: 8px;
+      cursor: pointer; transition: border-color 0.12s, transform 0.08s;
+    }
+    .waldo-card:hover { border-color: var(--gold); }
+    .waldo-card.st-flee { border-color: rgba(61, 220, 151, 0.7); background: rgba(61, 220, 151, 0.06); }
+    .waldo-card.st-static { border-color: rgba(91, 192, 235, 0.55); background: rgba(91, 192, 235, 0.05); }
+    .waldo-card.st-hide { border-color: var(--border); border-style: dashed; opacity: 0.62; }
+    .waldo-card.st-scrap { opacity: 0.45; cursor: default; }
+    .waldo-sprite-wrap {
+      min-height: 54px; display: flex; align-items: center; justify-content: center;
+      background: #0d1017; width: 100%; border-radius: 6px; padding: 6px;
+    }
+    .waldo-sprite { image-rendering: pixelated; image-rendering: crisp-edges; background-repeat: no-repeat; }
+    .waldo-meta { font-size: 0.74rem; color: var(--muted); font-family: ui-monospace, monospace; }
+    .waldo-pills { display: flex; gap: 4px; width: 100%; justify-content: center; }
+    .waldo-pills button { font-size: 0.7rem; padding: 2px 6px; border-radius: 5px; }
+    .waldo-pills button.sel-flee { background: var(--green); color: #111; border-color: var(--green); font-weight: 700; }
+    .waldo-pills button.sel-static { background: var(--cyan); color: #111; border-color: var(--cyan); font-weight: 700; }
+    .waldo-pills button.sel-hide { background: var(--amber); color: #111; border-color: var(--amber); font-weight: 700; }
+
+    /* Family Feud Cast Dashboard */
+    .feud-stage-box {
+      background: linear-gradient(135deg, #171b26 0%, #12151e 100%);
+      border: 1px solid var(--border); border-radius: 14px;
+      padding: 16px; margin-bottom: 16px;
+      display: flex; flex-wrap: wrap; gap: 18px; align-items: center;
+    }
+    .feud-stage-side { display: flex; flex-direction: column; gap: 10px; flex: 1; min-width: 260px; }
+    .feud-seat-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .feud-seat-chip {
+      font-size: 0.74rem; padding: 4px 8px; border-radius: 6px;
+      background: #0d1017; border: 1px solid var(--border); color: var(--text);
+      display: inline-flex; align-items: center; gap: 5px;
+    }
+    .feud-seat-chip.is-center { border-color: var(--gold); }
+    .feud-pal-panel {
+      background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+      padding: 14px 16px; margin-bottom: 16px; display: grid; gap: 12px;
+    }
+    .feud-pal-slots { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 12px; }
+    .feud-pal-slot {
+      background: var(--panel-alt); border: 1px solid var(--border); border-radius: 10px;
+      padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;
+    }
+    .feud-pal-vars { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+    .feud-var-box {
+      display: flex; align-items: center; justify-content: space-between; gap: 6px;
+      background: #121620; border: 1px solid var(--border); border-radius: 7px; padding: 5px 8px;
+      font-size: 0.75rem;
+    }
+    .feud-var-box.is-active { border-color: var(--ember); }
+    .feud-swatch {
+      width: 22px; height: 18px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.35);
+      cursor: pointer; padding: 0; display: inline-flex; align-items: center; justify-content: center;
+      font-size: 0.62rem; font-family: ui-monospace, monospace; font-weight: 700;
+    }
+    .feud-swatch.is-editing { outline: 2px solid var(--gold); outline-offset: 1px; }
+    .feud-picker {
+      background: #0d1017; border: 1px solid var(--gold); border-radius: 10px; padding: 12px;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .feud-nes-grid {
+      display: grid; grid-template-columns: repeat(13, minmax(22px, 1fr)); gap: 4px;
+    }
+    .feud-nes-cell {
+      height: 24px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2);
+      cursor: pointer; font-size: 0.62rem; font-family: ui-monospace, monospace;
+      display: flex; align-items: center; justify-content: center; padding: 0;
+    }
+    .feud-nes-cell.is-sel { outline: 2px solid #fff; outline-offset: 1px; }
+    .feud-split {
+      display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); gap: 16px; margin-top: 14px; align-items: start;
+    }
+    @media (max-width: 960px) { .feud-split { grid-template-columns: 1fr; } }
+    .feud-side-col {
+      background: rgba(255, 255, 255, 0.015); border: 1px solid var(--border);
+      border-radius: 12px; padding: 12px;
+    }
+    .feud-side-head {
+      display: flex; justify-content: space-between; align-items: center; gap: 8px;
+      padding-bottom: 10px; margin-bottom: 12px; border-bottom: 1px solid var(--border);
+    }
+    .feud-side-head strong { font-size: 0.94rem; color: var(--gold); }
+    .feud-side-head span { font-size: 0.78rem; color: var(--muted); }
+    .feud-side-col .feud-grid { margin-top: 0; grid-template-columns: repeat(auto-fill, minmax(195px, 1fr)); }
+    .feud-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(218px, 1fr)); gap: 12px; margin-top: 14px;
+    }
+    .feud-card {
+      background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+      padding: 12px; display: flex; flex-direction: column; gap: 8px; transition: border-color 0.12s, opacity 0.12s;
+    }
+    .feud-card.is-included { border-color: rgba(61, 220, 151, 0.55); }
+    .feud-card.is-excluded { border-style: dashed; opacity: 0.52; }
+    .feud-card.is-highlighted { box-shadow: 0 0 0 2px var(--gold); }
+    .feud-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; }
+    .feud-card-title { font-weight: 700; font-size: 0.92rem; line-height: 1.2; }
+    .feud-card-id { font-size: 0.72rem; color: var(--muted); font-family: ui-monospace, monospace; }
+    .feud-canvas-wrap {
+      display: flex; align-items: center; justify-content: center; border-radius: 8px;
+      padding: 8px; min-height: 112px; border: 1px solid var(--border); position: relative;
+    }
+    .feud-ctrl-row { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+    .feud-mini-btn { font-size: 0.71rem; padding: 3px 7px; border-radius: 6px; min-block-size: 24px; }
+    .feud-mini-btn.on { background: var(--green); color: #111; border-color: var(--green); font-weight: 700; }
+    .feud-mini-btn.off { background: #26191a; color: var(--ember); border-color: rgba(255,107,53,0.45); font-weight: 700; }
+    .feud-mini-btn.slot-on { background: var(--gold); color: #111; border-color: var(--gold); font-weight: 700; }
+    .feud-mini-btn.type-on { background: var(--cyan); color: #111; border-color: var(--cyan); font-weight: 700; }
+    :where(button, select, input):focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+    .feud-map-row {
+      display: flex; flex-wrap: wrap; gap: 4px; align-items: center;
+      font-size: 0.71rem; color: var(--muted); padding-top: 4px; border-top: 1px solid var(--border);
+    }
+    .feud-map-btn { font-size: 0.69rem; padding: 2px 6px; border-radius: 5px; font-family: ui-monospace, monospace; }
+
+    /* Barba's Hunt (Duck Hunt) Tile Dashboard */
+    .duck-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+      gap: 12px; margin-top: 14px;
+      content-visibility: auto;
+      contain-intrinsic-size: auto none auto 600px;
+    }
+    .duck-card {
+      background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+      padding: 10px; display: flex; flex-direction: column; gap: 8px;
+    }
+    .duck-card.is-flagged { border-color: rgba(247, 178, 103, 0.8); background: rgba(247, 178, 103, 0.06); }
+    .duck-card.is-selected { border-color: var(--gold); box-shadow: 0 0 0 1px rgba(255, 209, 102, 0.35); }
+    .duck-card-head { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+    .duck-card-head strong { font-size: 0.9rem; color: var(--gold); }
+    .duck-badge {
+      font-size: 0.7rem; padding: 2px 6px; border-radius: 999px;
+      background: var(--panel-alt); border: 1px solid var(--border); color: var(--muted);
+      font-family: ui-monospace, monospace;
+    }
+    .duck-canvas-wrap {
+      display: flex; align-items: center; justify-content: center;
+      min-height: 112px; padding: 8px; border-radius: 8px;
+      background: #0d1017; border: 1px solid var(--border); overflow: auto;
+    }
+    .duck-canvas-wrap canvas, .duck-chr-canvas, .duck-diff-slot canvas {
+      image-rendering: pixelated; image-rendering: crisp-edges;
+    }
+    .duck-meta { font-size: 0.72rem; color: var(--muted); font-family: ui-monospace, monospace; line-height: 1.35; }
+    .duck-tile-list {
+      font-size: 0.71rem; color: var(--cyan); font-family: ui-monospace, monospace;
+      padding-top: 4px; border-top: 1px solid var(--border);
+    }
+    .duck-card-controls { display: flex; gap: 6px; align-items: center; justify-content: space-between; }
+    .duck-card-controls select { font-size: 0.74rem; padding: 3px 6px; }
+    .duck-diff-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+      gap: 10px; margin-top: 10px;
+    }
+    .duck-diff-card {
+      background: var(--panel-alt); border: 1px solid var(--border); border-radius: 10px;
+      padding: 8px; display: flex; flex-direction: column; gap: 6px;
+    }
+    .duck-diff-head { display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--gold); font-family: ui-monospace, monospace; }
+    .duck-diff-head span { color: var(--muted); font-size: 0.72rem; }
+    .duck-diff-row { display: flex; gap: 10px; align-items: center; }
+    .duck-diff-slot { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 0.68rem; color: var(--muted); }
+    .duck-chr-wrap {
+      display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; margin-top: 10px;
+    }
+    .duck-chr-zoom-box {
+      background: var(--panel-alt); border: 1px solid var(--border); border-radius: 10px;
+      padding: 10px; display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 150px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Zelda II: <span>Barba Enterprise</span>{{HEADER_BADGE}}</h1>
+        <div class="subtitle">{{HEADER_SUBTITLE}}</div>
+      </div>
+      <div class="preset-bar" id="presets"></div>
+    </header>
+
+    {{LOCAL_STATE_BAR}}
+
+    <nav class="tab-bar" aria-label="Workspace Views">
+      <button type="button" class="tab-btn active" data-tab="fe">Barba Enterprise (Flags &amp; Seed)</button>
+      <button type="button" class="tab-btn" data-tab="titles">{{TITLES_TAB_LABEL}}</button>
+      <button type="button" class="tab-btn" data-tab="patcher">ROM Patcher (Local BPS)</button>
+{{DEV_TABS}}
+    </nav>
+
+    <div id="view-fe">
+
+    <section class="stage" aria-label="Live Build Visual Summary">
+      <div>
+        <div class="stage-title">Live Build Preview</div>
+        <div class="subtitle" style="margin:0; max-width:260px;">
+          Updates in real time as you toggle visual options below.
+        </div>
+      </div>
+      <div class="stage-slots" id="live-stage"></div>
+    </section>
+
+    <section class="top-box" aria-label="Seed and Flagstring">
+      <div class="row">
+        <label for="seed-input">Seed</label>
+        <input id="seed-input" class="mono" value="BARBA2026" style="max-width: 220px;">
+        <button id="roll-seed" type="button">Roll Seed</button>
+        <div class="filter-bar" style="margin-left: auto;">
+          <span style="font-size:0.84rem;color:var(--muted)">Show:</span>
+          <button type="button" class="filter-btn active" data-filter="all">All</button>
+          <button type="button" class="filter-btn" data-filter="ready">Built &amp; Toggleable</button>
+          <button type="button" class="filter-btn" data-filter="planned">Unbuilt / Planned</button>
+        </div>
+      </div>
+      <div class="row">
+        <label for="flagstring">Flagstring</label>
+        <input id="flagstring" class="mono" spellcheck="false">
+        <button id="apply-flagstring" type="button">Apply</button>
+        <button id="copy-flagstring" class="primary" type="button">Copy Flags</button>
+      </div>
+{{CLI_ROW}}
+      <div class="stats" id="stats"></div>
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    </section>
+
+    <main class="grid" id="categories"></main>
+    </div>
+
+    <div id="view-patcher" class="hidden">
+      <section class="top-box" aria-label="Client-Side BPS ROM Patcher">
+        <div class="subtitle" style="margin:0;">
+          Patch your own clean Zelda II (USA PRG0) ROM locally in your browser. Your files never leave your device, and shareable <code>--no-portals</code> patches contain zero third-party subgame ROMs.
+        </div>
+        <div class="row">
+          <label for="bps-rom-file">Source ROM</label>
+          <input id="bps-rom-file" type="file" accept=".nes">
+          <span id="bps-rom-status" class="mono" style="color:var(--muted);">Select clean Zelda II (.nes, 262,160 bytes)</span>
+        </div>
+        <div class="row">
+          <label for="bps-patch-file">BPS Patch</label>
+          <input id="bps-patch-file" type="file" accept=".bps">
+          <span id="bps-patch-status" class="mono" style="color:var(--muted);">Select barba.bps</span>
+        </div>
+        <div class="row">
+          <button id="bps-apply-btn" class="primary" type="button" disabled>Patch &amp; Download .nes</button>
+          <span id="bps-out-status" class="mono" style="color:var(--muted);"></span>
+        </div>
+      </section>
+    </div>
+
+    <!-- DEV_VIEWS_START -->
+    <div id="view-waldo" class="hidden">
+      <section class="top-box" aria-label="Waldo Crowd Tile Tagger">
+        <div class="row">
+          <label for="waldo-level">Level</label>
+          <select id="waldo-level"></select>
+          <label for="waldo-band" style="min-width:48px;">Band</label>
+          <select id="waldo-band">
+            <option value="all">All Bands</option>
+            <option value="0">Band 0</option>
+            <option value="1">Band 1</option>
+            <option value="2">Band 2</option>
+          </select>
+          <label for="waldo-state" style="min-width:48px;">State</label>
+          <select id="waldo-state">
+            <option value="all">All States</option>
+            <option value="flee">Flee (People / Pets)</option>
+            <option value="static">Static (BG Props)</option>
+            <option value="hide">Hide (Ambiguous)</option>
+            <option value="scrap">1x1 Auto-Scrap</option>
+          </select>
+        </div>
+        <div class="row">
+          <span class="subtitle" style="margin:0;">Click any tile card to cycle <strong>Flee → Static → Hide</strong>, or click a state pill directly.</span>
+          <div style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;">
+            <button id="waldo-reset" type="button">Reset</button>
+            <button id="waldo-copy" type="button">Copy waldo_crowd.json</button>
+            <button id="waldo-download" class="primary" type="button">Download waldo_crowd.json</button>
+          </div>
+        </div>
+        <div class="stats" id="waldo-stats"></div>
+        <div class="toast" id="waldo-toast" role="status" aria-live="polite"></div>
+      </section>
+      <section class="waldo-grid" id="waldo-grid"></section>
+    </div>
+
+    <div id="view-feud" class="hidden">
+      <section class="feud-stage-box" aria-label="Live 5-Seat Family Feud Stage Preview">
+        <div>
+          <canvas id="feud-stage-canvas" class="nes-canvas" width="512" height="208"></canvas>
+        </div>
+        <div class="feud-stage-side">
+          <div>
+            <div class="stage-title">Live 5-Seat Stage Podium Preview</div>
+            <div class="subtitle" style="margin:0;">
+              Real-time NES stage composite. Click any sprite card&apos;s <strong>Stage</strong> button to place it center-stage (Seat 3) and check contrast &amp; colors in context.
+            </div>
+          </div>
+          <div class="row">
+            <label for="feud-stage-pool" style="min-width:44px;">Team</label>
+            <select id="feud-stage-pool">
+              <option value="barba">Barba Team (Left)</option>
+              <option value="z2" selected>Zelda II Team (Right)</option>
+            </select>
+            <label for="feud-pose" style="min-width:44px;">Pose</label>
+            <select id="feud-pose">
+              <option value="animate">Animate (Idle / Roar / Wiggle)</option>
+              <option value="0">Idle</option>
+              <option value="1">Roar</option>
+              <option value="2">Wiggle</option>
+            </select>
+            <button id="feud-roll-stage" class="primary" type="button">Roll 5 Lineup</button>
+          </div>
+          <div class="feud-seat-chips" id="feud-seat-chips"></div>
+        </div>
+      </section>
+
+      <section class="feud-pal-panel" aria-label="NES Palette Slot Editor">
+        <div class="row" style="justify-content:space-between;">
+          <div class="row">
+            <strong style="color:var(--gold);font-size:0.9rem;">NES Palette Slots (Real-Time)</strong>
+            <button type="button" class="feud-mini-btn" id="feud-pal-tab-barba">Barba Slots (Left)</button>
+            <button type="button" class="feud-mini-btn active" id="feud-pal-tab-z2">Zelda II Slots (Right)</button>
+          </div>
+          <div class="row">
+            <label for="feud-var-sel" style="min-width:68px;">Preview Var</label>
+            <select id="feud-var-sel">
+              <option value="0">Variation 1</option>
+              <option value="1">Variation 2</option>
+              <option value="2">Variation 3</option>
+              <option value="3">Variation 4</option>
+            </select>
+          </div>
+        </div>
+        <div class="feud-pal-slots" id="feud-pal-slots"></div>
+        <div class="feud-picker hidden" id="feud-nes-picker"></div>
+      </section>
+
+      <section class="top-box" aria-label="Family Feud Cast Controls">
+        <div class="row">
+          <label for="feud-filter-pool" style="min-width:42px;">Pool</label>
+          <select id="feud-filter-pool">
+            <option value="all">All Cast (46)</option>
+            <option value="barba">Barba Cast — Left (13)</option>
+            <option value="z2">Zelda II Cast — Right (33)</option>
+          </select>
+          <label for="feud-filter-status" style="min-width:52px;">Status</label>
+          <select id="feud-filter-status">
+            <option value="all">All</option>
+            <option value="included">Included Only</option>
+            <option value="excluded">Excluded Only</option>
+          </select>
+          <label for="feud-filter-type" style="min-width:42px;">Type</label>
+          <select id="feud-filter-type">
+            <option value="all">All Types</option>
+            <option value="full">Full Sprite</option>
+            <option value="top_half">Top Half (Behind Table)</option>
+          </select>
+          <label for="feud-bg" style="min-width:42px;">Backdrop</label>
+          <select id="feud-bg">
+            <option value="stage">Stage Wall ($16)</option>
+            <option value="dark">Dark (#0d1017)</option>
+            <option value="checker">Checkerboard</option>
+          </select>
+          <label for="feud-zoom" style="min-width:42px;">Zoom</label>
+          <select id="feud-zoom">
+            <option value="2">2x</option>
+            <option value="3" selected>3x</option>
+            <option value="4">4x</option>
+          </select>
+        </div>
+        <div class="row">
+          <span class="subtitle" style="margin:0;">Save downloaded JSON to <code>assets/feud_cast.json</code>, then rebuild (<code>python tools/pack_feud.py</code> or <code>python tools/build.py</code>).</span>
+          <div style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;">
+            <button id="feud-include-all" type="button">Include All</button>
+            <button id="feud-reset" type="button">Reset</button>
+            <button id="feud-copy" type="button">Copy feud_cast.json</button>
+            <button id="feud-download" class="primary" type="button">Download feud_cast.json</button>
+          </div>
+        </div>
+        <div class="stats" id="feud-stats"></div>
+        <div class="toast" id="feud-toast" role="status" aria-live="polite"></div>
+      </section>
+
+      <section class="feud-grid" id="feud-grid"></section>
+    </div>
+
+    <div id="view-duck" class="hidden">
+      <div class="tab-bar" id="duck-subtabs" style="margin-bottom:10px;">
+        <button type="button" class="tab-btn active" data-duck-tab="all">All Sprites</button>
+        <button type="button" class="tab-btn" data-duck-tab="barba">Barba &amp; Hero/UI</button>
+        <button type="button" class="tab-btn" data-duck-tab="dh_enemies">Duck Hunt Enemies (Ported)</button>
+        <button type="button" class="tab-btn" data-duck-tab="z2_ref">Z2 Reference &amp; Bosses</button>
+      </div>
+      <section class="top-box" aria-label="Barba's Hunt Tile Controls">
+        <div class="row">
+          <label for="duck-cat" style="min-width:64px;">Category</label>
+          <select id="duck-cat">
+            <option value="all">All Sprites (29)</option>
+            <option value="villager">Flying Enemies (16)</option>
+            <option value="clay">Clay Targets (2)</option>
+            <option value="barba">Barba Poses (8)</option>
+            <option value="link">Villainous Link (1)</option>
+            <option value="shared">Shared R0 (2)</option>
+          </select>
+          <label for="duck-tag-filter" style="min-width:42px;">Tag</label>
+          <select id="duck-tag-filter">
+            <option value="all">All</option>
+            <option value="flagged">Flagged Issues Only</option>
+            <option value="ok">OK Only</option>
+            <option value="inspect_chr">Inspect CHR</option>
+            <option value="top_half_only">Is Top Half Only</option>
+            <option value="needs_bottom_half">Needs Bottom Half</option>
+            <option value="wrong_tiles">Wrong Source Tiles</option>
+            <option value="wrong_pal">Wrong Palette</option>
+            <option value="misaligned">Misaligned / Clipped</option>
+            <option value="duplicate">Duplicate / Nix</option>
+          </select>
+          <label for="duck-bg" style="min-width:64px;">Backdrop</label>
+          <select id="duck-bg">
+            <option value="sky">Sky ($21)</option>
+            <option value="forest">Forest ($0F)</option>
+            <option value="dark">Dark (#0d1017)</option>
+            <option value="checker">Checkerboard</option>
+          </select>
+          <label for="duck-zoom" style="min-width:42px;">Zoom</label>
+          <select id="duck-zoom">
+            <option value="2">2x</option>
+            <option value="3">3x</option>
+            <option value="4" selected>4x</option>
+            <option value="6">6x</option>
+          </select>
+          <label for="duck-anim" style="min-width:48px;">Frame</label>
+          <select id="duck-anim">
+            <option value="0">Frame 0</option>
+            <option value="1">Frame 1</option>
+            <option value="animate" selected>Animate (2 Hz)</option>
+          </select>
+          <label style="display:flex;align-items:center;gap:6px;min-width:auto;cursor:pointer;">
+            <input type="checkbox" id="duck-grid" checked> 8x8 Grid &amp; Tile IDs
+          </label>
+          <div style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;">
+            <button id="duck-reset-tags" type="button">Reset Tags</button>
+            <button id="duck-copy-tags" class="primary" type="button">Copy Flagged JSON</button>
+          </div>
+        </div>
+        <div class="stats" id="duck-stats"></div>
+        <div class="toast" id="duck-toast" role="status" aria-live="polite"></div>
+      </section>
+
+      <section class="duck-grid" id="duck-sprite-grid"></section>
+
+      <section class="feud-pal-panel" style="margin-top:16px;">
+        <div class="row" style="justify-content:space-between;">
+          <strong style="color:var(--gold);font-size:0.95rem;">Patched BG &amp; HUD Tile Diffs (Vanilla vs Patched vs Z2 Source)</strong>
+          <div class="row" style="margin:0;">
+            <label for="duck-bg-pal" style="min-width:56px;">Palette</label>
+            <select id="duck-bg-pal"></select>
+          </div>
+        </div>
+        <div class="duck-diff-grid" id="duck-bg-diffs"></div>
+      </section>
+
+      <section class="feud-pal-panel" id="duck-chr-panel" style="margin-top:16px;">
+        <div class="row">
+          <strong style="color:var(--gold);font-size:0.95rem;">CHR Bank Inspector</strong>
+          <label for="duck-bank-sel" style="min-width:42px;">Bank</label>
+          <select id="duck-bank-sel"></select>
+          <label for="duck-bank-pal" style="min-width:52px;">Palette</label>
+          <select id="duck-bank-pal"></select>
+          <label for="duck-bank-zoom" style="min-width:42px;">Zoom</label>
+          <select id="duck-bank-zoom">
+            <option value="2">2x</option>
+            <option value="3" selected>3x</option>
+            <option value="4">4x</option>
+          </select>
+        </div>
+        <div class="duck-chr-wrap">
+          <canvas id="duck-chr-canvas" class="duck-chr-canvas"></canvas>
+          <div class="duck-chr-zoom-box">
+            <div class="duck-meta" id="duck-chr-hover">Hover any tile to inspect its $ID</div>
+            <canvas id="duck-chr-zoom" width="64" height="64"></canvas>
+          </div>
+        </div>
+      </section>
+    </div>
+    <!-- DEV_VIEWS_END -->
+
+    <div id="view-titles" class="hidden">
+      <section class="top-box" aria-label="Title Screen Controls">
+        <div class="row">
+          <strong style="color:var(--gold);">Done Title Screens:</strong>
+          <div id="titles-done-strip" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+        </div>
+        <div class="row">
+          <strong style="color:var(--text);">Title Screens (Vanilla vs. Our Version)</strong>
+          <label for="titles-zoom" style="min-width:42px;margin-left:8px;">Zoom</label>
+          <select id="titles-zoom">
+            <option value="1">1x (256px)</option>
+            <option value="2" selected>2x (512px)</option>
+          </select>
+{{TITLES_EXPORT_ACTIONS}}
+        </div>
+        <div class="toast" id="titles-toast" role="status" aria-live="polite"></div>
+      </section>
+      <main class="grid" id="titles-list"></main>
+    </div>
+  </div>
+
+  <script>window.BARBA_DASHBOARD_FLAVOR = "{{FLAVOR}}";</script>
+  <script src="catalog.js"></script>
+  <script src="bps.js"></script>
+  <script src="title_review_data.js"></script>
+  <script src="title_review_ui.js"></script>
+{{DEV_SCRIPTS}}
+  <script>
+{{LOCAL_STATE_RENDER_JS}}
+    const catalog = window.BARBA_FE_CATALOG;
+    const state = { values: {}, seed: 'BARBA2026', filter: 'all', preset: 'barba' };
+    const byId = Object.fromEntries(catalog.flags.map(f => [f.id, f]));
+    const byCode = Object.fromEntries(catalog.flags.map(f => [f.code, f]));
+
+    function setToast(msg) {
+      document.getElementById('toast').textContent = msg;
+    }
+
+    const activeCanvases = [];
+    const imgCache = new Map();
+    const canvasObserver = ('IntersectionObserver' in window)
+      ? new IntersectionObserver(entries => {
+          for (const entry of entries) entry.target._vis = entry.isIntersecting;
+        }, { rootMargin: '150px' })
+      : null;
+
+    function loadStripImage(src) {
+      if (!imgCache.has(src)) {
+        const img = new Image();
+        img.src = src;
+        imgCache.set(src, img);
+      }
+      return imgCache.get(src);
+    }
+
+    function spriteEl(src, w, h, frames = 4, fps = 6, displayW = null) {
+      const targetW = displayW || (w >= 200 ? 220 : Math.round(w * 2));
+      const targetH = Math.round(h * (targetW / w));
+      const cv = document.createElement('canvas');
+      cv.className = 'nes-canvas';
+      cv.width = targetW;
+      cv.height = targetH;
+      cv._vis = !canvasObserver;
+      if (canvasObserver) canvasObserver.observe(cv);
+      const ctx = cv.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      activeCanvases.push({ cv, ctx, src, img: null, w, h, frames, fps, idx: 0, drawnIdx: -1, acc: 0 });
+      return cv;
+    }
+
+    let lastTick = performance.now();
+    let tickRaf = 0;
+    function ensureTicking() {
+      const feView = document.getElementById('view-fe');
+      if (tickRaf || document.hidden || (feView && feView.classList.contains('hidden'))) return;
+      lastTick = performance.now();
+      tickRaf = requestAnimationFrame(tickCanvases);
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) ensureTicking();
+    });
+
+    function tickCanvases(now) {
+      tickRaf = 0;
+      const feView = document.getElementById('view-fe');
+      if (document.hidden || (feView && feView.classList.contains('hidden'))) return;
+      const dt = Math.min(0.1, (now - lastTick) / 1000);
+      lastTick = now;
+      for (let i = activeCanvases.length - 1; i >= 0; i--) {
+        const item = activeCanvases[i];
+        if (!item.cv.isConnected) {
+          if (canvasObserver) canvasObserver.unobserve(item.cv);
+          activeCanvases.splice(i, 1);
+          continue;
+        }
+        const visible = item.cv._vis !== false;
+        if (!visible) continue;
+        if (!item.img) item.img = loadStripImage(item.src);
+        if (!item.img.complete || item.img.naturalWidth === 0) continue;
+        if (item.frames > 1) {
+          item.acc += dt;
+          const step = 1 / item.fps;
+          if (item.acc >= step) {
+            item.idx = (item.idx + Math.floor(item.acc / step)) % item.frames;
+            item.acc %= step;
+          }
+        }
+        if (item.idx === item.drawnIdx) continue;
+        item.drawnIdx = item.idx;
+        const ctx = item.ctx;
+        ctx.imageSmoothingEnabled = false;
+        ctx.clearRect(0, 0, item.cv.width, item.cv.height);
+        const cols = Math.max(1, Math.floor(item.img.naturalWidth / item.w));
+        const sx = (item.idx % cols) * item.w;
+        const sy = Math.floor(item.idx / cols) * item.h;
+        ctx.drawImage(item.img, sx, sy, item.w, item.h, 0, 0, item.cv.width, item.cv.height);
+      }
+      tickRaf = requestAnimationFrame(tickCanvases);
+    }
+    ensureTicking();
+
+    function applyPreset(name) {
+      state.preset = name;
+      state.values = { ...catalog.presets[name].values };
+      resolveDeps();
+      render();
+      setToast(`Loaded preset: ${name}`);
+    }
+
+    function resolveDeps() {
+      const barbaOn = Boolean(state.values.barba_protagonist);
+      for (const f of catalog.flags) {
+        if (f.coupled) state.values[f.id] = barbaOn;
+      }
+      let changed = true;
+      const disabled = [];
+      while (changed) {
+        changed = false;
+        for (const f of catalog.flags) {
+          if (f.type === 'bool' && state.values[f.id]) {
+            const missing = f.requires.filter(r => !state.values[r]);
+            if (missing.length) {
+              state.values[f.id] = false;
+              changed = true;
+              disabled.push(f.label);
+            }
+          }
+        }
+      }
+      if (disabled.length) setToast(`Auto-disabled due to missing prerequisite: ${disabled.join(', ')}`);
+    }
+
+    function encodeFlagstring() {
+      const parts = [];
+      for (const f of catalog.flags) {
+        const val = state.values[f.id];
+        if (f.type === 'bool' && val) parts.push(f.code);
+        else if (f.type === 'int') parts.push(`${f.code}${val}`);
+        else if (f.type === 'enum') parts.push(`${f.code}${f.options.indexOf(val)}`);
+      }
+      return `BFE1|${parts.join(' ')}#${state.seed}`;
+    }
+
+    function decodeFlagstring(str) {
+      const trimmed = str.trim();
+      const hashIdx = trimmed.lastIndexOf('#');
+      const body = hashIdx >= 0 ? trimmed.slice(0, hashIdx) : trimmed;
+      const seed = hashIdx >= 0 ? trimmed.slice(hashIdx + 1) : state.seed;
+      if (!body.startsWith('BFE1|')) throw new Error('Flagstring must start with BFE1|');
+      const next = { ...catalog.presets.vanilla.values };
+      for (const tok of body.slice(5).split(/\s+/).filter(Boolean)) {
+        const f = byCode[tok.slice(0, 2)];
+        if (!f) throw new Error(`Unknown flag code: ${tok.slice(0, 2)}`);
+        const rest = tok.slice(2);
+        if (f.type === 'bool') next[f.id] = true;
+        else if (f.type === 'int') next[f.id] = Math.max(f.min, Math.min(f.max, parseInt(rest, 10) || 0));
+        else if (f.type === 'enum') next[f.id] = f.options[parseInt(rest, 10)] || f.vanilla;
+      }
+      state.values = next;
+      state.seed = seed || 'BARBA2026';
+      state.preset = 'custom';
+      resolveDeps();
+      render();
+      setToast('Applied flagstring.');
+    }
+
+    function badgeFor(f) {
+      if (f.coupled) return '<span class="badge b-coupled">Coupled to Barba</span>';
+      if (f.status === 'toggleable') return '<span class="badge b-toggleable">Toggleable Now</span>';
+      if (f.status === 'built') return '<span class="badge b-built">Built (Barba)</span>';
+      return '<span class="badge b-planned">Unbuilt / Planned</span>';
+    }
+
+    function renderLiveStage() {
+      const stage = document.getElementById('live-stage');
+      stage.innerHTML = '';
+
+      const heroSrc = state.values.barba_protagonist ? 'previews/cap_barba_grass_attack.png' : 'previews/cap_vanilla_grass_attack.png';
+      const heroLabel = state.values.barba_protagonist ? `Barba (${state.values.volley_count}-Shot Volley)` : 'Link (Sword Slash)';
+
+      const sariaSrc = state.values.saria_foul_water ? 'previews/cap_barba_saria_town.png' : 'previews/cap_vanilla_saria_town.png';
+      const sariaLabel = state.values.saria_foul_water ? 'Saria Foul Water' : 'Vanilla Blue Water';
+
+      const goSrc = state.values.game_over_portrait ? 'previews/cap_barba_game_over.png' : 'previews/cap_vanilla_game_over.png';
+      const goLabel = state.values.game_over_portrait ? 'Barba Link' : 'Vanilla Ganon';
+
+      const slots = [
+        { title: 'Protagonist & Attack', label: heroLabel, src: heroSrc, w: 256, h: 176, frames: 84, fps: 20, dw: 360 },
+        { title: 'Saria Water', label: sariaLabel, src: sariaSrc, w: 256, h: 176, frames: 64, fps: 20, dw: 360 },
+        { title: 'Game Over', label: goLabel, src: goSrc, w: 256, h: 176, frames: 64, fps: 15, dw: 360 },
+      ];
+
+      for (const s of slots) {
+        const box = document.createElement('div');
+        box.className = 'stage-slot';
+        box.innerHTML = `<span>${s.title}</span>`;
+        box.appendChild(spriteEl(s.src, s.w, s.h, s.frames, s.fps, s.dw));
+        const lbl = document.createElement('strong');
+        lbl.textContent = s.label;
+        box.appendChild(lbl);
+        stage.appendChild(box);
+      }
+    }
+
+    let activeAudio = null;
+    function playWav(src, rate = 1.0) {
+      if (activeAudio) { activeAudio.pause(); activeAudio = null; }
+      activeAudio = new Audio(src);
+      activeAudio.playbackRate = rate;
+      activeAudio.preservesPitch = false;
+      activeAudio.play().catch(err => setToast(`Audio error: ${err.message}`));
+    }
+
+    function playNoiseRoar(rate = 1.0) {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      const ctx = new Ctx();
+      const dur = 0.75 / rate;
+      const buf = ctx.createBuffer(1, Math.max(1, Math.floor(ctx.sampleRate * dur)), ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(950 * rate, ctx.currentTime);
+      filter.frequency.exponentialRampToValueAtTime(180 * rate, ctx.currentTime + dur);
+      src.connect(filter).connect(ctx.destination);
+      src.start();
+    }
+
+    function buildAudioNode(f, isEnabled) {
+      const a = f.audio;
+      if (!a) return null;
+      const bar = document.createElement('div');
+      bar.className = 'audio-bar';
+      let pitchRate = 1.0;
+
+      const offBtn = document.createElement('button');
+      offBtn.type = 'button';
+      offBtn.className = 'audio-btn' + (!isEnabled ? ' is-active' : '');
+      offBtn.textContent = `▶ ${a.off_label}`;
+      offBtn.onclick = () => (a.off_wav ? playWav(a.off_wav, pitchRate) : playNoiseRoar(pitchRate));
+      bar.appendChild(offBtn);
+
+      const onBtn = document.createElement('button');
+      onBtn.type = 'button';
+      onBtn.className = 'audio-btn' + (isEnabled ? ' is-active' : '');
+      onBtn.textContent = `▶ ${a.on_label}`;
+      onBtn.onclick = () => playWav(a.on_wav, pitchRate);
+      bar.appendChild(onBtn);
+
+      if (a.pitch_control) {
+        const wrap = document.createElement('label');
+        wrap.className = 'pitch-wrap';
+        const valSpan = document.createElement('span');
+        valSpan.textContent = '1.00x';
+        const slider = document.createElement('input');
+        slider.type = 'range';
+        slider.min = '0.60';
+        slider.max = '1.60';
+        slider.step = '0.05';
+        slider.value = '1.00';
+        slider.oninput = () => {
+          pitchRate = Number(slider.value);
+          valSpan.textContent = `${pitchRate.toFixed(2)}x`;
+        };
+        wrap.append('Pitch:', slider, valSpan);
+        bar.appendChild(wrap);
+      }
+      return bar;
+    }
+
+    function buildPreviewNode(f, isEnabled, missingReq) {
+      const p = f.preview;
+      if (!p) return null;
+      const fps = p.fps || 6;
+
+      if (p.off) {
+        const wrap = document.createElement('div');
+        wrap.className = 'preview-compare';
+
+        const makeChoice = (active, src, w, h, label, targetVal) => {
+          const tile = document.createElement('div');
+          tile.className = 'choice-tile ' + (active ? 'is-selected' : 'is-dimmed');
+          const dw = w >= 200 ? 512 : (w >= 100 ? 384 : Math.round(w * 4));
+          tile.appendChild(spriteEl(src, w, h, p.frames || 4, fps, dw));
+          const lbl = document.createElement('div');
+          lbl.className = 'choice-label';
+          lbl.innerHTML = `${label} ${active ? '<span class="pill-on">Active</span>' : ''}`;
+          tile.appendChild(lbl);
+          tile.onclick = () => {
+            if (missingReq.length || f.coupled) return;
+            state.preset = 'custom';
+            state.values[f.id] = targetVal;
+            resolveDeps();
+            render();
+          };
+          return tile;
+        };
+
+        wrap.appendChild(makeChoice(!isEnabled, p.off, p.off_w, p.off_h, p.off_label, false));
+        wrap.appendChild(makeChoice(isEnabled, p.on, p.on_w, p.on_h, p.on_label, true));
+        return wrap;
+      }
+
+      const single = document.createElement('div');
+      single.className = 'preview-single ' + (isEnabled ? 'is-active' : 'is-inactive');
+      const dw = p.on_w >= 200 ? 512 : Math.round(p.on_w * 3.5);
+      single.appendChild(spriteEl(p.on, p.on_w, p.on_h, p.frames || 4, fps, dw));
+      const cap = document.createElement('div');
+      cap.className = 'choice-label';
+      cap.innerHTML = `${p.on_label} ${isEnabled ? '<span class="pill-on">On</span>' : ''}`;
+      single.appendChild(cap);
+      return single;
+    }
+
+    function render() {
+      const presetBar = document.getElementById('presets');
+      presetBar.innerHTML = '';
+      for (const [id, label] of [['vanilla', 'Vanilla Z2'], ['barba', 'Barba Mode'], ['barba_lite', 'Barba Lite'], ['chaos', 'Chaos Seed']]) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = label;
+        if (state.preset === id) btn.classList.add('active');
+        btn.onclick = () => applyPreset(id);
+        presetBar.appendChild(btn);
+      }
+
+      renderLiveStage();
+
+      document.getElementById('seed-input').value = state.seed;
+      const fs = encodeFlagstring();
+      document.getElementById('flagstring').value = fs;
+      const cliEl = document.getElementById('cli-cmd');
+      if (cliEl) cliEl.value = `python tools/fe_catalog.py --flags "${fs}" --build`;
+
+      const counts = { toggleable: 0, built: 0, planned: 0, enabled: 0 };
+      for (const f of catalog.flags) {
+        counts[f.status]++;
+        if (f.type === 'bool' ? state.values[f.id] : state.values[f.id] !== f.vanilla) counts.enabled++;
+      }
+      document.getElementById('stats').innerHTML =
+        `<span>Active vs Vanilla: <strong>${counts.enabled}/${catalog.flags.length}</strong></span>` +
+        `<span>Toggleable Now: <strong>${counts.toggleable}</strong></span>` +
+        `<span>Built (Bundled): <strong>${counts.built}</strong></span>` +
+        `<span>Unbuilt / Planned: <strong>${counts.planned}</strong></span>`;
+
+      const container = document.getElementById('categories');
+      container.innerHTML = '';
+      for (const cat of catalog.categories) {
+        const items = catalog.flags.filter(f => f.category === cat.id).filter(f => {
+          if (state.filter === 'ready') return f.status !== 'planned';
+          if (state.filter === 'planned') return f.status === 'planned';
+          return true;
+        });
+        if (!items.length) continue;
+        const card = document.createElement('section');
+        card.className = 'card';
+        card.innerHTML = `<h2>${cat.title}</h2>`;
+        for (const f of items) {
+          const item = document.createElement('div');
+          item.className = 'flag-item' + (f.status === 'planned' ? ' is-planned' : '');
+          const missingReq = f.requires.filter(r => !state.values[r]);
+          const isLocked = Boolean(f.coupled) || missingReq.length > 0;
+          const controlId = `ctrl-${f.id}`;
+          let controlHtml = '';
+          if (f.type === 'bool') {
+            controlHtml = `<input id="${controlId}" type="checkbox" ${state.values[f.id] ? 'checked' : ''} ${isLocked ? 'disabled' : ''}>`;
+          } else if (f.type === 'int') {
+            controlHtml = `<input id="${controlId}" type="number" min="${f.min}" max="${f.max}" value="${state.values[f.id]}" style="width:68px" ${isLocked ? 'disabled' : ''}>`;
+          } else {
+            const opts = f.options.map(o => `<option value="${o}" ${state.values[f.id] === o ? 'selected' : ''}>${o}</option>`).join('');
+            controlHtml = `<select id="${controlId}" ${isLocked ? 'disabled' : ''}>${opts}</select>`;
+          }
+          item.innerHTML = `
+            <div class="flag-head">
+              <label class="flag-title" for="${controlId}">${controlHtml} <span>${f.label}</span></label>
+              ${badgeFor(f)}
+            </div>
+            <div class="flag-desc">${f.description}</div>
+            ${f.coupled ? `<div class="flag-req">Coupled to Barba Mode — switches automatically with Barba Mode.</div>` : (missingReq.length ? `<div class="flag-req">Requires: ${missingReq.map(r => byId[r].label).join(', ')}</div>` : '')}
+          `;
+          const isEnabled = f.type === 'bool' ? Boolean(state.values[f.id]) : state.values[f.id] !== f.vanilla;
+          const previewNode = buildPreviewNode(f, isEnabled, missingReq);
+          if (previewNode) item.appendChild(previewNode);
+          const audioNode = buildAudioNode(f, isEnabled);
+          if (audioNode) item.appendChild(audioNode);
+          card.appendChild(item);
+
+          const ctrl = item.querySelector(`#${controlId}`);
+          ctrl.onchange = () => {
+            state.preset = 'custom';
+            state.values[f.id] = f.type === 'bool' ? ctrl.checked : (f.type === 'int' ? Number(ctrl.value) : ctrl.value);
+            resolveDeps();
+            render();
+          };
+        }
+        container.appendChild(card);
+      }
+    }
+
+    document.getElementById('seed-input').oninput = e => {
+      state.seed = e.target.value.trim() || 'BARBA2026';
+      render();
+    };
+    document.getElementById('roll-seed').onclick = () => {
+      state.seed = Math.random().toString(36).slice(2, 10).toUpperCase();
+      render();
+      setToast(`Rolled seed: ${state.seed}`);
+    };
+    document.getElementById('apply-flagstring').onclick = () => {
+      try { decodeFlagstring(document.getElementById('flagstring').value); }
+      catch (err) { setToast(err.message); }
+    };
+    document.getElementById('copy-flagstring').onclick = () => {
+      navigator.clipboard?.writeText(document.getElementById('flagstring').value);
+      setToast('Copied flagstring to clipboard.');
+    };
+    document.getElementById('copy-cli')?.addEventListener('click', () => {
+      navigator.clipboard?.writeText(document.getElementById('cli-cmd').value);
+      setToast('Copied CLI command to clipboard.');
+    });
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.onclick = () => {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.filter = btn.dataset.filter;
+        render();
+      };
+    });
+
+    applyPreset('barba');
+
+    // Tab switching
+    const switchTab = tab => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+      for (const id of ['fe', 'patcher', 'waldo', 'feud', 'duck', 'titles']) {
+        document.getElementById(`view-${id}`)?.classList.toggle('hidden', tab !== id);
+      }
+      if (tab === 'fe') {
+        ensureTicking();
+      } else {
+        imgCache.clear();
+        for (const item of activeCanvases) {
+          item.img = null;
+          item.drawnIdx = -1;
+        }
+      }
+      window.dispatchEvent(new CustomEvent('barba:tab', { detail: { tab } }));
+    };
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.onclick = () => switchTab(btn.dataset.tab);
+    });
+    const reqTab = new URLSearchParams(location.search).get('tab') || location.hash.replace('#', '');
+    if (document.getElementById(`view-${reqTab}`)) switchTab(reqTab);
+
+    // Client-side BPS ROM Patcher
+    (() => {
+      const bps = window.BARBA_BPS;
+      if (!bps) return;
+      let romBytes = null;
+      let patchBytes = null;
+      const romInput = document.getElementById('bps-rom-file');
+      const patchInput = document.getElementById('bps-patch-file');
+      const romStatus = document.getElementById('bps-rom-status');
+      const patchStatus = document.getElementById('bps-patch-status');
+      const applyBtn = document.getElementById('bps-apply-btn');
+      const outStatus = document.getElementById('bps-out-status');
+
+      const updateReady = () => {
+        applyBtn.disabled = !(romBytes && patchBytes);
+      };
+
+      romInput.onchange = async () => {
+        const file = romInput.files[0];
+        if (!file) { romBytes = null; romStatus.textContent = 'Select clean Zelda II (.nes)'; updateReady(); return; }
+        romBytes = new Uint8Array(await file.arrayBuffer());
+        const crc = bps.crc32(romBytes).toString(16).padStart(8, '0');
+        const sha = await bps.sha256Hex(romBytes);
+        const shaMatch = sha ? (sha === bps.Z2_SOURCE_SHA256 ? 'SHA-256 OK' : 'SHA-256 differs') : 'CRC32 only';
+        romStatus.textContent = `${file.name} (${romBytes.length.toLocaleString()} B, CRC32 ${crc}, ${shaMatch})`;
+        romStatus.style.color = (sha === null || sha === bps.Z2_SOURCE_SHA256) ? 'var(--green)' : 'var(--amber)';
+        updateReady();
+      };
+
+      patchInput.onchange = async () => {
+        const file = patchInput.files[0];
+        if (!file) { patchBytes = null; patchStatus.textContent = 'Select barba.bps'; updateReady(); return; }
+        patchBytes = new Uint8Array(await file.arrayBuffer());
+        try {
+          const hdr = bps.parseBpsHeader(patchBytes);
+          patchStatus.textContent = `${file.name} -> ${hdr.targetSize.toLocaleString()} B${hdr.metadata ? ` (${hdr.metadata})` : ''}`;
+          patchStatus.style.color = 'var(--green)';
+        } catch (err) {
+          patchBytes = null;
+          patchStatus.textContent = err.message;
+          patchStatus.style.color = 'var(--ember)';
+        }
+        updateReady();
+      };
+
+      applyBtn.onclick = () => {
+        if (!romBytes || !patchBytes) return;
+        try {
+          const res = bps.applyBps(romBytes, patchBytes);
+          const blob = new Blob([res.target], { type: 'application/octet-stream' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'barba.nes';
+          a.click();
+          outStatus.textContent = `Patched! ${res.targetSize.toLocaleString()} B, CRC32 ${res.targetCrc.toString(16).padStart(8, '0')}`;
+          outStatus.style.color = 'var(--green)';
+        } catch (err) {
+          outStatus.textContent = `Error: ${err.message}`;
+          outStatus.style.color = 'var(--ember)';
+        }
+      };
+    })();
+
+    // DEV_WALDO_JS_START
+    // Where's Barba? Tile State Tagger
+    const waldoData = window.WALDO_TAGGER_DATA;
+    if (waldoData) {
+      const initialStates = waldoData.descriptors.map(d => d.state);
+      const lvlSel = document.getElementById('waldo-level');
+      for (const lv of waldoData.levels) {
+        const opt = document.createElement('option');
+        opt.value = lv.bank;
+        opt.textContent = lv.name;
+        lvlSel.appendChild(opt);
+      }
+
+      const setWaldoToast = msg => { document.getElementById('waldo-toast').textContent = msg; };
+
+      const exportCrowdJson = () => {
+        const flee = [];
+        const hide = [];
+        for (const d of waldoData.descriptors) {
+          if (d.state === 'flee') flee.push([d.bank, d.band, d.idx]);
+          else if (d.state === 'hide') hide.push([d.bank, d.band, d.idx]);
+        }
+        return JSON.stringify({ flee, hide });
+      };
+
+      const renderWaldo = () => {
+        const bank = Number(lvlSel.value);
+        const bandFilter = document.getElementById('waldo-band').value;
+        const stateFilter = document.getElementById('waldo-state').value;
+        const levelItems = waldoData.descriptors.filter(d => d.bank === bank);
+        const counts = { flee: 0, static: 0, hide: 0, scrap: 0 };
+        for (const d of levelItems) counts[d.state]++;
+        document.getElementById('waldo-stats').innerHTML =
+          `<span>Level Total: <strong>${levelItems.length}</strong></span>` +
+          `<span>Flee: <strong>${counts.flee}</strong></span>` +
+          `<span>Static: <strong>${counts.static}</strong></span>` +
+          `<span>Hide: <strong>${counts.hide}</strong></span>` +
+          `<span>1x1 Scrap: <strong>${counts.scrap}</strong></span>`;
+
+        const filtered = levelItems.filter(d =>
+          (bandFilter === 'all' || d.band === Number(bandFilter)) &&
+          (stateFilter === 'all' || d.state === stateFilter)
+        );
+
+        const grid = document.getElementById('waldo-grid');
+        grid.innerHTML = '';
+        const scale = 2;
+        for (const d of filtered) {
+          const card = document.createElement('div');
+          card.className = `waldo-card st-${d.state}`;
+
+          const wrap = document.createElement('div');
+          wrap.className = 'waldo-sprite-wrap';
+          const spr = document.createElement('div');
+          spr.className = 'waldo-sprite';
+          spr.style.width = `${d.pw * scale}px`;
+          spr.style.height = `${d.ph * scale}px`;
+          spr.style.backgroundImage = "url('previews/waldo_atlas.png')";
+          spr.style.backgroundSize = `${waldoData.atlas_w * scale}px ${waldoData.atlas_h * scale}px`;
+          spr.style.backgroundPosition = `-${d.ax * scale}px -${d.ay * scale}px`;
+          wrap.appendChild(spr);
+          card.appendChild(wrap);
+
+          const meta = document.createElement('div');
+          meta.className = 'waldo-meta';
+          meta.textContent = `[${d.bank},${d.band},${d.idx}] ${d.w}x${d.h}`;
+          card.appendChild(meta);
+
+          if (d.state === 'scrap') {
+            const note = document.createElement('div');
+            note.className = 'waldo-meta';
+            note.textContent = '1x1 auto-scrap';
+            card.appendChild(note);
+          } else {
+            const pills = document.createElement('div');
+            pills.className = 'waldo-pills';
+            for (const st of ['flee', 'static', 'hide']) {
+              const btn = document.createElement('button');
+              btn.type = 'button';
+              btn.textContent = st;
+              if (d.state === st) btn.className = `sel-${st}`;
+              btn.onclick = e => {
+                e.stopPropagation();
+                d.state = st;
+                renderWaldo();
+              };
+              pills.appendChild(btn);
+            }
+            card.appendChild(pills);
+            card.onclick = () => {
+              const order = ['flee', 'static', 'hide'];
+              d.state = order[(order.indexOf(d.state) + 1) % order.length];
+              renderWaldo();
+            };
+          }
+          grid.appendChild(card);
+        }
+      };
+
+      lvlSel.onchange = renderWaldo;
+      document.getElementById('waldo-band').onchange = renderWaldo;
+      document.getElementById('waldo-state').onchange = renderWaldo;
+      document.getElementById('waldo-reset').onclick = () => {
+        waldoData.descriptors.forEach((d, i) => { d.state = initialStates[i]; });
+        renderWaldo();
+        setWaldoToast('Reset to assets/waldo_crowd.json');
+      };
+      document.getElementById('waldo-copy').onclick = () => {
+        navigator.clipboard?.writeText(exportCrowdJson());
+        setWaldoToast('Copied waldo_crowd.json to clipboard.');
+      };
+      document.getElementById('waldo-download').onclick = () => {
+        const blob = new Blob([exportCrowdJson()], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'waldo_crowd.json';
+        a.click();
+        setWaldoToast('Downloaded waldo_crowd.json');
+      };
+      renderWaldo();
+    }
+    // DEV_WALDO_JS_END
+  </script>
+</body>
+</html>

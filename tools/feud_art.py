@@ -773,6 +773,39 @@ def _write_rle_screen_inplace(
         chr_buf[pos + len(rle) : pos + max_len] = b'\x00' * (max_len - len(rle))
 
 
+def apply_title_build_number(prg_buf: bytearray, chr_buf: bytearray, build_number: int) -> None:
+    """Write 5x7 digits '0'..'9' into empty Bank 0B tiles $B6..$BF and stamp B<N> on Screen 0 row 1 col 26."""
+    s0 = _decode_rle_screen(prg_buf, chr_buf, 0)
+    digit_rows = {
+        '0': ['..####..','.##..##.','.##.###.','.######.','.##..##.','.##..##.','..####..','........'],
+        '1': ['...##...','..###...','...##...','...##...','...##...','...##...','.######.','........'],
+        '2': ['..####..','.##..##.','.....##.','..####..','.##.....','.##.....','.######.','........'],
+        '3': ['..####..','.##..##.','.....##.','...###..','.....##.','.##..##.','..####..','........'],
+        '4': ['....##..','...###..','..####..','.##.##..','.######.','....##..','....##..','........'],
+        '5': ['.######.','.##.....','.#####..','.....##.','.....##.','.##..##.','..####..','........'],
+        '6': ['..####..','.##.....','.#####..','.##..##.','.##..##.','.##..##.','..####..','........'],
+        '7': ['.######.','.....##.','....##..','...##...','..##....','..##....','..##....','........'],
+        '8': ['..####..','.##..##.','.##..##.','..####..','.##..##.','.##..##.','..####..','........'],
+        '9': ['..####..','.##..##.','.##..##.','..#####.','.....##.','....##..','..###...','........'],
+    }
+    for d_idx in range(10):
+        tid = 0xB6 + d_idx
+        off = 0x0B000 + tid * 16
+        assert chr_buf[off : off + 16] == b'\x00' * 16, f'Feud Bank 0B tile ${tid:02X} not empty'
+        chr_buf[off : off + 16] = encode_tile([r.replace('#', '3').replace('.', '0') for r in digit_rows[str(d_idx)]])
+    tag = [0x13 if ch == 'B' else 0xB6 + int(ch) for ch in f'B{build_number}']
+    assert all(v == 0 for v in s0[1 * 32 + 26 : 1 * 32 + 26 + len(tag)])
+    s0[1 * 32 + 26 : 1 * 32 + 26 + len(tag)] = tag
+    rle = _encode_rle_screen(s0)
+    # Relocate Screen 0 RLE to unused 0x0EE00 in CHR bank 0E and update Screen 0 pointer ($A411..$A412).
+    reloc = 0x0EE00
+    assert len(rle) <= 0x120 and chr_buf[reloc : reloc + len(rle)] == b'\x00' * len(rle)
+    chr_buf[reloc : reloc + len(rle)] = rle
+    ptr_off = 0xA410 - 0x8000
+    prg_buf[ptr_off + 1] = reloc & 0xFF
+    prg_buf[ptr_off + 2] = ((reloc >> 12) << 4) | ((reloc >> 8) & 0x0F)
+
+
 def apply_barba_branding(prg_buf: bytearray, chr_buf: bytearray) -> None:
     """Replace remaining 'FAMILY FEUD' text/plaques and 'FF' podium emblems with 'BARBA'S BEEF' / 'BB'."""
     # 1. Bank 0B text screens: Screen 0 (credits), Screen 5 (1P/2P menu), Screen 11 (win account)
@@ -1018,10 +1051,191 @@ def apply_barba_branding(prg_buf: bytearray, chr_buf: bytearray) -> None:
         chr_buf[off : off + 16] = encode_tile(rows)
 
 
-def apply_barba_cast(prg_buf: bytearray, chr_buf: bytearray, z2_rom: bytes) -> dict[str, int]:
-    """Replace Family Feud's stage, overview, Face-Off, Fast Money, and Host people with Barba assets."""
+_STAGE_ROUND_GLYPHS: dict[str, list[str]] = {
+    'C': [
+        '.####',
+        '#####',
+        '##...',
+        '##...',
+        '##...',
+        '##...',
+        '#####',
+        '.####',
+    ],
+    'D': [
+        '####.',
+        '#####',
+        '##.##',
+        '##.##',
+        '##.##',
+        '##.##',
+        '#####',
+        '####.',
+    ],
+    'E': [
+        '#####',
+        '#####',
+        '##...',
+        '####.',
+        '####.',
+        '##...',
+        '#####',
+        '#####',
+    ],
+    'F': [
+        '#####',
+        '#####',
+        '##...',
+        '####.',
+        '####.',
+        '##...',
+        '##...',
+        '##...',
+    ],
+    'H': [
+        '##.##',
+        '##.##',
+        '##.##',
+        '#####',
+        '#####',
+        '##.##',
+        '##.##',
+        '##.##',
+    ],
+    'I': [
+        '##',
+        '##',
+        '##',
+        '##',
+        '##',
+        '##',
+        '##',
+        '##',
+    ],
+    'N': [
+        '##.##',
+        '###.#',
+        '#####',
+        '#.###',
+        '#..##',
+        '#..##',
+        '#..##',
+        '#..##',
+    ],
+    'O': [
+        '.###.',
+        '#####',
+        '##.##',
+        '##.##',
+        '##.##',
+        '##.##',
+        '#####',
+        '.###.',
+    ],
+    'R': [
+        '####.',
+        '#####',
+        '##.##',
+        '####.',
+        '###..',
+        '##.#.',
+        '##.##',
+        '##.##',
+    ],
+    'S': [
+        '.####',
+        '#####',
+        '##...',
+        '####.',
+        '.####',
+        '...##',
+        '#####',
+        '####.',
+    ],
+    'T': [
+        '#####',
+        '#####',
+        '.##..',
+        '.##..',
+        '.##..',
+        '.##..',
+        '.##..',
+        '.##..',
+    ],
+    'U': [
+        '##.##',
+        '##.##',
+        '##.##',
+        '##.##',
+        '##.##',
+        '##.##',
+        '#####',
+        '.###.',
+    ],
+}
+
+
+def _build_stage_round_banner(title: str) -> list[str]:
+    """Render an 8x2 (64x16) Bank 0C sprite banner for Stage Overview rounds ('FIRST FEUD'..'FIFTH FEUD')."""
+    canvas = [['0'] * 64 for _ in range(16)]
+    word_gap = 3 if len(title) >= 11 else 4
+    total_w = 0
+    for idx, ch in enumerate(title):
+        if ch == ' ':
+            total_w += word_gap
+        else:
+            if idx > 0 and title[idx - 1] != ' ':
+                total_w += 1
+            total_w += len(_STAGE_ROUND_GLYPHS[ch][0])
+    assert total_w <= 64, f'Stage banner {title!r} too wide: {total_w}px'
+    ox = (64 - total_w) // 2
+    for idx, ch in enumerate(title):
+        if ch == ' ':
+            ox += word_gap
+            continue
+        if idx > 0 and title[idx - 1] != ' ':
+            ox += 1
+        glyph = _STAGE_ROUND_GLYPHS[ch]
+        for y, row in enumerate(glyph):
+            for x, px in enumerate(row):
+                if px == '#':
+                    canvas[y][ox + x] = '3'
+        ox += len(glyph[0])
+    return [''.join(r) for r in canvas]
+
+
+def _decode_local_grid(tiles: bytes, map_bytes: bytes, w: int, h: int) -> list[str]:
+    """Reconstruct an (8*h) x (8*w) character grid from 1-based local tile indices."""
+    grid = [['0'] * (w * 8) for _ in range(h * 8)]
+    for r in range(h):
+        for c in range(w):
+            tid = map_bytes[r * w + c]
+            if tid == 0:
+                continue
+            tile = decode_tile(tiles[(tid - 1) * 16 : tid * 16])
+            for y in range(8):
+                grid[r * 8 + y][c * 8 : (c + 1) * 8] = [str(p) for p in tile[y]]
+    return [''.join(row) for row in grid]
+
+
+def apply_barba_cast(
+    prg_buf: bytearray,
+    chr_buf: bytearray,
+    z2_rom: bytes,
+    *,
+    z2_opponents: bool = False,
+) -> dict[str, int]:
+    """Replace Family Feud's stage, overview, Face-Off, Fast Money, and Host people with Barba (and optional Z2 opponent) assets."""
     frames24 = make_frames(z2_rom, 24)
     frames16 = make_frames(z2_rom, 16)
+
+    z2_pool = None
+    z2_pal_slots: list[int] = []
+    if z2_opponents:
+        import feud_cast
+        cfg = feud_cast.load_cast_config()
+        _, z2_pool = feud_cast.build_all_cast_pools(z2_rom, cfg)
+        z2_pal_slots = list(feud_cast.get_runtime_cast_tables(cfg)['z2_pal_slots'])
 
     family_rosters = {
         0: [('std', True, 1), ('crouch', True, 3), ('up', True, 2), ('std', False, 0), ('tall', False, 1)],
@@ -1037,10 +1251,19 @@ def apply_barba_cast(prg_buf: bytearray, chr_buf: bytearray, z2_rom: bytes) -> d
         grids: dict[int, list[str]] = {}
         seat_pals: dict[int, int] = {}
         for seat, (kind, flp, pal_id) in enumerate(family_rosters[fam_id]):
-            seat_pals[seat] = pal_id
-            for f_i in range(5):
-                idx = base_idx + seat * 5 + f_i
-                grids[idx] = _build_portrait_4x6(frames24, kind, f_i, flp)
+            if z2_pool is not None and fam_id in (1, 2):
+                z_idx = ((fam_id - 1) * 5 + seat) % len(z2_pool)
+                seat_pals[seat] = z2_pal_slots[z_idx]
+                v = z2_pool[z_idx].variants[seat % 3]
+                st_frames = [_decode_local_grid(v.stage_tiles, v.stage_maps[f * 24 : (f + 1) * 24], 4, 6) for f in range(3)]
+                for f_i in range(5):
+                    idx = base_idx + seat * 5 + f_i
+                    grids[idx] = st_frames[(0, 1, 2, 1, 0)[f_i]]
+            else:
+                seat_pals[seat] = pal_id
+                for f_i in range(5):
+                    idx = base_idx + seat * 5 + f_i
+                    grids[idx] = _build_portrait_4x6(frames24, kind, f_i, flp)
         avail = list(range(0x04, 0x100))
         packed = _pack_bank(chr_buf, bank, avail, grids)
         stats[f'bank_{bank:02X}'] = len({t for ts in packed.values() for t in ts if t != 0})
@@ -1053,10 +1276,20 @@ def apply_barba_cast(prg_buf: bytearray, chr_buf: bytearray, z2_rom: bytes) -> d
     overview_grids: dict[int, list[str]] = {}
     for fam_id, base_idx in ((0, 123), (1, 133), (2, 143)):
         for seat, (kind, flp, _) in enumerate(family_rosters[fam_id]):
-            for f_i in range(2):
-                idx = base_idx + f_i * 5 + seat
-                overview_grids[idx] = _build_small_2x4(frames16, kind, f_i, flp)
-    avail_00 = [t for t in range(0x5B, 0xE1) if t != 0x37] + list(range(0xFB, 0x100))
+            if z2_pool is not None and fam_id in (1, 2):
+                z_idx = ((fam_id - 1) * 5 + seat) % len(z2_pool)
+                v = z2_pool[z_idx].variants[seat % 3]
+                for f_i in range(2):
+                    idx = base_idx + f_i * 5 + seat
+                    overview_grids[idx] = _decode_local_grid(v.ov_tiles, v.ov_maps[f_i * 8 : (f_i + 1) * 8], 2, 4)
+            else:
+                for f_i in range(2):
+                    idx = base_idx + f_i * 5 + seat
+                    overview_grids[idx] = _build_small_2x4(frames16, kind, f_i, flp)
+    avail_00 = [
+        t for t in range(0x5B, 0x100)
+        if t not in ({0x37, 0xC0, 0xC1, 0xCC} | set(range(0xD6, 0xFB)))
+    ]
     packed_00 = _pack_bank(chr_buf, 0x00, avail_00, overview_grids, row0_priority=True)
     stats['bank_00'] = len({t for ts in packed_00.values() for t in ts if t != 0})
     for idx, tids in packed_00.items():
@@ -1084,10 +1317,40 @@ def apply_barba_cast(prg_buf: bytearray, chr_buf: bytearray, z2_rom: bytes) -> d
         grids_fo: dict[int, list[str]] = {}
         attrs_fo: dict[int, list[list[int]]] = {}
         for seat, (_, _, pal_id) in enumerate(family_rosters[fam_id]):
-            tall_h = (70, 62, 72, 68, 70)[seat]
             og, oa = orig_grids[seat]
-            g0, a0 = _build_faceoff_contestant(frames24, og, oa, pal_id, 'closed', seat % 4, tall_h=tall_h)
-            g1, a1 = _build_faceoff_contestant(frames24, og, oa, pal_id, 'open', (seat + 1) % 4, tall_h=tall_h)
+            if z2_pool is not None and fam_id in (1, 2):
+                z_idx = ((fam_id - 1) * 5 + seat) % len(z2_pool)
+                z_pal = z2_pal_slots[z_idx]
+                v = z2_pool[z_idx].variants[seat % 3]
+                fo_pair = []
+                for f_i in range(2):
+                    upper = _decode_local_grid(v.fo_tiles, v.fo_maps[f_i * 60 : (f_i + 1) * 60], 6, 10)
+                    canvas = [list(row[4:36]) for row in upper] + [['0'] * 32 for _ in range(16)]
+                    attrs = [[z_pal] * 4 for _ in range(12)]
+                    for y in range(96):
+                        r = y // 8
+                        for x in range(32):
+                            c = x // 8
+                            is_podium = (r >= 6 and c <= 1 and og[y][x] != '0')
+                            is_buzzer = (r == 5 and c == 0 and x < 10 and y >= 42 and og[y][x] != '0')
+                            if is_podium or is_buzzer:
+                                canvas[y][x] = og[y][x]
+                                if r >= 6 and c <= 1:
+                                    attrs[r][c] = 0
+                                elif r == 5 and c == 0:
+                                    attrs[r][c] = oa[r][c]
+                            elif r >= 10 and c >= 2:
+                                canvas[y][x] = '2'
+                                attrs[r][c] = 0
+                            elif r >= 10 and c <= 1:
+                                attrs[r][c] = 0
+                    fo_pair.append(([''.join(row) for row in canvas], attrs))
+                g0, a0 = fo_pair[0]
+                g1, a1 = fo_pair[1]
+            else:
+                tall_h = (70, 62, 72, 68, 70)[seat]
+                g0, a0 = _build_faceoff_contestant(frames24, og, oa, pal_id, 'closed', seat % 4, tall_h=tall_h)
+                g1, a1 = _build_faceoff_contestant(frames24, og, oa, pal_id, 'open', (seat + 1) % 4, tall_h=tall_h)
             grids_fo[base_idx + seat] = g0
             attrs_fo[base_idx + seat] = a0
             grids_fo[base_idx + 7 + seat] = g1
@@ -1131,7 +1394,15 @@ def apply_barba_cast(prg_buf: bytearray, chr_buf: bytearray, z2_rom: bytes) -> d
         175: _build_host_walk_6x12(z2_rom, 'closed', 1, True),
         204: ['0' * 48 for _ in range(32)],
     }
-    avail_0c = list(range(0x18, 0x100))
+    for blk_idx, title in (
+        (154, 'FIRST FEUD'),
+        (155, 'SECOND FEUD'),
+        (156, 'THIRD FEUD'),
+        (157, 'FOURTH FEUD'),
+        (158, 'FIFTH FEUD'),
+    ):
+        host_grids[blk_idx] = _build_stage_round_banner(title)
+    avail_0c = list(range(0x01, 0x100))
     packed_0c = _pack_bank(chr_buf, 0x0C, avail_0c, host_grids)
     stats['bank_0C'] = len({t for ts in packed_0c.values() for t in ts if t != 0})
     for idx, tids in packed_0c.items():
@@ -1151,7 +1422,10 @@ def apply_barba_cast(prg_buf: bytearray, chr_buf: bytearray, z2_rom: bytes) -> d
 
     # 6. Stage Close-Up portrait attribute table ($98B6-$9909)
     for fam_id in range(3):
-        pals = [p for _, _, p in family_rosters[fam_id]]
+        if z2_pool is not None and fam_id in (1, 2):
+            pals = [z2_pal_slots[((fam_id - 1) * 5 + seat) % len(z2_pool)] for seat in range(5)]
+        else:
+            pals = [p for _, _, p in family_rosters[fam_id]]
         for side in range(2):
             order = list(reversed(pals)) if side == 0 else pals
             b0 = (order[0] << 2) | (order[0] << 6)
@@ -1165,37 +1439,33 @@ def apply_barba_cast(prg_buf: bytearray, chr_buf: bytearray, z2_rom: bytes) -> d
             off = (0x98B6 + fam_id * 28 + side * 14) - 0x8000
             prg_buf[off : off + 14] = bytes(row_top + row_bot)
 
-    # 7. Face-Off BG attribute table ($B9E6-$BA3F) + $23DB=$40 patch for Host top-left head
+    # 7. Face-Off BG attribute table ($B9E6-$BA3F); $23DB=$40 host attr is handled via W_FACEOFF_ATTR at $BA4E.
     for seat in range(5):
         for fam_id in range(3):
-            p = family_rosters[fam_id][seat][2]
+            if z2_pool is not None and fam_id in (1, 2):
+                p = z2_pal_slots[((fam_id - 1) * 5 + seat) % len(z2_pool)]
+            else:
+                p = family_rosters[fam_id][seat][2]
             dc = 0x10
             dd = (p << 4) | (p << 6)
             e4 = 0x11
             e5 = p * 0x55
             ec = 0x00
-            ed = p * 0x55
+            ed = p * 0x05
             off = (0xB9E6 + seat * 18 + fam_id * 6) - 0x8000
             prg_buf[off : off + 6] = bytes([dc, dd, e4, e5, ec, ed])
 
-    # Hook $BA4E (inside $BA40, right before LDA #$23; STA $2006; LDA #$DC; STA $2006)
-    # to a 16-byte helper in unused 0x00 slack at $BBD8 that sets $23DB = #$40 (Pal 1 on Host top-left).
-    ba4e_off = 0xBA4E - 0x8000
-    assert bytes(prg_buf[ba4e_off : ba4e_off + 5]) == bytes.fromhex('A9238D0620')
-    prg_buf[ba4e_off : ba4e_off + 5] = bytes([0x20, 0xD8, 0xBB, 0xEA, 0xEA])  # JSR $BBD8; NOP; NOP
-    bbd8_off = 0xBBD8 - 0x8000
-    helper = bytes([
-        0xA9, 0x23, 0x8D, 0x06, 0x20,  # LDA #$23; STA $2006
-        0xA9, 0xDB, 0x8D, 0x06, 0x20,  # LDA #$DB; STA $2006
-        0xA9, 0x40, 0x8D, 0x07, 0x20,  # LDA #$40; STA $2007
-        0xA9, 0x23, 0x8D, 0x06, 0x20,  # LDA #$23; STA $2006
-        0x60,                          # RTS
-    ])
-    assert bytes(prg_buf[bbd8_off : bbd8_off + len(helper)]) == b'\x00' * len(helper)
-    prg_buf[bbd8_off : bbd8_off + len(helper)] = helper
-
     stats['bank_09_title'] = apply_barba_title(prg_buf, chr_buf)
     apply_barba_branding(prg_buf, chr_buf)
+
+    # 8. Face-Off podium buzzer OAM blocks (89=off, 90=lit).
+    # Barba is 6 sprites wide on scanlines $AF/$B7, leaving only 2 sprite slots;
+    # emit 0 sprites on off-frame (BG shows dark circles) and only the 2x2 lit
+    # cyan circles ($E2) on lit-frame, using $F838's 0x00 attrs (SPR pal 0).
+    _write_block_and_attr(prg_buf, 89, [0x00] * 8)
+    _write_block_and_attr(prg_buf, 90, [0x00, 0x00, 0xE2, 0xE2, 0x00, 0x00, 0xE2, 0xE2])
+    prg_buf[0xF218 + 90 - 0x8000] = 0x38
+    prg_buf[0xF2E5 + 90 - 0x8000] = 0xF8
 
     return stats
 
@@ -1260,11 +1530,11 @@ def compute_free_tiles(prg_orig: bytes, chr_orig: bytes) -> dict[str, object]:
         0xEB, 0xEB, 0xEB, 0xEB, 0xEB, 0xEB,
     ]
 
-    # Stage Close-Up (CHR 05 P1, CHR 06 CPU): keep screen nametables, Turn/Prompt boxes (153..158), & $B5..$BA
+    # Stage Close-Up (CHR 05 P1, CHR 06 CPU): keep screen nametables, blank block 153, & $B5..$BA
     scr0d = set(_decode_rle_screen(prg_orig, chr_orig, 0x0D)[:960])
     scr0e = set(_decode_rle_screen(prg_orig, chr_orig, 0x0E)[:960])
     st_ui_keep: set[int] = set(range(0xB5, 0xBB))
-    for b in range(153, 159):
+    for b in (153,):
         _, _, ts, _, _ = _get_block(prg_orig, b)
         st_ui_keep.update(ts)
     st_p1_free = [t for t in range(256) if t not in (scr0d | st_ui_keep)]

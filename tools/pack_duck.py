@@ -1,6 +1,7 @@
 """Assemble and patch Duck Hunt -> Villager Hunt (MMC3, Mapper 176) for Barba Edition."""
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 
 from duck_art import SPRITE_PAL_BYTES, build_duck_chr_and_tables
@@ -12,6 +13,7 @@ from duck_code import (
 )
 from pack_f13 import Asm6502
 import roar_sample
+from subgame_pack import make_rom_header
 
 
 # Fixed entry points in guest WRAM bank ($7800-$7BFF)
@@ -227,6 +229,7 @@ def _build_villager_hunt_banks(
     reward_addr: int,
     standalone_stub: bool,
     roar_wav: Path | None = None,
+    build_number: int | None = None,
 ) -> tuple[bytes, bytes]:
     """Build full (prg_256k, chr_32k) for Villager Hunt."""
     _validate_duck_rom(duck_bytes)
@@ -239,7 +242,7 @@ def _build_villager_hunt_banks(
 
     art = build_duck_chr_and_tables(duck_bytes, z2_bytes)
     fixed_pad, fixed_syms = assemble_fixed_pad()
-    bank1, b1_syms = assemble_bank1(art, roar_info)
+    bank1, b1_syms = assemble_bank1(art, roar_info, build_number=build_number)
 
     prg16 = bytearray(duck_bytes[16 : 16 + 16384])
 
@@ -452,8 +455,16 @@ def build_standalone(
     out_path: Path,
     duck_path: Path = ROOT / 'roms/duck.nes',
     z2_path: Path = ROOT / 'roms/z2.nes',
+    *,
+    mapper: str = '176',
+    build_number: int | None = None,
 ) -> Path:
-    """Wrap Villager Hunt in a standalone 256KB PRG + 32KB CHR NES 2.0 Mapper 176 ROM."""
+    """Wrap Villager Hunt in a standalone 256KB PRG + 32KB CHR ROM (Mapper 176 or MMC3)."""
+    from build_history import HISTORY_FILE, next_subgame_build_number, record_subgame_build
+    import hashlib
+    record_this = build_number is None
+    if build_number is None:
+        build_number = next_subgame_build_number(HISTORY_FILE, 'duck')
     duck_bytes = duck_path.read_bytes()
     z2_bytes = z2_path.read_bytes()
     prg256, chr_data = _build_villager_hunt_banks(
@@ -462,30 +473,40 @@ def build_standalone(
         STANDALONE_RESTORE_ADDR,
         reward_addr=DUCK_REWARD_ADDR,
         standalone_stub=True,
+        build_number=build_number,
     )
 
-    # NES 2.0 Mapper 176 (FK23C), 256KB PRG, 32KB CHR, 32KB battery PRG-RAM, Vertical mirroring
-    hdr = bytearray(16)
-    hdr[0:4] = b'NES\x1a'
-    hdr[4] = 16                          # 16 * 16KB = 256KB PRG
-    hdr[5] = len(chr_data) // 8192       # 4 * 8KB = 32KB CHR
-    hdr[6] = 0x03                        # Vertical mirroring + battery, mapper low = 0
-    hdr[7] = 0xB8                        # NES 2.0 + mapper mid = $B0 (176)
-    hdr[10] = 0x90                       # 32KB battery PRG-RAM
-
+    hdr = make_rom_header(len(prg256), len(chr_data), mapper=mapper, vertical_mirroring=True)
+    rom_bytes = bytes(hdr) + prg256 + chr_data
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_bytes(bytes(hdr) + prg256 + chr_data)
+    out_path.write_bytes(rom_bytes)
+    if record_this:
+        record_subgame_build(HISTORY_FILE, 'duck', build_number, mapper, out_path, hashlib.sha256(rom_bytes).hexdigest())
     return out_path
 
 
 if __name__ == '__main__':
-    out = build_standalone(ROOT / 'build/subgames/duck.nes')
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--out', type=Path, default=None)
+    parser.add_argument('--mapper', choices=('176', 'mmc3'), default='176')
+    args = parser.parse_args()
+    default_out = ROOT / ('play/nes/duck-mmc3.nes' if args.mapper == 'mmc3' else 'build/subgames/duck.nes')
+    out = build_standalone(args.out or default_out, mapper=args.mapper)
+    if args.mapper == 'mmc3' and args.out is None:
+        from bps import write_bps
+        write_bps(
+            ROOT / 'roms/duck.nes',
+            out,
+            out_bps_path=ROOT / 'play/bps/duck-mmc3.bps',
+            metadata='duck-mmc3 | Barba Edition (MMC3)',
+        )
     rom = out.read_bytes()
     chr_len = rom[5] * 8192
+    expected_mapper = 4 if args.mapper == 'mmc3' else 176
     assert len(rom) == 16 + 256 * 1024 + chr_len
     assert rom[0:4] == b'NES\x1a'
     assert rom[4] == 16 and rom[5] in (4, 8, 16)
-    assert ((rom[6] >> 4) | (rom[7] & 0xF0)) == 176
+    assert ((rom[6] >> 4) | (rom[7] & 0xF0)) == expected_mapper
     assert rom[16 + 256 * 1024 - 6 : 16 + 256 * 1024 - 4] == bytes([DUCK_NMI_HOOK & 0xFF, DUCK_NMI_HOOK >> 8])
     assert rom[16 + 256 * 1024 - 4 : 16 + 256 * 1024 - 2] == bytes([0x00, 0x80])
-    print(f'Built {out} ({len(rom)} bytes, CHR={chr_len} bytes) - all assertions passed.')
+    print(f'Built {out} ({len(rom)} bytes, CHR={chr_len} bytes, mapper={expected_mapper}) - all assertions passed.')

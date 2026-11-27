@@ -1,6 +1,7 @@
 """Pack Mike Tyson's Punch-Out!! (MMC2) -> Barba's Punch-Out!! (MMC3 / Mapper 176)."""
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 import sys
 
@@ -11,6 +12,7 @@ if str(_TOOLS_DIR) not in sys.path:
 from mtpo_art import apply_mtpo_mod_art
 from pack_f13 import Asm6502 as _BaseAsm6502
 import roar_sample
+from subgame_pack import make_rom_header
 
 
 class Asm6502(_BaseAsm6502):
@@ -39,6 +41,7 @@ MTPO_ORIG_IRQ = 0xA000
 # WRAM Bank 3 ($A001 = $A3) virtualization state ($7F80..$7FEF; $7FF0..$7FFF reserved!)
 V_MMC3_SEL = 0x7F80
 V_MODE = 0x7F81       # 0=static, 1=title, 2=link intro, 3=tale of tape, 4=fight
+V_TITLE_B_DONE = 0x7F8F
 V_CHR0_FD = 0x7F82
 V_CHR0_FE = 0x7F83
 V_CHR1_FD = 0x7F84
@@ -120,6 +123,7 @@ def _assemble_bank14_runtime(
     restore_addr: int,
     reward_addr: int,
     roar_len_reg: int,
+    build_number: int | None = None,
 ) -> tuple[bytes, dict[str, int]]:
     """Assemble all MMC3 virtualization, NMI, IRQ, roar, and return code at $D860."""
     a = Asm6502(B14_CODE_BASE)
@@ -272,6 +276,20 @@ def _assemble_bank14_runtime(
     a.branch(0xD0, "m3_oam_lp")
     a.emit(0x58)                          # CLI so early-scanline Tale of the Tape IRQ runs during $A6DF sound
     a.label("arm_irq_rts")
+    if build_number is not None:
+        a.emit(0xAD, V_MODE & 0xFF, V_MODE >> 8, 0xC9, 0x01)
+        a.branch(0xD0, "tb_skip")
+        a.emit(0xAD, V_TITLE_B_DONE & 0xFF, V_TITLE_B_DONE >> 8)
+        a.branch(0xD0, "tb_skip")
+        a.emit(0xA9, 0x01, 0x8D, V_TITLE_B_DONE & 0xFF, V_TITLE_B_DONE >> 8)
+        a.emit(0x2C, 0x02, 0x20)
+        a.emit(0xA9, 0x20, 0x8D, 0x06, 0x20)
+        a.emit(0xA9, 0x3A, 0x8D, 0x06, 0x20)
+        for ch in f"B{build_number}":
+            tid = 0x0C if ch == "B" else 0x01 + int(ch)
+            a.emit(0xA9, tid, 0x8D, 0x07, 0x20)
+        a.emit(0xA9, 0x00, 0x8D, 0x06, 0x20, 0x8D, 0x06, 0x20)
+        a.label("tb_skip")
     a.emit(0x60)
 
     # ---- v_sound_nmi_end (hooked at $A036: arms IRQ after $1D>=3 NMI, CLI for early-scanline splits, then JMP $A6DF) ----
@@ -603,6 +621,7 @@ def patch_mtpo(
     reward_addr: int = 0x63BA,
     z2_bytes: bytes | None = None,
     standalone_stub: bool = False,
+    build_number: int | None = None,
 ) -> tuple[bytes, bytes]:
     """Port and mod Mike Tyson's Punch-Out!! -> Barba's Punch-Out!! (256KB PRG, 128KB CHR)."""
     if len(mtpo_bytes) != MTPO_TOTAL_SIZE:
@@ -629,7 +648,7 @@ def patch_mtpo(
     roar_len_reg = int(roar_meta["length_reg"])
 
     # 3. Assemble Bank 14 runtime
-    b14_runtime, lbl = _assemble_bank14_runtime(restore_addr, reward_addr, roar_len_reg)
+    b14_runtime, lbl = _assemble_bank14_runtime(restore_addr, reward_addr, roar_len_reg, build_number=build_number)
 
     # Place Bank 14 runtime at $D860..$DFFF (verify all $00)
     b14_base = 14 * 8192
@@ -746,8 +765,16 @@ def build_standalone(
     out_path: Path,
     mtpo_path: Path = Path("roms/mtpo.nes"),
     z2_path: Path = Path("roms/z2.nes"),
+    *,
+    mapper: str = "176",
+    build_number: int | None = None,
 ) -> Path:
-    """Build standalone NES 2.0 Mapper 176 ROM at out_path."""
+    """Build standalone Barba's Punch-Out!! ROM (Mapper 176 or MMC3) at out_path."""
+    from build_history import HISTORY_FILE, next_subgame_build_number, record_subgame_build
+    import hashlib
+    record_this = build_number is None
+    if build_number is None:
+        build_number = next_subgame_build_number(HISTORY_FILE, "mtpo")
     mtpo_bytes = mtpo_path.read_bytes()
     z2_bytes = z2_path.read_bytes() if z2_path.is_file() else None
     prg_out, chr_out = patch_mtpo(
@@ -756,28 +783,39 @@ def build_standalone(
         reward_addr=0x63BA,
         z2_bytes=z2_bytes,
         standalone_stub=True,
+        build_number=build_number,
     )
     assert len(prg_out) == PRG_OUT_SIZE
     assert len(chr_out) == CHR_OUT_SIZE
 
-    hdr = bytearray(16)
-    hdr[0:4] = b"NES\x1a"
-    hdr[4] = 16     # 16 * 16KB = 256KB PRG
-    hdr[5] = 16     # 16 * 8KB = 128KB CHR-ROM
-    hdr[6] = 0x02   # Vertical mirroring + battery
-    hdr[7] = 0xB8   # NES 2.0 + Mapper 176
-    hdr[10] = 0x90  # 32KB battery PRG-RAM
-
+    hdr = make_rom_header(len(prg_out), len(chr_out), mapper=mapper, vertical_mirroring=False)
+    rom_bytes = bytes(hdr) + prg_out + chr_out
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_bytes(bytes(hdr) + prg_out + chr_out)
+    out_path.write_bytes(rom_bytes)
+    if record_this:
+        record_subgame_build(HISTORY_FILE, "mtpo", build_number, mapper, out_path, hashlib.sha256(rom_bytes).hexdigest())
     return out_path
 
 
 if __name__ == "__main__":
     root = Path(__file__).resolve().parent.parent
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--out", type=Path, default=None)
+    parser.add_argument("--mapper", choices=("176", "mmc3"), default="176")
+    args = parser.parse_args()
+    default_out = root / ("play/nes/mtpo-mmc3.nes" if args.mapper == "mmc3" else "build/subgames/mtpo.nes")
     out = build_standalone(
-        root / "build" / "subgames" / "mtpo.nes",
+        args.out or default_out,
         root / "roms" / "mtpo.nes",
         root / "roms" / "z2.nes",
+        mapper=args.mapper,
     )
-    print(f"Built {out} ({out.stat().st_size} bytes)")
+    if args.mapper == "mmc3" and args.out is None:
+        from bps import write_bps
+        write_bps(
+            root / "roms" / "mtpo.nes",
+            out,
+            out_bps_path=root / "play" / "bps" / "mtpo-mmc3.bps",
+            metadata="mtpo-mmc3 | Barba Edition (MMC3)",
+        )
+    print(f"Built {out} ({out.stat().st_size} bytes, mapper={args.mapper})")

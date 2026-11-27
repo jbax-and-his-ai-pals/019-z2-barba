@@ -1,20 +1,15 @@
-"""Create a save-state pack for standalone Friday the 13th: Barba Edition (play/standalone/f13-barba.nes)."""
+"""Create a save-state pack for standalone Friday the 13th: Barba Edition (play/nes/f13-barba.nes)."""
 from __future__ import annotations
 
 import argparse
-import hashlib
-import json
-import shutil
-import subprocess
 from pathlib import Path
 
-from emulator_test import run
-from prepare_player import apply_play_defaults
+from subgame_pack import ROOT, create_pack, find_play_rom, prepare_profile, run_cli
 
-ROOT = Path(__file__).resolve().parents[1]
-ROM_PATH = ROOT / 'play/standalone/f13-barba.nes'
+ROM_PATH = ROOT / 'play/nes/f13-barba.nes'
 PACK_DIR = ROOT / 'build/f13-pack'
 PROFILE_DIR = ROOT / 'build/mesen-scenarios/f13'
+SCENARIOS = ROOT / 'tools/scenarios/f13_scenarios.lua'
 
 SLOTS = [
     ('title', 'Title Screen (Friday the 13th)', 'Friday the 13th title screen. Press Start to begin.'),
@@ -24,104 +19,57 @@ SLOTS = [
 ]
 
 
-def create(force: bool = False) -> dict:
-    if not ROM_PATH.is_file():
+def _paths(mmc3: bool = False) -> tuple[Path, Path, Path]:
+    if mmc3:
+        return (
+            find_play_rom('f13-mmc3'),
+            ROOT / 'build/f13-mmc3-pack',
+            ROOT / 'build/mesen-scenarios/f13-mmc3',
+        )
+    return find_play_rom('f13-barba'), PACK_DIR, PROFILE_DIR
+
+
+def _build(mmc3: bool, rom_path: Path) -> None:
+    if mmc3:
+        import build_mmc3
+        build_mmc3.build_game_mmc3('f13', rom_path.parent)
+    else:
         import f13_build
         f13_build.build()
 
-    digest = hashlib.sha256(ROM_PATH.read_bytes()).hexdigest()
-    manifest_path = PACK_DIR / 'manifest.json'
-    if manifest_path.exists() and not force:
-        manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
-        if manifest.get('rom_sha256') == digest and all((PACK_DIR / f'{s[0]}.mss').exists() for s in SLOTS):
-            return manifest
 
-    PACK_DIR.mkdir(parents=True, exist_ok=True)
-    scenario = ROOT / 'build/generate-f13-states.lua'
-    prefix = f'PACK_DIR = {json.dumps(PACK_DIR.as_posix())}\n'
-    scenario.write_text(prefix + (ROOT / 'tools/f13_scenarios.lua').read_text(encoding='utf-8'), encoding='utf-8')
-    if run(scenario, ROM_PATH, 60):
-        raise SystemExit('Friday the 13th state generation failed; see build/generate-f13-states-error.txt')
-
-    states = []
-    for slot, (sid, name, desc) in enumerate(SLOTS, 1):
-        mss = PACK_DIR / f'{sid}.mss'
-        if not mss.is_file() or not mss.read_bytes().startswith(b'MSS'):
-            raise SystemExit(f'Missing or invalid state: {mss}')
-        states.append({'slot': slot, 'id': sid, 'name': name, 'instructions': desc, 'file': mss.name})
-
-    manifest = {'rom_sha256': digest, 'folder': str(PACK_DIR), 'rom': str(ROM_PATH), 'states': states}
-    manifest_path.write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
-    return manifest
+def create(force: bool = False, mmc3: bool = False) -> dict:
+    rom_path, pack_dir, _ = _paths(mmc3)
+    tag = 'f13-mmc3' if mmc3 else 'f13'
+    return create_pack(
+        tag, rom_path, lambda: _build(mmc3, rom_path), SLOTS, SCENARIOS,
+        timeout=60, force=force, pack_dir=pack_dir,
+    )
 
 
-def prepare(force: bool = False) -> tuple[Path, dict]:
-    manifest = create(force=force)
-    source_exe = ROOT / '.tools/mesen/Mesen.exe'
-    if not source_exe.is_file():
-        raise SystemExit('Mesen is missing. Run tools/bootstrap.ps1 -WithEmulator first.')
-
-    PROFILE_DIR.mkdir(parents=True, exist_ok=True)
-    player = PROFILE_DIR / 'Mesen.exe'
-    if not player.exists():
-        shutil.copyfile(source_exe, player)
-
-    slots_dir = PROFILE_DIR / 'slots'
-    slots_dir.mkdir(exist_ok=True)
-    (PROFILE_DIR / 'saves').mkdir(exist_ok=True)
-    for slot in range(len(manifest['states']) + 1, 11):
-        (slots_dir / f'{ROM_PATH.stem}_{slot}.mss').unlink(missing_ok=True)
-
-    for entry in manifest['states']:
-        shutil.copyfile(PACK_DIR / entry['file'], slots_dir / f"{ROM_PATH.stem}_{entry['slot']}.mss")
-
-    settings = PROFILE_DIR / 'settings.json'
-    config = json.loads(settings.read_text(encoding='utf-8-sig')) if settings.exists() else {}
-    apply_play_defaults(config)
-    preferences = config.setdefault('Preferences', {})
-    preferences.update({
-        'SingleInstance': False,
-        'AutoLoadPatches': False,
-        'OverrideSaveDataFolder': True,
-        'SaveDataFolder': str(PROFILE_DIR / 'saves'),
-        'OverrideSaveStateFolder': True,
-        'SaveStateFolder': str(slots_dir),
-    })
-
-    reserved = set(range(90, 100))
-    shortcuts = preferences.setdefault('ShortcutKeys', [])
-    for entry in shortcuts:
-        for key_field in ('KeyCombination', 'KeyCombination2'):
-            combo = entry.get(key_field)
-            if combo and combo.get('Key1') in reserved and not combo.get('Key2') and not combo.get('Key3'):
-                combo['Key1'] = 0
-    names = {f'LoadStateSlot{slot}' for slot in range(1, 11)}
-    shortcuts[:] = [s for s in shortcuts if s.get('Shortcut') not in names]
-    for entry in manifest['states']:
-        shortcuts.append({
-            'Shortcut': f"LoadStateSlot{entry['slot']}",
-            'KeyCombination': {'Key1': 89 + entry['slot'], 'Key2': 0, 'Key3': 0},
-        })
-
-    script_window = config.setdefault('Debug', {}).setdefault('ScriptWindow', {})
-    script_window['AllowIoOsAccess'] = False
-    settings.write_text(json.dumps(config, indent=2) + '\n', encoding='utf-8')
-    return player, manifest
+def prepare(force: bool = False, mmc3: bool = False) -> tuple[Path, dict]:
+    rom_path, pack_dir, profile_dir = _paths(mmc3)
+    tag = 'f13-mmc3' if mmc3 else 'f13'
+    return prepare_profile(
+        tag, rom_path, lambda: _build(mmc3, rom_path), SLOTS, SCENARIOS,
+        timeout=60, force=force, pack_dir=pack_dir, profile_dir=profile_dir,
+    )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--mmc3', action='store_true', help='Use play/nes/f13-mmc3.nes instead of standalone.')
     parser.add_argument('--force', action='store_true', help='Regenerate all save states.')
     parser.add_argument('--prepare-only', action='store_true', help='Prepare profile without opening Mesen.')
     args = parser.parse_args()
 
-    player, manifest = prepare(force=args.force)
-    for entry in manifest['states']:
-        print(f"F{entry['slot']:<2} {entry['name']} - {entry['instructions']}")
-    if args.prepare_only:
-        print(f'Prepared profile: {PROFILE_DIR}')
-        return
-    subprocess.Popen([str(player), str(ROM_PATH)], cwd=PROFILE_DIR)
+    rom_path, pack_dir, profile_dir = _paths(args.mmc3)
+    tag = 'f13-mmc3' if args.mmc3 else 'f13'
+    run_cli(
+        tag, rom_path, lambda: _build(args.mmc3, rom_path), SLOTS, SCENARIOS,
+        timeout=60, force=args.force, prepare_only=args.prepare_only,
+        pack_dir=pack_dir, profile_dir=profile_dir,
+    )
 
 
 if __name__ == '__main__':

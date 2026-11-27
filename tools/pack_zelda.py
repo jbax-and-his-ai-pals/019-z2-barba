@@ -1,10 +1,12 @@
 """Assemble and patch The Legend of Zelda (NES, MMC1, 128KB PRG, CHR-RAM) for the Barba Mapper 176 portal."""
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 
 from pack_f13 import Asm6502
 import roar_sample
+from subgame_pack import make_rom_header
 from zelda_art import build_barba_player_tiles
 
 
@@ -267,6 +269,7 @@ def patch_zelda(
     reward_addr: int = ZELDA_REWARD_ADDR,
     reward_magic: int = ZELDA_REWARD_MAGIC,
     z2_bytes: bytes | None = None,
+    build_number: int | None = None,
 ) -> bytes:
     """Verify and patch The Legend of Zelda (MMC1, 128KB PRG) into a 256KB Mapper 176 PRG block."""
     assert zelda_bytes[:4] == b'NES\x1a', 'Not an iNES ROM'
@@ -284,6 +287,13 @@ def patch_zelda(
 
     src_prg = bytearray(zelda_bytes[16 : 16 + 128 * 1024])
     assert len(src_prg) == 128 * 1024
+
+    if build_number is not None:
+        # Title screen row 1 ($2020 len $20) starts at PRG 0x1A88E; cols 26..30 ($203A) are sky ($24).
+        title_b_off = 0x1A88E + 26
+        tag = bytes([0x0B] + [int(c) for c in str(build_number)])
+        assert src_prg[title_b_off : title_b_off + len(tag)] == b'\x24' * len(tag)
+        src_prg[title_b_off : title_b_off + len(tag)] = tag
 
     def patch_bank(bank: int, addr: int, new: bytes, expected: bytes) -> None:
         base = 0xC000 if bank == 7 else 0x8000
@@ -557,8 +567,16 @@ def build_standalone(
     out_path: Path,
     zelda_path: Path = ROOT / 'roms' / 'zelda.nes',
     z2_path: Path = ROOT / 'roms' / 'z2.nes',
+    *,
+    mapper: str = '176',
+    build_number: int | None = None,
 ) -> Path:
-    """Wrap patched Legend of Zelda in a standalone 256KB PRG + 32KB CHR-RAM NES 2.0 Mapper 176 ROM."""
+    """Wrap patched Legend of Zelda in a standalone 256KB PRG + 32KB CHR-RAM ROM (Mapper 176 or NES 2.0 MMC3)."""
+    from build_history import HISTORY_FILE, next_subgame_build_number, record_subgame_build
+    import hashlib
+    record_this = build_number is None
+    if build_number is None:
+        build_number = next_subgame_build_number(HISTORY_FILE, 'zelda')
     zelda_bytes = zelda_path.read_bytes()
     z2_bytes = z2_path.read_bytes()
     prg = bytearray(
@@ -567,6 +585,7 @@ def build_standalone(
             STANDALONE_RESTORE_ADDR,
             reward_addr=ZELDA_REWARD_ADDR,
             z2_bytes=z2_bytes,
+            build_number=build_number,
         )
     )
 
@@ -577,7 +596,7 @@ def build_standalone(
             assert actual == expected, f'Unexpected fixed bytes at ${addr:04X}: {actual.hex(" ")}'
             prg[off : off + len(new)] = new
 
-    # Standalone cold-boot stub at $FF60: wait 2 VBlanks, set $5FF0=$21, R6=0, JMP $8000
+    # Standalone cold-boot stub at $FF60: wait 2 VBlanks, init mapper, R6=0, JMP $8000
     a = Asm6502(STANDALONE_BOOT_STUB)
     a.emit(0x78, 0xD8, 0xA2, 0xFF, 0x9A)                    # SEI; CLD; LDX #$FF; TXS
     a.emit(0xA9, 0x00, 0x8D, 0x00, 0x20, 0x8D, 0x01, 0x20)  # PPU off
@@ -587,9 +606,10 @@ def build_standalone(
     a.label('v2')
     a.emit(0x2C, 0x02, 0x20)
     a.branch(0x10, 'v2')
-    a.emit(0xA9, 0x80, 0x8D, 0x01, 0xA0)                    # unlock $5FF0-$5FF3
-    a.emit(0xA9, 0x21, 0x8D, 0xF0, 0x5F)                    # $5FF0 = $21 (256KB MMC3 + 32KB CHR-RAM)
-    a.emit(0xA9, 0x00, 0x8D, 0xF1, 0x5F, 0x8D, 0xF2, 0x5F)  # $5FF1 = 0, $5FF2 = 0
+    a.emit(0xA9, 0x80, 0x8D, 0x01, 0xA0)                    # enable WRAM / unlock $5FF0-$5FF3
+    if mapper == '176':
+        a.emit(0xA9, 0x21, 0x8D, 0xF0, 0x5F)                # $5FF0 = $21 (256KB MMC3 + 32KB CHR-RAM)
+        a.emit(0xA9, 0x00, 0x8D, 0xF1, 0x5F, 0x8D, 0xF2, 0x5F)  # $5FF1 = 0, $5FF2 = 0
     a.emit(0xA9, 0x06, 0x8D, 0x00, 0x80, 0xA9, 0x00, 0x8D, 0x01, 0x80)  # R6 = 0
     a.emit(0x4C, 0x00, 0x80)                                # JMP $8000
     boot_stub = a.finish()
@@ -610,28 +630,43 @@ def build_standalone(
         bytes([ZELDA_ORIG_RESET & 0xFF, ZELDA_ORIG_RESET >> 8]),
     )
 
-    # NES 2.0 Mapper 176 (FK23C), 256KB PRG, 8KB dummy CHR-ROM, 32KB CHR-RAM (hdr[11]=0x09)
-    hdr = bytearray(16)
-    hdr[0:4] = b'NES\x1a'
-    hdr[4] = 16     # 16 * 16KB = 256KB PRG
-    hdr[5] = 1      # 1 * 8KB dummy CHR-ROM ($5FF0=$21 selects 32KB CHR-RAM)
-    hdr[6] = 0x02   # Battery
-    hdr[7] = 0xB8   # NES 2.0 + mapper 176
-    hdr[10] = 0x90  # 32KB battery PRG-RAM
-    hdr[11] = 0x09  # 32KB unbattery CHR-RAM
+    if mapper == 'mmc3':
+        hdr = make_rom_header(len(prg), 0, mapper='mmc3', vertical_mirroring=False, chr_ram_kb=32)
+        chr_tail = b''
+    else:
+        hdr = make_rom_header(len(prg), 8192, mapper='176', vertical_mirroring=False, chr_ram_kb=32)
+        chr_tail = b'\x00' * 8192
 
+    rom_bytes = bytes(hdr) + bytes(prg) + chr_tail
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_bytes(bytes(hdr) + bytes(prg) + b'\x00' * 8192)
+    out_path.write_bytes(rom_bytes)
+    if record_this:
+        record_subgame_build(HISTORY_FILE, 'zelda', build_number, mapper, out_path, hashlib.sha256(rom_bytes).hexdigest())
     return out_path
 
 
 if __name__ == '__main__':
-    out = build_standalone(ROOT / 'build' / 'subgames' / 'zelda.nes')
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--out', type=Path, default=None)
+    parser.add_argument('--mapper', choices=('176', 'mmc3'), default='176')
+    args = parser.parse_args()
+    default_out = ROOT / ('play/nes/zelda-mmc3.nes' if args.mapper == 'mmc3' else 'build/subgames/zelda.nes')
+    out = build_standalone(args.out or default_out, mapper=args.mapper)
+    if args.mapper == 'mmc3' and args.out is None:
+        from bps import write_bps
+        write_bps(
+            ROOT / 'roms/zelda.nes',
+            out,
+            out_bps_path=ROOT / 'play/bps/zelda-mmc3.bps',
+            metadata='zelda-mmc3 | Barba Edition (MMC3)',
+        )
     rom = out.read_bytes()
-    assert len(rom) == 16 + 256 * 1024 + 8192
+    expected_mapper = 4 if args.mapper == 'mmc3' else 176
+    expected_chr_banks = 0 if args.mapper == 'mmc3' else 1
+    assert len(rom) == 16 + 256 * 1024 + expected_chr_banks * 8192
     assert rom[0:4] == b'NES\x1a'
-    assert rom[4] == 16 and rom[5] == 1 and rom[11] == 0x09
-    assert ((rom[6] >> 4) | (rom[7] & 0xF0)) == 176
+    assert rom[4] == 16 and rom[5] == expected_chr_banks and rom[11] == 0x09
+    assert ((rom[6] >> 4) | (rom[7] & 0xF0)) == expected_mapper
     assert rom[16 + 256 * 1024 - 6 : 16 + 256 * 1024 - 4] == bytes([ZELDA_NMI_HOOK & 0xFF, ZELDA_NMI_HOOK >> 8])
     assert rom[16 + 256 * 1024 - 4 : 16 + 256 * 1024 - 2] == bytes([STANDALONE_BOOT_STUB & 0xFF, STANDALONE_BOOT_STUB >> 8])
-    print(f'Built {out} ({len(rom):,} bytes) - all assertions passed.')
+    print(f'Built {out} ({len(rom):,} bytes, mapper={expected_mapper}) - all assertions passed.')

@@ -20,7 +20,13 @@ from assets import (ASH_TILES, CASTLE_FIRE_BANK, CASTLE_FIRE_TILE_SHA256,
                     compile_title_shore, compile_town_fire, validate_layout)
 from bps import apply, encode
 from boss_art import compile_lava_link
-from build_history import HISTORY_FILE, git_source, record_build
+from build_history import (
+    HISTORY_FILE,
+    get_all_subgame_build_numbers,
+    git_source,
+    next_build_number,
+    record_build,
+)
 from game_over_art import (GAME_OVER_CHR_BANK, GAME_OVER_MAP_START,
                            compile_game_over_link)
 from nes import CHR_OFFSET, SOURCE_SHA256, decode_tile, encode_tile, load_source, prg_offset
@@ -1172,6 +1178,45 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
     ])
     new_story = b''.join(encode_story_line(line, title_border) for line in story_lines)
     overlay.prg(5, 0xA932, new_story, expected_story, 'Title screen Barba story scroll')
+
+    # Subtle build number (B<N>) in top-right sky border ($203A, row 1 col 26..30).
+    upcoming_z2_build = next_build_number(HISTORY_FILE)
+    build_tag = f'B{upcoming_z2_build}'
+    build_tiles = bytes(
+        0xDB if ch == 'B' else 0xD0 + ord(ch) - ord('0')
+        for ch in build_tag
+    )
+    # Hook $AE9F (LDA $34; CMP #$07 -> JSR $BB83; NOP) -> Bank 5 $BB83 + $BBE2 pads.
+    tb_gate = 0xBB83
+    tb_draw = 0xBBE2
+    text_addr = tb_draw + 12
+    gate_code = bytes([
+        0xA5, 0x2B,             # LDA $2B
+        0xC9, 0x20,             # CMP #$20
+        0xD0, 0x07,             # BNE +7 (done)
+        0xC5, 0x2C,             # CMP $2C (A is already #$20)
+        0xD0, 0x03,             # BNE +3 (done)
+        0x20, tb_draw & 0xFF, tb_draw >> 8,  # JSR $BBE2
+        0xA5, 0x34,             # LDA $34
+        0xC9, 0x07,             # CMP #$07
+        0x60,                   # RTS
+    ])
+    draw_code = bytes([
+        0xA2, len(build_tiles) - 1,  # LDX #len-1
+        0xBD, text_addr & 0xFF, text_addr >> 8,  # LDA text,X
+        0x9D, 0x1F, 0x03,       # STA $031F,X ($0305 + 26)
+        0xCA,                   # DEX
+        0x10, 0xF7,             # BPL -9
+        0x60,                   # RTS
+    ]) + build_tiles
+    assert len(gate_code) <= 0xBB95 - tb_gate
+    assert len(draw_code) <= 0xBBF5 - tb_draw
+    overlay.prg(5, 0xAE9F, bytes([0x20, tb_gate & 0xFF, tb_gate >> 8, 0xEA]),
+                bytes.fromhex('a534c907'), 'Title build number hook')
+    overlay.prg(5, tb_gate, gate_code, b'\xff' * len(gate_code),
+                'Title build number gate')
+    overlay.prg(5, tb_draw, draw_code, b'\xff' * len(draw_code),
+                'Title build number draw')
     # Last two CHR banks are filler in the guarded input; dedicate them to overworld.
     world = bytearray(source[CHR_OFFSET+16*4096:CHR_OFFSET+18*4096])
     world[:len(ow)] = ow
@@ -2369,8 +2414,8 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
         import f13_build
         import pack_waldo
         import portal_pool
-        waldo_bytes = build_waldo.build().read_bytes()
-        f13_bytes = f13_build.build().read_bytes() if f13_build.SOURCE_ROM.is_file() else None
+        waldo_bytes = build_waldo.build(count_build=False).read_bytes()
+        f13_bytes = f13_build.build(count_build=False).read_bytes() if f13_build.SOURCE_ROM.is_file() else None
         assignments = portal_pool.build_portal_assignments(
             include_f13=(f13_bytes is not None),
             roms_dir=ROOT / 'roms',
@@ -2398,11 +2443,6 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
         raise ValueError('Source ROM changed during build')
     (output/'barba.nes').write_bytes(target)
     (output/'barba.bps').write_bytes(patch)
-    if output.resolve() == (ROOT/'build').resolve():
-        play_dir = ROOT/'play'
-        play_dir.mkdir(exist_ok=True)
-        (play_dir/'barba.nes').write_bytes(target)
-        (play_dir/'barba.bps').write_bytes(patch)
     changed_bytes = sum(a != b for a, b in zip(source, target)) + max(0, len(target) - len(source))
     patch_groups: dict[str, dict[str, int]] = {}
     for entry in overlay.ranges:
@@ -2432,6 +2472,24 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
         'git_dirty': git_dirty,
         'release': release,
     })
+    if output.resolve() == (ROOT/'build').resolve():
+        build_num = report['build_number']
+        play_dir = ROOT/'play'
+        play_dir.mkdir(exist_ok=True)
+        (play_dir/f'barba-b{build_num}.nes').write_bytes(target)
+        (play_dir/f'barba-b{build_num}.bps').write_bytes(patch)
+        import package_bps
+        package_bps.stamp_play_artifacts(
+            ROOT,
+            build_num,
+            get_all_subgame_build_numbers(HISTORY_FILE),
+        )
+        parts = ['barba-bps']
+        if release:
+            parts.append(release)
+        parts.append(f'b{build_num}')
+        zip_path = ROOT/'dist'/f"{'-'.join(parts)}.zip"
+        package_bps.build_flat_zip(zip_path, package_bps.collect_bps_files(ROOT))
     return report
 
 

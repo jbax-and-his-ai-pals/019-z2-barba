@@ -59,7 +59,7 @@ Arrows move, **X** jumps, **Z** attacks, **Enter** starts or pauses, and
 **Space** selects or casts. Normal play saves use `build/play-saves/`.
 Run `./tools/launch.ps1 -NoRebuild` to open an existing playable artifact.
 
-**play/Test Barba.cmd** gives you Core checkpoints on **F1–F10**, from the
+**play/cmd/Test Core.cmd** gives you Core checkpoints on **F1–F10**, from the
 starting castle through the Great Palace approach. The other launchers
 cover bosses, towns, scenery, item and gem celebrations, and Game Over.
 Each set has an isolated Mesen profile. See the [checkpoint guide](docs/TEST-PACK.md)

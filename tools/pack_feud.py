@@ -1,10 +1,12 @@
 """Assemble and patch Family Feud (USA, MMC1) for the Barba Mapper 176 portal."""
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 
 from pack_f13 import Asm6502
+from subgame_pack import make_rom_header
 
 
 # Fixed entry points in guest WRAM bank ($7800-$7BFF)
@@ -45,7 +47,7 @@ _T0 = '@ABCDEFGHIJKLMNOPQRSTUVWXYZ  |||'
 _T1 = '@abcdefghijklmnopqrstuvwxyz     '
 _T2 = "@0123456789/'()+*[]-&           "
 
-# 20 Zelda II-themed Main Round puzzles: (prefix_idx, question, [(answer, pts), ...])
+# 35 Zelda II-themed Main Round puzzles: (prefix_idx, question, [(answer, pts), ...])
 # prefix_idx ($AFFD): 0=none, 1="Name the ", 2="Name something ", 3="Name a ", 4="Name an ", 5="Tell me ", 6="How many "
 ZELDA2_MAIN_PUZZLES: list[tuple[int, str, list[tuple[str, int]]]] = [
     (3, 'PALACE BOSS', [('HORSE[+]HEAD', 18), ('HELMET[+]HEAD', 16), ('REBONACK', 14), ('CAROCK', 13), ('GOOMA', 12), ('BARBA', 11), ('THUNDER[+]BIRD', 8), ('DARK[+]LINK/SHADOW[+]LINK', 8)]),
@@ -62,15 +64,30 @@ ZELDA2_MAIN_PUZZLES: list[tuple[int, str, list[tuple[str, int]]]] = [
     (3, 'MAZE OR OCEAN ENEMY', [('WIZZROBEs', 28), ('MAGOs', 22), ('IRON[+]KNUCKLEs', 18), ('STALFOS', 14), ('BUBBLEs', 10), ('MOAs', 8)]),
     (3, 'GREAT PALACE ENEMY', [('FOKKAs', 30), ('FOKKERUs', 24), ('BUBBLEs', 18), ('BOTs', 12), ('THUNDER[+]BIRD', 10), ('DARK[+]LINK/SHADOW[+]LINK', 6)]),
     (3, 'DEATH MTN ENEMY', [('DARIA[s]', 30), ('TEKTITEs', 24), ('OCTO[ROK]s', 18), ('GORIYAs', 16), ('BUBBLEs', 12)]),
-    (4, 'OVERWORLD HAZARD', [('SWAMP', 30), ('DESERT', 24), ('FOREST/WOODS', 18), ('GRAVEYARD', 16), ('LA(V/B)A', 12)]),
+    (4, 'OVERWORLD TILE THAT SPAWNS ENCOUNTERS', [('GRASS/PLAINS', 26), ('SWAMP', 22), ('DESERT', 18), ('FOREST/WOODS', 14), ('GRAVEYARD', 12), ('LA(V/B)A', 8)]),
     (2, 'FOUND IN A TOWN', [('HEALER/[TOWN+]LADY/[OLD+]WOMAN/VILLAGERs/PEOPLE', 28), ('ERROR', 24), ('SAGE/WISE+MAN/OLD+MAN', 18), ('BAGU', 12), ('KNIGHT', 10), ('CHIMNEY', 8)]),
     (3, 'WAY TO CROSS WATER', [('RAFT', 40), ('BOOTS/WATER+BOOTS', 34), ('FAIRY[+SPELL]', 16), ('BRIDGE', 10)]),
     (3, 'DROP FROM AN ENEMY', [('P[-]BAG/POINT+BAG/XP+BAG/EXP+BAG', 38), ('RED[+MAGIC]+JAR/RED+POTION', 26), ('BLUE[+MAGIC]+JAR/BLUE+POTION/[MAGIC+]JAR/POTION', 20), ('KEY', 16)]),
     (3, 'WAY TO HEAL LINK', [('FAIRY', 34), ('LIFE[+SPELL]', 28), ('TOWN+LADY/HEALER', 22), ('LEVEL+UP', 16)]),
-    (2, 'THAT GUARDS THE TRIFORCE', [('THUNDER[+]BIRD', 45), ('DARK[+]LINK/SHADOW[+]LINK', 35), ('OLD+MAN/SAGE', 20)]),
+    (2, 'THAT GUARDS THE TRIFORCE', [('THUNDER[+]BIRD', 45), ('DARK[+]LINK/SHADOW[+]LINK', 35), ('OLD+MAN/SAGE/IMPA', 20)]),
+    (3, 'PLACE YOU FIND A HEART CONTAINER', [('CAVE', 28), ('WATER/OCEAN/RIVER', 24), ('DESERT', 20), ('SWAMP/BUSH', 16), ('TOWN/KASUTO', 12)]),
+    (3, 'PLACE YOU FIND A MAGIC CONTAINER', [('DEATH+M(T/TN/OUNTAIN)', 26), ('CAVE', 24), ('RAURU/NORTH+CASTLE', 20), ('MAZE+ISLAND', 16), ('OLD+KASUTO/FOREST', 14)]),
+    (3, 'STAT YOU CAN LEVEL UP', [('ATTACK', 38), ('MAGIC', 32), ('LIFE', 30)]),
+    (3, 'CHARACTER IN ZELDA II', [('LINK', 24), ('ZELDA', 20), ('BARBA', 18), ('ERROR', 14), ('GAN[N]ON', 10), ('BAGU', 8), ('IMPA', 6)]),
+    (2, 'ON THE ZELDA II OVERWORLD', [('ROAD/PATH', 24), ('BRIDGE', 20), ('CAVE', 18), ('TOWN', 16), ('PALACE', 12), ('RIVER/WATER', 10)]),
+    (3, 'TRIFORCE', [('COURAGE', 40), ('POWER', 30), ('WISDOM', 30)]),
+    (3, 'VANILLA WEST HYRULE SPELL', [('SHIELD', 30), ('JUMP', 26), ('LIFE', 24), ('FAIRY', 20)]),
+    (3, 'VANILLA EAST HYRULE SPELL', [('FIRE', 30), ('REFLECT', 26), ('SPELL', 22), ('THUNDER', 22)]),
+    (3, 'FLYING CREATURE', [('FAIRY', 28), ('FOKKA', 22), ('THUNDER[+]BIRD', 18), ('FOKKERU', 12), ('ACHE', 10), ('MOA/BUBBLE', 10)]),
+    (3, 'REASON TO VISIT A TOWN', [('HEAL/LIFE', 30), ('LEARN+SPELL/GET+SPELL', 28), ('MAGIC', 18), ('TALK/CLUE', 14), ('QUEST/ITEM', 10)]),
+    (3, 'WAY TO GET EXTRA XP', [('P[-]BAG/POINT+BAG', 40), ('KILL+ENEMIES', 28), ('PALACE+CRYSTAL/CRYSTAL', 20), ('BOSS', 12)]),
+    (4, 'ENEMY WITH A SHIELD OR ARMOR', [('IRON[+]KNUCKLE', 42), ('STALFOS', 24), ('REBONACK', 16), ('FOKKA', 10), ('DOOM[+]KNOCKER', 8)]),
+    (2, 'YOU USE THE HAMMER ON', [('ROCK/BOULDER', 48), ('TREE[s]/FOREST/WOODS', 32), ('SPECTACLE+ROCK', 20)]),
+    (3, 'DESERT OR SWAMP ENEMY', [('GELDARM', 32), ('LEEVER', 24), ('MOBLIN', 20), ('OCTO[ROK]', 14), ('BOT', 10)]),
+    (3, 'HIGH[-]COST MAGIC SPELL', [('THUNDER', 40), ('FAIRY', 25), ('SPELL', 20), ('LIFE', 15)]),
 ]
 
-# 17 Zelda II-themed Fast Money puzzles
+# 27 Zelda II-themed Fast Money puzzles
 ZELDA2_FM_PUZZLES: list[tuple[int, str, list[tuple[str, int]]]] = [
     (3, 'BARBA EDITION SPELL', [('SCALES', 35), ('METEOR', 30), ('INFERNO', 25), ('WYRML[I]NG', 10)]),
     (3, 'P-BAG XP VALUE', [('200', 40), ('100', 25), ('50', 20), ('500', 15)]),
@@ -89,6 +106,16 @@ ZELDA2_FM_PUZZLES: list[tuple[int, str, list[tuple[str, int]]]] = [
     (3, 'GIFT FROM A WISE MAN', [('SPELL/MAGIC', 45), ('UP[+]STAB/UPWARD+THRUST', 25), ('DOWN[+]STAB/DOWNWARD+THRUST', 20), ('CLUE/HINT', 10)]),
     (3, 'PLACE IN WEST HYRULE', [('PARAPA[+PALACE]', 30), ('RAURU', 25), ('DEATH+M(T/TN/OUNTAIN)', 25), ('MIDORO[+SWAMP]', 20)]),
     (3, 'PLACE IN EAST HYRULE', [('NABOORU', 30), ('DARUNIA', 25), ('MAZE+ISLAND', 25), ('GREAT[+PALACE]', 20)]),
+    (0, 'MAX LEVELS FOR A STAT', [('8/EIGHT', 75), ('9/NINE', 25)]),
+    (2, 'BARBA BURNS', [('SIGN[s]', 30), ('VILLAGER[s]/PEOPLE', 25), ('FOREST/TREES', 20), ('TOWN[s]', 15), ('ENEMIES', 10)]),
+    (4, 'IMPORTANT NPC', [('ERROR', 30), ('BAGU', 25), ('IMPA', 20), ('ZELDA', 15), ('WISE+MAN/OLD+MAN', 10)]),
+    (3, 'DIRECTION YOU CAN STAB', [('FORWARD/STRAIGHT', 40), ('DOWN', 35), ('UP', 25)]),
+    (2, 'IN PALACE 6', [('BARBA', 35), ('LA(V/B)A', 25), ('WIZZROBE', 15), ('MAGO', 15), ('CRYSTAL', 10)]),
+    (3, 'BOSS THAT SHOOTS PROJECTILES', [('BARBA', 35), ('CAROCK', 30), ('THUNDER[+]BIRD', 20), ('HELMET[+]HEAD', 15)]),
+    (3, 'COLOR OF AN ENEMY IN ZELDA II', [('RED', 35), ('BLUE', 30), ('ORANGE', 20), ('GREEN', 15)]),
+    (2, 'THAT REFILLS AT A PALACE CRYSTAL', [('LIFE', 45), ('MAGIC', 35), ('XP/LEVEL', 20)]),
+    (3, 'CREATURE THAT JUMPS AROUND', [('TEKTITE', 40), ('BOT', 25), ('BIT', 15), ('IRON[+]KNUCKLE', 10), ('DARK[+]LINK/SHADOW[+]LINK', 10)]),
+    (4, 'INSTANT[-]DEATH HAZARD', [('PIT/FALLING', 50), ('LA(V/B)A', 35), ('WATER', 15)]),
 ]
 
 
@@ -342,9 +369,10 @@ def assemble_feud_wram_code(
     standalone_stub: bool = False,
     wram_syms: dict[str, int] | None = None,
     nmi_exit_addr: int | None = None,
+    mmc3_pure_chr: bool = False,
 ) -> bytes:
     """Assemble the WRAM trampoline and hooks at $7800-$7AFF."""
-    if standalone_stub:
+    if standalone_stub and not mmc3_pure_chr:
         assert wram_syms is not None, 'wram_syms required for standalone_stub=True'
         return _assemble_standalone_wram(wram_syms, nmi_exit_addr=nmi_exit_addr)
     a = Asm6502(FEUD_WRAM_CODE_BASE)
@@ -429,10 +457,11 @@ def assemble_feud_wram_code(
     a.emit(0xA9, 0x00, 0x8D, 0x00, 0x20, 0x8D, 0x01, 0x20, 0x8D, 0x15, 0x40)
 
     # Switch to Barba outer banks ($5FF0=0, $5FF1=0, $5FF2=0) and WRAM bank 0 ($A0)
-    a.emit(0xA9, 0x00, 0x8D, 0xF0, 0x5F, 0x8D, 0xF1, 0x5F, 0x8D, 0xF2, 0x5F)
+    if not mmc3_pure_chr:
+        a.emit(0xA9, 0x00, 0x8D, 0xF0, 0x5F, 0x8D, 0xF1, 0x5F, 0x8D, 0xF2, 0x5F)
     a.emit(0xA9, 0x06, 0x8D, 0x00, 0x80, 0xA9, restore_r6, 0x8D, 0x01, 0x80)
     a.emit(0xA9, 0x07, 0x8D, 0x00, 0x80, 0xA9, restore_r7, 0x8D, 0x01, 0x80)
-    a.emit(0xA9, 0xA0, 0x8D, 0x01, 0xA0)
+    a.emit(0xA9, 0x80 if mmc3_pure_chr else 0xA0, 0x8D, 0x01, 0xA0)
     a.emit(0xE0, FEUD_REWARD_MAGIC)       # CPX #FEUD_REWARD_MAGIC
     a.branch(0xD0, 'ret_no_win')
     a.emit(0x8E, FEUD_REWARD_ADDR & 0xFF, FEUD_REWARD_ADDR >> 8)
@@ -462,6 +491,57 @@ def assemble_feud_wram_code(
     a.emit(0xA9, 0x07, 0x8D, 0x00, 0x80, 0xA9, 0x01, 0x8D, 0x01, 0x80)
     a.emit(0x4C, FEUD_ORIG_RESET & 0xFF, FEUD_ORIG_RESET >> 8)
 
+    if mmc3_pure_chr:
+        # $7A30..$7AFF: Zelda II CPU family name picker & default P1 name "BARBA"
+        mmc3_pick_z2_name = 0x7A30
+        mmc3_def_p1_name = 0x7A58
+        _pad_to(a, mmc3_pick_z2_name)
+        a.emit(0x24, 0x0C); a.branch(0x10, '_mpzn_now')
+        a.emit(0x20, 0xF9, 0xCA)
+        a.label('_mpzn_now')
+        a.emit(0x20, 0xBB, 0x9B)                  # JSR Feud RNG ($01FA)
+        a.emit(0xAD, 0xFA, 0x01, 0x29, 0x0F, 0xAA)
+        a.abs_ref(0xBC, 'TBL_MMC3_NOFF')          # LDY TBL_MMC3_NOFF,X
+        a.emit(0xA2, 0x00)
+        a.label('_mpzn_cp')
+        a.abs_ref(0xB9, 'TBL_MMC3_NAMES')         # LDA TBL_MMC3_NAMES,Y
+        a.emit(0x9D, 0x08, 0x03)                  # STA $0308,X
+        a.branch(0x30, '_mpzn_done')              # BMI done (last char has bit 7 set)
+        a.emit(0xE8, 0xC8); a.branch(0xD0, '_mpzn_cp')
+        a.label('_mpzn_done')
+        a.emit(0x60)
+
+        _pad_to(a, mmc3_def_p1_name)
+        a.emit(0xA5, 0x0B); a.branch(0xD0, '_mdpn_done')
+        a.emit(0xA2, 0x07)
+        a.label('_mdpn_chk')
+        a.emit(0xB5, 0x48, 0x29, 0x7F, 0xC9, 0x41); a.branch(0xD0, '_mdpn_done')
+        a.emit(0xCA); a.branch(0x10, '_mdpn_chk')
+        a.emit(0xA2, 0x04)
+        a.label('_mdpn_cp')
+        a.abs_ref(0xBD, 'TBL_MMC3_BARBA'); a.emit(0x9D, 0x00, 0x03, 0xCA)
+        a.branch(0x10, '_mdpn_cp')
+        a.label('_mdpn_done')
+        a.emit(0x4C, 0xD5, 0x96)
+        a.label('TBL_MMC3_BARBA'); a.emit(0x42, 0x41, 0x52, 0x42, 0xC1)
+
+        z2_names = (
+            'ZELDA', 'LINK', 'GANON', 'RAURU', 'SARIA', 'ERROR', 'BAGU', 'MIDO',
+            'DARUNIA', 'IMPA', 'KASUTO', 'NABOORU', 'RUTO', 'FOKKA', 'CAROCK', 'GOOMA',
+        )
+        offs: list[int] = []
+        blob: list[int] = []
+        for nm in z2_names:
+            offs.append(len(blob))
+            bs = [ord(ch) for ch in nm]
+            bs[-1] |= 0x80
+            blob.extend(bs)
+        a.label('TBL_MMC3_NOFF'); a.emit(*offs)
+        a.label('TBL_MMC3_NAMES'); a.emit(*blob)
+        out = a.finish()
+        assert len(out) <= 0x0300, f'MMC3 WRAM overflow: {len(out)} > 0x0300'
+        return out
+
     return a.finish()
 
 
@@ -475,6 +555,8 @@ def patch_feud_prg_and_chr(
     wram_syms: dict[str, int] | None = None,
     celeb_syms: dict[str, int] | None = None,
     win_hook_addr: int | None = None,
+    z2_opponents: bool = False,
+    patch_win_hook: bool = True,
 ) -> tuple[bytes, bytes]:
     """Patch Family Feud 32KB PRG and 128KB CHR-ROM for Mapper 176 portal, Zelda II puzzles, and Barba/Z2 sprites."""
     assert len(prg) == 32768
@@ -506,7 +588,7 @@ def patch_feud_prg_and_chr(
     buf[nmi_rti_off + 3 : nmi_rti_off + 6] = b'\xEA\xEA\xEA'
     if win_hook_addr is not None:
         patch_jmp(FEUD_WIN_PATCH_ADDR, win_hook_addr)
-    elif not standalone:
+    elif patch_win_hook and not standalone:
         patch_jmp(FEUD_WIN_PATCH_ADDR, FEUD_WIN_HOOK)
 
     # 4. Encode Zelda II Main Round + Fast Money puzzles into Bank 16 ($10000 in CHR)
@@ -571,7 +653,20 @@ def patch_feud_prg_and_chr(
     _ = barba_json
     if z2_rom is not None:
         from feud_art import apply_barba_cast, patch_chr0b_blue_k
-        apply_barba_cast(buf, cbuf, z2_rom)
+        apply_barba_cast(buf, cbuf, z2_rom, z2_opponents=z2_opponents)
+        if z2_opponents and not standalone:
+            import feud_hooks
+            feud_hooks._patch_round_title(buf)
+            # Force P1 = Family 0 (Barba) and CPU = Family 1 or 2 (Zelda II opponents)
+            roll_both = bytes([0xA9, 0x00, 0x8D, 0x15, 0x03, 0x20, 0xBB, 0x9B, 0xAD, 0xFA, 0x01, 0x29, 0x01, 0x18, 0x69, 0x01, 0x8D, 0x16, 0x03, 0x60])
+            buf[0xC9DE - 0x8000 : 0xC9DE - 0x8000 + len(roll_both)] = roll_both
+            roll_p1 = bytes([0xA9, 0x00, 0x8D, 0x15, 0x03, 0x60])
+            buf[0xCA0C - 0x8000 : 0xCA0C - 0x8000 + len(roll_p1)] = roll_p1
+            roll_cpu = bytes([0x20, 0xBB, 0x9B, 0xAD, 0xFA, 0x01, 0x29, 0x01, 0x18, 0x69, 0x01, 0x8D, 0x16, 0x03, 0x60])
+            buf[0xCA22 - 0x8000 : 0xCA22 - 0x8000 + len(roll_cpu)] = roll_cpu
+            # Zelda II CPU family name ($7A30) + default P1 name "BARBA" ($7A58)
+            buf[0x9653 - 0x8000 : 0x9659 - 0x8000] = bytes([0x20, 0x30, 0x7A, 0x4C, 0xBE, 0x97])
+            buf[0x96B3 - 0x8000 : 0x96B6 - 0x8000] = bytes([0x20, 0x58, 0x7A])
         if standalone:
             assert wram_syms is not None, 'wram_syms required for standalone=True'
             import feud_hooks
@@ -591,11 +686,169 @@ def patch_feud_prg_and_chr(
     return bytes(buf), bytes(cbuf)
 
 
-def build_standalone(out_path: Path, src_rom: Path, z2_rom_path: Path | None = None, barba_json: Path | None = None) -> Path:
-    """Build a standalone Mapper 176 test ROM for Family Feud: Barba Edition."""
+def _build_standalone_mmc3(
+    out_path: Path,
+    raw: bytes,
+    z2_bytes: bytes | None,
+    barba_json: Path | None,
+    build_number: int | None = None,
+) -> Path:
+    """Build a classic iNES 1.0 Mapper 4 (MMC3, 256KB PRG + 256KB CHR-ROM + DPCM roars) Feud ROM."""
+    import feud_hooks
+    import feud_mmc3
+    import feud_wram
+    import roar_sample
+    from feud_art import patch_chr0b_blue_k
+
+    assert z2_bytes is not None, 'roms/z2.nes is required for MMC3 Barba build'
+
+    roar_wav = Path(__file__).resolve().parent.parent / 'assets' / 'roar.wav'
+    roar_dmc = None
+    roar_soft_dmc = None
+    if roar_wav.is_file():
+        roar_dir = Path(__file__).resolve().parent.parent / 'build' / 'subgames'
+        roar_dir.mkdir(parents=True, exist_ok=True)
+        roar_dmc, _ = roar_sample.convert(roar_wav, roar_dir)
+        assert len(roar_dmc) <= 0xE544 - 0xDCC0, f'roar.dmc too large for $DCC0-$E543: {len(roar_dmc)}'
+        roar_soft_dmc, _ = roar_sample.convert_soft(roar_wav, roar_dir)
+        assert len(roar_soft_dmc) <= 0xECC6 - 0xE940, f'roar_soft.dmc too large for $E940-$ECC5: {len(roar_soft_dmc)}'
+
+    wram_extra, wram_syms = feud_wram.assemble_wram_extra(mmc3_pure_chr=True)
+    pal_wram, pal_syms = feud_wram.assemble_pal_wram()
+    all_wram_syms = {**wram_syms, **pal_syms}
+    celeb_wram = None
+    celeb_syms = None
+    if roar_dmc is not None:
+        celeb_wram, celeb_syms = feud_wram.assemble_celeb_wram(mmc3_pure_chr=True)
+
+    prg, chr_rom = patch_feud_prg_and_chr(
+        raw[16 : 16 + 32768],
+        raw[16 + 32768 : 16 + 32768 + 131072],
+        z2_bytes,
+        barba_json,
+        standalone=False,
+        win_hook_addr=None,
+        z2_opponents=False,
+        patch_win_hook=False,
+    )
+    prg_buf = bytearray(prg)
+    chr_buf = bytearray(chr_rom)
+    patch_chr0b_blue_k(chr_buf)
+    feud_hooks.apply_feud_prg_hooks(prg_buf, all_wram_syms, celeb_syms, mmc3_4x12_fo=False)
+
+    cast_assets = feud_mmc3.build_mmc3_cast_assets(bytes(prg_buf), bytes(chr_buf), raw, z2_bytes)
+    prg_patched_buf = bytearray(cast_assets['prg_patched'])  # type: ignore[arg-type]
+    chr256_buf = bytearray(cast_assets['chr256'])            # type: ignore[arg-type]
+    if build_number is not None:
+        from feud_art import apply_title_build_number
+        apply_title_build_number(prg_patched_buf, chr256_buf, build_number)
+    prg_patched = bytes(prg_patched_buf)
+    chr256 = bytes(chr256_buf)
+    bank5: bytes = cast_assets['bank5']              # type: ignore[assignment]
+    bank6: bytes = cast_assets['bank6']              # type: ignore[assignment]
+
+    bank4_code = feud_mmc3.assemble_mmc3_bank4(cast_assets)
+    wram_code = feud_mmc3.assemble_mmc3_wram_code(all_wram_syms)
+    assert len(wram_code) <= 0x300
+    assert len(wram_extra) <= 0x500
+    assert len(pal_wram) <= 0x100
+    assert len(bank4_code) <= 0x1200
+
+    # Stage 1 ($FFC5, <=13 bytes of 0xFF padding): SEI; CLD; enable MMC3 WRAM; disable IRQ; jump to Stage 2
+    a_s1 = Asm6502(STANDALONE_BOOT_STAGE1)
+    a_s1.emit(0x78, 0xD8, 0xA9, 0x80, 0x8D, 0x01, 0xA0, 0x8D, 0x00, 0xE0)
+    a_s1.emit(0x4C, STANDALONE_BOOT_STAGE2 & 0xFF, STANDALONE_BOOT_STAGE2 >> 8)
+    stage1 = a_s1.finish()
+    assert len(stage1) <= 13
+
+    # Stage 2 ($FFE2, <=20 bytes of 0x00 padding): map PRG bank 4 to $8000, jump to copy stub
+    a_s2 = Asm6502(STANDALONE_BOOT_STAGE2)
+    a_s2.emit(0xA9, 0x06, 0x8D, 0x00, 0x80, 0xA9, 0x04, 0x8D, 0x01, 0x80)
+    a_s2.emit(0x4C, STANDALONE_COPY_ADDR & 0xFF, STANDALONE_COPY_ADDR >> 8)
+    stage2 = a_s2.finish()
+    assert len(stage2) <= 20
+
+    # Copy stub ($8300 in PRG bank 4): copy wram_code, wram_extra, pal_wram, celeb_wram -> WRAM -> FEUD_BOOT
+    a_cp = Asm6502(STANDALONE_COPY_ADDR)
+    a_cp.emit(0x78)                          # SEI
+    a_cp.emit(0xA9, 0x80, 0x8D, 0x01, 0xA0)  # Enable MMC3 WRAM
+    a_cp.emit(0xA2, 0x00)                    # LDX #$00
+    a_cp.label('cp_loop')
+    for page in range(3):
+        a_cp.emit(0xBD, 0x00, 0x80 + page)
+        a_cp.emit(0x9D, 0x00, (FEUD_WRAM_CODE_BASE >> 8) + page)
+    for page in range(5):
+        a_cp.emit(0xBD, 0x00, 0x84 + page)
+        a_cp.emit(0x9D, 0x00, 0x7B + page)
+    a_cp.emit(0xBD, 0x00, 0x9F)
+    a_cp.emit(0x9D, 0x00, 0x74)
+    if celeb_wram is not None:
+        for page in range(4):
+            a_cp.emit(0xBD, 0x00, 0x9B + page)
+            a_cp.emit(0x9D, 0x00, 0x70 + page)
+    a_cp.emit(0xE8)                          # INX
+    a_cp.branch(0xD0, 'cp_loop')             # BNE cp_loop
+    a_cp.emit(0x4C, FEUD_BOOT & 0xFF, FEUD_BOOT >> 8)
+    copy_stub = a_cp.finish()
+    assert len(copy_stub) <= 0x100
+
+    prg256 = bytearray(b'\xFF' * (256 * 1024))
+    prg256[0 : 16384] = prg_patched[0:16384]
+    prg256[32768 : 32768 + len(wram_code)] = wram_code
+    prg256[32768 + 0x300 : 32768 + 0x300 + len(copy_stub)] = copy_stub
+    prg256[32768 + 0x400 : 32768 + 0x400 + len(wram_extra)] = wram_extra
+    prg256[32768 + 0x900 : 32768 + 0x900 + len(bank4_code)] = bank4_code
+    if celeb_wram is not None:
+        assert len(celeb_wram) <= 0x400
+        prg256[32768 + 0x1B00 : 32768 + 0x1B00 + len(celeb_wram)] = celeb_wram
+    prg256[32768 + 0x1F00 : 32768 + 0x1F00 + len(pal_wram)] = pal_wram
+    prg256[5 * 8192 : 6 * 8192] = bank5
+    prg256[6 * 8192 : 7 * 8192] = bank6
+
+    top_base = 240 * 1024
+    prg256[top_base : top_base + 16384] = prg_patched[16384:32768]
+    if roar_dmc is not None:
+        prg256[top_base + 0x1CC0 : top_base + 0x1CC0 + len(roar_dmc)] = roar_dmc
+    if roar_soft_dmc is not None:
+        prg256[top_base + 0x2940 : top_base + 0x2940 + len(roar_soft_dmc)] = roar_soft_dmc
+
+    s1_off = top_base + (STANDALONE_BOOT_STAGE1 - 0xC000)
+    assert prg256[s1_off : s1_off + len(stage1)] == b'\xFF' * len(stage1)
+    prg256[s1_off : s1_off + len(stage1)] = stage1
+    s2_off = top_base + (STANDALONE_BOOT_STAGE2 - 0xC000)
+    assert prg256[s2_off : s2_off + len(stage2)] == b'\x00' * len(stage2)
+    prg256[s2_off : s2_off + len(stage2)] = stage2
+    prg256[0x3FFFC:0x3FFFE] = bytes([STANDALONE_BOOT_STAGE1 & 0xFF, STANDALONE_BOOT_STAGE1 >> 8])
+
+    hdr = make_rom_header(len(prg256), len(chr256), mapper='mmc3', vertical_mirroring=True)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_bytes(bytes(hdr) + bytes(prg256) + chr256)
+    return out_path
+
+
+def build_standalone(
+    out_path: Path,
+    src_rom: Path,
+    z2_rom_path: Path | None = None,
+    barba_json: Path | None = None,
+    *,
+    mapper: str = '176',
+    build_number: int | None = None,
+) -> Path:
+    """Build a standalone Family Feud: Barba Edition ROM (Mapper 176 or pure CHR-ROM MMC3)."""
+    from build_history import HISTORY_FILE, next_subgame_build_number, record_subgame_build
+    import hashlib
+    record_this = build_number is None
+    if build_number is None:
+        build_number = next_subgame_build_number(HISTORY_FILE, 'feud')
     raw = src_rom.read_bytes()
     assert raw[:4] == b'NES\x1a'
     z2_bytes = z2_rom_path.read_bytes() if z2_rom_path and z2_rom_path.exists() else None
+    if mapper == 'mmc3':
+        res = _build_standalone_mmc3(out_path, raw, z2_bytes, barba_json, build_number=build_number)
+        if record_this:
+            record_subgame_build(HISTORY_FILE, 'feud', build_number, mapper, res, hashlib.sha256(res.read_bytes()).hexdigest())
+        return res
     dyn = None
     roar_dmc = None
     roar_soft_dmc = None
@@ -605,9 +858,11 @@ def build_standalone(out_path: Path, src_rom: Path, z2_rom_path: Path | None = N
         roar_wav = Path(__file__).resolve().parent.parent / 'assets' / 'roar.wav'
         if roar_wav.is_file():
             import roar_sample
-            roar_dmc, _ = roar_sample.convert(roar_wav, out_path.parent)
+            roar_dir = Path(__file__).resolve().parent.parent / 'build' / 'subgames'
+            roar_dir.mkdir(parents=True, exist_ok=True)
+            roar_dmc, _ = roar_sample.convert(roar_wav, roar_dir)
             assert len(roar_dmc) <= 0xE544 - 0xDCC0, f'roar.dmc too large for $DCC0-$E543: {len(roar_dmc)}'
-            roar_soft_dmc, _ = roar_sample.convert_soft(roar_wav, out_path.parent)
+            roar_soft_dmc, _ = roar_sample.convert_soft(roar_wav, roar_dir)
             assert len(roar_soft_dmc) <= 0xECC6 - 0xE940, f'roar_soft.dmc too large for $E940-$ECC5: {len(roar_soft_dmc)}'
     prg, chr_rom = patch_feud_prg_and_chr(
         raw[16 : 16 + 32768],
@@ -618,6 +873,13 @@ def build_standalone(out_path: Path, src_rom: Path, z2_rom_path: Path | None = N
         wram_syms=dyn['wram_syms'] if dyn is not None else None,
         celeb_syms=dyn['celeb_syms'] if (dyn is not None and roar_dmc is not None) else None,
     )
+    prg_buf = bytearray(prg)
+    chr_buf = bytearray(chr_rom)
+    if build_number is not None:
+        from feud_art import apply_title_build_number
+        apply_title_build_number(prg_buf, chr_buf, build_number)
+    prg = bytes(prg_buf)
+    chr_rom = bytes(chr_buf)
 
     wram_code = assemble_feud_wram_code(
         0x0000,
@@ -723,8 +985,11 @@ def build_standalone(out_path: Path, src_rom: Path, z2_rom_path: Path | None = N
     if dyn is not None:
         hdr[11] = 0x09  # 32KB unbattery CHR-RAM (64 << 9)
 
+    out_bytes = bytes(hdr) + bytes(prg512) + bytes(chr256)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_bytes(bytes(hdr) + bytes(prg512) + bytes(chr256))
+    out_path.write_bytes(out_bytes)
+    if record_this:
+        record_subgame_build(HISTORY_FILE, 'feud', build_number, mapper, out_path, hashlib.sha256(out_bytes).hexdigest())
     return out_path
 
 
@@ -922,13 +1187,37 @@ def patch_feud_for_combined(
 
 if __name__ == '__main__':
     root = Path(__file__).resolve().parent.parent
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--out', type=Path, default=None)
+    parser.add_argument('--mapper', choices=('176', 'mmc3'), default='176')
+    args = parser.parse_args()
+    default_out = root / ('play/nes/feud-mmc3.nes' if args.mapper == 'mmc3' else 'build/subgames/feud.nes')
     out = build_standalone(
-        root / 'build/subgames/feud.nes',
+        args.out or default_out,
         root / 'roms/feud.nes',
         root / 'roms/z2.nes',
         root / 'assets/barba.json',
+        mapper=args.mapper,
     )
-    play_out = root / 'play/standalone/feud-barba.nes'
-    play_out.parent.mkdir(parents=True, exist_ok=True)
-    play_out.write_bytes(out.read_bytes())
-    print(f'Built {out} ({out.stat().st_size} bytes) and {play_out}')
+    if args.mapper == '176' and args.out is None:
+        from bps import write_bps
+        play_out = root / 'play/nes/feud-barba.nes'
+        play_out.parent.mkdir(parents=True, exist_ok=True)
+        play_out.write_bytes(out.read_bytes())
+        write_bps(
+            root / 'roms/feud.nes',
+            play_out,
+            out_bps_path=root / 'play/bps/feud-barba.bps',
+            metadata='feud-barba | Barba Edition',
+        )
+        print(f'Built {out} ({out.stat().st_size} bytes) and {play_out}')
+    else:
+        if args.mapper == 'mmc3' and args.out is None:
+            from bps import write_bps
+            write_bps(
+                root / 'roms/feud.nes',
+                out,
+                out_bps_path=root / 'play/bps/feud-mmc3.bps',
+                metadata='feud-mmc3 | Barba Edition (MMC3)',
+            )
+        print(f'Built {out} ({out.stat().st_size} bytes, mapper={args.mapper})')

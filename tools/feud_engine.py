@@ -154,9 +154,9 @@ BARBA_ALT_PATS = [
 
 ZELDA_FAMILY_NAMES = [
     'HYRULE', 'BARBA', 'ZELDA', 'GANON', 'BAGU', 'ERROR', 'RAURU', 'RUTO',
-    'SARIA', 'DARUNIA', 'NABOORU', 'IMPA', 'KASUTO', 'MIDO', 'TRIFORCE', 'FOKKA',
-    'DAIRA', 'MOBLIN', 'STALFOS', 'IRONKNK', 'CAROCK', 'REBONACK', 'GOOMA', 'GELDARM',
-    'WIZROBE', 'LIZALFOS', 'MAGO', 'THNDBRD', 'SHADWLK', 'GORON', 'OCTO', 'TINGLE',
+    'SARIA', 'DARUNIA', 'NABOORU', 'IMPA', 'KASUTO', 'MIDO', 'FOKKA',
+    'DAIRA', 'MOBLIN', 'STALFOS', 'CAROCK', 'GOOMA', 'GELDARM',
+    'MAGO', 'GORON', 'OCTOROK', 'TINGLE',
 ]
 
 CHR0B_BLUE_MAP: dict[str, int] = {
@@ -1038,8 +1038,11 @@ def _assemble_bank4(cast: dict[str, object]) -> bytes:
 
     # ---- B4_PICK_Z2_NAME ----
     a.label('B4_PICK_Z2_NAME')
+    a.label('pzn_rng')
     a.abs_ref(0x20, 'B4_RNG')
-    a.emit(0xAD, 0xFA, 0x01, 0x45, 0x1F, 0x29, 0x1F, 0xAA)
+    a.emit(0xAD, 0xFA, 0x01, 0x45, 0x1F, 0x29, 0x1F, 0xC9, len(ZELDA_FAMILY_NAMES))
+    a.branch(0xB0, 'pzn_rng')
+    a.emit(0xAA)
     a.abs_ref(0xBC, 'TBL_NAME_OFF')
     a.emit(0xA2, 0x00)
     a.label('pzn_cp')

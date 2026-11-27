@@ -20,7 +20,7 @@ SCENES=[
     ('boss-door','Before Palace 6 boss','Jump right over the lava ledges and keep holding Right. Barba roars on landing, then holds still for half a second before Lava Link rises.'),
     ('great-palace','Great Palace final boss','Great Palace Thunderbird / Dark Link corridor with max stats, all spells and full meters. Test Inferno, fireballs and ending progression.')
 ]
-RECIPE_FILES=['tools/state_scenarios.lua','tests/newgame.lua','tests/state_pack.lua',
+RECIPE_FILES=['tools/scenarios/state_scenarios.lua','tests/newgame.lua','tests/state_pack.lua',
               'tools/create_test_pack.py','tools/checkpoint_sets.json','tests/checkpoint_features.lua']
 RECIPES=json.loads((ROOT/'tools/checkpoint_sets.json').read_text())
 EDGE_SCENES=[
@@ -39,7 +39,7 @@ TOWN_OW_COORDS = {
     3: (75, 60),   # Mido
     4: (60, 23),   # Nabooru
     5: (33, 3),    # Darunia
-    6: (99, 61),   # New Kasuto
+    6: (81, 61),   # New Kasuto
     7: (99, 34),   # Old Kasuto
 }
 PALACE_OW_COORDS = {
@@ -48,15 +48,16 @@ PALACE_OW_COORDS = {
     3: (98, 57),   # Palace 3
     4: (58, 59),   # Palace 4 (Maze Island)
     5: (60, 62),   # Palace 5
-    6: (100, 45),  # Palace 6 (Hidden Palace)
+    6: (102, 45),  # Palace 6 (Hidden Palace)
     7: (73, 4),    # Great Palace
 }
 ENCOUNTER_OW_COORDS = {
     (0, 1): (82, 16),   # West Hyrule water bridge
     (0, 14): (69, 9),   # Medicine cave
     (0, 16): (62, 54),  # Myu cave
-    (0, 34): (32, 40),  # West Hyrule grass
+    (0, 34): (25, 15),  # West Hyrule grass
     (2, 2): (76, 21),   # Valley of Death Lizalfos
+    (2, 34): (25, 15),  # East Hyrule grass
 }
 
 
@@ -87,7 +88,7 @@ def checkpoint_writes(scene: dict) -> tuple[dict,dict]:
     code={1:0,2:1,3:2,4:0,5:0,6:1,7:2}.get(number,0)
     prev_region=2 if (region==2 or (region==1 and number==4)) else 0
     writes.update({0x707:world,0x706:region,0x70A:prev_region,
-                   0x769:3 if world in (1,2) else (5 if world==5 else 4),
+                   0x769:(2 if prev_region==2 else 1) if world==0 else (3 if world in (1,2) else (5 if world==5 else 4)),
                    0x561:scene['room'],0x568:max(0,number-1),0x56B:number,0x56C:code,
                    0x701:0,0x75C:scene['page'],0x704:0,0x736:0,0x73D:0,0x726:1})
     if scene.get('town') and number in TOWN_OW_COORDS:
@@ -99,7 +100,8 @@ def checkpoint_writes(scene: dict) -> tuple[dict,dict]:
     elif world==0 and (region,scene['room']) in ENCOUNTER_OW_COORDS:
         ow_y,ow_x=ENCOUNTER_OW_COORDS[(region,scene['room'])]
         writes.update({0x73:ow_y,0x74:ow_x})
-    if scene.get('town'):writes[0x748]=0x2C+(number%4)*2
+    if scene.get('town'):writes[0x748]=0x31 if number==6 else 0x2C+(number%4)*2
+    elif world==0 and scene.get('mode')!=5 and scene['room'] in (34,35):writes[0x748]=0xFF
     else:writes[0x748]=0x34+code
     writes.update({int(a):v for a,v in scene.get('entry',{}).items()})
     return writes,expected
@@ -122,7 +124,7 @@ def scene_prefix(set_name: str) -> str:
 
 
 def recipe_hash(set_name: str='core') -> str:
-    files=RECIPE_FILES+(['tools/edge_scenarios.lua'] if set_name=='edges' else [])
+    files=RECIPE_FILES+(['tools/scenarios/edge_scenarios.lua'] if set_name=='edges' else [])
     return hashlib.sha256(b''.join((ROOT/p).read_bytes() for p in files)).hexdigest()
 
 
@@ -157,7 +159,7 @@ def create(force: bool=False, set_name: str='core', rom_path: Path | None=None) 
     if set_name=='edges':
         core=create(set_name='core',rom_path=rom_path)
         prefix+='SOURCE_STATE='+json.dumps((Path(core['folder'])/'combat.mss').as_posix())+'\n'
-    scenario.write_text(prefix+(ROOT/('tools/edge_scenarios.lua' if set_name=='edges' else 'tools/state_scenarios.lua')).read_text())
+    scenario.write_text(prefix+(ROOT/('tools/scenarios/edge_scenarios.lua' if set_name=='edges' else 'tools/scenarios/state_scenarios.lua')).read_text())
     if run(scenario,pack_rom,60):raise ValueError('State generation failed; see build/*-error.txt')
     states=[]
     for slot,(key,title,instructions) in enumerate(scenes,1):

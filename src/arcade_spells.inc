@@ -93,7 +93,7 @@ ArcadeSpellHook0:
     ldy $0749
     cpy #$08
     bcs @arcade_cast
-    jmp $8DCD               ; vanilla spell 0..7 cast
+    jmp $8DDC               ; vanilla spell 0..7 cast (after $8DC9..$8DDB reclaim)
 @arcade_cast:
     ldx #$00
     jsr CallBank2Spell0

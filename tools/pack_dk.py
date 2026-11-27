@@ -9,12 +9,14 @@ Round 2 upgrade:
 """
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 
 from nes import CHR_OFFSET as Z2_CHR_OFFSET, decode_tile, encode_tile, load_source
 from pack_f13 import Asm6502
 import roar_sample
+from subgame_pack import make_rom_header
 
 
 # Fixed entry points in guest WRAM bank ($7800-$7BFF)
@@ -39,6 +41,7 @@ DK_FB1_VX         = 0x7FE8
 DK_FB1_VY         = 0x7FE9
 DK_FB_COOLDOWN    = 0x7FEA  # Frames until next fireball shot
 DK_SPRING_TIMER   = 0x7FEB  # Stage 2 (75m) Z2 Shield spawn timer (separate from bomb $36)
+DK_FB_ALT         = 0x7FEC  # Alternates 0/1 so every other fireball fires straight forward
 DK_ROAR_TIMER     = 0x7FF8  # Countdown frames for active roar.dmc playback
 DK_ANIM_FRAME     = 0x7FF9  # Global NMI animation frame counter
 DK_CHR_BANK_R0    = 0x7FFA  # Shadow of current MMC3 R0 bank (Lil' Barba)
@@ -1123,7 +1126,7 @@ def _encode_dk_text(s: str) -> bytes:
     return bytes(out)
 
 
-def _make_barba_kong_title_packet() -> bytes:
+def _make_barba_kong_title_packet(build_number: int | None = None) -> bytes:
     """Build custom 'BARBA KONG' title screen PPU packet."""
     # Palettes:
     # BG0: vanilla DK blue girders ($0F, $2C, $38, $12)
@@ -1185,6 +1188,8 @@ def _make_barba_kong_title_packet() -> bytes:
     # Vanilla Donkey Kong copyright footer
     packets.append((0x2305, False, False, bytes.fromhex('d301090801241712171d0e170d18240c1865151d0d64')))
     packets.append((0x234B, False, False, bytes.fromhex('160a0d0e24121724130a190a17')))
+    if build_number is not None:
+        packets.append((0x203A, False, False, _encode_dk_text(f'B{build_number}')))
 
     return _encode_ppu_packets(packets)
 
@@ -1261,6 +1266,7 @@ def _assemble_bank1(
     orig_prg: bytes,
     roar_info: dict,
     roar_dmc_len: int,
+    build_number: int | None = None,
 ) -> tuple[bytes, dict[str, int]]:
     """Build 8 KB PRG Bank 1 ($8000-$9FFF): relocated DK core, MMC3 anim, roar, screens."""
     bank1 = bytearray(b'\xFF' * 8192)
@@ -1287,6 +1293,39 @@ def _assemble_bank1(
     a.emit(0xEE, DK_ROAR_COUNT & 0xFF, DK_ROAR_COUNT >> 8)      # INC DK_ROAR_COUNT
     a.emit(0x68, 0x60)                                          # PLA; RTS
 
+    # TriggerBarbaRoarIfIdle: play sampled roar only when DK_ROAR_TIMER == 0 (preserves A, X, Y)
+    a.label('TriggerBarbaRoarIfIdle')
+    a.emit(0x48)                                                # PHA
+    a.emit(0xAD, DK_ROAR_TIMER & 0xFF, DK_ROAR_TIMER >> 8)
+    a.branch(0xD0, 'roar_idle_skip')
+    a.emit(0x68)                                                # PLA
+    a.abs_ref(0x4C, 'TriggerBarbaRoar')
+    a.label('roar_idle_skip')
+    a.emit(0x68, 0x60)                                          # PLA; RTS
+
+    # BarbaKongDeathRoar ($D0D4): LDA $58; BNE done; LDA #$80; STA $FE; JMP TriggerBarbaRoar
+    a.label('BarbaKongDeathRoar')
+    a.emit(0xA5, 0x58)
+    a.branch(0xD0, 'death_roar_done')
+    a.emit(0xA9, 0x80, 0x85, 0xFE)
+    a.abs_ref(0x4C, 'TriggerBarbaRoar')
+    a.label('death_roar_done')
+    a.emit(0x60)
+
+    # BarbaKongSmashRoar ($ED58): LDA #$02; STA $FF; roar if gameplay ($58==0) and idle
+    a.label('BarbaKongSmashRoar')
+    a.emit(0xA9, 0x02, 0x85, 0xFF)
+    a.emit(0xA5, 0x58)
+    a.branch(0xD0, 'smash_roar_done')
+    a.abs_ref(0x4C, 'TriggerBarbaRoarIfIdle')
+    a.label('smash_roar_done')
+    a.emit(0x60)
+
+    # BarbaKongBonusRoar ($EC94): LDA #$20; STA $FD; roar on bonus item pickup
+    a.label('BarbaKongBonusRoar')
+    a.emit(0xA9, 0x20, 0x85, 0xFD)
+    a.abs_ref(0x4C, 'TriggerBarbaRoarIfIdle')
+
     # BarbaKongTitleStart ($C98A): STA $0514; JMP TriggerBarbaRoar
     a.label('BarbaKongTitleStart')
     a.emit(0x8D, 0x14, 0x05)
@@ -1307,9 +1346,10 @@ def _assemble_bank1(
     a.emit(0x8D, DK_FB0_TIMER & 0xFF, DK_FB0_TIMER >> 8)
     a.emit(0x8D, DK_FB1_TIMER & 0xFF, DK_FB1_TIMER >> 8)
     a.emit(0x8D, DK_FB_COOLDOWN & 0xFF, DK_FB_COOLDOWN >> 8)
+    a.emit(0x8D, DK_FB_ALT & 0xFF, DK_FB_ALT >> 8)
     a.abs_ref(0x4C, 'TriggerBarbaRoar')
 
-    # BarbaKongFireballUpdate ($D75B): shoot fireballs randomly in the hammer arc while $A0 != 0
+    # BarbaKongFireballUpdate ($D75B): alternate straight-forward shots with 180-deg cone shots while $A0 != 0
     a.label('BarbaKongFireballUpdate')
     a.emit(0xAD, DK_FB_COOLDOWN & 0xFF, DK_FB_COOLDOWN >> 8)
     a.branch(0xF0, 'fb_try_spawn')
@@ -1327,9 +1367,17 @@ def _assemble_bank1(
     a.label('fb_spawn_slot')
     a.emit(0xA9, 0x09, 0x8D, DK_FB_COOLDOWN & 0xFF, DK_FB_COOLDOWN >> 8)
     a.emit(0xA9, 0x1A, 0x9D, DK_FB0_TIMER & 0xFF, DK_FB0_TIMER >> 8)
+    a.emit(0xAD, DK_FB_ALT & 0xFF, DK_FB_ALT >> 8)
+    a.emit(0x49, 0x01)
+    a.emit(0x8D, DK_FB_ALT & 0xFF, DK_FB_ALT >> 8)
+    a.branch(0xD0, 'fb_straight_shot')
     a.emit(0xA5, 0x18)                                       # LDA $18 (DK RNG)
     a.emit(0x4D, DK_ANIM_FRAME & 0xFF, DK_ANIM_FRAME >> 8)   # EOR DK_ANIM_FRAME
     a.emit(0x29, 0x0F, 0xA8)                                 # TAY (0..15 across 180-deg forward cone)
+    a.branch(0x10, 'fb_angle_ready')
+    a.label('fb_straight_shot')
+    a.emit(0xA0, 0x07)                                       # Straight forward (vy=0, vx=+/-3, dy=+4)
+    a.label('fb_angle_ready')
     a.abs_ref(0xB9, 'fb_dy_tbl')
     a.emit(0x18, 0x6D, 0x00, 0x02)                           # ADC BarbaY (head-to-feet body emit)
     a.emit(0x9D, DK_FB0_Y & 0xFF, DK_FB0_Y >> 8)
@@ -1459,6 +1507,7 @@ def _assemble_bank1(
     a.label('fb_s2_hit')
     a.emit(0x20, 0xD1, 0xEA, 0x20, 0x94, 0xF0)               # JSR $EAD1; JSR $F094
     a.emit(0xA6, 0x5D, 0xA9, 0x00, 0x95, 0x5E)               # LDX $5D; LDA #0; STA $5E,X
+    a.abs_ref(0x20, 'TriggerBarbaRoarIfIdle')
     a.emit(0xA9, 0x01, 0x85, 0xBF, 0x60)                     # LDA #1; STA $BF; RTS
 
     # BarbaKongSpringSpawn ($EA34): Stage 2 Z2 Shield spawner using DK_SPRING_TIMER
@@ -1476,9 +1525,13 @@ def _assemble_bank1(
     a.label('spring_spawn_done')
     a.emit(0x60)
 
-    # BarbaKongStage2Hook ($CF07): run vanilla collision ($EC29), tick spring timer, & run Link's bombs
+    # BarbaKongStage2Hook ($CF07): run vanilla collision ($EC29), then Stage 2 ($53==3) spring timer & bombs
     a.label('BarbaKongStage2Hook')
     a.emit(0x20, 0x29, 0xEC)                                 # JSR $EC29
+    a.emit(0xA5, 0x53, 0xC9, 0x03)                           # LDA $53; CMP #$03 (75m Stage 2 only)
+    a.branch(0xF0, 's2_hook_active')
+    a.emit(0x60)
+    a.label('s2_hook_active')
     a.emit(0xAD, DK_SPRING_TIMER & 0xFF, DK_SPRING_TIMER >> 8)
     a.branch(0xF0, 's2_bombs_start')
     a.emit(0xCE, DK_SPRING_TIMER & 0xFF, DK_SPRING_TIMER >> 8)
@@ -1635,7 +1688,7 @@ def _assemble_bank1(
         ('PKT_25M', _upgrade_stage_ppu_packet(orig_prg, 0xF55B, '25m')),
         ('PKT_75M', _upgrade_stage_ppu_packet(orig_prg, 0xF7CD, '75m')),
         ('PKT_100M', _upgrade_stage_ppu_packet(orig_prg, 0xF71C, '100m')),
-        ('PKT_TITLE', _make_barba_kong_title_packet()),
+        ('PKT_TITLE', _make_barba_kong_title_packet(build_number)),
         ('PKT_HUD', _encode_ppu_packets(_decode_ppu_packets(orig_prg, 0xFA1B))),
     ):
         syms[name] = pkt_cursor
@@ -1967,12 +2020,17 @@ def _patch_dk_prg_mmc3(
     patch(0xCA1D, jsr('BarbaKongEnableApu') + bytes([0xEA, 0xEA]), bytes.fromhex('a9 0f 8d 15 40'))
     patch(0xCE2F, jsr('BarbaKongRescueRoar') + bytes([0xEA]), bytes.fromhex('a9 04 85 fd'))
     patch(0xD086, jsr('BarbaKongStageClear') + bytes([0xEA] * 5), bytes.fromhex('a9 00 85 fc a9 01 85 9a'))
+    patch(0xD0D5, jsr('BarbaKongDeathRoar') + bytes([0xEA] * 5), bytes.fromhex('a5 58 d0 04 a9 80 85 fe'))
     patch(0xD75C, jmp('BarbaKongFireballUpdate'), bytes.fromhex('a5 9f 4a'))
     patch(0xD88F, jsr('BarbaKongPickupFury') + bytes([0xEA, 0xEA]), bytes.fromhex('a5 fc 8d 19 05'))
+    patch(0xEC93, jsr('BarbaKongBonusRoar') + bytes([0xEA]), bytes.fromhex('a9 20 85 fd'))
+    patch(0xED57, jsr('BarbaKongSmashRoar') + bytes([0xEA]), bytes.fromhex('a9 02 85 ff'))
     patch(0xCF07, jsr('BarbaKongStage2Hook'), bytes.fromhex('20 29 ec'))
     patch(0xEA34, jmp('BarbaKongSpringSpawn'), bytes.fromhex('a5 36 d0'))
     patch(0xEB24, bytes([0x04]), bytes([0x02]))
     patch(0xECBF, jmp('BarbaKongFireballHit') + bytes([0xEA]), bytes.fromhex('a5 a0 d0 03'))
+    # Tighten Lil' Barba player hurtbox ($C196, idx=$4C) from 5x5 (+5..+10) to 3x3 (+6..+9)
+    patch(0xC196, bytes([0x06, 0x06, 0x09, 0x09]), bytes.fromhex('05 05 0a 0a'))
 
     # Keep Lil' Barba facing forward during Flame Fury instead of cycling back-facing climb frames ($10-$1C)
     patch(0xC1A2, bytes([0x04, 0x08, 0x20, 0x04, 0x08, 0x20]), bytes.fromhex('0c 14 1c 10 18 20'))
@@ -2043,8 +2101,16 @@ def build_standalone(
     out_path: Path,
     dk_path: Path = Path('roms/dk.nes'),
     z2_path: Path = Path('roms/z2.nes'),
+    *,
+    mapper: str = '176',
+    build_number: int | None = None,
 ) -> Path:
-    """Wrap Barba Kong in a standalone 256 KB PRG + 32 KB CHR NES 2.0 Mapper 176 ROM."""
+    """Wrap Barba Kong in a standalone 256 KB PRG + 32 KB CHR ROM (Mapper 176 or MMC3)."""
+    from build_history import HISTORY_FILE, next_subgame_build_number, record_subgame_build
+    import hashlib
+    record_this = build_number is None
+    if build_number is None:
+        build_number = next_subgame_build_number(HISTORY_FILE, 'dk')
     root = Path(__file__).resolve().parent.parent
     if not z2_path.is_absolute() and not z2_path.exists():
         z2_path = root / z2_path
@@ -2056,7 +2122,7 @@ def build_standalone(
     roar_dmc, roar_info = roar_sample.convert(root / 'assets/roar.wav', roar_out)
 
     chr32, pose_grids = build_barba_kong_chr(orig_chr, z2_bytes)
-    bank1, bank1_syms = _assemble_bank1(orig_prg, roar_info, len(roar_dmc))
+    bank1, bank1_syms = _assemble_bank1(orig_prg, roar_info, len(roar_dmc), build_number=build_number)
     fixed_prg16k = bytearray(_patch_dk_prg_mmc3(orig_prg, bank1_syms, pose_grids, roar_dmc))
 
     # Patch standalone reset vector ($FFFC) to $8000 (bank 0 loader)
@@ -2083,29 +2149,39 @@ def build_standalone(
     prg256[stub_end : stub_end + 3] = bytes([0x4C, STANDALONE_RESTORE_ADDR & 0xFF, STANDALONE_RESTORE_ADDR >> 8])
     prg256[30 * 8192 : 32 * 8192] = bytes(fixed_prg16k)
 
-    # NES 2.0 Mapper 176 (FK23C), 256KB PRG, 32KB CHR, 32KB PRG-RAM, Horizontal mirroring
     assert len(chr32) % 8192 == 0 and len(chr32) <= 128 * 1024
-    hdr = bytearray(16)
-    hdr[0:4] = b'NES\x1a'
-    hdr[4] = 16                     # 16 * 16KB = 256KB PRG
-    hdr[5] = len(chr32) // 8192     # 4 * 8KB = 32KB CHR
-    hdr[6] = 0x02                   # Horizontal mirroring + battery, mapper low = 0
-    hdr[7] = 0xB8                   # NES 2.0 + mapper mid = $B0 (176)
-    hdr[10] = 0x90                  # 32KB battery PRG-RAM
+    hdr = make_rom_header(len(prg256), len(chr32), mapper=mapper, vertical_mirroring=False)
 
+    rom_bytes = bytes(hdr) + bytes(prg256) + chr32
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_bytes(bytes(hdr) + bytes(prg256) + chr32)
+    out_path.write_bytes(rom_bytes)
+    if record_this:
+        record_subgame_build(HISTORY_FILE, 'dk', build_number, mapper, out_path, hashlib.sha256(rom_bytes).hexdigest())
     return out_path
 
 
 if __name__ == '__main__':
     root = Path(__file__).resolve().parent.parent
-    out = build_standalone(root / 'build/subgames/dk.nes', root / 'roms/dk.nes', root / 'roms/z2.nes')
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--out', type=Path, default=None)
+    parser.add_argument('--mapper', choices=('176', 'mmc3'), default='176')
+    args = parser.parse_args()
+    default_out = root / ('play/nes/dk-mmc3.nes' if args.mapper == 'mmc3' else 'build/subgames/dk.nes')
+    out = build_standalone(args.out or default_out, root / 'roms/dk.nes', root / 'roms/z2.nes', mapper=args.mapper)
+    if args.mapper == 'mmc3' and args.out is None:
+        from bps import write_bps
+        write_bps(
+            root / 'roms/dk.nes',
+            out,
+            out_bps_path=root / 'play/bps/dk-mmc3.bps',
+            metadata='dk-mmc3 | Barba Edition (MMC3)',
+        )
     rom = out.read_bytes()
+    expected_mapper = 4 if args.mapper == 'mmc3' else 176
     assert len(rom) == 16 + 256 * 1024 + 32 * 1024
     assert rom[0:4] == b'NES\x1a'
     assert rom[4] == 16 and rom[5] == 4
-    assert ((rom[6] >> 4) | (rom[7] & 0xF0)) == 176
+    assert ((rom[6] >> 4) | (rom[7] & 0xF0)) == expected_mapper
     assert rom[16 + 256 * 1024 - 6 : 16 + 256 * 1024 - 4] == bytes([DK_NMI_HOOK & 0xFF, DK_NMI_HOOK >> 8])
     assert rom[16 + 256 * 1024 - 4 : 16 + 256 * 1024 - 2] == bytes([0x00, 0x80])
     # Also sanity-check patch_dk_for_combined contract
@@ -2115,4 +2191,4 @@ if __name__ == '__main__':
         0xE123,
     )
     assert len(c_prg) == 256 * 1024 and len(c_chr) == 32 * 1024
-    print(f'Built {out} ({len(rom)} bytes) - Barba Kong MMC3 assertions passed.')
+    print(f'Built {out} ({len(rom)} bytes, mapper={expected_mapper}) - Barba Kong MMC3 assertions passed.')

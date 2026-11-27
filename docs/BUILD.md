@@ -50,7 +50,15 @@ Outputs:
 - `build/barba-sprites.png`: generated preview of the original pixel artwork.
 - Assembly binaries, linker map, and debug symbols for development.
 
-The default output directory also mirrors the ROM and BPS to `play/`.
+The default output directory also mirrors the ROM and BPS to `play/` with
+the `-b<N>` build number attached (`play/barba-b<N>.nes`, `play/barba-b<N>.bps`,
+`play/nes/*-b<N>.nes`, `play/bps/*-b<N>.bps`), and writes
+`dist/barba-bps-b<N>.zip` containing `barba-b<N>.bps` plus all
+`play/bps/*-b<N>.bps` files in a flat archive for GitHub releases. Subgame ROMs
+and patches live under `play/nes/` and `play/bps/`, with Windows launchers in
+`play/cmd/`. You can also rebuild the archive directly with
+`python tools/package_bps.py` (optionally `--build-number N` or
+`--version vX.Y.Z`).
 Relocated overworld graphics use BPS source-copy references to the clean
 Zelda II ROM. The combined BPS also contains literal data for the additional
 game because `roms/waldo.nes` is a build input and BPS reads from a single
@@ -281,7 +289,7 @@ wobble/rasp, intelligibility against music, volume and clicks; press Start
 during a roar to check its cutoff. Standalone DPCM previews are
 decoded samples without the NES mixer/filters. Fidelity approval is a human
 listening task. The normal gameplay pack is generated and installed using
-`python tools/prepare_test_player.py`; use `play/zelda2-tests/Test Core.cmd`.
+`python tools/prepare_test_player.py`; use `play/cmd/Test Core.cmd`.
 F2 tests quiet attacks/hurt, F6 Lava
 Link's original hurt sound, F9 the boss followed by gem completion. The optional
 `--rom` is also supported by `create_test_pack.py`; manifests remain keyed by

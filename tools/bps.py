@@ -1,5 +1,6 @@
 """BPS1 source-read/target-read encoder and validating decoder (no dependencies)."""
 from __future__ import annotations
+from pathlib import Path
 import struct
 import zlib
 
@@ -120,3 +121,24 @@ def apply(source: bytes, patch: bytes) -> bytes:
     if pos != end or zlib.crc32(target) != target_crc:
         raise ValueError('Target checksum or action stream mismatch')
     return bytes(target)
+
+
+def write_bps(
+    source_path: Path | str,
+    target_path: Path | str,
+    out_bps_path: Path | str | None = None,
+    metadata: str = '',
+    source_copies: list[tuple[int, int, int]] | None = None,
+) -> Path:
+    """Encode target_path against source_path, verify round-trip, and write .bps."""
+    src_path = Path(source_path)
+    tgt_path = Path(target_path)
+    bps_path = Path(out_bps_path) if out_bps_path is not None else tgt_path.with_suffix('.bps')
+    source = src_path.read_bytes()
+    target = tgt_path.read_bytes()
+    patch = encode(source, target, metadata, source_copies)
+    if apply(source, patch) != target:
+        raise ValueError(f'BPS patch round-trip failed for {tgt_path}')
+    bps_path.parent.mkdir(parents=True, exist_ok=True)
+    bps_path.write_bytes(patch)
+    return bps_path

@@ -11,6 +11,7 @@ if _TOOLS_DIR not in sys.path:
 
 import smb_art
 import smb_barba
+from subgame_pack import make_rom_header
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SOURCE = ROOT / 'roms' / 'smb.nes'
@@ -322,6 +323,7 @@ def patch_smb_barba(
     z2_bytes: bytes,
     *,
     castle_clear: bool = False,
+    build_number: int | None = None,
 ) -> tuple[bytes, bytes, bytes, dict]:
     """Patch SMB into Super Barba Bros. (bank1 8KB, prg32 32KB, chr32 32KB, metadata)."""
     orig_prg32 = smb_bytes[16 : 16 + 32768]
@@ -329,14 +331,20 @@ def patch_smb_barba(
     prg32_base, _, metadata = patch_smb(smb_bytes, castle_clear=castle_clear)
     prg32 = bytearray(prg32_base)
     barba_meta = smb_barba.apply_barba_patches(prg32, ROOT)
-    chr32 = smb_art.build_smb_barba_chr(smb_bytes, z2_bytes)
+    chr32 = bytearray(smb_art.build_smb_barba_chr(smb_bytes, z2_bytes))
+    if build_number is not None:
+        # SMB title PPU stream ends at CHR 0x1FF0 (00 + 15x FF pad); append $203A B<N>.
+        tag = bytes([0x0B] + [int(c) for c in str(build_number)])
+        pkt = bytes([0x20, 0x3A, len(tag)]) + tag + b'\x00'
+        assert chr32[0x1FF0 : 0x1FF0 + len(pkt)] == b'\x00' + b'\xFF' * (len(pkt) - 1)
+        chr32[0x1FF0 : 0x1FF0 + len(pkt)] = pkt
     assert len(bank1_8k) == 8192
     assert len(prg32) == 32768
     assert len(chr32) <= 128 * 1024
     metadata['chr_size'] = len(chr32)
     metadata['bank1_size'] = len(bank1_8k)
     metadata['barba'] = barba_meta
-    return bank1_8k, bytes(prg32), chr32, metadata
+    return bank1_8k, bytes(prg32), bytes(chr32), metadata
 
 
 def patch_smb_for_combined(
@@ -374,14 +382,22 @@ def build_standalone(
     restore_addr: int = DEFAULT_RESTORE_ADDR,
     wram_bank: int = DEFAULT_WRAM_BANK,
     castle_clear: bool = False,
+    mapper: str = '176',
+    build_number: int | None = None,
 ) -> dict:
-    """Build standalone NES 2.0 Mapper 176 Super Barba Bros. ROM at out_path."""
+    """Build standalone Super Barba Bros. ROM (Mapper 176 or MMC3) at out_path."""
+    from build_history import HISTORY_FILE, next_subgame_build_number, record_subgame_build
+    import hashlib
+    record_this = build_number is None
+    if build_number is None:
+        build_number = next_subgame_build_number(HISTORY_FILE, 'smb')
     bank1_8k, prg32k, chr32k, metadata = patch_smb_barba(
-        source_path.read_bytes(), z2_path.read_bytes(), castle_clear=castle_clear
+        source_path.read_bytes(), z2_path.read_bytes(), castle_clear=castle_clear,
+        build_number=build_number,
     )
     bank0 = make_smb_bank0(
         restore_addr,
-        wram_bank=wram_bank,
+        wram_bank=0x80 if mapper == 'mmc3' else wram_bank,
         r1_bank=smb_art.CHR_R1_ENEMIES,
         include_bank1=True,
         lock_exit=False,
@@ -394,18 +410,14 @@ def build_standalone(
     prg256[8192 : 2 * 8192] = bank1_8k
     prg256[28 * 8192 : 32 * 8192] = prg32k
 
-    # NES 2.0 Mapper 176 (FK23C), 256KB PRG (16x16KB), 32KB CHR (4x8KB), Vertical mirroring, 32KB WRAM
     assert len(chr32k) % 8192 == 0
-    hdr = bytearray(16)
-    hdr[0:4] = b'NES\x1a'
-    hdr[4] = 16
-    hdr[5] = len(chr32k) // 8192
-    hdr[6] = 0x03  # Vertical mirroring + battery
-    hdr[7] = 0xB8  # Mapper 176 (high nibble 0xB0) + NES 2.0 (0x08)
-    hdr[10] = 0x90  # 32KB battery-backed WRAM
+    hdr = make_rom_header(len(prg256), len(chr32k), mapper=mapper, vertical_mirroring=True)
 
+    rom_bytes = bytes(hdr) + bytes(prg256) + chr32k
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_bytes(bytes(hdr) + bytes(prg256) + chr32k)
+    out_path.write_bytes(rom_bytes)
+    if record_this:
+        record_subgame_build(HISTORY_FILE, 'smb', build_number, mapper, out_path, hashlib.sha256(rom_bytes).hexdigest())
     return metadata
 
 
@@ -413,11 +425,21 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, default=DEFAULT_SOURCE)
     parser.add_argument('--z2', type=Path, default=DEFAULT_Z2_SOURCE)
-    parser.add_argument('--out', type=Path, default=DEFAULT_OUT)
+    parser.add_argument('--out', type=Path, default=None)
+    parser.add_argument('--mapper', choices=('176', 'mmc3'), default='176')
     parser.add_argument('--castle-clear', action='store_true', help='Also trigger win hook on World 1-4..7-4 clear')
     args = parser.parse_args()
-    meta = build_standalone(args.out, args.source, args.z2, castle_clear=args.castle_clear)
-    print(f'Built {args.out} ({args.out.stat().st_size:,} bytes): {meta}')
+    out_path = args.out or (ROOT / 'play/nes/smb-mmc3.nes' if args.mapper == 'mmc3' else DEFAULT_OUT)
+    meta = build_standalone(out_path, args.source, args.z2, castle_clear=args.castle_clear, mapper=args.mapper)
+    if args.mapper == 'mmc3' and args.out is None:
+        from bps import write_bps
+        write_bps(
+            args.source,
+            out_path,
+            out_bps_path=ROOT / 'play/bps/smb-mmc3.bps',
+            metadata='smb-mmc3 | Barba Edition (MMC3)',
+        )
+    print(f'Built {out_path} ({out_path.stat().st_size:,} bytes, mapper={args.mapper}): {meta}')
 
 
 if __name__ == '__main__':

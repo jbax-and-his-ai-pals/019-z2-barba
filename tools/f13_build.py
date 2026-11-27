@@ -5,6 +5,7 @@ import hashlib
 from pathlib import Path
 
 from boss_art import make_frames, resize_x, source_head
+from bps import write_bps
 from f13_barba_code import (
     F13_HUD_HOOK,
     F13_PAL_HOOK,
@@ -35,7 +36,7 @@ SOURCE_ROM = ROOT / "roms/f13.nes"
 Z2_ROM = ROOT / "roms/z2.nes"
 SOURCE_SHA256 = "3e2bfc0097f5913b72dc4c77512e9596231359484423e3a5c26bea06c67b48e4"
 OUT_ROM = ROOT / "build/f13_barba.nes"
-PLAY_ROM = ROOT / "play/standalone/f13-barba.nes"
+PLAY_ROM = ROOT / "play/nes/f13-barba.nes"
 
 HEADER_SIZE = 16
 PRG_SIZE = 0x8000
@@ -103,7 +104,10 @@ def shift_rows(rows: list[str], dy: int = 0, dx: int = 0) -> list[str]:
     return out
 
 
-def build() -> Path:
+def build(count_build: bool = True, build_number: int | None = None) -> Path:
+    from build_history import HISTORY_FILE, get_subgame_build_number, next_subgame_build_number, record_subgame_build
+    if build_number is None:
+        build_number = next_subgame_build_number(HISTORY_FILE, "f13") if count_build else get_subgame_build_number(HISTORY_FILE, "f13")
     raw = SOURCE_ROM.read_bytes()
     digest = hashlib.sha256(raw).hexdigest()
     if digest != SOURCE_SHA256:
@@ -141,6 +145,15 @@ def build() -> Path:
         bytes([0x15, 0x12, 0x17, 0x14, 0xFF]),
         "jason_to_link_name",
     )
+
+    # 1c. Stamp subtle title build number (B<N>) on bottom-right of F13 title screen (0x0B08A RLE)
+    tag = bytes(0x0B if ch == "B" else int(ch) for ch in f"B{build_number}")
+    # Original 0x0B08A..0x0B0DB: 2c ff (44 blanks) + ff 28 00 ... (attribute tail) + 36x 00 pad at 0x0B0DC.
+    tail_orig = bytes(raw[0x0B08C:0x0B0DC])
+    shift = len(tag) + 3  # replacing 2-byte '2c ff' with '08 ff <80|N> <tag> <36-N> ff'
+    assert raw[0x0B0DC : 0x0B0DC + shift] == b"\x00" * shift, "Not enough padding after F13 title RLE"
+    rle_patch = bytes([0x08, 0xFF, 0x80 | len(tag)]) + tag + bytes([36 - len(tag), 0xFF]) + tail_orig
+    rom.put(0x0B08A, raw[0x0B08A : 0x0B08A + len(rle_patch)], rle_patch, "title_build_number")
 
     # 2. Counselor sprite palettes (CHR table 0x0DD5D = 6x8B, and 0x0E218 for counselor 0):
     #    Keep 3 (Laura) and 4 (Debbie) untouched; give 0,1,2,5 distinct Barba palettes!
@@ -692,6 +705,14 @@ def build() -> Path:
     OUT_ROM.write_bytes(out_bytes)
     PLAY_ROM.parent.mkdir(parents=True, exist_ok=True)
     PLAY_ROM.write_bytes(out_bytes)
+    if count_build:
+        record_subgame_build(HISTORY_FILE, "f13", build_number, "mmc3", PLAY_ROM, hashlib.sha256(out_bytes).hexdigest())
+    write_bps(
+        SOURCE_ROM,
+        PLAY_ROM,
+        out_bps_path=ROOT / "play/bps/f13-barba.bps",
+        metadata="Friday the 13th | Barba Edition",
+    )
     print(f"Built {OUT_ROM} and {PLAY_ROM} ({len(out_bytes)} bytes, MMC3)")
     return OUT_ROM
 

@@ -97,7 +97,7 @@ def _encode_title_str(s: str) -> list[int]:
     return out
 
 
-def build_title_ppu_stream() -> bytes:
+def build_title_ppu_stream(build_number: int | None = None) -> bytes:
     """Build PPU nametable stream ($2000) for "BARBA'S HUNT" title screen."""
     buf = bytearray()
 
@@ -181,6 +181,8 @@ def build_title_ppu_stream() -> bytes:
     write_row(0x22A8, _encode_title_str('GAME C   OCTOROKS MOAS'))
     write_row(0x2307, _encode_title_str('TOP SCORE ='))
     write_row(0x2345, _encode_title_str('DPAD AIM   A B FIREBALL'))
+    if build_number is not None:
+        write_row(0x203A, _encode_title_str(f'B{build_number}'))
 
     # Attribute colors (matching vanilla Duck Hunt):
     # $23C0..$23DF (rows 0-15): BARBA'S, divider bar, HUNT -> Pal 0 ($00: cyan + orange bar)
@@ -239,25 +241,18 @@ def _build_encounter_ppu_stream(
 
     sky_fn(write_row)
 
-    # Ground (rows 20..21)
+    # Ground (rows 20..23): extend thematic ground tiles down to row 23
     write_row(0x2280, ground_r20)
     write_row(0x22A0, ground_r21)
+    write_row(0x22C0, ground_r20)
+    write_row(0x22E0, ground_r21)
 
-    # Dirt & HUD (rows 22..29) matching Duck Hunt $E042 layout
-    dirt_r22 = [0x50, 0x51, 0x50, 0x52] * 8
-    write_row(0x22C0, dirt_r22)
-    dirt_r23 = [
-        0x52, 0x50, 0x53, 0x50, 0x50, 0x51, 0x50, 0x50,
-        0x52, 0x50, 0x53, 0x50, 0x50, 0x53, 0x50, 0x50,
-        0x51, 0x50, 0x50, 0x52, 0x50, 0x53, 0x50, 0x50,
-        0x50, 0x51, 0x50, 0x50, 0x52, 0x50, 0x53, 0x50,
-    ]
-    write_row(0x22E0, dirt_r23)
+    # Thematic HUD backdrop & panels (rows 24..29) matching Duck Hunt $E042 layout
     write_row(0x2300, [
-        0x52, 0x50, 0x54, 0x1B, 0x27, 0x50, 0x50, 0x50,
-        0x50, 0x50, 0x54, 0x52, 0x50, 0x54, 0x52, 0x54,
-        0x52, 0x50, 0x50, 0x50, 0x50, 0x54, 0x52, 0x50,
-        0x50, 0x50, 0x50, 0x50, 0x50, 0x50, 0x54, 0x52,
+        0x50, 0x50, 0x50, 0x1B, 0x27, 0x50, 0x50, 0x50,
+        0x50, 0x50, 0x50, 0x50, 0x50, 0x50, 0x50, 0x50,
+        0x50, 0x50, 0x50, 0x50, 0x50, 0x50, 0x50, 0x50,
+        0x50, 0x50, 0x50, 0x50, 0x50, 0x50, 0x50, 0x50,
     ])
     write_row(0x2320, [
         0x50, 0x50, 0xE2, 0xE3, 0xE3, 0xE3, 0xE4, 0xE2,
@@ -317,7 +312,7 @@ def build_forest_ppu_stream() -> bytes:
         0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x00, 0x00,  # rows 8..11: trunks, popup
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  # rows 12..15: trunks
         0x50, 0x50, 0x50, 0x50, 0x50, 0x50, 0x50, 0x50,  # rows 16..19: trunks top, bushes bottom
-        0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5,  # rows 20..23: ground top, dirt bottom
+        0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55,  # rows 20..23: forest ground extended (Pal 1)
         0xAA, 0xAA, 0xAA, 0xFA, 0xFA, 0xBA, 0xFA, 0xBA,  # rows 24..27: HUD
         0x0A, 0x0A, 0x0A, 0x0A, 0x0A, 0x0A, 0x0A, 0x0A,  # rows 28..29: HUD bottom
     ]
@@ -346,7 +341,7 @@ def build_grass_ppu_stream() -> bytes:
         0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x00, 0x00,  # rows 8..11: sky & popup
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  # rows 12..15: sky
         0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55,  # rows 16..19: sprigs & bushes (Pal 1)
-        0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5,  # rows 20..23: grass top (Pal 1), dirt bottom (Pal 2)
+        0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55,  # rows 20..23: grass ground extended (Pal 1)
         0xAA, 0xAA, 0xAA, 0xFA, 0xFA, 0xBA, 0xFA, 0xBA,  # rows 24..27: HUD
         0x0A, 0x0A, 0x0A, 0x0A, 0x0A, 0x0A, 0x0A, 0x0A,  # rows 28..29: HUD bottom
     ]
@@ -376,7 +371,7 @@ def build_desert_ppu_stream() -> bytes:
         0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x00, 0x00,  # rows 8..11: sky & popup
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  # rows 12..15: sky
         0x00, 0x11, 0x00, 0x00, 0x00, 0x00, 0x44, 0x00,  # rows 16..19: cacti (Pal 1) & sand bumps (Pal 0)
-        0xA0, 0xA0, 0xA0, 0xA0, 0xA0, 0xA0, 0xA0, 0xA0,  # rows 20..23: sand top (Pal 0), dirt bottom (Pal 2)
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  # rows 20..23: desert sand extended (Pal 0)
         0xAA, 0xAA, 0xAA, 0xFA, 0xFA, 0xBA, 0xFA, 0xBA,  # rows 24..27: HUD
         0x0A, 0x0A, 0x0A, 0x0A, 0x0A, 0x0A, 0x0A, 0x0A,  # rows 28..29: HUD bottom
     ]
@@ -420,7 +415,7 @@ def assemble_fixed_pad() -> tuple[bytes, dict[str, int]]:
     return code, dict(a.labels)
 
 
-def assemble_bank1(art: dict, roar_info: dict, *, is_pal: bool = False) -> tuple[bytes, dict[str, int]]:
+def assemble_bank1(art: dict, roar_info: dict, *, is_pal: bool = False, build_number: int | None = None) -> tuple[bytes, dict[str, int]]:
     """Assemble Bank 1 ($A000-$BFFF, mapped via R7 = 1) code and sprite tables."""
     a = DuckAsm(BANK1_BASE)
 
@@ -485,8 +480,6 @@ def assemble_bank1(art: dict, roar_info: dict, *, is_pal: bool = False) -> tuple
     a.label('vh_stop_roar')
     a.emit(0xA9, 0x00)
     a.emit(0x8D, VH_ROAR_TIMER & 0xFF, VH_ROAR_TIMER >> 8)
-    a.emit(0x8D, VH_SHAKE_TIMER & 0xFF, VH_SHAKE_TIMER >> 8)
-    a.emit(0x85, 0x0B)                                       # clear Y scroll shake
     a.emit(0x8D, VH_MMC3_MODE & 0xFF, VH_MMC3_MODE >> 8)
     a.emit(0xA9, 0x0F, 0x8D, 0x15, 0x40)
     a.emit(0xA9, 0x06, 0x8D, 0x00, 0x80)                     # Normal PRG mode ($8000=R6)
@@ -502,6 +495,8 @@ def assemble_bank1(art: dict, roar_info: dict, *, is_pal: bool = False) -> tuple
     a.emit(0xA9, 0x00)
     a.emit(0x8D, VH_FIRE_TIMER & 0xFF, VH_FIRE_TIMER >> 8)
     a.emit(0x8D, VH_SHOT_MODE & 0xFF, VH_SHOT_MODE >> 8)
+    a.emit(0x8D, VH_SHAKE_TIMER & 0xFF, VH_SHAKE_TIMER >> 8)
+    a.emit(0x85, 0x0B)                                       # clear Y scroll shake
     a.emit(0x60)
 
     # Replaces $C5C4 (LDX #$04; LDY #$E4; JSR $C617)
@@ -699,6 +694,7 @@ def assemble_bank1(art: dict, roar_info: dict, *, is_pal: bool = False) -> tuple
 
     a.label('vh_on_perfect_roar')
     a.emit(0x20, 0x38, 0xD5)                                 # JSR $D538 (perfect jingle)
+    a.emit(0xA9, 155, 0x8D, VH_SHAKE_TIMER & 0xFF, VH_SHAKE_TIMER >> 8)  # screen shake during perfect fanfare
     a.abs_ref(0x4C, 'vh_play_roar')
 
     # ------------------------------------------------------------------
@@ -1390,7 +1386,7 @@ def assemble_bank1(art: dict, roar_info: dict, *, is_pal: bool = False) -> tuple
         a.emit(0xFF)
 
     a.label('title_ppu_stream')
-    a.emit(*build_title_ppu_stream())
+    a.emit(*build_title_ppu_stream(build_number))
 
     a.label('forest_ppu_stream')
     a.emit(*build_forest_ppu_stream())
@@ -1430,9 +1426,9 @@ def assemble_bank1(art: dict, roar_info: dict, *, is_pal: bool = False) -> tuple
 
     from duck_art import SPRITE_PAL_BYTES
     scene_pals = [
-        ('forest', 0x0F, bytes.fromhex('0f 17 07 08 0f 29 19 09 0f 0f 29 18 0f 0f 30 16')),
-        ('grass',  0x21, bytes.fromhex('21 30 10 00 21 29 19 09 21 0f 29 18 21 0f 30 16')),
-        ('desert', 0x22, bytes.fromhex('22 30 36 27 22 29 17 09 22 0f 29 18 22 0f 30 16')),
+        ('forest', 0x0F, bytes.fromhex('0f 17 07 08 0f 29 19 09 0f 0f 29 09 0f 0f 30 16')),
+        ('grass',  0x21, bytes.fromhex('21 30 10 00 21 29 19 09 21 0f 29 19 21 0f 30 16')),
+        ('desert', 0x22, bytes.fromhex('22 30 36 27 22 29 17 09 22 0f 29 36 22 0f 30 16')),
     ]
     for sname, sky, bg_pal in scene_pals:
         spr_pal = bytearray(SPRITE_PAL_BYTES)

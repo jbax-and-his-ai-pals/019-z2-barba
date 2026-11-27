@@ -1,4 +1,4 @@
-"""Create and launch save-state packs for standalone subgames in play/standalone/."""
+"""Create and launch save-state packs for standalone subgames in play/nes/."""
 from __future__ import annotations
 
 import argparse
@@ -7,21 +7,31 @@ import subprocess
 import sys
 from pathlib import Path
 
-from subgame_pack import ROOT, run_cli
+from bps import write_bps
+from subgame_pack import ROOT, find_play_rom, run_cli
 
 
-def _build_subgame(game: str) -> None:
+def _build_subgame(game: str, mmc3: bool = False) -> None:
+    if mmc3:
+        subprocess.run([sys.executable, str(ROOT / 'tools/build_mmc3.py'), '--game', game], check=True)
+        return
     subprocess.run([sys.executable, str(ROOT / f'tools/pack_{game}.py')], check=True)
     src = ROOT / f'build/subgames/{game}.nes'
-    dst = ROOT / f'play/standalone/{game}-barba.nes'
+    dst = ROOT / f'play/nes/{game}-barba.nes'
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(src, dst)
+    write_bps(
+        ROOT / 'roms' / f'{game}.nes',
+        dst,
+        out_bps_path=ROOT / f'play/bps/{game}-barba.bps',
+        metadata=f'{game}-barba | Barba Edition',
+    )
 
 
 GAMES: dict[str, dict] = {
     'dk': {
-        'rom': ROOT / 'play/standalone/dk-barba.nes',
-        'scenarios': ROOT / 'tools/dk_scenarios.lua',
+        'rom': ROOT / 'play/nes/dk-barba.nes',
+        'scenarios': ROOT / 'tools/scenarios/dk_scenarios.lua',
         'timeout': 90,
         'slots': [
             ('title', 'Title Screen (Barba Kong)', 'Barba Kong title screen with fireball cursor. Press Start to begin.'),
@@ -33,23 +43,25 @@ GAMES: dict[str, dict] = {
         ],
     },
     'duck': {
-        'rom': ROOT / 'play/standalone/duck-barba.nes',
-        'scenarios': ROOT / 'tools/duck_scenarios.lua',
+        'rom': ROOT / 'play/nes/duck-barba.nes',
+        'scenarios': ROOT / 'tools/scenarios/duck_scenarios.lua',
         'timeout': 120,
         'slots': [
             ('title', 'Title Screen (Villager Hunt)', 'Villager Hunt title screen. Press A to start Game A, Game B, or Game C.'),
-            ('barba_intro', 'Barba Intro Walk', 'Full-body Barba walking across the grass during the opening sequence.'),
-            ('barba_jump', 'Barba Downstab Jump', 'Barba leaping into the grass with the full-length Z2 downstab graphic and screen shake.'),
-            ('game_a', 'Game A (1 Villager)', 'Zelda II villager flying across the sky. Aim with D-pad and press A for fireball burst!'),
+            ('barba_intro', 'Barba Intro & Jump', 'Full-body Barba walking across the grass and leaping in with the Z2 downstab graphic.'),
+            ('game_a', 'Forest (Game A, 1 Villager)', 'Round 1 Forest with a Zelda II villager flying across the sky. Aim with D-pad and press A for fireball burst!'),
+            ('plains', 'Plains (Round 2 Grass)', 'Round 2 Overworld Grass with a Zelda II villager flying across the sky.'),
+            ('desert', 'Desert (Round 3 Desert)', 'Round 3 Desert with a Zelda II villager flying across the sky.'),
             ('barba_catch', 'Barba Catch Celebration', 'Barba popping up from the grass holding the caught villager.'),
             ('link_laugh', 'Villainous Link Laugh', 'Villainous Link popping up laughing after a miss!'),
             ('game_b', 'Game B (2 Villagers)', 'Game B with two Zelda II villagers flying at once.'),
             ('game_c', 'Game C (Octoroks & Moas)', 'Game C with Zelda II Octoroks, Moas, and Palace Plates flying.'),
+            ('perfect_round', '10/10 Perfect Round Clear', 'End of a 10/10 round right before the PERFECT!! fanfare, roar, and screen shake.'),
         ],
     },
     'mm2': {
-        'rom': ROOT / 'play/standalone/mm2-barba.nes',
-        'scenarios': ROOT / 'tools/mm2_scenarios.lua',
+        'rom': ROOT / 'play/nes/mm2-barba.nes',
+        'scenarios': ROOT / 'tools/scenarios/mm2_scenarios.lua',
         'timeout': 120,
         'slots': [
             ('title', 'Title Screen (Barba Man 2)', 'Barba Man 2 title screen. Press Start to begin.'),
@@ -60,8 +72,8 @@ GAMES: dict[str, dict] = {
         ],
     },
     'mtpo': {
-        'rom': ROOT / 'play/standalone/mtpo-barba.nes',
-        'scenarios': ROOT / 'tools/mtpo_scenarios.lua',
+        'rom': ROOT / 'play/nes/mtpo-barba.nes',
+        'scenarios': ROOT / 'tools/scenarios/mtpo_scenarios.lua',
         'timeout': 120,
         'slots': [
             ('intro', "Intro (Barba's Punch-Out!!)", "Barba's Punch-Out!! intro screen."),
@@ -71,8 +83,8 @@ GAMES: dict[str, dict] = {
         ],
     },
     'smb': {
-        'rom': ROOT / 'play/standalone/smb-barba.nes',
-        'scenarios': ROOT / 'tools/smb_scenarios.lua',
+        'rom': ROOT / 'play/nes/smb-barba.nes',
+        'scenarios': ROOT / 'tools/scenarios/smb_scenarios.lua',
         'timeout': 180,
         'slots': [
             ('title', 'Title Screen (Super Barba Bros.)', 'Super Barba Bros. title screen. Press Start to begin.'),
@@ -85,8 +97,8 @@ GAMES: dict[str, dict] = {
         ],
     },
     'wheel': {
-        'rom': ROOT / 'play/standalone/wheel-barba.nes',
-        'scenarios': ROOT / 'tools/wheel_scenarios.lua',
+        'rom': ROOT / 'play/nes/wheel-barba.nes',
+        'scenarios': ROOT / 'tools/scenarios/wheel_scenarios.lua',
         'timeout': 180,
         'slots': [
             ('title', 'Title Screen (Wheel of Barba)', 'Wheel of Barba title screen. Press Start to begin.'),
@@ -96,8 +108,8 @@ GAMES: dict[str, dict] = {
         ],
     },
     'zelda': {
-        'rom': ROOT / 'play/standalone/zelda-barba.nes',
-        'scenarios': ROOT / 'tools/zelda_scenarios.lua',
+        'rom': ROOT / 'play/nes/zelda-barba.nes',
+        'scenarios': ROOT / 'tools/scenarios/zelda_scenarios.lua',
         'timeout': 120,
         'slots': [
             ('title', 'Title Screen (Zelda 1: Barba)', 'The Legend of Zelda: Barba Edition title screen.'),
@@ -112,15 +124,18 @@ GAMES: dict[str, dict] = {
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--game', required=True, choices=sorted(GAMES.keys()))
+    parser.add_argument('--mmc3', action='store_true', help='Use play/nes/<game>-mmc3.nes instead of standalone.')
     parser.add_argument('--force', action='store_true', help='Regenerate all save states.')
     parser.add_argument('--prepare-only', action='store_true', help='Prepare profile without opening Mesen.')
     args = parser.parse_args()
 
     cfg = GAMES[args.game]
+    game_id = f'{args.game}-mmc3' if args.mmc3 else args.game
+    rom_path = find_play_rom(f'{args.game}-mmc3' if args.mmc3 else f'{args.game}-barba')
     run_cli(
-        game=args.game,
-        rom_path=cfg['rom'],
-        build_fn=lambda: _build_subgame(args.game),
+        game=game_id,
+        rom_path=rom_path,
+        build_fn=lambda: _build_subgame(args.game, mmc3=args.mmc3),
         slots=cfg['slots'],
         scenarios_lua=cfg['scenarios'],
         timeout=cfg['timeout'],

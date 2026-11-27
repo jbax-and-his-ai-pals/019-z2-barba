@@ -1,6 +1,7 @@
 """Assemble and patch Mega Man 2 (NES, MMC1, 256KB PRG, 32KB CHR-RAM) for Barba Man 2."""
 from __future__ import annotations
 
+import argparse
 import hashlib
 import sys
 from pathlib import Path
@@ -13,6 +14,7 @@ import mm2_art
 import nes
 import roar_sample
 from pack_f13 import Asm6502
+from subgame_pack import make_rom_header
 
 
 _ROOT = _TOOLS_DIR.parent
@@ -71,6 +73,7 @@ def _assemble_bank15_code(
     standalone_stub: bool = False,
     roar_rate_index: int = 9,
     roar_length_reg: int = 56,
+    build_number: int | None = None,
 ) -> list[tuple[int, bytes, int]]:
     """Assemble all Bank 15 virtualization, hook, return, and boot routines."""
     segments: list[tuple[int, bytes, int]] = []
@@ -122,6 +125,10 @@ def _assemble_bank15_code(
     a.emit(0xC9, 0x3C)                                              # CMP #$3C (60 frames)
     a.branch(0xB0, 'check_pad')                                     # BCS check_pad
     a.emit(0xEE, MM2_DEBOUNCE & 0xFF, MM2_DEBOUNCE >> 8)            # INC $07FF
+    if build_number is not None:
+        a.emit(0xC9, 15)
+        a.branch(0xD0, 'normal_nmi')
+        a.emit(0x20, 0xF0, 0xF4)                                    # JSR MM2_TITLE_BUILD
     a.branch(0xD0, 'normal_nmi')                                    # BNE normal_nmi (always taken)
     a.label('check_pad')
     a.emit(0xA9, 0x01, 0x8D, 0x16, 0x40, 0xA9, 0x00, 0x8D, 0x16, 0x40)  # strobe $4016
@@ -259,6 +266,29 @@ def _assemble_bank15_code(
     a.emit(0x60)                                                    # RTS
     segments.append((MM2_SPAWN_Y, a.finish(), MM2_ROAR_DMC_ADDR))
 
+    if build_number is not None:
+        # 14. MM2_TITLE_BUILD ($F4F0): write B<N> to $239A (using $C2='B' and $A0/$A7/$A2/$A8/$A1/$A5 or $BD-$BF)
+        known_digits = {'0': 0xA0, '1': 0xA7, '2': 0xA2, '5': 0xA8, '8': 0xA1, '9': 0xA5}
+        extra_slots = [0xBD, 0xBE, 0xBF]
+        tag_tiles: list[int] = []
+        for ch in f'B{build_number}':
+            if ch == 'B':
+                tag_tiles.append(0xC2)
+            elif ch in known_digits:
+                tag_tiles.append(known_digits[ch])
+            else:
+                if ch not in known_digits:
+                    known_digits[ch] = extra_slots.pop(0)
+                tag_tiles.append(known_digits[ch])
+        a = Asm6502(0xF4F0)
+        a.emit(0x2C, 0x02, 0x20)
+        a.emit(0xA9, 0x23, 0x8D, 0x06, 0x20)
+        a.emit(0xA9, 0x9A, 0x8D, 0x06, 0x20)
+        for tid in tag_tiles:
+            a.emit(0xA9, tid, 0x8D, 0x07, 0x20)
+        a.emit(0xA9, 0x00, 0x8D, 0x06, 0x20, 0x8D, 0x06, 0x20, 0x60)
+        segments.append((0xF4F0, a.finish(), MM2_ROAR_DMC_ADDR))
+
     return segments
 
 
@@ -270,6 +300,7 @@ def patch_mm2(
     reward_magic: int = MM2_REWARD_MAGIC,
     standalone_stub: bool = False,
     z2_bytes: bytes | None = None,
+    build_number: int | None = None,
 ) -> bytes:
     """Verify and patch Mega Man 2 (MMC1, 256KB PRG, 32KB CHR-RAM) into Barba Man 2."""
     assert mm2_bytes[:4] == b'NES\x1a', 'Not an iNES ROM'
@@ -330,6 +361,7 @@ def patch_mm2(
         standalone_stub=standalone_stub,
         roar_rate_index=roar_info['rate_index'],
         roar_length_reg=roar_info['length_reg'],
+        build_number=build_number,
     ):
         assert addr + len(data) <= limit, (
             f'Overflow at ${addr:04X}: {addr + len(data):04X} > {limit:04X}'
@@ -520,10 +552,21 @@ def patch_mm2(
     return bytes(prg)
 
 
-def build_standalone(out_path: Path, mm2_path: Path = Path('roms/mm2.nes')) -> Path:
-    """Wrap patched Mega Man 2 in a standalone 256KB PRG + 32KB CHR-RAM NES 2.0 Mapper 176 ROM."""
+def build_standalone(
+    out_path: Path,
+    mm2_path: Path = Path('roms/mm2.nes'),
+    *,
+    mapper: str = '176',
+    build_number: int | None = None,
+) -> Path:
+    """Wrap patched Mega Man 2 in a standalone 256KB PRG + 32KB CHR-RAM ROM (Mapper 176 or NES 2.0 MMC3)."""
+    from build_history import HISTORY_FILE, next_subgame_build_number, record_subgame_build
+    import hashlib
+    record_this = build_number is None
+    if build_number is None:
+        build_number = next_subgame_build_number(HISTORY_FILE, 'mm2')
     mm2_bytes = mm2_path.read_bytes()
-    prg = bytearray(patch_mm2(mm2_bytes, restore_addr=STANDALONE_RESTORE_ADDR, standalone_stub=True))
+    prg = bytearray(patch_mm2(mm2_bytes, restore_addr=STANDALONE_RESTORE_ADDR, standalone_stub=True, build_number=build_number))
 
     def patch_b15(addr: int, new: bytes, expected: bytes) -> None:
         off = 15 * 0x4000 + (addr - 0xC000)
@@ -532,12 +575,13 @@ def build_standalone(out_path: Path, mm2_path: Path = Path('roms/mm2.nes')) -> P
         )
         prg[off : off + len(new)] = new
 
-    # Standalone boot stub at $FF87: unlock $5FF0-$5FF3, set $5FF0=$21 (32KB CHR-RAM), $5FF1=$00, $5FF2=$00, JMP MM2_BOOT
+    # Standalone boot stub at $FF87
     a = Asm6502(STANDALONE_BOOT_STUB)
     a.emit(0x78, 0xD8)                                              # SEI; CLD
-    a.emit(0xA9, 0x80, 0x8D, 0x01, 0xA0)                            # LDA #$80; STA $A001 (unlock $5FF0-$5FF3)
-    a.emit(0xA9, 0x21, 0x8D, 0xF0, 0x5F)                            # LDA #$21; STA $5FF0 (32KB CHR-RAM via R0..R5)
-    a.emit(0xA9, 0x00, 0x8D, 0xF1, 0x5F, 0x8D, 0xF2, 0x5F)          # LDA #$00; STA $5FF1; STA $5FF2
+    a.emit(0xA9, 0x80, 0x8D, 0x01, 0xA0)                            # LDA #$80; STA $A001 (enable WRAM / unlock $5FFx)
+    if mapper == '176':
+        a.emit(0xA9, 0x21, 0x8D, 0xF0, 0x5F)                        # LDA #$21; STA $5FF0 (32KB CHR-RAM via R0..R5)
+        a.emit(0xA9, 0x00, 0x8D, 0xF1, 0x5F, 0x8D, 0xF2, 0x5F)      # LDA #$00; STA $5FF1; STA $5FF2
     a.emit(0x4C, MM2_BOOT & 0xFF, MM2_BOOT >> 8)                    # JMP MM2_BOOT
     boot_stub = a.finish()
     assert STANDALONE_BOOT_STUB + len(boot_stub) <= STANDALONE_RESTORE_ADDR
@@ -557,30 +601,45 @@ def build_standalone(out_path: Path, mm2_path: Path = Path('roms/mm2.nes')) -> P
         bytes([MM2_ORIG_RESET & 0xFF, MM2_ORIG_RESET >> 8]),
     )
 
-    # NES 2.0 Mapper 176 (FK23C), 256KB PRG, 8KB dummy CHR-ROM, 32KB CHR-RAM (hdr[11]=0x09)
-    hdr = bytearray(16)
-    hdr[0:4] = b'NES\x1a'
-    hdr[4] = 16     # 16 * 16KB = 256KB PRG
-    hdr[5] = 1      # 1 * 8KB dummy CHR-ROM (matches combined Barba ROM; $5FF0=$21 selects CHR-RAM)
-    hdr[6] = 0x02   # Battery, mapper low = 0
-    hdr[7] = 0xB8   # NES 2.0 + mapper mid = $B0 (176)
-    hdr[10] = 0x90  # 32KB battery PRG-RAM
-    hdr[11] = 0x09  # 32KB unbattery CHR-RAM (64 << 9 = 32768)
+    if mapper == 'mmc3':
+        hdr = make_rom_header(len(prg), 0, mapper='mmc3', vertical_mirroring=False, chr_ram_kb=32)
+        chr_tail = b''
+    else:
+        hdr = make_rom_header(len(prg), 8192, mapper='176', vertical_mirroring=False, chr_ram_kb=32)
+        chr_tail = b'\x00' * 8192
 
+    rom_bytes = bytes(hdr) + bytes(prg) + chr_tail
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_bytes(bytes(hdr) + bytes(prg) + b'\x00' * 8192)
+    out_path.write_bytes(rom_bytes)
+    if record_this:
+        record_subgame_build(HISTORY_FILE, 'mm2', build_number, mapper, out_path, hashlib.sha256(rom_bytes).hexdigest())
     return out_path
 
 
 if __name__ == '__main__':
     root = Path(__file__).resolve().parent.parent
-    out = build_standalone(root / 'build/subgames/mm2.nes', root / 'roms/mm2.nes')
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--out', type=Path, default=None)
+    parser.add_argument('--mapper', choices=('176', 'mmc3'), default='176')
+    args = parser.parse_args()
+    default_out = root / ('play/nes/mm2-mmc3.nes' if args.mapper == 'mmc3' else 'build/subgames/mm2.nes')
+    out = build_standalone(args.out or default_out, root / 'roms/mm2.nes', mapper=args.mapper)
+    if args.mapper == 'mmc3' and args.out is None:
+        from bps import write_bps
+        write_bps(
+            root / 'roms/mm2.nes',
+            out,
+            out_bps_path=root / 'play/bps/mm2-mmc3.bps',
+            metadata='mm2-mmc3 | Barba Edition (MMC3)',
+        )
     rom = out.read_bytes()
-    assert len(rom) == 16 + 256 * 1024 + 8192
+    expected_mapper = 4 if args.mapper == 'mmc3' else 176
+    expected_chr_banks = 0 if args.mapper == 'mmc3' else 1
+    assert len(rom) == 16 + 256 * 1024 + expected_chr_banks * 8192
     assert rom[0:4] == b'NES\x1a'
-    assert rom[4] == 16 and rom[5] == 1
+    assert rom[4] == 16 and rom[5] == expected_chr_banks
     assert rom[11] == 0x09
-    assert ((rom[6] >> 4) | (rom[7] & 0xF0)) == 176
+    assert ((rom[6] >> 4) | (rom[7] & 0xF0)) == expected_mapper
     assert rom[16 + 256 * 1024 - 6 : 16 + 256 * 1024 - 4] == bytes([MM2_NMI_HOOK & 0xFF, MM2_NMI_HOOK >> 8])
     assert rom[16 + 256 * 1024 - 4 : 16 + 256 * 1024 - 2] == bytes([STANDALONE_BOOT_STUB & 0xFF, STANDALONE_BOOT_STUB >> 8])
-    print(f'Built {out} ({len(rom)} bytes) - all assertions passed.')
+    print(f'Built {out} ({len(rom)} bytes, mapper={expected_mapper}) - all assertions passed.')

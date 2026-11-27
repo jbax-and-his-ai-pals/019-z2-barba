@@ -59,7 +59,7 @@ from feud_engine import (
 )
 
 
-def _assemble_wram_part1(a: FeudAsm) -> None:
+def _assemble_wram_part1(a: FeudAsm, *, mmc3_pure_chr: bool = False) -> None:
     """Emit W_CALL_B4, W_SYNC_CHR, block routers, and attribute writers."""
     # Tables (16 bytes CHR->RAM slot map + PPU X coords for Stage Close-Up & Overview)
     a.label('TBL_CHR_TO_RAM')
@@ -90,53 +90,57 @@ def _assemble_wram_part1(a: FeudAsm) -> None:
     # ---- W_SYNC_CHR: programs $5FF0 + MMC3 R0/R1 fast (<60c) then R2..R5 ----
     a.label('W_SYNC_CHR')
     a.emit(0x08, 0x78, 0x48, 0x8A, 0x48, 0x98, 0x48)  # PHP; SEI; PHA; TXA; PHA; TYA; PHA
-    # Decide RAM vs ROM from W_CUR_CHR0
-    a.op16(0xAD, W_CUR_CHR0)
-    a.branch(0xD0, 'sc_not00')
-    a.emit(0xAD, 0x45, 0x03, 0xC9, 0x11)  # skip RAM if unused Scr 17
-    a.branch(0xF0, 'sc_use_rom')
-    a.branch(0xD0, 'sc_use_ram')
-    a.label('sc_not00')
-    a.emit(0xC9, 0x05); a.branch(0xF0, 'sc_use_ram')
-    a.emit(0xC9, 0x06); a.branch(0xF0, 'sc_use_ram')
-    a.emit(0xC9, 0x0B); a.branch(0xD0, 'sc_chk_fo')
-    a.emit(0xAD, 0xD3, 0x04, 0xC9, 0x03)  # $0B uses RAM only in Fast Money ($04D3==3)
-    a.branch(0xF0, 'sc_use_ram')
-    a.branch(0xD0, 'sc_use_rom')
-    a.label('sc_chk_fo')
-    a.emit(0xC9, 0x02); a.branch(0xF0, 'sc_is_fo')
-    a.emit(0xC9, 0x03); a.branch(0xD0, 'sc_use_rom')
-    a.label('sc_is_fo')
-    a.emit(0xAD, 0xD3, 0x04, 0xC9, 0x02)  # $02/$03 use RAM only in Face-Off ($04D3==2)
-    a.branch(0xF0, 'sc_use_ram')
+    if mmc3_pure_chr:
+        a.op16(0xAD, W_CUR_CHR0); a.emit(0x20, 0x00, 0x78)
+        a.op16(0xAD, W_CUR_CHR1); a.emit(0x20, 0x20, 0x78)
+    else:
+        # Decide RAM vs ROM from W_CUR_CHR0
+        a.op16(0xAD, W_CUR_CHR0)
+        a.branch(0xD0, 'sc_not00')
+        a.emit(0xAD, 0x45, 0x03, 0xC9, 0x11)  # skip RAM if unused Scr 17
+        a.branch(0xF0, 'sc_use_rom')
+        a.branch(0xD0, 'sc_use_ram')
+        a.label('sc_not00')
+        a.emit(0xC9, 0x05); a.branch(0xF0, 'sc_use_ram')
+        a.emit(0xC9, 0x06); a.branch(0xF0, 'sc_use_ram')
+        a.emit(0xC9, 0x0B); a.branch(0xD0, 'sc_chk_fo')
+        a.emit(0xAD, 0xD3, 0x04, 0xC9, 0x03)  # $0B uses RAM only in Fast Money ($04D3==3)
+        a.branch(0xF0, 'sc_use_ram')
+        a.branch(0xD0, 'sc_use_rom')
+        a.label('sc_chk_fo')
+        a.emit(0xC9, 0x02); a.branch(0xF0, 'sc_is_fo')
+        a.emit(0xC9, 0x03); a.branch(0xD0, 'sc_use_rom')
+        a.label('sc_is_fo')
+        a.emit(0xAD, 0xD3, 0x04, 0xC9, 0x02)  # $02/$03 use RAM only in Face-Off ($04D3==2)
+        a.branch(0xF0, 'sc_use_ram')
 
-    a.label('sc_use_rom')
-    a.emit(0xA9, 0x01, 0x48)
-    a.op16(0xAD, W_CUR_CHR0); a.emit(0x29, 0x1F)
-    a.branch(0x10, '_sc_do_r0')  # always positive (0..31)
+        a.label('sc_use_rom')
+        a.emit(0xA9, 0x01, 0x48)
+        a.op16(0xAD, W_CUR_CHR0); a.emit(0x29, 0x1F)
+        a.branch(0x10, '_sc_do_r0')  # always positive (0..31)
 
-    a.label('sc_use_ram')
-    a.emit(0xA9, 0x21, 0x48)
-    a.op16(0xAD, W_CUR_CHR0); a.emit(0x29, 0x0F, 0xAA); a.abs_ref(0xBD, 'TBL_CHR_TO_RAM')
+        a.label('sc_use_ram')
+        a.emit(0xA9, 0x21, 0x48)
+        a.op16(0xAD, W_CUR_CHR0); a.emit(0x29, 0x0F, 0xAA); a.abs_ref(0xBD, 'TBL_CHR_TO_RAM')
 
-    a.label('_sc_do_r0')
-    a.emit(0x0A, 0x0A, 0xAA)
-    a.emit(0xA9, 0x00, 0x8D, 0x00, 0x80, 0x8E, 0x01, 0x80, 0xE8, 0xE8)
-    a.emit(0xA9, 0x01, 0x8D, 0x00, 0x80, 0x8E, 0x01, 0x80)
-    a.emit(0x68, 0x8D, 0xF0, 0x5F)
-    a.op16(0x8D, W_CHR_MODE)
-    a.emit(0xC9, 0x21)
-    a.branch(0xF0, '_sc_set_ram')
-    a.op16(0xAD, W_CUR_CHR1); a.emit(0x29, 0x1F)
-    a.branch(0x10, '_sc_set_chr1_exit')  # always positive (0..31)
-    a.label('_sc_set_ram')
-    a.op16(0xAD, W_CUR_CHR1); a.emit(0x29, 0x0F, 0xAA); a.abs_ref(0xBD, 'TBL_CHR_TO_RAM')
+        a.label('_sc_do_r0')
+        a.emit(0x0A, 0x0A, 0xAA)
+        a.emit(0xA9, 0x00, 0x8D, 0x00, 0x80, 0x8E, 0x01, 0x80, 0xE8, 0xE8)
+        a.emit(0xA9, 0x01, 0x8D, 0x00, 0x80, 0x8E, 0x01, 0x80)
+        a.emit(0x68, 0x8D, 0xF0, 0x5F)
+        a.op16(0x8D, W_CHR_MODE)
+        a.emit(0xC9, 0x21)
+        a.branch(0xF0, '_sc_set_ram')
+        a.op16(0xAD, W_CUR_CHR1); a.emit(0x29, 0x1F)
+        a.branch(0x10, '_sc_set_chr1_exit')  # always positive (0..31)
+        a.label('_sc_set_ram')
+        a.op16(0xAD, W_CUR_CHR1); a.emit(0x29, 0x0F, 0xAA); a.abs_ref(0xBD, 'TBL_CHR_TO_RAM')
 
-    a.label('_sc_set_chr1_exit')
-    a.emit(0x0A, 0x0A, 0xAA, 0xA0, 0x02)
-    a.label('_sc_r25_lp')
-    a.emit(0x8C, 0x00, 0x80, 0x8E, 0x01, 0x80, 0xE8, 0xC8, 0xC0, 0x06)
-    a.branch(0xD0, '_sc_r25_lp')
+        a.label('_sc_set_chr1_exit')
+        a.emit(0x0A, 0x0A, 0xAA, 0xA0, 0x02)
+        a.label('_sc_r25_lp')
+        a.emit(0x8C, 0x00, 0x80, 0x8E, 0x01, 0x80, 0xE8, 0xC8, 0xC0, 0x06)
+        a.branch(0xD0, '_sc_r25_lp')
     a.label('sc_exit')
     a.emit(0x68, 0xA8, 0x68, 0xAA, 0x68, 0x28, 0x60)
 
@@ -611,10 +615,10 @@ def _assemble_wram_part2(a: FeudAsm) -> None:
     a.emit(0x8D, 0xBE, 0x05, 0xEE, 0xBD, 0x05, 0x60)
 
 
-def assemble_wram_extra() -> tuple[bytes, dict[str, int]]:
+def assemble_wram_extra(*, mmc3_pure_chr: bool = False) -> tuple[bytes, dict[str, int]]:
     """Build WRAM routines at $7B00-$7EFF and return (code_bytes, entry_addrs)."""
     a = FeudAsm(WRAM_EXTRA_ORG)
-    _assemble_wram_part1(a)
+    _assemble_wram_part1(a, mmc3_pure_chr=mmc3_pure_chr)
     _assemble_wram_part2(a)
     raw = a.finish()
     assert len(raw) <= 0x04FC, f'WRAM extra overflow: {len(raw)} > 1276'
@@ -624,6 +628,8 @@ def assemble_wram_extra() -> tuple[bytes, dict[str, int]]:
 def assemble_celeb_wram(
     base_5ff1: int = 0x00,
     roar_5ff1: int = 0x10,
+    *,
+    mmc3_pure_chr: bool = False,
 ) -> tuple[bytes, dict[str, int]]:
     """Build Barba round-win head-tilt, randomized roar burst, and shake routines at $7000-$73FF."""
     FEUD_MMC1_CTRL = 0x7860
@@ -813,7 +819,8 @@ def assemble_celeb_wram(
     a.emit(0xA9, 0x40, 0x8D, 0x11, 0x40)  # settle DMC DAC midpoint once
     a.emit(0xA9, 0x02); a.op16(0x8D, W_CELEB_ACTIVE)
     a.emit(0xA9, 0x03, 0x20, FEUD_MMC1_CTRL & 0xFF, FEUD_MMC1_CTRL >> 8)  # Horiz mirroring (MMC1 val 3 -> $A000=1)
-    a.emit(0xA9, roar_5ff1, 0x8D, 0xF1, 0x5F)  # upper 256KB PRG (roar.dmc at $DCC0)
+    if not mmc3_pure_chr:
+        a.emit(0xA9, roar_5ff1, 0x8D, 0xF1, 0x5F)  # upper 256KB PRG (roar.dmc at $DCC0)
 
     # Pick random roar count in 3..5
     a.abs_ref(0x20, '_c_rng')
@@ -883,7 +890,8 @@ def assemble_celeb_wram(
     a.label('crp_roars_done')
     a.emit(0xA9, 0x00); a.op16(0x8D, W_SHAKE_X)
     a.emit(0xA9, 0x0F, 0x8D, 0x15, 0x40)
-    a.emit(0xA9, base_5ff1, 0x8D, 0xF1, 0x5F)  # restore Feud base 256KB PRG
+    if not mmc3_pure_chr:
+        a.emit(0xA9, base_5ff1, 0x8D, 0xF1, 0x5F)  # restore Feud base 256KB PRG
     a.emit(0xA9, 0x02, 0x20, FEUD_MMC1_CTRL & 0xFF, FEUD_MMC1_CTRL >> 8)  # restore Vertical mirroring (MMC1 val 2 -> $A000=0)
 
     a.emit(0xA9, 0x00); a.op16(0x8D, W_ROAR_SEAT_Q)
@@ -916,7 +924,9 @@ def assemble_celeb_wram(
     a.label('W_AMB_ROAR_STOP')
     a.op16(0xAD, W_AMB_ROAR_ON); a.branch(0xF0, 'art_done')
     a.emit(0xA9, 0x0F, 0x8D, 0x15, 0x40)
-    a.emit(0xA9, base_5ff1, 0x8D, 0xF1, 0x5F); a.op16(0x8D, W_AMB_ROAR_ON)
+    if not mmc3_pure_chr:
+        a.emit(0xA9, base_5ff1, 0x8D, 0xF1, 0x5F)
+    a.emit(0xA9, 0x00); a.op16(0x8D, W_AMB_ROAR_ON)
     a.label('art_done')
     a.emit(0x60)
 
@@ -937,7 +947,8 @@ def assemble_celeb_wram(
     a.emit(0xAD, 0xFA, 0x01, 0x45, 0x1F, 0x29, 0x7F, 0x18, 0x69, 14)  # 270..397 frames (4.5..6.6s)
     a.op16(0x8D, W_AMB_TMR_LO)
     a.emit(0xA9, 0x01); a.op16(0x8D, W_AMB_TMR_HI)
-    a.emit(0xA9, roar_5ff1, 0x8D, 0xF1, 0x5F)     # upper 256KB PRG (roar_soft.dmc at $E940)
+    if not mmc3_pure_chr:
+        a.emit(0xA9, roar_5ff1, 0x8D, 0xF1, 0x5F)     # upper 256KB PRG (roar_soft.dmc at $E940)
     a.emit(0xA9, 0x0F, 0x8D, 0x15, 0x40)
     a.emit(0xA9, 0x40, 0x8D, 0x11, 0x40)     # settle DMC DAC midpoint before ambient roar
     a.emit(0xA9, 0x09, 0x8D, 0x10, 0x40)     # rate 9 (11,186 Hz, matches Z2 Barba roar)

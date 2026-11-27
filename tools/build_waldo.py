@@ -9,13 +9,14 @@ from pathlib import Path
 import roar_sample
 from assets import compile_assets, encounter_connector_rows, encounter_trail_rows
 from boss_art import resize_x, shear_up, source_head, source_pair
+from bps import write_bps
 from nes import CHR_OFFSET, HEADER_SIZE, decode_tile, encode_tile, load_source
 
 ROOT = Path(__file__).resolve().parents[1]
 WALDO_PATH = ROOT / 'roms/waldo.nes'
 Z2_PATH = ROOT / 'roms/z2.nes'
 OUT_PATH = ROOT / 'build/waldo_barba.nes'
-PLAY_PATH = ROOT / 'play/standalone/waldo-barba.nes'
+PLAY_PATH = ROOT / 'play/nes/waldo-barba.nes'
 BARBA_JSON = ROOT / 'assets/barba.json'
 CROWD_JSON = ROOT / 'assets/waldo_crowd.json'
 ASH_JSON = ROOT / 'assets/ash.json'
@@ -2102,7 +2103,10 @@ def _patch_ticket_lava(out: bytearray, waldo: bytes) -> None:
             put(out, nt_off + r * 32 + 7, bytes(row_tids), expected=expected_rows[r])
 
 
-def build() -> Path:
+def build(count_build: bool = True, build_number: int | None = None) -> Path:
+    from build_history import HISTORY_FILE, get_subgame_build_number, next_subgame_build_number, record_subgame_build
+    if build_number is None:
+        build_number = next_subgame_build_number(HISTORY_FILE, 'waldo') if count_build else get_subgame_build_number(HISTORY_FILE, 'waldo')
     if not WALDO_PATH.is_file():
         raise SystemExit('Missing roms/waldo.nes')
     waldo = WALDO_PATH.read_bytes()
@@ -3439,6 +3443,24 @@ def build() -> Path:
         assert len(crowd_code) <= 0x1260, f'crowd_code too large: {len(crowd_code)}'
         prg_256[0x20D00:0x20D00 + len(crowd_code)] = crowd_code
 
+        # Subtle title build number (B<N>) at $23BA (row 29, col 26) right after title_stamp_init ($CCE2..$CCFF, 30B)
+        tb_addr = 0xCCE2
+        tb_tiles = bytes(0x93 if ch == 'B' else 0x88 + int(ch) for ch in f'B{build_number}')
+        tb_data_addr = tb_addr + 25
+        tb_code = bytes([
+            0xA9, 0x23, 0x8D, 0x06, 0x20,
+            0xA9, 0xBA, 0x8D, 0x06, 0x20,
+            0xA2, len(tb_tiles) - 1,
+            0xBD, tb_data_addr & 0xFF, tb_data_addr >> 8,
+            0x8D, 0x07, 0x20,
+            0xCA, 0x10, 0xF9,
+            0xA2, 0x03, 0xA9, 0xA3, 0x60,
+        ]) + tb_tiles
+        assert len(tb_code) <= 0x1E, f'waldo tb_code too large: {len(tb_code)}'
+        prg_256[0x20CE2 : 0x20CE2 + len(tb_code)] = tb_code
+        # Jump from end of title_stamp_init ($CC60 + 0x4D) to tb_addr
+        prg_256[0x20C60 + 0x4D : 0x20C60 + 0x52] = bytes([0x4C, tb_addr & 0xFF, tb_addr >> 8, 0xEA, 0xEA])
+
         def jsr(name: str) -> bytes:
             a = crowd_labels[name]
             return bytes([0x20, a & 0xFF, a >> 8])
@@ -3462,6 +3484,14 @@ def build() -> Path:
     OUT_PATH.write_bytes(out)
     PLAY_PATH.parent.mkdir(parents=True, exist_ok=True)
     PLAY_PATH.write_bytes(out)
+    if count_build:
+        record_subgame_build(HISTORY_FILE, 'waldo', build_number, 'mmc3', PLAY_PATH, hashlib.sha256(out).hexdigest())
+    write_bps(
+        WALDO_PATH,
+        PLAY_PATH,
+        out_bps_path=ROOT / 'play/bps/waldo-barba.bps',
+        metadata="Where's Barba? | Barba Edition",
+    )
     print(f'Wrote {OUT_PATH} and {PLAY_PATH} ({len(out)} bytes)')
     return OUT_PATH
 

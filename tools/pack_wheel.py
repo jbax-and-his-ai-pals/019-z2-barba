@@ -128,6 +128,7 @@ def make_wheel_wram_code(
     restore_r7: int = 0x0D,
     reward_addr: int = WHEEL_REWARD_ADDR,
     reward_magic: int = WHEEL_REWARD_MAGIC,
+    build_number: int | None = None,
 ) -> bytes:
     """Assemble the 1024-byte ($7800-$7BFF) WRAM helper for Wheel of Fortune."""
     out = bytearray(b'\xFF' * 0x400)
@@ -344,6 +345,18 @@ def make_wheel_wram_code(
     a.emit(*ram_fk23c)
     place(WHEEL_BOOT, a.finish(), 0x7C00)
 
+    if build_number is not None:
+        tb_addr = 0x7980
+        tb_tiles = bytes(ord(c) for c in f'B{build_number}')
+        a_tb = Asm6502(tb_addr)
+        a_tb.emit(0x2C, 0x02, 0x20)
+        a_tb.emit(0xA9, 0x23, 0x8D, 0x06, 0x20)
+        a_tb.emit(0xA9, 0x9A, 0x8D, 0x06, 0x20)
+        for ch_byte in tb_tiles:
+            a_tb.emit(0xA9, ch_byte, 0x8D, 0x07, 0x20)
+        a_tb.emit(0xAD, 0x00, 0x03, 0x60)
+        place(tb_addr, a_tb.finish(), 0x7A00)
+
     return bytes(out)
 
 
@@ -358,6 +371,7 @@ def make_wheel_boot_bank0(
     standalone_stub: bool = False,
     reward_addr: int = WHEEL_REWARD_ADDR,
     reward_magic: int = WHEEL_REWARD_MAGIC,
+    build_number: int | None = None,
 ) -> bytes:
     """Build 8KB loader bank 0 ($8000-$9FFF): copies $8100-$84FF -> $7800-$7BFF and jumps to WHEEL_BOOT."""
     bank0 = bytearray(b'\xFF' * 8192)
@@ -391,6 +405,7 @@ def make_wheel_boot_bank0(
         restore_r7=restore_r7,
         reward_addr=reward_addr,
         reward_magic=reward_magic,
+        build_number=build_number,
     )
     return bytes(bank0)
 
@@ -409,6 +424,7 @@ def patch_wheel(
     *,
     base_5ff1: int = 0x00,
     z2_bytes: bytes | None = None,
+    build_number: int | None = None,
 ) -> list[bytes]:
     """Verify and patch Wheel of Fortune -> Wheel of Barba (AxROM, 4x32KB PRG) -> [bank0..bank3]."""
     assert wheel_bytes[:4] == b'NES\x1a', 'Not an iNES ROM'
@@ -589,6 +605,8 @@ def patch_wheel(
             # 5f. Apply Zelda II / Barba puzzles, categories, contestants, palettes, and UI text in Bank 0
             wheel_puzzles.apply_puzzle_patches_bank0(prg)
             wheel_art.apply_art_patches_bank0(prg)
+            if build_number is not None:
+                patch(0x8DA9, bytes.fromhex('20 80 79'), bytes.fromhex('ad 00 03'))
         elif b == 1:
             # Matching Bank 1 half of fast $917C -> $8CC8 -> Bank 0 return trampoline
             b1_start = 0xFE24 + 15  # exact length of fast_b0_bytes (5+5+5)
@@ -648,11 +666,18 @@ def build_standalone(
     out_path: Path,
     wheel_path: Path = Path('roms/wheel.nes'),
     z2_path: Path | None = None,
+    *,
+    build_number: int | None = None,
 ) -> Path:
     """Wrap Wheel of Barba in a standalone 1024KB PRG + CHR-RAM NES 2.0 Mapper 176 ROM."""
+    from build_history import HISTORY_FILE, next_subgame_build_number, record_subgame_build
+    import hashlib
+    record_this = build_number is None
+    if build_number is None:
+        build_number = next_subgame_build_number(HISTORY_FILE, 'wheel')
     wheel_bytes = wheel_path.read_bytes()
     z2_bytes = z2_path.read_bytes() if z2_path is not None else None
-    banks = patch_wheel(wheel_bytes, z2_bytes=z2_bytes)
+    banks = patch_wheel(wheel_bytes, z2_bytes=z2_bytes, build_number=build_number)
 
     # Patch standalone reset vector ($FFFC) in Bank 0, Bank 1 (504..512KB power-on!), and Bank 3.
     cold_ram = bytes.fromhex(
@@ -713,8 +738,11 @@ def build_standalone(
     hdr[10] = 0x90  # 32KB battery PRG-RAM
     hdr[11] = 0x09  # 32KB CHR-RAM
 
+    rom_bytes = bytes(hdr) + bytes(prg1024)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_bytes(bytes(hdr) + bytes(prg1024))
+    out_path.write_bytes(rom_bytes)
+    if record_this:
+        record_subgame_build(HISTORY_FILE, 'wheel', build_number, '176', out_path, hashlib.sha256(rom_bytes).hexdigest())
     return out_path
 
 

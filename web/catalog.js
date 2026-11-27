@@ -156,6 +156,36 @@ window.BARBA_FE_CATALOG = {
       }
     },
     {
+      "id": "upstab_breath",
+      "code": "Wu",
+      "category": "barba_core",
+      "label": "Up-Thrust -> Upward Breath & Rising Head-Butt",
+      "type": "bool",
+      "status": "built",
+      "coupled": true,
+      "vanilla": false,
+      "barba": true,
+      "requires": [
+        "barba_protagonist"
+      ],
+      "description": "Technique-gated Up-Thrust (Up+B in air) fires upward diagonal firebreath volleys alongside a rising head-butt pose."
+    },
+    {
+      "id": "downstab_stomp",
+      "code": "Wd",
+      "category": "barba_core",
+      "label": "Down-Thrust -> Dive Stomp & Downstab Tail",
+      "type": "bool",
+      "status": "built",
+      "coupled": true,
+      "vanilla": false,
+      "barba": true,
+      "requires": [
+        "barba_protagonist"
+      ],
+      "description": "Technique-gated Down-Thrust (Down+B in air) stomps easy enemies (HP 1..16, excluding shielded foes and bosses) on descent, with a downstab tail pose and contact item pickup."
+    },
+    {
       "id": "ironknuckle_rebound",
       "code": "Ir",
       "category": "barba_core",
@@ -282,6 +312,51 @@ window.BARBA_FE_CATALOG = {
       }
     },
     {
+      "id": "overworld_barba_trail",
+      "code": "Wo",
+      "category": "barba_core",
+      "label": "Overworld Barba Avatar, Encounter Trail & Wyrmling",
+      "type": "bool",
+      "status": "built",
+      "coupled": true,
+      "vanilla": false,
+      "barba": true,
+      "requires": [
+        "barba_protagonist"
+      ],
+      "description": "Replaces Link's overworld sprite with Barba, adds a multi-segment trailing body in encounters, and swaps the wandering overworld Fairy for a Wyrmling."
+    },
+    {
+      "id": "hud_and_death_polish",
+      "code": "Wl",
+      "category": "barba_core",
+      "label": "Level-Up BREATH Pane & Fatal-Hit Silhouette",
+      "type": "bool",
+      "status": "built",
+      "coupled": true,
+      "vanilla": false,
+      "barba": true,
+      "requires": [
+        "barba_protagonist"
+      ],
+      "description": "Renames the level-up SWORD stat to BREATH with a fireball icon, and draws a custom 24x48 fatal-hit silhouette on death."
+    },
+    {
+      "id": "cave_firelight",
+      "code": "Wc",
+      "category": "barba_core",
+      "label": "Dark-Cave Envelope Firelight & Glow Halo",
+      "type": "bool",
+      "status": "built",
+      "coupled": true,
+      "vanilla": false,
+      "barba": true,
+      "requires": [
+        "barba_protagonist"
+      ],
+      "description": "10-step fireball-driven ember/warm/golden-orange lighting in dark grottos without the Candle, $2001 emphasis below scanline 31, and a behind-BG glow halo around live fireballs."
+    },
+    {
       "id": "volley_count",
       "code": "Vc",
       "category": "barba_options",
@@ -338,16 +413,46 @@ window.BARBA_FE_CATALOG = {
       "description": "Burning Error leaves an interactive ash pile ('I AM ASH PILE.')."
     },
     {
+      "id": "burned_signs",
+      "code": "Wn",
+      "category": "barba_options",
+      "label": "Burned Signs & Rotating Dialogue",
+      "type": "bool",
+      "status": "built",
+      "coupled": true,
+      "vanilla": false,
+      "barba": true,
+      "requires": [
+        "barba_protagonist"
+      ],
+      "description": "Firebreath chars town and overworld signs with a scorched mark and rotating burned-sign messages."
+    },
+    {
+      "id": "ngplus_mountain_melt",
+      "code": "Nm",
+      "category": "barba_options",
+      "label": "NG+ Overworld Mountain Melting",
+      "type": "bool",
+      "status": "built",
+      "coupled": true,
+      "vanilla": false,
+      "barba": true,
+      "requires": [
+        "barba_protagonist"
+      ],
+      "description": "On New Game+, pressing B on the overworld melts Mountain tiles into walkable Desert with live PPU attribute updates."
+    },
+    {
       "id": "scanline_scenery",
       "code": "Ws",
       "category": "world_presentation",
-      "label": "Overworld & Encounter Scenery (IRQ Clouds & Shimmer)",
+      "label": "Overworld & Encounter Scenery (IRQ Clouds, Foliage & Shimmer)",
       "type": "bool",
       "status": "built",
       "vanilla": false,
       "barba": true,
       "requires": [],
-      "description": "Parallax clouds, swaying grass/sprigs, shimmering water/lava/flames, and rock-steady HUD split.",
+      "description": "Parallax clouds, swaying grass/sprigs, overworld foliage sway and desert/water sparkles, shimmering water/lava/flames, and rock-steady HUD split.",
       "preview": {
         "off": "previews/cap_vanilla_grass_walk.png",
         "off_w": 256,
@@ -360,6 +465,18 @@ window.BARBA_FE_CATALOG = {
         "frames": 144,
         "fps": 20
       }
+    },
+    {
+      "id": "enemy_polish",
+      "code": "Wg",
+      "category": "world_presentation",
+      "label": "Geldarm Sand-Sink & Giant Bot Splat SFX",
+      "type": "bool",
+      "status": "built",
+      "vanilla": false,
+      "barba": true,
+      "requires": [],
+      "description": "Geldarm sinks into the desert sand before its death explosion, and Great Palace Giant Bot plays an APU splat when splitting into 5 small Bots."
     },
     {
       "id": "saria_foul_water",
@@ -438,6 +555,20 @@ window.BARBA_FE_CATALOG = {
         "frames": 96,
         "fps": 20
       }
+    },
+    {
+      "id": "arcade_spells_and_gear",
+      "code": "Ta",
+      "category": "world_presentation",
+      "label": "Arcade Spells, 2-Column Pause Menu & Cosmetic Gear Bar",
+      "type": "bool",
+      "status": "built",
+      "vanilla": false,
+      "barba": true,
+      "requires": [
+        "crossover_portals"
+      ],
+      "description": "Winning subgames in Barba's Arcade unlocks 11+ bonus spells in a 2-column pause menu and 5 stackable/swappable cosmetic trophies (HAT, MASK, HELM, TIE, BELT)."
     },
     {
       "id": "sampled_roar",
@@ -634,19 +765,28 @@ window.BARBA_FE_CATALOG = {
         "spell_wyrmling": false,
         "spell_meteor": false,
         "spell_inferno": false,
+        "upstab_breath": false,
+        "downstab_stomp": false,
         "ironknuckle_rebound": false,
         "glove_bricks": false,
         "lava_wade": false,
         "palace_roar_shake": false,
         "rauru_sage_basement": false,
         "title_and_ending": false,
+        "overworld_barba_trail": false,
+        "hud_and_death_polish": false,
+        "cave_firelight": false,
         "volley_count": 1,
         "town_chaos": false,
         "error_ash_pile": false,
+        "burned_signs": false,
+        "ngplus_mountain_melt": false,
         "scanline_scenery": false,
+        "enemy_polish": false,
         "saria_foul_water": false,
         "boss_meters": "vanilla",
         "crossover_portals": false,
+        "arcade_spells_and_gear": false,
         "sampled_roar": false,
         "game_over_portrait": false,
         "game_over_laughs": false,
@@ -667,19 +807,28 @@ window.BARBA_FE_CATALOG = {
         "spell_wyrmling": true,
         "spell_meteor": true,
         "spell_inferno": true,
+        "upstab_breath": true,
+        "downstab_stomp": true,
         "ironknuckle_rebound": true,
         "glove_bricks": true,
         "lava_wade": true,
         "palace_roar_shake": true,
         "rauru_sage_basement": true,
         "title_and_ending": true,
+        "overworld_barba_trail": true,
+        "hud_and_death_polish": true,
+        "cave_firelight": true,
         "volley_count": 5,
         "town_chaos": true,
         "error_ash_pile": true,
+        "burned_signs": true,
+        "ngplus_mountain_melt": true,
         "scanline_scenery": true,
+        "enemy_polish": true,
         "saria_foul_water": true,
         "boss_meters": "souls",
         "crossover_portals": true,
+        "arcade_spells_and_gear": true,
         "sampled_roar": true,
         "game_over_portrait": true,
         "game_over_laughs": true,
@@ -691,7 +840,7 @@ window.BARBA_FE_CATALOG = {
         "open_great_palace": 6,
         "palette_shuffle": false
       },
-      "flagstring": "BFE1|Bb S1 S2 S3 S4 Ir Gb Lw Wp Wr Wt Vc5 Tc We Ws Wf Wm1 Tp Ar Ap Ag Ri0 Rx0 Ro6#BARBA2026"
+      "flagstring": "BFE1|Bb S1 S2 S3 S4 Wu Wd Ir Gb Lw Wp Wr Wt Wo Wl Wc Vc5 Tc We Wn Nm Ws Wg Wf Wm1 Tp Ta Ar Ap Ag Ri0 Rx0 Ro6#BARBA2026"
     },
     "barba_lite": {
       "values": {
@@ -700,19 +849,28 @@ window.BARBA_FE_CATALOG = {
         "spell_wyrmling": true,
         "spell_meteor": true,
         "spell_inferno": true,
+        "upstab_breath": true,
+        "downstab_stomp": true,
         "ironknuckle_rebound": true,
         "glove_bricks": true,
         "lava_wade": true,
         "palace_roar_shake": true,
         "rauru_sage_basement": true,
         "title_and_ending": true,
+        "overworld_barba_trail": true,
+        "hud_and_death_polish": true,
+        "cave_firelight": true,
         "volley_count": 5,
         "town_chaos": false,
         "error_ash_pile": false,
+        "burned_signs": true,
+        "ngplus_mountain_melt": true,
         "scanline_scenery": true,
+        "enemy_polish": true,
         "saria_foul_water": true,
         "boss_meters": "souls",
         "crossover_portals": false,
+        "arcade_spells_and_gear": false,
         "sampled_roar": true,
         "game_over_portrait": true,
         "game_over_laughs": true,
@@ -724,7 +882,7 @@ window.BARBA_FE_CATALOG = {
         "open_great_palace": 6,
         "palette_shuffle": false
       },
-      "flagstring": "BFE1|Bb S1 S2 S3 S4 Ir Gb Lw Wp Wr Wt Vc5 Ws Wf Wm1 Ar Ap Ag Ri0 Rx0 Ro6#BARBA2026"
+      "flagstring": "BFE1|Bb S1 S2 S3 S4 Wu Wd Ir Gb Lw Wp Wr Wt Wo Wl Wc Vc5 Wn Nm Ws Wg Wf Wm1 Ar Ap Ag Ri0 Rx0 Ro6#BARBA2026"
     },
     "chaos": {
       "values": {
@@ -733,19 +891,28 @@ window.BARBA_FE_CATALOG = {
         "spell_wyrmling": true,
         "spell_meteor": true,
         "spell_inferno": true,
+        "upstab_breath": true,
+        "downstab_stomp": true,
         "ironknuckle_rebound": true,
         "glove_bricks": true,
         "lava_wade": true,
         "palace_roar_shake": true,
         "rauru_sage_basement": true,
         "title_and_ending": true,
+        "overworld_barba_trail": true,
+        "hud_and_death_polish": true,
+        "cave_firelight": true,
         "volley_count": 5,
         "town_chaos": true,
         "error_ash_pile": true,
+        "burned_signs": true,
+        "ngplus_mountain_melt": true,
         "scanline_scenery": true,
+        "enemy_polish": true,
         "saria_foul_water": true,
         "boss_meters": "souls",
         "crossover_portals": true,
+        "arcade_spells_and_gear": true,
         "sampled_roar": true,
         "game_over_portrait": true,
         "game_over_laughs": true,
@@ -757,7 +924,7 @@ window.BARBA_FE_CATALOG = {
         "open_great_palace": 4,
         "palette_shuffle": true
       },
-      "flagstring": "BFE1|Bb S1 S2 S3 S4 Ir Gb Lw Wp Wr Wt Vc5 Tc We Ws Wf Wm1 Tp Ar Ap Ag Ri2 Rs Rb Rp Rx1 Ro4 Rc#BARBA2026"
+      "flagstring": "BFE1|Bb S1 S2 S3 S4 Wu Wd Ir Gb Lw Wp Wr Wt Wo Wl Wc Vc5 Tc We Wn Nm Ws Wg Wf Wm1 Tp Ta Ar Ap Ag Ri2 Rs Rb Rp Rx1 Ro4 Rc#BARBA2026"
     }
   }
 };
