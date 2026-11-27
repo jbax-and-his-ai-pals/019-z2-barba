@@ -56,7 +56,7 @@
         <strong>${side.label}</strong>
         ${isOurs ? '<span class="pill-on">Our Version</span>' : '<span class="badge">Vanilla</span>'}
       </div>
-      <img src="${side.img}" alt="${side.label}" style="width:${256 * ui.zoom}px;max-width:100%;height:auto;image-rendering:pixelated;border-radius:6px;border:1px solid var(--border);">
+      <img src="${side.img}" alt="${side.label}" loading="lazy" decoding="async" style="width:${256 * ui.zoom}px;max-width:100%;height:auto;image-rendering:pixelated;border-radius:6px;border:1px solid var(--border);">
       <div class="flag-desc">${side.caption}</div>
     `;
     return box;
@@ -151,5 +151,17 @@
     setToast('Copied JSON feedback to clipboard.');
   });
 
-  render();
+  let rendered = false;
+  function ensureRendered() {
+    if (rendered) return;
+    rendered = true;
+    render();
+  }
+  const viewTitles = document.getElementById('view-titles');
+  if (viewTitles && !viewTitles.classList.contains('hidden')) {
+    ensureRendered();
+  }
+  window.addEventListener('barba:tab', e => {
+    if (e.detail?.tab === 'titles') ensureRendered();
+  });
 })();

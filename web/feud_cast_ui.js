@@ -781,7 +781,19 @@
   };
 
   initLineups();
-  renderAll();
+  let feudRendered = false;
+  function ensureFeudRendered() {
+    if (feudRendered) return;
+    feudRendered = true;
+    renderAll();
+  }
+  const viewFeud = document.getElementById('view-feud');
+  if (viewFeud && !viewFeud.classList.contains('hidden')) {
+    ensureFeudRendered();
+  }
+  window.addEventListener('barba:tab', e => {
+    if (e.detail?.tab === 'feud') ensureFeudRendered();
+  });
 
   // Gentle animation loop when Pose == Animate
   setInterval(() => {

@@ -22,7 +22,7 @@
     body {
       margin: 0;
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      background: radial-gradient(circle at top right, #231715 0%, var(--bg) 45%);
+      background: var(--bg);
       color: var(--text);
       line-height: 1.45;
     }
@@ -717,47 +717,60 @@
       if (canvasObserver) canvasObserver.observe(cv);
       const ctx = cv.getContext('2d');
       ctx.imageSmoothingEnabled = false;
-      activeCanvases.push({ cv, ctx, img: loadStripImage(src), w, h, frames, fps, idx: 0, drawnIdx: -1, acc: 0 });
+      activeCanvases.push({ cv, ctx, src, img: null, w, h, frames, fps, idx: 0, drawnIdx: -1, acc: 0 });
       return cv;
     }
 
     let lastTick = performance.now();
+    let tickRaf = 0;
+    function ensureTicking() {
+      const feView = document.getElementById('view-fe');
+      if (tickRaf || document.hidden || (feView && feView.classList.contains('hidden'))) return;
+      lastTick = performance.now();
+      tickRaf = requestAnimationFrame(tickCanvases);
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) ensureTicking();
+    });
+
     function tickCanvases(now) {
+      tickRaf = 0;
+      const feView = document.getElementById('view-fe');
+      if (document.hidden || (feView && feView.classList.contains('hidden'))) return;
       const dt = Math.min(0.1, (now - lastTick) / 1000);
       lastTick = now;
-      if (!document.hidden) {
-        for (let i = activeCanvases.length - 1; i >= 0; i--) {
-          const item = activeCanvases[i];
-          if (!item.cv.isConnected) {
-            if (canvasObserver) canvasObserver.unobserve(item.cv);
-            activeCanvases.splice(i, 1);
-            continue;
-          }
-          if (!item.img.complete || item.img.naturalWidth === 0) continue;
-          const visible = item.cv._vis !== false;
-          if (!visible && item.drawnIdx !== -1) continue;
-          if (visible && item.frames > 1) {
-            item.acc += dt;
-            const step = 1 / item.fps;
-            if (item.acc >= step) {
-              item.idx = (item.idx + Math.floor(item.acc / step)) % item.frames;
-              item.acc %= step;
-            }
-          }
-          if (item.idx === item.drawnIdx) continue;
-          item.drawnIdx = item.idx;
-          const ctx = item.ctx;
-          ctx.imageSmoothingEnabled = false;
-          ctx.clearRect(0, 0, item.cv.width, item.cv.height);
-          const cols = Math.max(1, Math.floor(item.img.naturalWidth / item.w));
-          const sx = (item.idx % cols) * item.w;
-          const sy = Math.floor(item.idx / cols) * item.h;
-          ctx.drawImage(item.img, sx, sy, item.w, item.h, 0, 0, item.cv.width, item.cv.height);
+      for (let i = activeCanvases.length - 1; i >= 0; i--) {
+        const item = activeCanvases[i];
+        if (!item.cv.isConnected) {
+          if (canvasObserver) canvasObserver.unobserve(item.cv);
+          activeCanvases.splice(i, 1);
+          continue;
         }
+        const visible = item.cv._vis !== false;
+        if (!visible) continue;
+        if (!item.img) item.img = loadStripImage(item.src);
+        if (!item.img.complete || item.img.naturalWidth === 0) continue;
+        if (item.frames > 1) {
+          item.acc += dt;
+          const step = 1 / item.fps;
+          if (item.acc >= step) {
+            item.idx = (item.idx + Math.floor(item.acc / step)) % item.frames;
+            item.acc %= step;
+          }
+        }
+        if (item.idx === item.drawnIdx) continue;
+        item.drawnIdx = item.idx;
+        const ctx = item.ctx;
+        ctx.imageSmoothingEnabled = false;
+        ctx.clearRect(0, 0, item.cv.width, item.cv.height);
+        const cols = Math.max(1, Math.floor(item.img.naturalWidth / item.w));
+        const sx = (item.idx % cols) * item.w;
+        const sy = Math.floor(item.idx / cols) * item.h;
+        ctx.drawImage(item.img, sx, sy, item.w, item.h, 0, 0, item.cv.width, item.cv.height);
       }
-      requestAnimationFrame(tickCanvases);
+      tickRaf = requestAnimationFrame(tickCanvases);
     }
-    requestAnimationFrame(tickCanvases);
+    ensureTicking();
 
     function applyPreset(name) {
       state.preset = name;
@@ -1100,6 +1113,16 @@
       document.getElementById('view-feud').classList.toggle('hidden', tab !== 'feud');
       document.getElementById('view-duck').classList.toggle('hidden', tab !== 'duck');
       document.getElementById('view-titles').classList.toggle('hidden', tab !== 'titles');
+      if (tab === 'fe') {
+        ensureTicking();
+      } else {
+        imgCache.clear();
+        for (const item of activeCanvases) {
+          item.img = null;
+          item.drawnIdx = -1;
+        }
+      }
+      window.dispatchEvent(new CustomEvent('barba:tab', { detail: { tab } }));
     };
     document.querySelectorAll('.tab-btn').forEach(btn => {
       btn.onclick = () => switchTab(btn.dataset.tab);

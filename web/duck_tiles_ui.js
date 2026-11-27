@@ -625,10 +625,22 @@
   }
 
   initControls();
-  renderStats();
-  renderSprites();
-  renderBgDiffs();
-  renderChrBank();
+  let duckRendered = false;
+  function ensureDuckRendered() {
+    if (duckRendered) return;
+    duckRendered = true;
+    renderStats();
+    renderSprites();
+    renderBgDiffs();
+    renderChrBank();
+  }
+  const viewDuck = document.getElementById('view-duck');
+  if (viewDuck && !viewDuck.classList.contains('hidden')) {
+    ensureDuckRendered();
+  }
+  window.addEventListener('barba:tab', e => {
+    if (e.detail?.tab === 'duck') ensureDuckRendered();
+  });
 
   let gridVisible = true;
   const spriteGrid = document.getElementById('duck-sprite-grid');
