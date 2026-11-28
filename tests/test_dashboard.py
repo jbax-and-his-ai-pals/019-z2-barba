@@ -101,7 +101,7 @@ class TestDashboardBuilder(unittest.TestCase):
         ):
             self.assertNotIn(marker, public_html, f"Public HTML should not contain {marker}")
 
-        for marker in ('src="catalog.js"', 'src="title_review_data.js"', 'src="subgames_data.js"', '>Summary<', 'Barba Edition', '>Zelda 2<', '>All Title Screens<'):
+        for marker in ('src="catalog.js"', 'src="title_review_data.js"', 'src="subgames_data.js"', '>Overview<', 'id="view-overview"', '>Summary<', 'Barba Edition', '>Zelda 2<', '>All Title Screens<'):
             self.assertIn(marker, public_html)
 
         # Local flavor has all internal dev tools, state bar, and local data files
@@ -278,10 +278,12 @@ class TestDashboardBuilder(unittest.TestCase):
         self.assertEqual(
             tab_ids,
             [
+                "overview",
                 "fe",
                 "sub-pubgame",
                 "sub-locgame",
                 "z2strings",
+                "owtiles",
                 "waldo",
                 "feud",
                 "duck",
@@ -494,6 +496,93 @@ class TestTitleBuildResolution(unittest.TestCase):
                 by_id = {g["id"]: g for g in cat["games"]}
                 self.assertEqual(by_id["zelda"]["build_number"], 69)
                 self.assertEqual(by_id["smb"]["build_number"], 999)
+
+    def test_release_downloads_pending_and_published(self) -> None:
+        template = build_dashboard.TEMPLATE_PATH.read_text(encoding="utf-8")
+        sample_manifest = {
+            "repo": "jbax-and-his-ai-pals/019-z2-barba",
+            "tag": "v2.0.0",
+            "build_number": 825,
+            "published": False,
+            "collections": [
+                {
+                    "id": "all",
+                    "title": "Complete BPS Collection",
+                    "description": "All patches",
+                    "filename": "barba-bps-v2.0.0-b825.zip",
+                    "size_bytes": 123456,
+                    "file_count": 2,
+                }
+            ],
+            "patches": [
+                {
+                    "id": "barba",
+                    "game": "barba",
+                    "tier": "main",
+                    "title": "Zelda II: Barba Edition (Combined)",
+                    "filename": "barba-b825.bps",
+                    "size_bytes": 654321,
+                    "mapper": "NES 2.0 Mapper 176 (FK23C)",
+                    "base_rom": "Zelda II: The Adventure of Link (USA PRG0)",
+                },
+                {
+                    "id": "dk-compat",
+                    "game": "dk",
+                    "tier": "compat",
+                    "title": "Donkey Barba (MMC3 Compat)",
+                    "filename": "dk-compat-b27.bps",
+                    "size_bytes": 294273,
+                    "mapper": "Mapper 4 (MMC3)",
+                    "base_rom": "Donkey Kong (USA / Rev A)",
+                },
+            ],
+        }
+        pending_html = build_dashboard.render_flavor(template, "public", release_manifest=sample_manifest)
+        self.assertIn("Pending Upload", pending_html)
+        self.assertIn("barba-bps-v2.0.0-b825.zip", pending_html)
+        self.assertIn("barba-b825.bps", pending_html)
+        self.assertIn("dk-compat-b27.bps", pending_html)
+        self.assertNotIn("releases/download/v2.0.0/", pending_html)
+
+        published_manifest = dict(sample_manifest, published=True)
+        live_html = build_dashboard.render_flavor(template, "public", release_manifest=published_manifest)
+        self.assertIn("https://github.com/jbax-and-his-ai-pals/019-z2-barba/releases/download/v2.0.0/barba-bps-v2.0.0-b825.zip", live_html)
+        self.assertIn("https://github.com/jbax-and-his-ai-pals/019-z2-barba/releases/download/v2.0.0/barba-b825.bps", live_html)
+        self.assertIn("https://github.com/jbax-and-his-ai-pals/019-z2-barba/releases/download/v2.0.0/dk-compat-b27.bps", live_html)
+        self.assertNotIn("Pending Upload", live_html)
+
+
+class TestOverworldTilesLab(unittest.TestCase):
+    def test_public_omits_ow_tiles_lab_and_local_includes_it(self) -> None:
+        template = build_dashboard.TEMPLATE_PATH.read_text(encoding="utf-8")
+        pub_html = build_dashboard.render_flavor(template, "public")
+        loc_html = build_dashboard.render_flavor(template, "local")
+
+        self.assertNotIn('data-tab="owtiles"', pub_html)
+        self.assertNotIn('id="view-owtiles"', pub_html)
+        self.assertNotIn("local_ow_tiles_data.js", pub_html)
+        self.assertNotIn("ow_tiles_ui.js", pub_html)
+
+        self.assertIn('data-tab="owtiles"', loc_html)
+        self.assertIn('id="view-owtiles"', loc_html)
+        self.assertIn("local_ow_tiles_data.js", loc_html)
+        self.assertIn("ow_tiles_ui.js", loc_html)
+
+    def test_collect_ow_tiles_data_covers_all_environment_types(self) -> None:
+        import ow_tiles_dashboard
+
+        payload = ow_tiles_dashboard.collect_ow_tiles_data()
+        env_by_id = {e["id"]: e for e in payload["environments"]}
+        for required in ("water", "swamp", "desert", "mountain", "graveyard", "forest", "grass"):
+            self.assertIn(required, env_by_id)
+        for settled in ("water", "swamp", "desert", "mountain", "graveyard"):
+            self.assertEqual(env_by_id[settled]["status"], "settled")
+        for iterating in ("forest", "grass"):
+            self.assertEqual(env_by_id[iterating]["status"], "iterating")
+        self.assertGreaterEqual(len(payload["grass_possibilities"]), 4)
+        self.assertGreaterEqual(len(payload["forest_possibilities"]), 4)
+        for tile_flat in payload["environments"][0]["frames"]:
+            self.assertEqual(len(tile_flat), 64)
 
 
 if __name__ == "__main__":

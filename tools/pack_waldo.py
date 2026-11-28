@@ -7,65 +7,74 @@ import build_waldo
 from roar_sample import SAMPLE_ADDRESS, SAMPLE_CAPACITY
 
 
-def make_waldo_nmi_hook() -> bytes:
-    """Assemble Waldo's $F603 NMI return hook (Start+Select after 60 frames)."""
-    # Offsets from $F603:
+def make_waldo_nmi_hook() -> tuple[bytes, bytes]:
+    """Assemble Waldo's split NMI return hook ($F8FB and $F922; Start+Select after 60 frames)."""
+    # Part A at $F8FB (17 bytes):
     # 00: 48          PHA
     # 01: AD FF 7F    LDA $7FFF
     # 04: C9 3C       CMP #$3C
-    # 06: B0 05       BCS +5 -> 0D (@check_pad)
+    # 06: B0 06       BCS +6 -> 0E (@go_pad)
     # 08: EE FF 7F    INC $7FFF
-    # 0B: D0 08       BNE +8 -> 15 (@normal_nmi)
-    # 0D (@check_pad):
-    # 0D: A5 06       LDA $06
-    # 0F: 29 0C       AND #$0C
-    # 11: C9 0C       CMP #$0C
-    # 13: F0 04       BEQ +4 -> 19 (@do_return)
-    # 15 (@normal_nmi):
-    # 15: 68          PLA
-    # 16: 4C 37 E2    JMP $E237
-    # 19 (@do_return):
-    # 19: 4C A4 F9    JMP $F9A4
-    return bytes.fromhex(
-        '48 ad ff 7f c9 3c b0 05 ee ff 7f d0 08 '
+    # 0B: 4C 2A F9    JMP $F92A (@normal_nmi)
+    # 0E (@go_pad):
+    # 0E: 4C 22 F9    JMP $F922 (@check_pad)
+    part_a = bytes.fromhex(
+        '48 ad ff 7f c9 3c b0 06 ee ff 7f '
+        '4c 2a f9 4c 22 f9'
+    )
+    # Part B at $F922 (15 bytes):
+    # 00 ($F922): A5 06 29 0C C9 0C   LDA $06; AND #$0C; CMP #$0C
+    # 06 ($F928): F0 04               BEQ +4 -> 0C ($F92E @do_return)
+    # 08 ($F92A @normal_nmi): 68 4C 37 E2  PLA; JMP $E237
+    # 0C ($F92E @do_return):  4C 7B F6     JMP $F67B (stage)
+    part_b = bytes.fromhex(
         'a5 06 29 0c c9 0c f0 04 '
         '68 4c 37 e2 '
-        '4c a4 f9'
+        '4c 7b f6'
     )
+    return part_a, part_b
 
 
 def make_waldo_win_hook() -> bytes:
-    """Assemble Waldo's Moon Ending hook (set Barba WRAM $648B=$57, $6804=1, then melt out)."""
+    """Assemble Waldo's Moon Ending hook at $F941 (set Barba WRAM $648B=$57, $6804=1, then melt out)."""
     # A9 A0       LDA #$A0
     # 8D 01 A0    STA $A001      ; WRAM bank 0 (keep $5FF0-$5FF3 locked)
     # A9 57       LDA #$57
     # 8D 8B 64    STA $648B      ; WALDO_HAT = WALDO_HAT_MAGIC
     # A9 01       LDA #$01
     # 8D 04 68    STA $6804      ; RA_LAST_WIN_GAME = 1 (waldo)
-    # 4C A4 F9    JMP $F9A4      ; melt-out & return ($F9A4/$8C00 never reads WRAM)
-    return bytes.fromhex('a9 a0 8d 01 a0 a9 57 8d 8b 64 a9 01 8d 04 68 4c a4 f9')
+    # 4C 7B F6    JMP $F67B      ; melt-out & return ($F67B/$8C00 never reads WRAM)
+    return bytes.fromhex('a9 a0 8d 01 a0 a9 57 8d 8b 64 a9 01 8d 04 68 4c 7b f6')
 
 
-def make_waldo_seed_rng() -> bytes:
-    """Assemble Waldo's $F632 boot RNG seeder (reads Barba's $7FF0-$7FF2 seed if non-zero)."""
+def make_waldo_seed_rng() -> tuple[bytes, bytes, bytes]:
+    """Assemble Waldo's split boot RNG seeder ($F964, $F984, and $F9CA)."""
+    # Part A1 at $F964 (20 bytes):
     # AD F0 7F    LDA $7FF0
-    # F0 0E       BEQ @keep_hash
+    # D0 03       BNE +3 -> store
+    # 4C CA F9    JMP $F9CA (@keep_hash)
     # 8D 00 02    STA $0200
     # AD F1 7F    LDA $7FF1
     # 8D 01 02    STA $0201
+    # 4C 84 F9    JMP $F984
+    part_a1 = bytes.fromhex(
+        'ad f0 7f d0 03 4c ca f9 '
+        '8d 00 02 ad f1 7f 8d 01 02 4c 84 f9'
+    )
+    # Part A2 at $F984 (7 bytes):
     # AD F2 7F    LDA $7FF2
     # 8D 02 02    STA $0202
     # 60          RTS
+    part_a2 = bytes.fromhex('ad f2 7f 8d 02 02 60')
+    # Part B at $F9CA (13 bytes):
     # @keep_hash:
     # AD 00 07    LDA $0700
     # 8D 00 02    STA $0200
     # AD 01 07    LDA $0701
     # 8D 01 02    STA $0201
     # 60          RTS
-    return bytes.fromhex(
-        'ad f0 7f f0 0e 8d 00 02 ad f1 7f 8d 01 02 ad f2 7f 8d 02 02 60 '
-        'ad 00 07 8d 00 02 ad 01 07 8d 01 02 60'
-    )
+    part_b = bytes.fromhex('ad 00 07 8d 00 02 ad 01 07 8d 01 02 60')
+    return part_a1, part_a2, part_b
 
 
 def make_waldo_melt_out() -> bytes:
@@ -200,42 +209,51 @@ def pack_combined(barba: bytes, restore_addr: int, waldo: bytes,
     assert w_prg[e000_off + 0x00E9 : e000_off + 0x00EC] == bytes.fromhex('20 45 a0')
     w_prg[e000_off + 0x00E9 : e000_off + 0x00EC] = bytes.fromhex('ea ea ea')
 
-    # Skip Waldo's difficulty selection screen ($E114: JSR $AB85 -> JSR $F65B)
+    # Skip Waldo's difficulty selection screen ($E114: JSR $AB85 -> JSR $F6BD)
     # and explicitly set $0600 = 0 (Easy) and $0603 = 0 (normal game) since
     # Waldo's RESET only clears $0000-$05FF (leaving Zelda II WRAM at $0600 stale).
     assert w_prg[e000_off + 0x0114 : e000_off + 0x0117] == bytes.fromhex('20 85 ab')
-    w_prg[e000_off + 0x0114 : e000_off + 0x0117] = bytes.fromhex('20 5b f6')
+    w_prg[e000_off + 0x0114 : e000_off + 0x0117] = bytes.fromhex('20 bd f6')
     diff_init = bytes.fromhex('a9 00 8d 00 06 8d 03 06 18 60')
-    assert all(x == 0 for x in w_prg[e000_off + 0x165B : e000_off + 0x165B + len(diff_init)])
-    w_prg[e000_off + 0x165B : e000_off + 0x165B + len(diff_init)] = diff_init
+    assert all(x == 0 for x in w_prg[e000_off + 0x16BD : e000_off + 0x16BD + len(diff_init)])
+    w_prg[e000_off + 0x16BD : e000_off + 0x16BD + len(diff_init)] = diff_init
 
     # Replace Title Screen's JSR $E79C at $A025 (Bank 3) with JSR $C9FC (Bank 16, already mapped at $C000)
     assert w_prg[0x06025:0x06028] == bytes.fromhex('20 9c e7')
     w_prg[0x06025:0x06028] = bytes.fromhex('20 fc c9')
 
-    # Patch Waldo's NMI hook at $F603-$F653 (free 0x00 region) + vector $FFFA
-    hook = make_waldo_nmi_hook()
+    # Patch Waldo's NMI hook ($F8FB/$F922), RNG seeder ($F964/$F984/$F9CA), and Moon win hook ($F941)
+    nmi_a, nmi_b = make_waldo_nmi_hook()
     win_hook = make_waldo_win_hook()
-    seed_hook = make_waldo_seed_rng()
-    assert len(hook) <= 0x1D and len(seed_hook) <= 0x22 and len(win_hook) <= 0x13
-    assert all(x == 0 for x in w_prg[e000_off + 0x1603 : e000_off + 0x1641 + len(win_hook)])
-    w_prg[e000_off + 0x1603 : e000_off + 0x1603 + len(hook)] = hook
-    w_prg[e000_off + 0x161F : e000_off + 0x161F + len(seed_hook)] = seed_hook
-    w_prg[e000_off + 0x1641 : e000_off + 0x1641 + len(win_hook)] = win_hook
+    seed_a1, seed_a2, seed_b = make_waldo_seed_rng()
+    assert len(nmi_a) <= 18 and len(nmi_b) <= 18
+    assert len(seed_a1) <= 21 and len(seed_a2) <= 21 and len(seed_b) <= 13 and len(win_hook) <= 19
+    assert all(x == 0 for x in w_prg[e000_off + 0x18FB : e000_off + 0x18FB + len(nmi_a)])
+    assert all(x == 0 for x in w_prg[e000_off + 0x1922 : e000_off + 0x1922 + len(nmi_b)])
+    assert all(x == 0 for x in w_prg[e000_off + 0x1964 : e000_off + 0x1964 + len(seed_a1)])
+    assert all(x == 0 for x in w_prg[e000_off + 0x1984 : e000_off + 0x1984 + len(seed_a2)])
+    assert all(x == 0 for x in w_prg[e000_off + 0x19CA : e000_off + 0x19CA + len(seed_b)])
+    assert all(x == 0 for x in w_prg[e000_off + 0x1941 : e000_off + 0x1941 + len(win_hook)])
+    w_prg[e000_off + 0x18FB : e000_off + 0x18FB + len(nmi_a)] = nmi_a
+    w_prg[e000_off + 0x1922 : e000_off + 0x1922 + len(nmi_b)] = nmi_b
+    w_prg[e000_off + 0x1964 : e000_off + 0x1964 + len(seed_a1)] = seed_a1
+    w_prg[e000_off + 0x1984 : e000_off + 0x1984 + len(seed_a2)] = seed_a2
+    w_prg[e000_off + 0x19CA : e000_off + 0x19CA + len(seed_b)] = seed_b
+    w_prg[e000_off + 0x1941 : e000_off + 0x1941 + len(win_hook)] = win_hook
     assert w_prg[e000_off + 0x1FFA : e000_off + 0x1FFC] == bytes.fromhex('37 e2')
-    w_prg[e000_off + 0x1FFA : e000_off + 0x1FFC] = bytes.fromhex('03 f6')
+    w_prg[e000_off + 0x1FFA : e000_off + 0x1FFC] = bytes.fromhex('fb f8')
 
     # Seed Waldo's RNG ($0200-$0202) from Barba's $7FF0-$7FF2 at boot ($E09A)
     assert w_prg[e000_off + 0x009A : e000_off + 0x00A6] == bytes.fromhex('ad 00 07 8d 00 02 ad 01 07 8d 01 02')
-    w_prg[e000_off + 0x009A : e000_off + 0x00A6] = bytes.fromhex('20 1f f6') + b'\xEA' * 9
+    w_prg[e000_off + 0x009A : e000_off + 0x00A6] = bytes.fromhex('20 64 f9') + b'\xEA' * 9
 
-    # Hook end of Moon Ending ($A1B3 in Bank 0: JMP $E4EC -> JMP $F641) so it sets WALDO_HAT and waves out to Barba
+    # Hook end of Moon Ending ($A1B3 in Bank 0: JMP $E4EC -> JMP $F941) so it sets WALDO_HAT and waves out to Barba
     assert w_prg[0x01B3:0x01B6] == bytes.fromhex('4c ec e4')
-    w_prg[0x01B3:0x01B6] = bytes.fromhex('4c 41 f6')
+    w_prg[0x01B3:0x01B6] = bytes.fromhex('4c 41 f9')
 
-    # Hook end of Game Over ($E1D9 in Fixed Bank: JMP $E0F2 -> JMP $F9A4) so it skips the main menu and returns to Barba
+    # Hook end of Game Over ($E1D9 in Fixed Bank: JMP $E0F2 -> JMP $F67B) so it skips the main menu and returns to Barba
     assert w_prg[e000_off + 0x01D9 : e000_off + 0x01DC] == bytes.fromhex('4c f2 e0')
-    w_prg[e000_off + 0x01D9 : e000_off + 0x01DC] = bytes.fromhex('4c a4 f9')
+    w_prg[e000_off + 0x01D9 : e000_off + 0x01DC] = bytes.fromhex('4c 7b f6')
 
     # Disable PPU NMI before the melt waits for its first VBlank. The shortcut
     # enters here from NMI, and a second NMI would restart the melt every frame.
@@ -246,9 +264,9 @@ def pack_combined(barba: bytes, restore_addr: int, waldo: bytes,
         'a9 06 8d 00 80 a9 10 8d 01 80 ' # Map bank 16 at $8000
         '4c 00 8c'                       # JMP return trampoline loader
     )
-    assert len(stage) <= 29
-    assert all(x == 0 for x in w_prg[e000_off + 0x19A4 : e000_off + 0x19A4 + len(stage)])
-    w_prg[e000_off + 0x19A4 : e000_off + 0x19A4 + len(stage)] = stage
+    assert len(stage) <= 24
+    assert all(x == 0 for x in w_prg[e000_off + 0x167B : e000_off + 0x167B + len(stage)])
+    w_prg[e000_off + 0x167B : e000_off + 0x167B + len(stage)] = stage
 
     # Build 512KB PRG:
     #   0..128KB   : Barba
@@ -329,26 +347,28 @@ def pack_combined(barba: bytes, restore_addr: int, waldo: bytes,
     prg512[384 * 1024 + 0x0B10 : 384 * 1024 + 0x0B10 + len(melt_out)] = melt_out
 
     # Cold-boot stub in 504..512KB (power-on starts in 512KB mode):
-    # Place 16-byte loader at $F9C1 (remaining 22B in $F9A4..$F9D6) and 16-byte RAM stub
-    # in the next >=16B zero run in $E000-$FFFF.
+    # Place 16-byte RAM stub and 16-byte loader in the first two >=16B zero runs in $E000-$FFFF.
     off_504 = 504 * 1024
     boot_ram = bytes.fromhex('a9 01 8d f0 5f a9 00 8d f1 5f 8d f2 5f 6c fc ff')
-    ram_src = None
-    run = 0
-    for i in range(0x2000):
-        if prg512[off_504 + i] == 0:
-            run += 1
-            if run == len(boot_ram):
-                ram_src = 0xE000 + i - run + 1
-                prg512[off_504 + i - run + 1 : off_504 + i + 1] = boot_ram
-                break
-        else:
-            run = 0
-    assert ram_src is not None
-    boot = bytes.fromhex('78 d8 a2 0f bd') + ram_src.to_bytes(2, 'little') + bytes.fromhex('9d 00 03 ca 10 f7 4c 00 03')
-    assert all(x == 0 for x in prg512[off_504 + 0x19C1 : off_504 + 0x19C1 + len(boot)])
-    prg512[off_504 + 0x19C1 : off_504 + 0x19C1 + len(boot)] = boot
-    prg512[off_504 + 0x1FFC : off_504 + 0x1FFE] = bytes.fromhex('c1 f9')
+
+    def _alloc_zero_run(size: int) -> int:
+        run = 0
+        for i in range(0x2000):
+            if prg512[off_504 + i] == 0:
+                run += 1
+                if run == size:
+                    return 0xE000 + i - run + 1
+            else:
+                run = 0
+        raise AssertionError(f'No {size}-byte zero run in $E000-$FFFF')
+
+    ram_src = _alloc_zero_run(len(boot_ram))
+    prg512[off_504 + (ram_src - 0xE000) : off_504 + (ram_src - 0xE000) + len(boot_ram)] = boot_ram
+    # 14-byte loader (hardware RESET already sets I=1, and Z2 RESET runs SEI; CLD)
+    boot = bytes.fromhex('a2 0f bd') + ram_src.to_bytes(2, 'little') + bytes.fromhex('9d 00 03 ca 10 f7 4c 00 03')
+    boot_addr = _alloc_zero_run(len(boot))
+    prg512[off_504 + (boot_addr - 0xE000) : off_504 + (boot_addr - 0xE000) + len(boot)] = boot
+    prg512[off_504 + 0x1FFC : off_504 + 0x1FFE] = boot_addr.to_bytes(2, 'little')
 
     # 512KB CHR: 0..256KB Barba, 256..384KB Waldo, 384..416KB F13 (if provided), 416..512KB free
     chr512 = bytearray(b'\xFF' * (512 * 1024))

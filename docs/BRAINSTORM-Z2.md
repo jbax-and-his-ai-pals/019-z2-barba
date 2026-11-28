@@ -38,6 +38,7 @@ Small, self-contained hooks with fast visual/audio payoff and minimal architectu
 - **Low-MP cast fizzle** — smoke puff + dry dragon cough when trying to cast without enough MP
 - **Impact sparks & selective hitstop** — sparks on all stone/shield hits; subtle 2–3 frame micro-hitstop on charged shots and boss hits only
 - **Heavy landing / stomp dust** — dust puffs + subtle thump on high drops / downstabs
+- **Palace bridge falling dust** — spawn small falling OAM dust/crumb sprites (piggybacking on `$041A` step-on bridge slots) that drift downward below disintegrating bridge tiles
 - **Steam & sizzle on water** — steam puffs when fireballs hit water/swamps; Barba steams while wading
 - **Lava bubbles & rising sparks** — sprite bubbles/embers over Palace 6 and Great Palace lava pits
 - **False-wall & fake-floor shimmer** — subtle visual tell/ripple on fake walls and hidden drop pits

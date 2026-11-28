@@ -187,7 +187,7 @@ SHOUT_FONT_A = 0xDA          # native font: 'A'..'Z' are consecutive tiles
 # $C0-$CE/$62/$64/$74/$76 even in bank 6; items; emulator census of all town
 # rooms), and no menu/HUD pane draws it. Bank 7 $00-$27 are villager sprites.
 SHOUT_PAIR_SHA256 = {
-    (7, 0x32): 'c0a91503eeabff7b', (7, 0x7E): '8f729ebb615dc165',
+    (7, 0x7E): '8f729ebb615dc165',
     (7, 0x80): '893a0325cdc7cf39', (7, 0x84): 'af85fa03d8808ac1',
     (7, 0x86): '3e0dffed3d26d014', (7, 0x88): '55dc69973efa250d', (7, 0x8A): '431ab247f511fe1d',
     (7, 0x8C): 'c644321081be6393', (7, 0x92): 'cab870c820270963', (7, 0x94): '13ea6b95d58a4960',
@@ -200,6 +200,7 @@ SHOUT_PAIR_SHA256 = {
     (6, 0x78): '3054cb3b20613bbd', (6, 0x7A): 'd5aa306916f80c94', (6, 0x7C): 'dd16785f9de0c5fe',
     (6, 0x94): 'a19816f6150159eb', (6, 0x96): 'c4a1e8d2f73af810', (6, 0x98): 'ad60a4ced100a384',
     (6, 0xAA): '75da72438cdf4244', (6, 0xAC): 'e0526bda20a145b0', (6, 0xAE): 'be16549eb5b081fb',
+    (6, 0xB6): '203f10a2f9e335b4',
 }
 # Town sprite pairs that must stay vanilla (checked after every build).
 TOWN_SPRITE_PAIRS = {
@@ -345,10 +346,15 @@ TOWN_FIRE_TILE_SHA256 = {
 # $C0-$FC. Pixel values: 1 = font highlight, 2 = font shade (as in the ROM font).
 TEXT_GLYPH_BANK = 7
 TEXT_GLYPHS = {
+    0x33: ["00000000", "00000000", "00000000", "00000000",
+           "00000000", "00112000", "00112000", "01120000"],   # comma (vanilla Z2 2bpp)
     0x35: ["00012000", "00012000", "00020000", "00000000",
            "00000000", "00000000", "00000000", "00000000"],   # apostrophe
 }
-TEXT_GLYPH_SHA256 = {0x35: '374708fff7719dd5'}   # blank in vanilla bank 7
+TEXT_GLYPH_SHA256 = {
+    0x33: '374708fff7719dd5',   # blank in vanilla bank 7
+    0x35: '374708fff7719dd5',   # blank in vanilla bank 7
+}
 
 
 # Level-up pane / File Select attack icon: BG tile $C9 (vanilla sword) in every

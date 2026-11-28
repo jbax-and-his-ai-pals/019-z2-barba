@@ -1,20 +1,15 @@
--- Smoke test for Barba's Arcade (Rauru Room $1C) and all 9 currently wired booths.
+-- Smoke test for Barba's Arcade (Rauru Room $1C) and all 5 active 2.0 booths.
 dofile(TEST_DIR .. '/newgame.lua')
 local mem = emu.memType.nesMemory
 local function read(a) return emu.read(a, mem) end
 local function write(a, v) emu.write(a, v, mem) end
 
 local booths = {
-    {id='waldo',  page=0, x=0x50, nmi=0xF603},
-    {id='f13',    page=0, x=0x90, nmi=0x7852},
+    {id='waldo',  page=0, x=0x50, nmi=0xF8FB},
     {id='feud',   page=0, x=0xD0, nmi=0xCA5E},
     {id='dk',     page=1, x=0x20, nmi=0x7840},
-    {id='smb',    page=1, x=0x70, nmi=0x7800},
     {id='duck',   page=1, x=0xC0, nmi=0x7840},
-    {id='mm2',    page=2, x=0x70, nmi=0xF380},
     {id='wheel',  page=2, x=0xC0, nmi=0x7850},
-    {id='zelda',  page=3, x=0x20, nmi=0xFF58},
-    {id='mtpo',   page=3, x=0x70, nmi=0xDA76},
 }
 
 local report = assert(io.open(OUTPUT_DIR .. '/arcade-smoke.txt', 'w'))
@@ -63,8 +58,7 @@ emu.addEventCallback(function()
         local gf = frame - phaseStart
         emu.setInput({start = (gf >= 80), select = (gf >= 80)}, 0)
     elseif phase == 'return' then
-        local rf = frame - phaseStart
-        emu.setInput({b = (rf >= 240 and rf < 244)}, 0)
+        emu.setInput({}, 0)
     elseif phase == 'exit_arcade' then
         emu.setInput({left = true}, 0)
     else
@@ -78,7 +72,8 @@ emu.addEventCallback(function()
     local b = booths[idx]
     if phase == 'boot' then
         if frame == 1000 then
-            -- Warp to Rauru ($01) page 1 right in front of the Arcade door (x=40)
+            -- Warp to Rauru ($01) page 1 right in front of the Arcade door (x=40) and unlock all booths
+            write(0x6806, 0xFF); write(0x6807, 0x03)
             write(0x707, 1); write(0x706, 0); write(0x056B, 0); write(0x769, 3); write(0x561, 1)
             write(0x701, 0); write(0x75C, 1); write(0x704, 0); write(0x736, 0); write(0x73D, 0); write(0x726, 1)
             phase = 'load_rauru'
@@ -136,13 +131,13 @@ emu.addEventCallback(function()
             check(true, string.format('%s: Start+Select returned to Barba ($FFFA=$C07B)', b.id))
             phase = 'return'
             phaseStart = frame
-        elseif gf > 260 then
+        elseif gf > 500 then
             check(false, string.format('%s: Start+Select timed out (nmi=$%04X)', b.id, nmi))
             finish()
         end
     elseif phase == 'return' then
         local rf = frame - phaseStart
-        if rf > 245 and read(0x74C) == 0 and read(0xDE) == 0 then
+        if rf > 50 and read(0x74C) == 0 and read(0xDE) == 0 then
             check(read(0x0561) == 0x1C, string.format('%s: restored cleanly inside Barba Arcade ($1C)', b.id))
             idx = idx + 1
             if idx <= #booths then

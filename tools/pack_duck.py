@@ -80,6 +80,8 @@ def assemble_duck_fixed_transitions() -> tuple[bytes, dict[str, int]]:
     a.inc(DUCK_WIPE_DONE)
     a.lda_imm(0x01)
     a.abs_ref(0x20, 'duck_trans_core')
+    a.lda(0x08)
+    a.sta(0x2000)
     a.emit(0x68, 0xA8, 0x68, 0xAA)                             # PLA; TAY; PLA; TAX
     a.label('dwc_orig')
     a.emit(0x68)                                               # PLA (saved A from DUCK_NMI_HOOK)

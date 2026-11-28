@@ -130,6 +130,8 @@
     .card {
       background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
       padding: 16px; display: flex; flex-direction: column; gap: 12px;
+      content-visibility: auto;
+      contain-intrinsic-size: auto 480px;
     }
     .card h2 {
       margin: 0; font-size: 1.05rem; border-bottom: 1px solid var(--border);
@@ -140,6 +142,8 @@
     .flag-item {
       display: flex; flex-direction: column; gap: 8px; padding: 11px;
       border-radius: 10px; background: var(--panel-alt); border: 1px solid transparent;
+      content-visibility: auto;
+      contain-intrinsic-size: auto 340px;
     }
     .flag-item.is-planned { opacity: 0.82; border-style: dashed; border-color: var(--border); }
     .flag-item.is-local-only {
@@ -399,20 +403,36 @@
     .b-ok { background: rgba(61, 220, 151, 0.15); color: var(--green); border: 1px solid rgba(61, 220, 151, 0.35); }
     .b-warn { background: rgba(244, 162, 97, 0.16); color: var(--amber); border: 1px solid rgba(244, 162, 97, 0.45); }
     .b-err { background: rgba(255, 107, 53, 0.2); color: var(--ember); border: 1px solid rgba(255, 107, 53, 0.55); }
+    .z2str-preview-wrap {
+      background: #080a0f; border: 1px solid var(--border); border-radius: 8px;
+      padding: 8px 10px; display: flex; flex-direction: column; gap: 6px;
+    }
+    .z2str-preview-label {
+      font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted);
+    }
+    .z2str-canvas-scroll {
+      overflow-x: auto; display: flex; justify-content: center;
+    }
+    .z2str-nes-canvas {
+      display: block; image-rendering: pixelated; image-rendering: crisp-edges;
+      border-radius: 4px; max-width: 100%; height: auto;
+    }
     .z2str-editor-wrap {
-      background: #0d1017; border: 1px solid var(--border); border-radius: 8px;
+      background: #000000; border: 1px solid #3032EC; border-radius: 8px;
       padding: 6px 10px; overflow-x: auto;
     }
     .z2str-ruler {
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-size: 0.72rem; line-height: 1.1; color: #525d77; letter-spacing: 0.04em;
+      font-size: 0.92rem; line-height: 1.1; color: #525d77; letter-spacing: 0.04em;
+      font-variant-numeric: tabular-nums;
       user-select: none; white-space: pre; border-bottom: 1px dashed #222938; padding-bottom: 3px; margin-bottom: 4px;
     }
     .z2str-textarea {
-      width: 100%; background: transparent; border: none; color: var(--text);
+      display: block; width: 100%; background: transparent; border: none; color: var(--text);
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       font-size: 0.92rem; line-height: 1.35; letter-spacing: 0.04em;
-      resize: vertical; outline: none; padding: 0; white-space: pre;
+      font-variant-numeric: tabular-nums;
+      resize: vertical; outline: none; padding: 0; margin: 0; white-space: pre;
     }
     .z2str-metrics {
       display: flex; flex-wrap: wrap; gap: 10px; font-size: 0.76rem; color: var(--muted);
@@ -438,6 +458,104 @@
       white-space: pre-wrap; color: var(--text);
     }
     .z2str-notes { font-size: 0.74rem; color: var(--muted); font-style: italic; }
+
+    /* Overview / Landing Tab */
+    .overview-grid { display: grid; gap: 18px; }
+    .overview-hero {
+      background: linear-gradient(135deg, rgba(255, 107, 53, 0.12) 0%, #171b26 52%, #12151e 100%);
+      border: 1px solid var(--border); border-radius: 14px;
+      padding: 20px 22px; display: grid; gap: 12px;
+    }
+    .overview-hero-head {
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;
+    }
+    .overview-hero h2 { margin: 0; font-size: 1.35rem; color: var(--text); border: none; padding: 0; }
+    .overview-hero h2 span { color: var(--ember); }
+    .overview-lead { margin: 0; color: var(--muted); font-size: 0.95rem; max-width: 82ch; }
+    .overview-bullets {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 12px; margin-top: 4px;
+    }
+    .overview-pill-box {
+      background: #11151f; border: 1px solid var(--border); border-radius: 10px;
+      padding: 12px 14px; display: flex; flex-direction: column; gap: 5px;
+    }
+    .overview-pill-box strong { color: var(--gold); font-size: 0.88rem; }
+    .overview-pill-box span { color: var(--muted); font-size: 0.82rem; }
+    .overview-releases {
+      background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+      padding: 18px 20px; display: grid; gap: 12px;
+    }
+    .overview-releases h2 {
+      margin: 0; font-size: 1.05rem; color: var(--gold);
+      border-bottom: 1px solid var(--border); padding-bottom: 8px;
+    }
+    .overview-notice {
+      background: rgba(244, 162, 97, 0.10); border: 1px solid rgba(244, 162, 97, 0.42);
+      border-radius: 10px; padding: 11px 14px; font-size: 0.86rem; color: var(--text);
+    }
+    .overview-notice strong { color: var(--amber); }
+    .overview-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .btn-link {
+      display: inline-flex; align-items: center; gap: 6px; text-decoration: none;
+      font-size: 0.86rem; font-weight: 600; padding: 8px 14px; border-radius: 8px;
+      background: var(--panel-alt); color: var(--text); border: 1px solid var(--border);
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .btn-link:hover { border-color: var(--ember); }
+    .btn-link.primary { background: var(--ember); border-color: var(--ember); color: #111; }
+    .overview-specs {
+      display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.8rem; color: var(--muted);
+    }
+    .overview-specs code { color: var(--cyan); }
+    .release-subhead {
+      margin: 4px 0 0; font-size: 0.88rem; font-weight: 700; color: var(--text);
+      text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .release-zips-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px;
+    }
+    .release-zip-card {
+      background: var(--panel-alt); border: 1px solid var(--border); border-radius: 10px;
+      padding: 12px 14px; display: flex; flex-direction: column; justify-content: space-between; gap: 8px;
+    }
+    .release-zip-card h3 { margin: 0; font-size: 0.92rem; color: var(--text); }
+    .release-zip-card p { margin: 0; font-size: 0.79rem; color: var(--muted); }
+    .release-meta {
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+      font-size: 0.76rem; color: var(--muted);
+    }
+    .release-meta code { color: var(--cyan); }
+    .release-bps-groups { display: grid; gap: 10px; }
+    .release-bps-group-title {
+      font-size: 0.8rem; font-weight: 600; color: var(--amber); margin: 2px 0 4px;
+    }
+    .release-bps-list {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 8px;
+    }
+    .release-bps-row {
+      background: #11151f; border: 1px solid var(--border); border-radius: 8px;
+      padding: 9px 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    }
+    .release-bps-info { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .release-bps-info strong { font-size: 0.85rem; color: var(--text); }
+    .release-bps-info span { font-size: 0.75rem; color: var(--muted); }
+    .release-bps-info code { color: var(--cyan); font-size: 0.75rem; }
+    .btn-link.is-pending {
+      opacity: 0.62; cursor: not-allowed; pointer-events: none;
+    }
+    .overview-nav-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px;
+    }
+    .overview-nav-card {
+      background: var(--panel-alt); border: 1px solid var(--border); border-radius: 10px;
+      padding: 13px 14px; display: flex; flex-direction: column; justify-content: space-between; gap: 10px;
+      transition: border-color 0.15s;
+    }
+    .overview-nav-card:hover { border-color: var(--gold); }
+    .overview-nav-card h3 { margin: 0 0 4px; font-size: 0.96rem; color: var(--text); }
+    .overview-nav-card p { margin: 0; font-size: 0.81rem; color: var(--muted); }
+    .overview-jump { align-self: flex-start; font-size: 0.78rem; padding: 5px 10px; }
   </style>
 </head>
 <body>
@@ -453,12 +571,118 @@
     {{LOCAL_STATE_BAR}}
 
     <nav class="tab-bar" aria-label="Workspace Views">
-      <button type="button" class="tab-btn active" data-tab="fe">{{FE_TAB_LABEL}}</button>
+      <button type="button" class="tab-btn active" data-tab="overview">Overview</button>
+      <button type="button" class="tab-btn" data-tab="fe">{{FE_TAB_LABEL}}</button>
 {{WORKSPACE_TABS}}
       <button type="button" class="tab-btn" data-tab="titles">{{TITLES_TAB_LABEL}}</button>
     </nav>
 
-    <div id="view-fe">
+    <div id="view-overview" class="overview-grid">
+      <section class="overview-hero" aria-label="Project Summary">
+        <div class="overview-hero-head">
+          <h2>Zelda II: <span>Barba Edition</span></h2>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <span class="badge b-coupled">NES 2.0 Mapper 176 (Dev)</span>
+            <span class="badge b-built">5-Subgame Arcade</span>
+          </div>
+        </div>
+        <p class="overview-lead">
+          Play as <strong>Barba</strong>, the Palace 6 dragon, across <em>Zelda II: The Adventure of Link</em>.
+          Hyrule&apos;s map, palace order, and item gates remain familiar, while 24&times;48 dragon movement,
+          five-shot diagonal fire breath, dragon spells, fleeing/burning townsfolk, animated scenery, and a
+          playable crossover arcade transform how you explore.
+        </p>
+        <div class="overview-bullets">
+          <div class="overview-pill-box">
+            <strong>Dragon Combat &amp; Spells</strong>
+            <span>Five-shot fire breath volleys, upward breath, rising head-butt, downstab stomp, Wyrmling flight, SCALES, INFERNO, and METEOR.</span>
+          </div>
+          <div class="overview-pill-box">
+            <strong>Living World &amp; Towns</strong>
+            <span>Villagers flee, hide, or turn to ash; signs and buildings scorch; clouds drift, grass sways, and water/lava ripple via MMC3 scanline IRQs.</span>
+          </div>
+          <div class="overview-pill-box">
+            <strong>Crossover Subgame Arcade</strong>
+            <span>Discover and play 5 Barba-fied NES classics from Hyrule portals &amp; Rauru&apos;s Arcade &mdash; or as standalone <code>-compat</code> MMC3 ROMs.</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="overview-releases" aria-label="Releases and Patching">
+        <h2>Release Files &amp; Patching</h2>
+        {{RELEASE_NOTICE}}
+        {{RELEASE_DOWNLOADS}}
+        <div class="overview-actions">
+          <a class="btn-link primary" href="https://github.com/jbax-and-his-ai-pals/019-z2-barba/releases/latest" target="_blank" rel="noopener noreferrer">Latest GitHub Release &nearr;</a>
+          <a class="btn-link" href="https://github.com/jbax-and-his-ai-pals/019-z2-barba/releases" target="_blank" rel="noopener noreferrer">All Releases (incl. v1.05) &nearr;</a>
+          <a class="btn-link" href="https://github.com/jbax-and-his-ai-pals/019-z2-barba" target="_blank" rel="noopener noreferrer">Source Repository &nearr;</a>
+          <a class="btn-link" href="https://github.com/jbax-and-his-ai-pals/019-z2-barba/blob/main/docs/BUILD.md" target="_blank" rel="noopener noreferrer">Build &amp; Patch Guide &nearr;</a>
+        </div>
+        <div class="overview-specs">
+          <span>Base ROM (Mainline): <strong>USA PRG0 Zelda II (headered)</strong></span>
+          <span>SHA-256: <code>ad8c0fbcf092bf84b48e69fd3964eea4ed91bfe62abc352943d537979782680c</code></span>
+          <span>Emulator: <strong>Mesen 2.1.1</strong> (recommended for Mapper 176)</span>
+        </div>
+        {{OVERVIEW_LOCAL_NOTE}}
+      </section>
+
+      <section class="card" aria-label="Dashboard Guide">
+        <h2>What&apos;s in This Dashboard</h2>
+        <div class="overview-nav-grid">
+          <div class="overview-nav-card">
+            <div>
+              <h3>Zelda 2 Showcase</h3>
+              <p>Side-by-side Vanilla Z2 vs. Barba Edition captures for dragon physics, fire breath, spells, town chaos, scenery, and audio.</p>
+            </div>
+            <button type="button" class="overview-jump" data-jump="fe">Open Zelda 2 Tab &rarr;</button>
+          </div>
+          <div class="overview-nav-card">
+            <div>
+              <h3>Where&apos;s Barba?</h3>
+              <p><em>Where&apos;s Waldo?</em> crossover accessible from Rauru&apos;s Arcade &mdash; hunt Barba across crowded NES scenes.</p>
+            </div>
+            <button type="button" class="overview-jump" data-jump="sub-waldo">Open Where&apos;s Barba? &rarr;</button>
+          </div>
+          <div class="overview-nav-card">
+            <div>
+              <h3>Barba&apos;s Hunt</h3>
+              <p><em>Duck Hunt</em> crossover with fire-breathing Barba, Link&apos;s laugh, and custom NES biomes.</p>
+            </div>
+            <button type="button" class="overview-jump" data-jump="sub-duck">Open Barba&apos;s Hunt &rarr;</button>
+          </div>
+          <div class="overview-nav-card">
+            <div>
+              <h3>Barba&apos;s Feud</h3>
+              <p><em>Family Feud</em> crossover pitting Barba&apos;s team against Zelda II&apos;s cast on a custom NES stage.</p>
+            </div>
+            <button type="button" class="overview-jump" data-jump="sub-feud">Open Barba&apos;s Feud &rarr;</button>
+          </div>
+          <div class="overview-nav-card">
+            <div>
+              <h3>Barba&apos;s Wheel</h3>
+              <p><em>Wheel of Fortune</em> crossover featuring custom Wheel of Barba title art, wheel graphics, and puzzles.</p>
+            </div>
+            <button type="button" class="overview-jump" data-jump="sub-wheel">Open Barba&apos;s Wheel &rarr;</button>
+          </div>
+          <div class="overview-nav-card">
+            <div>
+              <h3>Donkey Barba</h3>
+              <p><em>Donkey Kong</em> crossover swapping Barba and Link across classic 25m, 75m, and 100m girders.</p>
+            </div>
+            <button type="button" class="overview-jump" data-jump="sub-dk">Open Donkey Barba &rarr;</button>
+          </div>
+          <div class="overview-nav-card">
+            <div>
+              <h3>All Title Screens</h3>
+              <p>Live 256&times;240 NES title screen comparisons (Vanilla vs. Modded) across Zelda II and every subgame.</p>
+            </div>
+            <button type="button" class="overview-jump" data-jump="titles">Open Title Screens &rarr;</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div id="view-fe" class="hidden">
 
     <section class="stage" aria-label="Summary">
       <div>
@@ -754,6 +978,87 @@
       </section>
       <main class="grid" id="z2str-groups"></main>
     </div>
+
+    <div id="view-owtiles" class="hidden">
+      <section class="top-box local-only-card" aria-label="Overworld Tile Animation Lab Controls">
+        <div class="local-only-banner" role="note">
+          Local Only — Not Published on GitHub Pages
+          <span class="local-sub">All animated overworld environment tiles (Settled: Water, Swamp, Desert, Mountain/Lava, Graveyard; Iterating: Forest &amp; Grass) plus side-by-side possibilities and an 8x8 pixel sandbox.</span>
+        </div>
+        <div class="row">
+          <label for="owt-filter" style="min-width:44px;">Show</label>
+          <select id="owt-filter">
+            <option value="all" selected>All Environment Types (7)</option>
+            <option value="settled">Settled Only (Water, Swamp, Desert, Mtn, Graveyard)</option>
+            <option value="iterating">Iterating Only (Forest &amp; Grass)</option>
+          </select>
+          <label for="owt-region" style="min-width:52px;">Palette</label>
+          <select id="owt-region">
+            <option value="west" selected>West Hyrule</option>
+            <option value="east">East Hyrule</option>
+          </select>
+          <label for="owt-zoom" style="min-width:42px;">Zoom</label>
+          <select id="owt-zoom">
+            <option value="4">4x</option>
+            <option value="6" selected>6x</option>
+            <option value="8">8x</option>
+            <option value="10">10x</option>
+          </select>
+          <label for="owt-speed" style="min-width:44px;">Speed</label>
+          <select id="owt-speed">
+            <option value="0.5">0.5x</option>
+            <option value="1" selected>1x (60fps)</option>
+            <option value="2">2x</option>
+          </select>
+          <button id="owt-play" type="button" class="primary">Pause</button>
+          <button id="owt-step" type="button">Step +1f</button>
+          <label style="display:inline-flex;align-items:center;gap:6px;min-width:auto;cursor:pointer;">
+            <input id="owt-grid" type="checkbox" checked> Grid
+          </label>
+          <button id="owt-copy-md" type="button" style="margin-left:auto;">Copy Notes (Markdown)</button>
+        </div>
+        <div class="stats" id="owt-stats"></div>
+        <div class="toast" id="owt-toast" role="status" aria-live="polite"></div>
+      </section>
+
+      <h2 style="margin:14px 0 8px;font-size:1.05rem;color:var(--text);">All Animated Overworld Environment Tiles</h2>
+      <main class="grid" id="owt-env-grid"></main>
+
+      <h2 style="margin:20px 0 8px;font-size:1.05rem;color:var(--text);">Grass ($6D) — Iteration Possibilities (Not Settled)</h2>
+      <main class="grid" id="owt-grass-grid"></main>
+
+      <h2 style="margin:20px 0 8px;font-size:1.05rem;color:var(--text);">Forest ($68–$6B) — Iteration Possibilities (Not Settled)</h2>
+      <main class="grid" id="owt-forest-grid"></main>
+
+      <h2 style="margin:20px 0 8px;font-size:1.05rem;color:var(--text);">8x8 Pixel &amp; Frame Sandbox (Grass / Forest)</h2>
+      <section class="card local-only-card" aria-label="8x8 Tile Sandbox">
+        <div class="row" style="flex-wrap:wrap;gap:10px;">
+          <label for="owt-sb-target" style="min-width:48px;">Tile</label>
+          <select id="owt-sb-target">
+            <option value="grass" selected>Grass ($6D)</option>
+            <option value="forest_tl">Forest Top-Left ($68)</option>
+            <option value="forest_tr">Forest Top-Right ($6A)</option>
+          </select>
+          <div id="owt-sb-frames" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+          <button id="owt-sb-clone" type="button">Clone Base</button>
+          <button id="owt-sb-shiftl" type="button">Shift L</button>
+          <button id="owt-sb-shiftr" type="button">Shift R</button>
+          <button id="owt-sb-reset" type="button">Reset</button>
+          <button id="owt-sb-copy" type="button" class="primary" style="margin-left:auto;">Copy Python Snippet</button>
+        </div>
+        <div id="owt-sb-palette" style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0;"></div>
+        <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:0.78rem;color:var(--muted);margin-bottom:4px;">Click / Drag to Paint Active Frame (8x8)</div>
+            <canvas id="owt-sb-editor" style="cursor:crosshair;border:1px solid var(--border);border-radius:6px;image-rendering:pixelated;"></canvas>
+          </div>
+          <div>
+            <div style="font-size:0.78rem;color:var(--muted);margin-bottom:4px;">Live Animated Meadow / Grove Preview</div>
+            <canvas id="owt-sb-preview" style="border:1px solid var(--border);border-radius:6px;image-rendering:pixelated;"></canvas>
+          </div>
+        </div>
+      </section>
+    </div>
     <!-- DEV_VIEWS_END -->
 
     <div id="view-titles" class="hidden">
@@ -781,7 +1086,6 @@
   <script src="title_review_ui.js"></script>
   <script src="{{SUBGAMES_DATA_JS}}"></script>
   <script src="subgames_ui.js"></script>
-  <script src="previews/audio_data.js"></script>
 {{DEV_SCRIPTS}}
   <script>
 {{LOCAL_STATE_RENDER_JS}}
@@ -806,6 +1110,7 @@
     function loadStripImage(src) {
       if (!imgCache.has(src)) {
         const img = new Image();
+        img.decoding = 'async';
         img.src = src;
         imgCache.set(src, img);
       }
@@ -814,11 +1119,11 @@
 
     function spriteEl(src, w, h, frames = 4, fps = 6, displayW = null) {
       const targetW = displayW || (w >= 200 ? 220 : Math.round(w * 2));
-      const targetH = Math.round(h * (targetW / w));
       const cv = document.createElement('canvas');
       cv.className = 'nes-canvas';
-      cv.width = targetW;
-      cv.height = targetH;
+      cv.width = w;
+      cv.height = h;
+      cv.style.width = `${targetW}px`;
       cv._vis = !canvasObserver;
       if (canvasObserver) canvasObserver.observe(cv);
       const ctx = cv.getContext('2d');
@@ -909,7 +1214,6 @@
           item.drawnIdx = item.idx;
           item.drawnClipIdx = item.clipIdx;
           const ctx = item.ctx;
-          ctx.imageSmoothingEnabled = false;
           ctx.clearRect(0, 0, item.cv.width, item.cv.height);
           const cols = Math.max(1, Math.floor(activeImg.naturalWidth / activeClip.w));
           const rows = Math.max(1, Math.floor(activeImg.naturalHeight / activeClip.h));
@@ -938,7 +1242,6 @@
         if (item.idx === item.drawnIdx) continue;
         item.drawnIdx = item.idx;
         const ctx = item.ctx;
-        ctx.imageSmoothingEnabled = false;
         ctx.clearRect(0, 0, item.cv.width, item.cv.height);
         const cols = Math.max(1, Math.floor(item.img.naturalWidth / item.w));
         const rows = Math.max(1, Math.floor(item.img.naturalHeight / item.h));
@@ -1209,6 +1512,21 @@
       return gainNode;
     }
 
+    let audioDataPromise = null;
+    function loadAudioDataFallback() {
+      if (window.BARBA_AUDIO_DATA) return Promise.resolve(window.BARBA_AUDIO_DATA);
+      if (!audioDataPromise) {
+        audioDataPromise = new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = 'previews/' + 'audio_data.js';
+          s.onload = () => resolve(window.BARBA_AUDIO_DATA || {});
+          s.onerror = () => reject(new Error('Failed to load audio fallback'));
+          document.head.appendChild(s);
+        });
+      }
+      return audioDataPromise;
+    }
+
     async function playWav(src, speed = 1.0, pitch = 1.0, volume = 1.0) {
       const ctx = getAudioCtx();
       if (!ctx) return null;
@@ -1217,18 +1535,25 @@
       }
       try {
         if (!audioBufCache.has(src)) {
-          let arr;
-          const b64 = window.BARBA_AUDIO_DATA && window.BARBA_AUDIO_DATA[src];
-          if (b64) {
+          let arr = null;
+          let b64 = window.BARBA_AUDIO_DATA && window.BARBA_AUDIO_DATA[src];
+          if (!b64) {
+            try {
+              const resp = await fetch(src);
+              if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+              arr = await resp.arrayBuffer();
+            } catch (_) {
+              const data = await loadAudioDataFallback();
+              b64 = data && data[src];
+            }
+          }
+          if (!arr && b64) {
             const bin = atob(b64);
             const bytes = new Uint8Array(bin.length);
             for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
             arr = bytes.buffer;
-          } else {
-            const resp = await fetch(src);
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            arr = await resp.arrayBuffer();
           }
+          if (!arr) throw new Error(`Audio unavailable: ${src}`);
           audioBufCache.set(src, await ctx.decodeAudioData(arr));
         }
         return playBufferWithRate(audioBufCache.get(src), speed, pitch, volume);
@@ -1353,7 +1678,7 @@
           lbl.innerHTML = `${label} ${active ? '<span class="pill-on">Active</span>' : ''}`;
           tile.appendChild(lbl);
           tile.onclick = () => {
-            if (missingReq.length || f.coupled) return;
+            if (missingReq.length || f.coupled || Boolean(state.values[f.id]) === targetVal) return;
             state.preset = 'custom';
             state.values[f.id] = targetVal;
             resolveDeps();
@@ -1562,6 +1887,12 @@
     };
     document.querySelectorAll('.tab-btn').forEach(btn => {
       btn.onclick = () => switchTab(btn.dataset.tab);
+    });
+    document.querySelectorAll('.overview-jump[data-jump]').forEach(btn => {
+      btn.onclick = () => {
+        const target = btn.dataset.jump;
+        if (document.getElementById(`view-${target}`)) switchTab(target);
+      };
     });
     const reqTab = new URLSearchParams(location.search).get('tab') || location.hash.replace('#', '');
     if (document.getElementById(`view-${reqTab}`)) switchTab(reqTab);

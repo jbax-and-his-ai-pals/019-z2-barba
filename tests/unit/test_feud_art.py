@@ -332,11 +332,17 @@ class FeudArtTests(unittest.TestCase):
                 self.assertGreaterEqual(pts[-1], 2, q_str)
                 self.assertFalse(all(p % 5 == 0 for p in pts), q_str)
                 seen_vecs.add(tuple(pts))
+                fm_allowed = None
+                if pool is pack_feud.ZELDA2_FM_PUZZLES:
+                    fm_allowed = set('0123456789') if answers[0][0][0].isdigit() else set('ABCDEFGHIJKLMNOPQRSTUVWXYZ ')
                 for ans_text, _pts in answers:
                     variants = expand_variants(ans_text)
                     self.assertLessEqual(len(variants), 20, f'{q_str}: {ans_text} -> {len(variants)} variants')
                     buf_len = sum(len(v) + 1 for v in variants)
                     self.assertLess(buf_len, 256, f'{q_str}: {ans_text} buffer {buf_len}')
+                    if fm_allowed is not None:
+                        bad = [v for v in variants if not set(v) <= fm_allowed]
+                        self.assertEqual(bad, [], f'FM {q_str}: {ans_text} untypeable variants {bad}')
         self.assertEqual(len(seen_vecs), len(pack_feud.ZELDA2_MAIN_PUZZLES) + len(pack_feud.ZELDA2_FM_PUZZLES))
         self.assertLessEqual(total_bytes, 4096)
 

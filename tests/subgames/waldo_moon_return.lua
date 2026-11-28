@@ -148,7 +148,7 @@ emu.addEventCallback(function()
         end
     elseif phase == 'enter' then
         local ef = frame - enterStart
-        if ef > 250 and read(0xFFFA) == 0x03 and read(0xFFFB) == 0xF6 then
+        if ef > 250 and read(0xFFFA) == 0xFB and read(0xFFFB) == 0xF8 then
             phase = 'waldo'
             waldoStart = frame
         elseif ef > 350 then
@@ -157,7 +157,7 @@ emu.addEventCallback(function()
         end
     elseif phase == 'waldo' then
         local wf = frame - waldoStart
-        if read(0xFFFA) ~= 0x03 or read(0xFFFB) ~= 0xF6 then
+        if read(0xFFFA) ~= 0xFB or read(0xFFFB) ~= 0xF8 then
             local meltCount = 0
             for _ in pairs(meltScrollX) do meltCount = meltCount + 1 end
             check(sawMeltOut, 'WaldoMoonReturn ran WaldoMeltOut ($CB10) before restoring Barba')

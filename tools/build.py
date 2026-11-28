@@ -588,7 +588,8 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
         overlay.prg(3, address, dest.to_bytes(2, 'little'), bytes.fromhex('bd 9a'), f'Sign reader {kind} update {address:04X}')
     # In-place town dialogue replacements (14 chars/line max, 1-tile blank border on all sides).
     town_glyphs = {chr(ord('A') + i): 0xDA + i for i in range(26)}
-    town_glyphs.update({' ': 0xF4, '.': 0xCF, '!': 0x36, '\n': 0xFD})
+    town_glyphs.update({str(i): 0xD0 + i for i in range(10)})
+    town_glyphs.update({' ': 0xF4, '.': 0xCF, '/': 0xCE, ',': 0x33, '?': 0x34, "'": 0x35, '!': 0x36, '\n': 0xFD})
     for address, name, original, dialogue in (
         (0xA99E, 'Mido downstab', 'WHEN YOU\nJUMP PRESS\nDOWNWARD\nTO STAB.',
          'JUMP AND HOLD\nDOWN FOR A\nWYRM DIVE!'),
@@ -597,11 +598,11 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
         (0xA656, 'Saria mirror lady', 'OH! YOU\nFOUND MY\nMIRROR!\nFOLLOW ME.',
          'OH MY GOD!\nMY MIRROR!\nFOLLOW ME.'),
         (0xA7FE, 'Saria bridge guard', 'ONLY TOWN\nFOLK MAY\nCROSS THIS\nRIVER!',
-         'FOUL WATER!\nLOCALS ONLY.\nTURN BACK!'),
+         'THE WATER IS\n   FOUL!\nTURN BACK!'),
         (0xA9C4, 'Bagu note', 'BAGU IS MY\nNAME. SHOW\nMY NOTE TO\nRIVER MAN.',
-         'BAGU IS MY\nNAME. SHOW\nMY NOTE TO\nTHE GUARD.'),
+         "I'M BAGU.\nKIND OF A\nBIG DEAL.\nKNOW ME NOW."),
         (0xA9F7, 'Bagu location', 'LET ME BE!\nMASTER IS\nIN WOODS\nN OF RIVER',
-         'LET ME BE!\nMASTER IS\nIN WOODS\nN OF SARIA'),
+         'MASTER IS IN\nWOODS NORTH OF\nSARIA.'),
     ):
         expected = bytes(town_glyphs[ch] for ch in original) + b'\xff'
         replacement = bytes(town_glyphs[ch] for ch in dialogue) + b'\xff'
@@ -2424,7 +2425,7 @@ def build(source_path: Path, output: Path, title_roar_wav: Path | None = ROOT/'a
     # must stay vanilla in the town BG bank (only TEXT_GLYPHS are added), and every
     # vanilla message byte must resolve to one of them. 2026-11-16: the town fire art
     # had overwritten '?' ($34) and a shout glyph the mid-dot ($32).
-    font = set(range(0xD0, 0xF5)) | {0xCA, 0xCB, 0xCC, 0xCF, 0x34, 0x36}
+    font = set(range(0xD0, 0xF5)) | {0xCA, 0xCB, 0xCC, 0xCE, 0xCF, 0x34, 0x36}
     for tile in font:
         offset = CHR_OFFSET + TEXT_GLYPH_BANK*4096 + tile*16
         if target[offset:offset+16] != source[offset:offset+16]:

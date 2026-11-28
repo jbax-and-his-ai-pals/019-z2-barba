@@ -18,7 +18,6 @@ ShoutTile_Bang = $A1
 ShoutTile_M = $A3
 ShoutTile_G = $A9
 ShoutTile_A = $AB
-ShoutTile_D = $33
 ShoutTile_V = $7F
 ShoutTile_E = $BB
 ShoutTile_L = $BD
@@ -27,6 +26,7 @@ ShoutTile_P = $BF
 ; has no free pairs left: $00-$27 are villager sprites (Fat Woman $11-$1F etc.).
 ; The counter draws digit 0 with ShoutTile_O to save a pair.
 ShoutTile_B = $AE
+ShoutTile_D = $B6
 ShoutTile_H = $7C
 ShoutTile_X = $66
 ShoutTile_1 = $78

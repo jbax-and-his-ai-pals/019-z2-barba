@@ -4,10 +4,13 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
+import subprocess
 import zlib
 from pathlib import Path
 
 import roar_sample
+from asm6502 import Asm6502
 from assets import compile_assets, encounter_connector_rows, encounter_trail_rows
 from boss_art import resize_x, shear_up, source_head, source_pair
 from bps import write_bps
@@ -16,8 +19,32 @@ from nes import CHR_OFFSET, HEADER_SIZE, decode_tile, encode_tile, load_source
 ROOT = Path(__file__).resolve().parents[1]
 WALDO_PATH = ROOT / 'roms/waldo.nes'
 Z2_PATH = ROOT / 'roms/z2.nes'
-OUT_PATH = ROOT / 'build/waldo_barba.nes'
-PLAY_PATH = ROOT / 'play/nes/waldo.nes'
+
+
+def _git_branch_suffix() -> str:
+    """Return '-<branch>' when building on a non-main git branch, else ''."""
+    try:
+        res = subprocess.run(
+            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        branch = res.stdout.strip()
+    except OSError:
+        return ''
+    if not branch or branch in ('main', 'HEAD'):
+        return ''
+    safe = re.sub(r'[^A-Za-z0-9._-]+', '-', branch).strip('-')
+    return f'-{safe}' if safe else ''
+
+
+_BRANCH_SUFFIX = _git_branch_suffix()
+OUT_PATH = ROOT / f'build/waldo_barba{_BRANCH_SUFFIX}.nes'
+PLAY_PATH = ROOT / f'play/nes/waldo{_BRANCH_SUFFIX}.nes'
+BPS_PATH = ROOT / f'play/bps/waldo{_BRANCH_SUFFIX}.bps'
 BARBA_JSON = ROOT / 'assets/barba.json'
 CROWD_JSON = ROOT / 'assets/waldo_crowd.json'
 ASH_JSON = ROOT / 'assets/ash.json'
@@ -240,6 +267,11 @@ def make_crowd_flee_code(base: int = 0xCD00) -> tuple[bytes, dict[str, int]]:
     label('CrowdInit')
     emit(0xA9, 0x00)
     emit(0x8D, 0x00, 0x7F)              # STA CROWD_ACTIVE
+    emit(0xAD, 0xF5, 0x03)              # LDA VANILLA_MODE
+    rel(0xF0, 'ci_barba')
+    emit(0xBD, 0xD1, 0xF3, 0x60)        # Vanilla: LDA $F3D1,X; RTS
+    label('ci_barba')
+    emit(0xA9, 0x00)
     emit(0x8D, 0x01, 0x7F)              # STA PERSON_COUNT
     emit(0x8D, 0x02, 0x7F)              # STA PPU_Q_COUNT
     emit(0x8D, 0x03, 0x7F)              # STA PERSON_CUR
@@ -262,6 +294,10 @@ def make_crowd_flee_code(base: int = 0xCD00) -> tuple[bytes, dict[str, int]]:
     # Clears CROWD_ACTIVE, hides Barba/Fireball OAM slots, and restores R2/R3
     # so Barba's overworld pose_b tiles ($40..$47) do not render as shout font glyphs.
     label('CrowdExit')
+    emit(0xAD, 0xF5, 0x03)
+    rel(0xF0, 'ce_barba')
+    emit(0x4C, 0xEC, 0xE4)              # Vanilla: JMP $E4EC
+    label('ce_barba')
     emit(0xA9, 0x00)
     emit(0x8D, 0x00, 0x7F)              # STA CROWD_ACTIVE
     emit(0x8D, 0x02, 0x7F)              # STA PPU_Q_COUNT
@@ -288,6 +324,10 @@ def make_crowd_flee_code(base: int = 0xCD00) -> tuple[bytes, dict[str, int]]:
     # Copies ($50 - $4F) * 64 bytes from $6000 to BG_TILES ($7200) + $4F*64,
     # and records base-scenery collision bits (non-zero tiles) into COLL_BITS_STG ($6680 + $4F*8).
     label('CrowdSaveBg')
+    emit(0xAD, 0xF5, 0x03)
+    rel(0xF0, 'csb_barba')
+    emit(0xA9, 0xC0, 0x85, 0x22, 0x60)  # Vanilla: LDA #$C0; STA $22; RTS
+    label('csb_barba')
     emit(0xA6, 0x4D)                    # LDX $4D (band 0..2)
     emit(0x8E, 0x2F, 0x7F)              # STX CUR_BAND ($7F2F)
     emit(0xA5, 0x4F, 0x9D, 0x10, 0x7F)  # STA BAND_MIN_Y,X
@@ -433,6 +473,10 @@ def make_crowd_flee_code(base: int = 0xCD00) -> tuple[bytes, dict[str, int]]:
     # BEFORE fade-in so people start fleeing immediately on frame 1 with zero perceived freeze!
     # Leaves CROWD_ACTIVE = 0 until CrowdActivate ($EC75).
     label('CrowdPrep')
+    emit(0xAD, 0xF5, 0x03)
+    rel(0xF0, 'cp_barba')
+    emit(0x4C, 0x58, 0xF3)              # Vanilla: JMP $F358
+    label('cp_barba')
     emit(0x20, 0x58, 0xF3)              # JSR $F358 (upload NT/attr/pal while screen is OFF)
     emit(0xA2, 0x00)
     label('cs_sv_tmr')
@@ -593,6 +637,10 @@ def make_crowd_flee_code(base: int = 0xCD00) -> tuple[bytes, dict[str, int]]:
 
     # CrowdActivate: called from $EC75 after fade-in completes.
     label('CrowdActivate')
+    emit(0xAD, 0xF5, 0x03)
+    rel(0xF0, 'ca_barba')
+    emit(0xA9, 0x08, 0x4C, 0x57, 0xE5)  # Vanilla: LDA #$08; JMP $E557
+    label('ca_barba')
     abs16(0x20, 'BarbaInit')
     emit(0xA9, 0x01, 0x8D, 0x00, 0x7F)                    # CROWD_ACTIVE = 1
     emit(0xA9, 0x08, 0x4C, 0x57, 0xE5)                    # JMP $E557
@@ -2217,6 +2265,7 @@ def build(count_build: bool = True, build_number: int | None = None, write_play:
 
     # Preserve last horizontal facing (WRAM $7FD4: 0=left, 1=right) when walking up/down in Bank 14 (Cave).
     # Hooks $84FE (ASL A; TAY; LDA $8BA2,Y) -> JMP $8C82 in the freed descriptor space ($8C82..$8D51).
+    # In Vanilla mode ($03F5 != 0), branches to $F69B (trampoline to Bank 17 CopyVanillaB14Desc -> WRAM $7FD8).
     b14_code = bytearray()
     b14_labels: dict[str, int] = {}
     b14_fixups: list[tuple[int, str]] = []
@@ -2228,6 +2277,12 @@ def build(count_build: bool = True, build_number: int | None = None, write_play:
         b14_code.append(op)
         b14_fixups.append((len(b14_code), target))
         b14_code.append(0)
+    b14_emit(0xAE, 0xF5, 0x03)              # LDX $03F5 (preserve A!)
+    b14_rel(0xF0, 'b14_barba')
+    b14_emit(0x85, 0x47, 0xA9, 0x46, 0x8D, 0x00, 0x80)  # STA $47; LDA #$46; STA $8000
+    b14_emit(0x20, 0x5B, 0xF6)              # JSR $F65B (Bank 31 -> Bank 17 CopyVanillaB14Desc)
+    b14_emit(0x4C, 0x0B, 0x85)              # JMP $850B (LDY #$00; LDA ($14),Y)
+    b14_label('b14_barba')
     b14_emit(0xC9, 0x08)                    # CMP #$08 (0..7 = left)
     b14_rel(0xB0, 'not_left')
     b14_emit(0xA0, 0x00, 0x8C, 0xD4, 0x7F)  # LDY #$00; STY $7FD4
@@ -2247,12 +2302,51 @@ def build(count_build: bool = True, build_number: int | None = None, write_play:
     b14_label('do_lookup')
     b14_emit(0x0A, 0xA8, 0xB9, 0xA2, 0x8B)  # ASL A; TAY; LDA $8BA2,Y
     b14_emit(0x4C, 0x03, 0x85)              # JMP $8503
+    # Helpers for Vanilla Overworld/Cave sprite dimensions (2x4=8 sprites vs 6x6=36 sprites):
+    b14_label('GetMapW')
+    b14_emit(0xAD, 0xF5, 0x03)
+    b14_rel(0xD0, 'gmw_van')
+    b14_emit(0xA9, 0x06, 0x60)
+    b14_label('gmw_van')
+    b14_emit(0xA9, 0x02, 0x60)
+    b14_label('GetMapH')
+    b14_emit(0xAD, 0xF5, 0x03)
+    b14_rel(0xD0, 'gmh_van')
+    b14_emit(0xA9, 0x06, 0x60)
+    b14_label('gmh_van')
+    b14_emit(0xA9, 0x04, 0x60)
+    b14_label('GetMapSprCnt')
+    b14_emit(0xA2, 0x24, 0xAD, 0xF5, 0x03)
+    b14_rel(0xF0, 'gmsc_done')
+    b14_emit(0xA2, 0x08)
+    b14_label('gmsc_done')
+    b14_emit(0x4C, 0xEC, 0xE6)              # JMP $E6EC
     for pos, target in b14_fixups:
         b14_code[pos] = (b14_labels[target] - (pos + 1)) & 0xFF
     assert len(b14_code) <= 0x8D52 - 0x8C82
     put(out, HEADER_SIZE + 0x1CC82, bytes(b14_code),
         expected=waldo[HEADER_SIZE + 0x1CC82:HEADER_SIZE + 0x1CC82 + len(b14_code)])
     put(out, HEADER_SIZE + 0x1C4FE, bytes([0x4C, 0x82, 0x8C]), expected=bytes([0x0A, 0xA8, 0xB9]))
+    gmw_addr = 0x8C82 + b14_labels['GetMapW']
+    gmh_addr = 0x8C82 + b14_labels['GetMapH']
+    gmsc_addr = 0x8C82 + b14_labels['GetMapSprCnt']
+    put(out, HEADER_SIZE + 0x1C49A, bytes([0x4C, gmsc_addr & 0xFF, gmsc_addr >> 8, 0xEA, 0xEA]),
+        expected=bytes([0xA2, 0x24, 0x20, 0xEC, 0xE6]))
+    put(out, HEADER_SIZE + 0x1C4AB, bytes([0x4C, gmsc_addr & 0xFF, gmsc_addr >> 8, 0xEA, 0xEA]),
+        expected=bytes([0xA2, 0x24, 0x20, 0xEC, 0xE6]))
+    for w_off in (0x1C31E, 0x1C74B, 0x1C7A3, 0x1D29D):
+        put(out, HEADER_SIZE + w_off, bytes([0x20, gmw_addr & 0xFF, gmw_addr >> 8]),
+            expected=bytes([0xAD, 0x6B, 0x8A]))
+    for h_off in (0x1C324, 0x1C751, 0x1C7BB, 0x1D2A3):
+        put(out, HEADER_SIZE + h_off, bytes([0x20, gmh_addr & 0xFF, gmh_addr >> 8]),
+            expected=bytes([0xAD, 0x6C, 0x8A]))
+    # $87C9..$87D5: computes ($8A6C)*($8A6B) -> STA $0331 (36 for 6x6 Barba, 8 for 2x4 Vanilla)
+    put(
+        out,
+        HEADER_SIZE + 0x1C7C9,
+        bytes.fromhex('a9 24 ae f5 03 f0 02 a9 08 ea ea ea ea'),
+        expected=bytes.fromhex('ae 6c 8a ca a9 00 18 6d 6b 8a ca 10 f9'),
+    )
 
     # 3. Title Screen Stamp Portrait (Bank 13 BG + Bank 198 behind-BG sprite overlay).
     # Keep Title BG Pal 3 as [20(white), 12(blue), 0E(black), 16(red)] and patch Title Sprite Pal 0
@@ -2607,18 +2701,21 @@ def build(count_build: bool = True, build_number: int | None = None, write_play:
 
     def _patch_title_theres_barba() -> None:
         # 1) Patch Bank 14 nametable cells for "BARBA" (plus clear shared tile $36 at r18 c6 and $7C at r15 c10).
+        # Use unique tiles $F2/$F4 for the 3 speck cells so Vanilla CHR can keep their original pixels.
         nt14_patches = [
-            (1, 0,  0x1E, 0x00),  # r17 c6: clear 1px speck top-left of 'T'
+            (1, 0,  0x1E, 0xF2),  # r17 c6: clear 1px speck top-left of 'T'
             (1, 15, 0x00, 0xED),
-            (2, 0,  0x36, 0x00),  # r18 c6: was shared $36 (only 1px shadow of 'W')
+            (2, 0,  0x36, 0xF4),  # r18 c6: was shared $36 (only 1px shadow of 'W')
             (2, 12, 0x1E, 0xEE),
             (3, 9,  0x00, 0xEF),
             (4, 7,  0x00, 0xF0),
             (5, 4,  0x00, 0xF1),
-            (10, 4, 0x36, 0x00),  # r26 c10: clear 1px speck bottom-left of first 'B'
+            (10, 4, 0x36, 0xF4),  # r26 c10: clear 1px speck bottom-left of first 'B'
         ]
         for tr, tc, old_tid, new_tid in nt14_patches:
             put(out, HEADER_SIZE + 0x0651B + tr * 32 + tc, bytes([new_tid]), expected=bytes([old_tid]))
+        for tid in (0xF2, 0xF4):
+            put_chr_tile(out, 14, tid, ['0' * 8] * 8)
 
         # r15 (Bank 13) patches: replace shared $7C at r15 c10 with free tile $F3; clear r15 c26..27 ($F0/$F1 top of '?')
         nt_base = HEADER_SIZE + 0x06315
@@ -3163,6 +3260,31 @@ def build(count_build: bool = True, build_number: int | None = None, write_play:
         prg_128 = bytes(out[HEADER_SIZE:HEADER_SIZE + 0x20000])
         chr_128 = bytes(out[HEADER_SIZE + 0x20000:])
         chr_256 = bytearray(chr_128) + bytes(0x20000)
+
+        # Snapshot untouched vanilla Title CHR (4KB Banks 13 & 14) into 4KB Banks 50 & 51 (1KB 200..207)
+        # so the title screen can hot-swap seamlessly between "THERE'S BARBA!" and "WHERE'S WALDO?".
+        chr_256[50 * 4096:51 * 4096] = waldo[WALDO_CHR_OFFSET + 13 * 4096:WALDO_CHR_OFFSET + 14 * 4096]
+        chr_256[51 * 4096:52 * 4096] = waldo[WALDO_CHR_OFFSET + 14 * 4096:WALDO_CHR_OFFSET + 15 * 4096]
+        # Snapshot all other modified Vanilla CHR 4KB banks (2, 15..29 -> 32..47; 30..31 -> 52..53)
+        chr_256[32 * 4096:33 * 4096] = waldo[WALDO_CHR_OFFSET + 2 * 4096:WALDO_CHR_OFFSET + 3 * 4096]
+        chr_256[33 * 4096:48 * 4096] = waldo[WALDO_CHR_OFFSET + 15 * 4096:WALDO_CHR_OFFSET + 30 * 4096]
+        chr_256[52 * 4096:54 * 4096] = waldo[WALDO_CHR_OFFSET + 30 * 4096:WALDO_CHR_OFFSET + 32 * 4096]
+
+        def copy_vanilla_title_tile(dst_4k: int, dst_tid: int, src_4k: int, src_tid: int | None) -> None:
+            dst_off = dst_4k * 4096 + dst_tid * 16
+            if src_tid is None:
+                chr_256[dst_off:dst_off + 16] = bytes(16)
+            else:
+                src_off = WALDO_CHR_OFFSET + src_4k * 4096 + src_tid * 16
+                chr_256[dst_off:dst_off + 16] = waldo[src_off:src_off + 16]
+
+        # Alias tiles shared by the Barba nametable so Vanilla CHR renders 100% pixel-exact:
+        copy_vanilla_title_tile(50, 0xF3, 13, 0x7C)
+        for v_tid in (0xED, 0xEF, 0xF0, 0xF1):
+            copy_vanilla_title_tile(51, v_tid, 14, None)
+        for v_tid in (0xEE, 0xF2):
+            copy_vanilla_title_tile(51, v_tid, 14, 0x1E)
+        copy_vanilla_title_tile(51, 0xF4, 14, 0x36)
         chr_256[48 * 4096:49 * 4096] = chr_128[8 * 4096:9 * 4096]
         for idx, slot in enumerate(slot_for_idx):
             if idx == 3:
@@ -3290,8 +3412,11 @@ def build(count_build: bool = True, build_number: int | None = None, write_play:
             put_1k_tile(196, 0x34 + idx, zrows)
 
         prg_256 = bytearray(b'\xff' * 0x40000)
-        prg_256[0x00000:0x1C000] = prg_128[0x00000:0x1C000]  # Banks 0..13
+        prg_256[0x00000:0x1C000] = prg_128[0x00000:0x1C000]  # Banks 0..13 (Barba)
         prg_256[0x3C000:0x40000] = prg_128[0x1C000:0x20000]  # Banks 14..15 -> 30..31
+        # Vanilla PRG twins for modified switchable banks (0, 2, 3, 4..8 -> Banks 18..25)
+        for dst_b, src_b in ((18, 0), (19, 2), (20, 3), (21, 4), (22, 5), (23, 6), (24, 7), (25, 8)):
+            prg_256[dst_b * 0x2000:(dst_b + 1) * 0x2000] = waldo[HEADER_SIZE + src_b * 0x2000:HEADER_SIZE + (src_b + 1) * 0x2000]
 
         # Bank 16 ($C000-$DFFF at 0x20000): DPCM sample + roar helpers
         prg_256[0x20000:0x20000 + len(sample)] = sample
@@ -3308,9 +3433,13 @@ def build(count_build: bool = True, build_number: int | None = None, write_play:
             'ad f7 03 29 10 f0 0f ad 15 40 29 10 d0 08 ad f7 03 29 ef 8d f7 03 ad f6 03 60'
         )
         found_barba_roar = bytes.fromhex(
+            'ad f5 03 f0 05 a0 6c a9 ea 60 '
             'b0 0a 48 98 48 20 00 c9 68 a8 68 60 a0 6c a9 ea 60'
         )
-        title_start_roar = bytes.fromhex('4c 60 df')  # JMP $DF60 (TitleStartRoarSeq)
+        title_start_roar = bytes.fromhex('4c 60 cc')  # JMP $CC60 (TitleStartRoarSeq)
+        title_start_roar_check = bytes.fromhex(
+            'ad f5 03 f0 03 4c ed e5 4c 60 cc'  # vanilla -> JMP $E5ED, barba -> JMP $CC60
+        )
         # $DF60: Title Screen Start roar + horizontal screen shake (~1.57s) + brief stabilization (0.3s) before fade-out
         # Shakes X ($04 + T tip OAM X) only so $03 (Y) stays 0 and Sprite-0 CHR split at y=128 never glitches.
         title_start_roar_seq = bytes([
@@ -3376,7 +3505,9 @@ def build(count_build: bool = True, build_number: int | None = None, write_play:
         prg_256[0x2096A:0x2096A + len(title_start_roar)] = title_start_roar
         prg_256[0x20970:0x20970 + len(moon_roar_seq)] = moon_roar_seq
         prg_256[0x209E1:0x209E1 + len(shake_xy)] = shake_xy
-        prg_256[0x21F60:0x21F60 + len(title_start_roar_seq)] = title_start_roar_seq
+        prg_256[0x209E9:0x209E9 + len(title_start_roar_check)] = title_start_roar_check
+        assert len(title_start_roar_seq) <= 0x52, f'title_start_roar_seq too large: {len(title_start_roar_seq)}'
+        prg_256[0x20C60:0x20C60 + len(title_start_roar_seq)] = title_start_roar_seq
         prg_256[0x21FC0:0x21FC0 + len(moon_oam_tables_12)] = moon_oam_tables_12
 
         # Bank 31 ($E000-$FFFF at 0x3E000): RESET sets R6=16 (in $FFE0-$FFF9 tail padding), plus NMI/level/ending hooks
@@ -3401,29 +3532,7 @@ def build(count_build: bool = True, build_number: int | None = None, write_play:
                 sub = [''.join(str(t_tip_grid[y][tc * 8 + x]) for x in range(8)) for y in range(8)]
                 put_1k_tile(198, 10 + tc, sub)
 
-        # $CC60 (clear of $C9FC..$CC5F used by pack_waldo.py): TitleStampInit
-        title_stamp_init = bytes([
-            0x2C, 0x02, 0x20,                   # BIT $2002
-            0xA9, 0x3F, 0x8D, 0x06, 0x20,       # LDA #$3F; STA $2006
-            0xA9, 0x11, 0x8D, 0x06, 0x20,       # LDA #$11; STA $2006
-            0xA9, 0x16, 0x8D, 0x07, 0x20,       # LDA #$16; STA $2007 (Pal 0: red-orange)
-            0xA9, 0x27, 0x8D, 0x07, 0x20,       # LDA #$27; STA $2007 (Pal 0: light orange)
-            0xA9, 0x38, 0x8D, 0x07, 0x20,       # LDA #$38; STA $2007 (Pal 0: ivory/white)
-            0xA9, 0x20, 0x8D, 0x07, 0x20,       # LDA #$20; STA $2007 ($3F14)
-            0xA9, 0x12, 0x8D, 0x07, 0x20,       # LDA #$12; STA $2007 (Pal 1: blue)
-            0xA9, 0x0E, 0x8D, 0x07, 0x20,       # LDA #$0E; STA $2007 (Pal 1: black)
-            0xA9, 0x00, 0x8D, 0x07, 0x20,       # LDA #$00; STA $2007 (Pal 1: grey)
-            0xA9, 0x42, 0x8D, 0x00, 0x80,       # LDA #$42; STA $8000 (keep PRG mode 1 bit 6!)
-            0xA9, 0xC6, 0x8D, 0x01, 0x80,       # LDA #$C6; STA $8001
-            0xA2, 0x2F,                         # LDX #$2F (48 bytes - 1)
-            0xBD, 0xB2, 0xCC,                   # LDA $CCB2,X (title_stamp_oam)
-            0x9D, 0x04, 0x07,                   # STA $0704,X
-            0xCA, 0x10, 0xF7,                   # DEX; BPL -9
-            0xA9, 0x40, 0x85, 0x05,             # LDA #$40; STA $05 (OAM DMA $0700)
-            0xA5, 0x05, 0xD0, 0xFC,             # wait for NMI OAM DMA
-            0xA2, 0x03, 0xA9, 0xA3, 0x60,       # LDX #$03; LDA #$A3; RTS
-        ])
-        # $CCB2 (48 bytes): OAM[1..10] stamp + OAM[11..12] 'T' bottom tip (y=160, Pal 1, front of BG)
+        # OAM[1..10] stamp + OAM[11..12] 'T' bottom tip (y=160, Pal 1, front of BG)
         title_stamp_oam = bytes([
             0x26, 0x00, 0x20, 0xB9,  0x26, 0x01, 0x20, 0xC1,  0x26, 0x02, 0x20, 0xC9,
             0x2E, 0x03, 0x20, 0xB9,  0x2E, 0x04, 0x20, 0xC1,  0x2E, 0x05, 0x20, 0xC9,
@@ -3431,13 +3540,6 @@ def build(count_build: bool = True, build_number: int | None = None, write_play:
             0x3C, 0x08, 0x20, 0xC3,  0x3C, 0x09, 0x20, 0xCB,
             0x9F, 0x0A, 0x01, 0x4E,  0x9F, 0x0B, 0x01, 0x56,
         ])
-        assert len(title_stamp_init) == 0x52
-        prg_256[0x20C60:0x20C60 + len(title_stamp_init)] = title_stamp_init
-        prg_256[0x20CB2:0x20CB2 + len(title_stamp_oam)] = title_stamp_oam
-        # Bank 3 ($A021): init Title Screen Barba stamp sprite overlay & palette before fade-in
-        put(prg_256, 0x06021, bytes.fromhex('20 60 cc ea'), expected=bytes.fromhex('a2 03 a9 a3'))
-        # Bank 3 ($A03C): Title Screen Start roar
-        put(prg_256, 0x0603C, bytes.fromhex('20 6a c9'), expected=bytes.fromhex('20 ed e5'))
 
         # Subtle title build number (B<N>) as OAM sprites in CHR Bank 198 ($C6) at bottom-right white margin.
         tb_tag = f'B{build_number}'
@@ -3460,17 +3562,451 @@ def build(count_build: bool = True, build_number: int | None = None, write_play:
             tid = 0x0C + idx_ch
             put_1k_tile(198, tid, [row.replace('1', '2') for row in tb_font[ch]])
             tb_oam_extra.extend([0xE4, tid, 0x01, tb_x0 + idx_ch * 8])
-        full_title_oam = title_stamp_oam + bytes(tb_oam_extra)
-        assert 0x20CB2 + len(full_title_oam) <= 0x20D00, f'title_stamp_oam too large: {len(full_title_oam)}'
-        prg_256[0x20CB2 : 0x20CB2 + len(full_title_oam)] = full_title_oam
-        # Update LDX #(len-1) in title_stamp_init (0xA2, 0x2F)
-        ldx_off = title_stamp_init.index(bytes([0xA2, 0x2F]))
-        assert prg_256[0x20C60 + ldx_off : 0x20C60 + ldx_off + 2] == bytes([0xA2, 0x2F])
-        prg_256[0x20C60 + ldx_off + 1] = len(full_title_oam) - 1
+
+        # Popsicle & cursor tiles in 1KB Bank 198 ($C6, tiles $20..$2F):
+        #   $20..$25: White/Vanilla popsicle (16x24, Pal 2: 1=black, 2=tan stick, 3=cream/white)
+        #   $26..$2B: Barba striped popsicle (16x24, Pal 3: 1=black, 2=red-orange, 3=gold/stick)
+        #   $2C..$2F: Upward pointing hand cursor (16x16, Pal 2: 1=black, 2=tan shadow, 3=white)
+        vanilla_pop_24 = [
+            '0000011111100000',
+            '0001133333311000',
+            '0013333333333100',
+            '0013333333333100',
+            '0133313333133310',
+            '0133313333133310',
+            '0133313333133310',
+            '0133313333133310',
+            '0133313333133310',
+            '0133313333133310',
+            '0133313333133310',
+            '0133313333133310',
+            '0133313333133310',
+            '0133333333333310',
+            '0133333333333310',
+            '0133333333333310',
+            '0111111111111110',
+            '0000012222100000',
+            '0000012222100000',
+            '0000012222100000',
+            '0000012222100000',
+            '0000012222100000',
+            '0000001221000000',
+            '0000000110000000',
+        ]
+        barba_pop_24 = [
+            '0000011111100000',
+            '0001122332211000',
+            '0012223332223100',
+            '0012233322233100',
+            '0122332223332210',
+            '0123322233322210',
+            '0133222333222310',
+            '0132223332223310',
+            '0122233322233210',
+            '0122333222332210',
+            '0123332223322210',
+            '0133322233222310',
+            '0133222332223310',
+            '0132223322233310',
+            '0122233222333210',
+            '0122332223332210',
+            '0111111111111110',
+            '0000013333100000',
+            '0000013333100000',
+            '0000013333100000',
+            '0000013333100000',
+            '0000013333100000',
+            '0000001331000000',
+            '0000000110000000',
+        ]
+        hand_cursor_16 = [
+            '0000001110000000',
+            '0000013331000000',
+            '0000013331000000',
+            '0000013331000000',
+            '0000013331000000',
+            '0000013331110000',
+            '0011013331331100',
+            '0133113331331310',
+            '0133333333333310',
+            '0133333333333310',
+            '0013333333333310',
+            '0013333333333210',
+            '0001333333332210',
+            '0000122222222100',
+            '0000133333333100',
+            '0000011111111000',
+        ]
+        for base_tid, pop_rows in ((0x20, vanilla_pop_24), (0x26, barba_pop_24)):
+            for tr in range(3):
+                for tc in range(2):
+                    sub = [pop_rows[tr * 8 + y][tc * 8:(tc + 1) * 8] for y in range(8)]
+                    put_1k_tile(198, base_tid + tr * 2 + tc, sub)
+        for tr in range(2):
+            for tc in range(2):
+                sub = [hand_cursor_16[tr * 8 + y][tc * 8:(tc + 1) * 8] for y in range(8)]
+                put_1k_tile(198, 0x2C + tr * 2 + tc, sub)
+
+        popsicle_oam = bytes([
+            # Vanilla popsicle (left, X=12, Y=188, Pal 2)
+            0xBC, 0x20, 0x02, 12,   0xBC, 0x21, 0x02, 20,
+            0xC4, 0x22, 0x02, 12,   0xC4, 0x23, 0x02, 20,
+            0xCC, 0x24, 0x02, 12,   0xCC, 0x25, 0x02, 20,
+            # Barba striped popsicle (right, X=38, Y=188, Pal 3)
+            0xBC, 0x26, 0x03, 38,   0xBC, 0x27, 0x03, 46,
+            0xC4, 0x28, 0x03, 38,   0xC4, 0x29, 0x03, 46,
+            0xCC, 0x2A, 0x03, 38,   0xCC, 0x2B, 0x03, 46,
+        ])
+        cursor_oam = bytes([
+            0xD6, 0x2C, 0x02, 38,   0xD6, 0x2D, 0x02, 46,
+            0xDE, 0x2E, 0x02, 38,   0xDE, 0x2F, 0x02, 46,
+        ])
+        full_title_oam = title_stamp_oam + bytes(tb_oam_extra) + popsicle_oam + cursor_oam
+        assert 4 + len(full_title_oam) <= 256, f'full_title_oam too large: {len(full_title_oam)}'
+        cursor_oam_base = 0x0704 + len(title_stamp_oam) + len(tb_oam_extra) + len(popsicle_oam)
+
+        # Bank 17 ($C000 at 0x22000): TitleSelectorInit + TitleSelectorLoop + OAM/Y tables
+        b17 = Asm6502(0xC000)
+        b17.label('TitleSelectorInit')
+        b17.emit(
+            0xA9, 0x00, 0x8D, 0xF5, 0x03,       # LDA #$00; STA $03F5 (VANILLA_MODE = Barba)
+            0x8D, 0xE0, 0x03,                   # STA $03E0 (PREV_PAD1 = 0)
+            0x2C, 0x02, 0x20,                   # BIT $2002
+            0xA9, 0x3F, 0x8D, 0x06, 0x20,       # LDA #$3F; STA $2006
+            0xA9, 0x11, 0x8D, 0x06, 0x20,       # LDA #$11; STA $2006
+            0xA9, 0x16, 0x8D, 0x07, 0x20,       # Pal 0: red-orange
+            0xA9, 0x27, 0x8D, 0x07, 0x20,       # Pal 0: gold
+            0xA9, 0x38, 0x8D, 0x07, 0x20,       # Pal 0: ivory
+            0xA9, 0x20, 0x8D, 0x07, 0x20,       # $3F14
+            0xA9, 0x12, 0x8D, 0x07, 0x20,       # Pal 1: blue
+            0xA9, 0x0E, 0x8D, 0x07, 0x20,       # Pal 1: black
+            0xA9, 0x00, 0x8D, 0x07, 0x20,       # Pal 1: grey
+            0xA9, 0x20, 0x8D, 0x07, 0x20,       # $3F18
+            0xA9, 0x0E, 0x8D, 0x07, 0x20,       # Pal 2: black (vanilla pop + hand)
+            0xA9, 0x27, 0x8D, 0x07, 0x20,       # Pal 2: tan stick / shadow
+            0xA9, 0x38, 0x8D, 0x07, 0x20,       # Pal 2: cream/white
+            0xA9, 0x20, 0x8D, 0x07, 0x20,       # $3F1C
+            0xA9, 0x0E, 0x8D, 0x07, 0x20,       # Pal 3: black (Barba striped pop)
+            0xA9, 0x16, 0x8D, 0x07, 0x20,       # Pal 3: red-orange
+            0xA9, 0x27, 0x8D, 0x07, 0x20,       # Pal 3: gold/stick
+            0xA9, 0x42, 0x8D, 0x00, 0x80,       # R2 ($1000-$13FF) = 1KB Bank 198 ($C6)
+            0xA9, 0xC6, 0x8D, 0x01, 0x80,
+            0xA2, len(full_title_oam) - 1,
+        )
+        b17.label('init_oam_loop')
+        b17.abs_ref(0xBD, 'FullTitleOam')       # LDA FullTitleOam,X
+        b17.emit(0x9D, 0x04, 0x07, 0xCA)        # STA $0704,X; DEX
+        b17.branch(0x10, 'init_oam_loop')       # BPL init_oam_loop
+        b17.emit(
+            0xA9, 0x40, 0x85, 0x05,             # LDA #$40; STA $05 (OAM DMA)
+        )
+        b17.label('init_wait_oam')
+        b17.emit(0xA5, 0x05)
+        b17.branch(0xD0, 'init_wait_oam')
+        b17.emit(0xA2, 0x03, 0xA9, 0xA3, 0x60)  # LDX #$03; LDA #$A3; RTS
+
+        b17.label('TitleSelectorLoop')
+        b17.emit(0xA5, 0x02)                    # LDA $02
+        b17.label('wait_nmi')
+        b17.emit(0xC5, 0x02)
+        b17.branch(0xF0, 'wait_nmi')            # BEQ wait_nmi
+        # Gentle 2px vertical bob on cursor Y
+        b17.emit(
+            0xA5, 0x02, 0x29, 0x10, 0x4A, 0x4A, 0x4A,  # (frame & $10) >> 3 -> 0 or 2
+            0x18, 0x69, 0xD6,
+            0x8D, cursor_oam_base & 0xFF, cursor_oam_base >> 8,
+            0x8D, (cursor_oam_base + 4) & 0xFF, (cursor_oam_base + 4) >> 8,
+            0x18, 0x69, 0x08,
+            0x8D, (cursor_oam_base + 8) & 0xFF, (cursor_oam_base + 8) >> 8,
+            0x8D, (cursor_oam_base + 12) & 0xFF, (cursor_oam_base + 12) >> 8,
+            0xA9, 0x40, 0x85, 0x05,             # trigger OAM DMA
+            # Edge-detect Pad 1 ($06 uses ROR: bit0=A, bit2=Select, bit3=Start, bit6=Left, bit7=Right):
+            0xAD, 0xE0, 0x03, 0x45, 0x06, 0x25, 0x06, 0xAA,
+            0xA5, 0x06, 0x8D, 0xE0, 0x03,
+            0x8A, 0x29, 0x09,                   # Start ($08) or A ($01)?
+        )
+        b17.branch(0xD0, 'confirm')
+        b17.emit(0x8A, 0x29, 0xC4)              # Left ($40), Right ($80), Select ($04)?
+        b17.branch(0xF0, 'TitleSelectorLoop')
+        # Toggle VANILLA_MODE ($03F5 ^= 1)
+        b17.emit(0xAD, 0xF5, 0x03, 0x49, 0x01, 0x8D, 0xF5, 0x03)
+        b17.branch(0xD0, 'set_vanilla')
+
+        # Barba mode: R0/R1 = Bank 13 ($34/$36) top, Bank 14 ($38/$3A) bottom; show stamp + 'T'
+        b17.emit(
+            0xA9, 0x34, 0x85, 0x38, 0xA9, 0x36, 0x85, 0x3E,
+            0xA9, 0x38, 0x85, 0x39, 0xA9, 0x3A, 0x85, 0x3F,
+            0xA0, 0x00, 0xA2, 0x00,
+        )
+        b17.label('barba_y_loop')
+        b17.abs_ref(0xB9, 'StampYTable')        # LDA StampYTable,Y
+        b17.emit(0x9D, 0x04, 0x07, 0xE8, 0xE8, 0xE8, 0xE8, 0xC8, 0xC0, 0x0C)
+        b17.branch(0xD0, 'barba_y_loop')
+        b17.emit(0xA9, 38)                      # cursor X = 38 (Barba)
+        b17.abs_ref(0x20, 'SetCursorX')
+        b17.emit(0xA9, 0x80, 0xA2, 0x11)        # low blip pitch
+        b17.abs_ref(0x20, 'PlayBlip')
+        b17.abs_ref(0x4C, 'TitleSelectorLoop')
+
+        b17.label('set_vanilla')
+        # Vanilla mode: R0/R1 = Bank 50 ($C8/$CA) top, Bank 51 ($CC/$CE) bottom; hide stamp + 'T'
+        b17.emit(
+            0xA9, 0xC8, 0x85, 0x38, 0xA9, 0xCA, 0x85, 0x3E,
+            0xA9, 0xCC, 0x85, 0x39, 0xA9, 0xCE, 0x85, 0x3F,
+            0xA2, 0x00, 0xA9, 0xFE,
+        )
+        b17.label('vanilla_y_loop')
+        b17.emit(0x9D, 0x04, 0x07, 0xE8, 0xE8, 0xE8, 0xE8, 0xE0, 0x30)
+        b17.branch(0xD0, 'vanilla_y_loop')
+        b17.emit(0xA9, 12)                      # cursor X = 12 (Vanilla)
+        b17.abs_ref(0x20, 'SetCursorX')
+        b17.emit(0xA9, 0x60, 0xA2, 0x11)        # higher blip pitch
+        b17.abs_ref(0x20, 'PlayBlip')
+        b17.abs_ref(0x4C, 'TitleSelectorLoop')
+
+        b17.label('confirm')
+        b17.emit(0x60)                          # RTS to $F62C (restores R6=16)
+
+        b17.label('SetCursorX')
+        b17.emit(
+            0x8D, (cursor_oam_base + 3) & 0xFF, (cursor_oam_base + 3) >> 8,
+            0x8D, (cursor_oam_base + 11) & 0xFF, (cursor_oam_base + 11) >> 8,
+            0x18, 0x69, 0x08,
+            0x8D, (cursor_oam_base + 7) & 0xFF, (cursor_oam_base + 7) >> 8,
+            0x8D, (cursor_oam_base + 15) & 0xFF, (cursor_oam_base + 15) >> 8,
+            0x60,
+        )
+
+        b17.label('PlayBlip')
+        b17.emit(
+            0x8D, 0x02, 0x40,                   # timer lo = A
+            0x8E, 0x03, 0x40,                   # length/hi = X
+            0xAD, 0xF6, 0x03, 0x09, 0x01, 0x8D, 0xF6, 0x03, 0x8D, 0x15, 0x40,
+            0xA9, 0x86, 0x8D, 0x00, 0x40,       # 50% duty, short envelope
+            0xA9, 0x00, 0x8D, 0x01, 0x40,
+            0x60,
+        )
+
+        b17.label('StampYTable')
+        b17.emit(0x26, 0x26, 0x26, 0x2E, 0x2E, 0x2E, 0x34, 0x34, 0x3C, 0x3C, 0x9F, 0x9F)
+        b17.label('FullTitleOam')
+        b17.emit(*full_title_oam)
+
+        # CopyVanillaB14Desc: A = sprite descriptor index (0..23). Copies 16B from relocated vanilla
+        # descriptor table into WRAM $7FD8..$7FE7 and sets $14/$15 = $7FD8.
+        b17.label('CopyVanillaB14Desc')
+        b17.emit(0x0A, 0xAA)                    # ASL A; TAX
+        b17.abs_ref(0xBD, 'VanillaB14Ptrs')     # LDA VanillaB14Ptrs,X
+        b17.emit(0x85, 0x14)
+        b17.abs_ref(0xBD, 'VanillaB14PtrsPlus1')
+        b17.emit(0x85, 0x15, 0xA0, 0x0F)        # STA $15; LDY #$0F
+        b17.label('cv14_loop')
+        b17.emit(0xB1, 0x14, 0x99, 0xD8, 0x7F, 0x88)
+        b17.branch(0x10, 'cv14_loop')
+        b17.emit(0xA9, 0xD8, 0x85, 0x14, 0xA9, 0x7F, 0x85, 0x15, 0x60)
+
+        b17.label('VanillaB14Ptrs')
+        b17_ptr_pos = len(b17.buf)
+        b17.emit(*([0] * 48))
+        b17.labels['VanillaB14PtrsPlus1'] = b17.labels['VanillaB14Ptrs'] + 1
+        b17.label('VanillaB14Descs')
+        van_descs_addr = b17.labels['VanillaB14Descs']
+        b17.emit(*waldo[HEADER_SIZE + 0x1CBD2:HEADER_SIZE + 0x1CD52])
+        for i in range(24):
+            orig_p = waldo[HEADER_SIZE + 0x1CBA2 + i * 2] | (waldo[HEADER_SIZE + 0x1CBA2 + i * 2 + 1] << 8)
+            rel_p = van_descs_addr + (orig_p - 0x8BD2)
+            b17.buf[b17_ptr_pos + i * 2] = rel_p & 0xFF
+            b17.buf[b17_ptr_pos + i * 2 + 1] = rel_p >> 8
+
+        b17_bytes = b17.finish()
+        assert len(b17_bytes) <= 0x930, f'Bank 17 code too large (overlaps $C930): {len(b17_bytes)}'
+        prg_256[0x22000:0x22000 + len(b17_bytes)] = b17_bytes
+        # Mirror NMI DMC check ($C930) in Bank 17 so NMIs while R6=17 on the title screen are safe.
+        prg_256[0x22930:0x22930 + len(nmi_dmc_check)] = nmi_dmc_check
+
+        # Fixed Bank 31 ($F603..$F692, $F9A4..$F9C3): trampolines + MapChrA + NmiChrWrite
+        loop_addr = b17.labels['TitleSelectorLoop']
+        cv14_addr = b17.labels['CopyVanillaB14Desc']
+        # Keep $F603 (TitleSelectorInit) and $F61F (TitleSelectorLoop) at fixed addresses,
+        # wrapping R6 bank switches with SEI/CLI so scanline IRQs ($E489) cannot clobber $8000.
+        r6_16_addr = 0xF603 + 28 + 15  # $F62E: SEI; R6=16; CLI; RTS inside TitleSelectorLoop tail
+        tramp_17 = bytes([
+            0x78, 0xA9, 0x46, 0x8D, 0x00, 0x80, 0xA9, 0x11, 0x8D, 0x01, 0x80, 0x58,  # $F603: SEI; R6=17; CLI (12B)
+            0x20, 0x00, 0xC0,                                                        # JSR $C000 (3B)
+            0x20, r6_16_addr & 0xFF, r6_16_addr >> 8,                                # JSR r6_16 (3B)
+            0xA2, 0x03, 0xA9, 0xA3, 0x60,                                            # LDX #$03; LDA #$A3; RTS (5B)
+            0xEA, 0xEA, 0xEA, 0xEA, 0xEA,                                            # pad to $F61F (5B)
+            0x78, 0xA9, 0x46, 0x8D, 0x00, 0x80, 0xA9, 0x11, 0x8D, 0x01, 0x80, 0x58,  # $F61F: SEI; R6=17; CLI (12B)
+            0x20, loop_addr & 0xFF, loop_addr >> 8,                                  # JSR TitleSelectorLoop (3B)
+            0x78, 0xA9, 0x46, 0x8D, 0x00, 0x80, 0xA9, 0x10, 0x8D, 0x01, 0x80, 0x58,  # $F62E: SEI; R6=16; CLI (12B)
+            0x60,                                                                    # RTS (1B)
+        ])
+        assert len(tramp_17) == 56
+        # $F603..$F636: tramp_17 (52B); $F637..$F64E: NmiRemapChr (24B)
+        # $F9A4..$F9C8: MapChrA (37B) — reads VanillaChr1kBaseTbl at $CCD2 in Bank 16
+        # $F65B..$F66F: CopyVanillaB14Tramp (21B)
+        map_chr_addr = 0xF9A4
+        nmi_remap_addr = 0xF603 + len(tramp_17)
+        nmi_remap = Asm6502(nmi_remap_addr)
+        nmi_remap.emit(0xAE, 0xF5, 0x03)
+        nmi_remap.branch(0xF0, 'nr_done')
+        nmi_remap.emit(0xA2, 0x0B)
+        nmi_remap.label('nr_loop')
+        nmi_remap.emit(0xB5, 0x38, 0x20, map_chr_addr & 0xFF, map_chr_addr >> 8, 0x95, 0x38, 0xCA)
+        nmi_remap.branch(0x10, 'nr_loop')
+        nmi_remap.label('nr_done')
+        nmi_remap.emit(0xA0, 0x40, 0x8C, 0x00, 0x80, 0x60)
+        nmi_remap_bytes = nmi_remap.finish()
+        assert len(tramp_17) + len(nmi_remap_bytes) <= 0x51, f'F603 overflow: {len(tramp_17) + len(nmi_remap_bytes)}'
+        put(prg_256, 0x3F603, tramp_17 + nmi_remap_bytes,
+            expected=waldo[0x1F603 + HEADER_SIZE : 0x1F603 + HEADER_SIZE + len(tramp_17) + len(nmi_remap_bytes)])
+        put(
+            prg_256,
+            0x3E24C,
+            bytes([0x20, nmi_remap_addr & 0xFF, nmi_remap_addr >> 8])
+            + bytes.fromhex('a5 38 8d 01 80 c8 8c 00 80 a5 3e 8d 01 80 ea ea'),
+            expected=bytes.fromhex('a0 40 8c 00 80 a5 38 8d 01 80 c8 8c 00 80 a5 3e 8d 01 80'),
+        )
+
+        # $F9A4: MapChrA — remaps 1KB CHR bank A (0..127) to Vanilla twin if $03F5 != 0. Preserves X & Y.
+        mca = Asm6502(0xF9A4)
+        mca.emit(0xC9, 0x80)
+        mca.branch(0xB0, 'mca_done')
+        mca.emit(0x8E, 0xE1, 0x03, 0xAE, 0xF5, 0x03)
+        mca.branch(0xF0, 'mca_done_x')
+        mca.emit(0x85, 0x47, 0x4A, 0x4A, 0xAA, 0xBD, 0xD2, 0xCC)
+        mca.branch(0xF0, 'mca_restore')
+        mca.emit(0x45, 0x47, 0x29, 0xFC, 0x45, 0x47)
+        mca.label('mca_done_x')
+        mca.emit(0xAE, 0xE1, 0x03)
+        mca.label('mca_done')
+        mca.emit(0x60)
+        mca.label('mca_restore')
+        mca.emit(0xA5, 0x47, 0xAE, 0xE1, 0x03, 0x60)
+        map_chr_a = mca.finish()
+        assert len(map_chr_a) <= 0x33, f'map_chr_a too large: {len(map_chr_a)}'
+        put(prg_256, 0x3F9A4, map_chr_a, expected=waldo[0x1F9A4 + HEADER_SIZE : 0x1F9A4 + HEADER_SIZE + len(map_chr_a)])
+
+        b14_tramp_21 = bytes([
+            0xA9, 0x11, 0x8D, 0x01, 0x80,                                # R6=17 (5B, $8000=$46 set by caller)
+            0xA5, 0x47, 0x20, cv14_addr & 0xFF, cv14_addr >> 8,          # LDA $47; JSR cv14 (5B)
+            0xA9, 0x46, 0x8D, 0x00, 0x80, 0xA9, 0x10, 0x8D, 0x01, 0x80,  # R6=16 (10B)
+            0x60,                                                        # RTS (1B)
+        ])
+        put(prg_256, 0x3F65B, b14_tramp_21, expected=waldo[0x1F65B + HEADER_SIZE : 0x1F65B + HEADER_SIZE + len(b14_tramp_21)])
+
+        # Leave IRQ ($E489..$E4AC) 100% untouched vanilla so HBlank split timing never glitches!
+
+        # $E538..$E594: SetR0R1 ($E538) + SetR2R5 ($E557) remapped via MapChrA ($F9A4)
+        set_r0r1 = bytes.fromhex(
+            '20 a4 f9 a0 40 8c 04 02 8c 00 80 8d 03 02 8d 01 80 '
+            'c8 8c 04 02 8c 00 80 18 69 02 4c 80 e5'
+        )  # 30 bytes ($E538..$E555)
+        set_r2r5 = bytes.fromhex(
+            'a0 42 20 a4 f9 8c 04 02 8c 00 80 8d 03 02 8d 01 80 '
+            'c8 18 69 01 c0 45 d0 e9 a9 19 20 a4 f9 8c 04 02 8c 00 80 4c 80 e5'
+        )  # 38 bytes ($E557..$E57C)
+        set_tail = bytes.fromhex('8d 03 02 8d 01 80 60')  # $E580 (7 bytes)
+        put(prg_256, 0x3E538, set_r0r1 + b'\xea' + set_r2r5 + b'\xea\xea\xea' + set_tail,
+            expected=waldo[0x1E538 + HEADER_SIZE : 0x1E538 + HEADER_SIZE + 31 + 38 + 3 + 7])
+
+        # Bank 16 ($CCB2..$CCD1): SetR7 + VanillaPrgTbl; ($CCD2..$CCF1): VanillaChr1kBaseTbl
+        b16_r7 = Asm6502(0xCCB2)
+        b16_r7.label('SetR7')
+        b16_r7.emit(0xAE, 0xF5, 0x03)
+        b16_r7.branch(0xF0, 'r7_native')
+        b16_r7.emit(0xAA)
+        b16_r7.abs_ref(0xBD, 'VanillaPrgTbl')
+        b16_r7.label('r7_native')
+        b16_r7.emit(0x8D, 0x03, 0x02, 0x8D, 0x01, 0x80, 0x60)
+        b16_r7.label('VanillaPrgTbl')
+        b16_r7.emit(18, 1, 19, 20, 21, 22, 23, 24, 25, 9, 10, 11, 12, 13)
+        b16_r7_bytes = b16_r7.finish()
+        assert len(b16_r7_bytes) <= 0x20, f'b16_r7 too large: {len(b16_r7_bytes)}'
+        prg_256[0x20CB2:0x20CB2 + len(b16_r7_bytes)] = b16_r7_bytes
+
+        chr_tbl = [0] * 32
+        chr_tbl[2] = 32 * 4
+        chr_tbl[13] = 50 * 4
+        chr_tbl[14] = 51 * 4
+        for b4 in range(15, 30):
+            chr_tbl[b4] = (33 + (b4 - 15)) * 4
+        chr_tbl[30] = 52 * 4
+        chr_tbl[31] = 53 * 4
+        prg_256[0x20CD2:0x20CD2 + 32] = bytes(chr_tbl)
+
+        # Mirror SetR7 + VanillaChr1kBaseTbl ($CCB2..$CCF1) into Bank 17 so callers
+        # (e.g., NMI MapChrA or $E1B4 SetR7) still work when R6 == 17 during TitleSelector.
+        # Bank 17's SetR7 jumps to $CCF2, sets R7, and switches R6 back to 16 before RTS.
+        b17_r7_tramp = bytes([0x4C, 0xF2, 0xCC])
+        b17_r7 = Asm6502(0xCCF2)
+        b17_r7.label('SetR7_B17')
+        b17_r7.emit(0xAE, 0xF5, 0x03)
+        b17_r7.branch(0xF0, 'r7_b17_native')
+        b17_r7.emit(0xAA)
+        b17_r7.abs_ref(0xBD, 'VanillaPrgTbl_B17')
+        b17_r7.label('r7_b17_native')
+        b17_r7.emit(0x8D, 0x03, 0x02, 0x8D, 0x01, 0x80)
+        b17_r7.emit(0xA9, 0x46, 0x8D, 0x00, 0x80, 0xA9, 0x10, 0x8D, 0x01, 0x80, 0x60)
+        b17_r7.label('VanillaPrgTbl_B17')
+        b17_r7.emit(18, 1, 19, 20, 21, 22, 23, 24, 25, 9, 10, 11, 12, 13)
+        b17_r7_bytes = b17_r7.finish()
+        assert all(b == 0xFF for b in prg_256[0x22CB2:0x22CF2 + len(b17_r7_bytes)]), 'Bank 17 $CCB2+ unexpectedly occupied'
+        prg_256[0x22CB2:0x22CB2 + len(b17_r7_tramp)] = b17_r7_tramp
+        prg_256[0x22CD2:0x22CD2 + 32] = bytes(chr_tbl)
+        prg_256[0x22CF2:0x22CF2 + len(b17_r7_bytes)] = b17_r7_bytes
+        set_r7_addr = b16_r7.labels['SetR7']
+        for r7_off in (0x3E0E3, 0x3E0FC, 0x3E1EF, 0x3E202, 0x3E215, 0x3E228, 0x3EE3D):
+            put(
+                prg_256,
+                r7_off,
+                bytes([0x20, set_r7_addr & 0xFF, set_r7_addr >> 8, 0xEA, 0xEA, 0xEA]),
+                expected=bytes.fromhex('8d 03 02 8d 01 80'),
+            )
+
+        b16_pal = Asm6502(0xDF76)
+        b16_pal.label('LoadPalPtr')
+        b16_pal.emit(0xAD, 0xF5, 0x03)
+        b16_pal.branch(0xF0, 'pal_native')
+        b16_pal.emit(0xE0, 0x06)
+        b16_pal.branch(0xF0, 'pal_map')
+        b16_pal.emit(0xE0, 0x0A)
+        b16_pal.branch(0xF0, 'pal_sub')
+        b16_pal.label('pal_native')
+        b16_pal.emit(0xBD, 0xEF, 0xE8, 0x85, 0x14, 0xBD, 0xF0, 0xE8, 0x85, 0x15, 0x60)
+        b16_pal.label('pal_map')
+        b16_pal.lda_lo('VanillaMapPal'); b16_pal.emit(0x85, 0x14)
+        b16_pal.lda_hi('VanillaMapPal'); b16_pal.emit(0x85, 0x15, 0x60)
+        b16_pal.label('pal_sub')
+        b16_pal.lda_lo('VanillaSubwayPal'); b16_pal.emit(0x85, 0x14)
+        b16_pal.lda_hi('VanillaSubwayPal'); b16_pal.emit(0x85, 0x15, 0x60)
+        b16_pal.label('VanillaMapPal')
+        b16_pal.emit(*waldo[HEADER_SIZE + 0x1E800:HEADER_SIZE + 0x1E810])
+        b16_pal.label('VanillaSubwayPal')
+        b16_pal.emit(*waldo[HEADER_SIZE + 0x1E820:HEADER_SIZE + 0x1E830])
+        b16_pal_bytes = b16_pal.finish()
+        assert len(b16_pal_bytes) <= 0x4A, f'b16_pal too large: {len(b16_pal_bytes)}'
+        prg_256[0x21F76:0x21F76 + len(b16_pal_bytes)] = b16_pal_bytes
+        lpp_addr = b16_pal.labels['LoadPalPtr']
+        put(
+            prg_256,
+            0x3E5D2,
+            bytes([0x20, lpp_addr & 0xFF, lpp_addr >> 8] + [0xEA] * 7),
+            expected=bytes.fromhex('bd ef e8 85 14 bd f0 e8 85 15'),
+        )
+
+        put(prg_256, 0x06021, bytes.fromhex('20 03 f6 ea'), expected=bytes.fromhex('a2 03 a9 a3'))
+        put(
+            prg_256,
+            0x06032,
+            bytes.fromhex('20 1f f6 ea ea ea ea ea ea ea'),
+            expected=bytes.fromhex('a5 06 05 07 d0 04 a5 02 d0 f6'),
+        )
+        put(prg_256, 0x0603C, bytes.fromhex('20 e9 c9'), expected=bytes.fromhex('20 ed e5'))
 
         # Bank 16 ($CD00 at 0x20D00): Search-level crowd fleeing from Barba
         crowd_code, crowd_labels = make_crowd_flee_code(0xCD00)
-        assert len(crowd_code) <= 0x1260, f'crowd_code too large: {len(crowd_code)}'
+        assert len(crowd_code) <= 0x1276, f'crowd_code too large: {len(crowd_code)}'
         prg_256[0x20D00:0x20D00 + len(crowd_code)] = crowd_code
 
         def jsr(name: str) -> bytes:
@@ -3510,7 +4046,7 @@ def build(count_build: bool = True, build_number: int | None = None, write_play:
         write_bps(
             WALDO_PATH,
             PLAY_PATH,
-            out_bps_path=ROOT / 'play/bps/waldo.bps',
+            out_bps_path=BPS_PATH,
             metadata="Where's Barba? | Barba Edition",
         )
         print(f'Wrote {OUT_PATH} and {PLAY_PATH} ({len(out)} bytes)')

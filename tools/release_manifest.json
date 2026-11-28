@@ -1,0 +1,172 @@
+{
+  "repo": "jbax-and-his-ai-pals/019-z2-barba",
+  "tag": "v2.0.0",
+  "version": "v2.0.0",
+  "build_number": 825,
+  "published": false,
+  "collections": [
+    {
+      "id": "all",
+      "title": "Complete BPS Collection",
+      "description": "Zelda II: Barba Edition + all standalone subgames (Flagship + MMC3 Compat).",
+      "filename": "barba-bps-v2.0.0-b825.zip",
+      "size_bytes": 1370036,
+      "file_count": 11,
+      "files": [
+        "barba-b825.bps",
+        "dk-b27.bps",
+        "duck-b37.bps",
+        "feud-b79.bps",
+        "waldo-b41.bps",
+        "wheel-b18.bps",
+        "dk-compat-b27.bps",
+        "duck-compat-b37.bps",
+        "feud-compat-b79.bps",
+        "waldo-compat-b41.bps",
+        "wheel-compat-b18.bps"
+      ]
+    },
+    {
+      "id": "subgames",
+      "title": "Standalone Subgames (Flagship)",
+      "description": "All 5 standalone Barba subgame .bps patches (Mapper 176).",
+      "filename": "barba-subgames-bps-v2.0.0-b825.zip",
+      "size_bytes": 440268,
+      "file_count": 5,
+      "files": [
+        "dk-b27.bps",
+        "duck-b37.bps",
+        "feud-b79.bps",
+        "waldo-b41.bps",
+        "wheel-b18.bps"
+      ]
+    },
+    {
+      "id": "compat",
+      "title": "Standalone Subgames (MMC3 Compat)",
+      "description": "Universal Mapper 4 / MMC3 compatibility .bps patches for standalone subgames.",
+      "filename": "barba-compat-bps-v2.0.0-b825.zip",
+      "size_bytes": 365280,
+      "file_count": 5,
+      "files": [
+        "dk-compat-b27.bps",
+        "duck-compat-b37.bps",
+        "feud-compat-b79.bps",
+        "waldo-compat-b41.bps",
+        "wheel-compat-b18.bps"
+      ]
+    }
+  ],
+  "patches": [
+    {
+      "id": "barba",
+      "game": "barba",
+      "tier": "main",
+      "title": "Zelda II: Barba Edition (Combined)",
+      "filename": "barba-b825.bps",
+      "size_bytes": 6182497,
+      "mapper": "NES 2.0 Mapper 176 (FK23C)",
+      "base_rom": "Zelda II: The Adventure of Link (USA PRG0)"
+    },
+    {
+      "id": "dk",
+      "game": "dk",
+      "tier": "subgames",
+      "title": "Donkey Barba",
+      "filename": "dk-b27.bps",
+      "size_bytes": 294269,
+      "mapper": "NES 2.0 Mapper 176",
+      "base_rom": "Donkey Kong (USA / Rev A)"
+    },
+    {
+      "id": "duck",
+      "game": "duck",
+      "tier": "subgames",
+      "title": "Barba's Hunt",
+      "filename": "duck-b37.bps",
+      "size_bytes": 327216,
+      "mapper": "NES 2.0 Mapper 176",
+      "base_rom": "Duck Hunt (World)"
+    },
+    {
+      "id": "feud",
+      "game": "feud",
+      "tier": "subgames",
+      "title": "Barba's Feud",
+      "filename": "feud-b79.bps",
+      "size_bytes": 773310,
+      "mapper": "NES 2.0 Mapper 176",
+      "base_rom": "Family Feud (USA)"
+    },
+    {
+      "id": "waldo",
+      "game": "waldo",
+      "tier": "subgames",
+      "title": "Where's Barba?",
+      "filename": "waldo-b41.bps",
+      "size_bytes": 411378,
+      "mapper": "NES 2.0 Mapper 176",
+      "base_rom": "Where's Waldo? (USA)"
+    },
+    {
+      "id": "wheel",
+      "game": "wheel",
+      "tier": "subgames",
+      "title": "Barba's Wheel",
+      "filename": "wheel-b18.bps",
+      "size_bytes": 1041214,
+      "mapper": "NES 2.0 Mapper 176",
+      "base_rom": "Wheel of Fortune (USA)"
+    },
+    {
+      "id": "dk-compat",
+      "game": "dk",
+      "tier": "compat",
+      "title": "Donkey Barba (MMC3 Compat)",
+      "filename": "dk-compat-b27.bps",
+      "size_bytes": 294273,
+      "mapper": "Mapper 4 (MMC3)",
+      "base_rom": "Donkey Kong (USA / Rev A)"
+    },
+    {
+      "id": "duck-compat",
+      "game": "duck",
+      "tier": "compat",
+      "title": "Barba's Hunt (MMC3 Compat)",
+      "filename": "duck-compat-b37.bps",
+      "size_bytes": 327231,
+      "mapper": "Mapper 4 (MMC3)",
+      "base_rom": "Duck Hunt (World)"
+    },
+    {
+      "id": "feud-compat",
+      "game": "feud",
+      "tier": "compat",
+      "title": "Barba's Feud (MMC3 Compat)",
+      "filename": "feud-compat-b79.bps",
+      "size_bytes": 507351,
+      "mapper": "Mapper 4 (MMC3)",
+      "base_rom": "Family Feud (USA)"
+    },
+    {
+      "id": "waldo-compat",
+      "game": "waldo",
+      "tier": "compat",
+      "title": "Where's Barba? (MMC3 Compat)",
+      "filename": "waldo-compat-b41.bps",
+      "size_bytes": 411357,
+      "mapper": "Mapper 4 (MMC3)",
+      "base_rom": "Where's Waldo? (USA)"
+    },
+    {
+      "id": "wheel-compat",
+      "game": "wheel",
+      "tier": "compat",
+      "title": "Barba's Wheel (MMC3 Compat)",
+      "filename": "wheel-compat-b18.bps",
+      "size_bytes": 1041214,
+      "mapper": "NES 2.0 Mapper 176",
+      "base_rom": "Wheel of Fortune (USA)"
+    }
+  ]
+}

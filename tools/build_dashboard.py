@@ -28,6 +28,7 @@ if str(_TOOLS_DIR) not in sys.path:
 
 import capture_subgame_previews  # noqa: E402
 import fe_catalog  # noqa: E402
+import ow_tiles_dashboard  # noqa: E402
 import title_dashboard  # noqa: E402
 import z2_strings_dashboard  # noqa: E402
 
@@ -112,13 +113,15 @@ def render_workspace_tabs_html(flavor: str, games: list[dict[str, Any]] | None =
 
 
 def render_subgame_views_html(flavor: str, games: list[dict[str, Any]] | None = None) -> str:
-    return "\n".join(
+    views = [
         f'    <div id="view-sub-{g["id"]}" class="hidden"></div>'
         for g in subgame_tabs_for_flavor(flavor, games=games)
-    )
+    ]
+    return "\n".join(views)
 
 DEV_TABS_HTML = """\
       <button type="button" class="tab-btn is-local-only" data-tab="z2strings" title="Local only — not published on GitHub Pages">Z2 String Review<span class="tab-local-pill">Local</span></button>
+      <button type="button" class="tab-btn is-local-only" data-tab="owtiles" title="Local only — not published on GitHub Pages">Overworld Tiles Lab<span class="tab-local-pill">Local</span></button>
       <button type="button" class="tab-btn" data-tab="waldo">Where's Barba? Tile Tagger</button>
       <button type="button" class="tab-btn" data-tab="feud">Family Feud Cast</button>
       <button type="button" class="tab-btn" data-tab="duck">Barba's Hunt Tiles</button>"""
@@ -174,6 +177,8 @@ LOCAL_SCRIPTS_HTML = """\
   <script src="local_state.js"></script>
   <script src="local_z2_strings_data.js"></script>
   <script src="z2_strings_ui.js"></script>
+  <script src="local_ow_tiles_data.js"></script>
+  <script src="ow_tiles_ui.js"></script>
   <script src="waldo_tagger.js"></script>
   <script src="feud_cast_data.js"></script>
   <script src="feud_cast_ui.js"></script>
@@ -320,12 +325,182 @@ def write_web_catalog(
     return written
 
 
+RELEASE_MANIFEST_PATH = _TOOLS_DIR / "release_manifest.json"
+DEFAULT_RELEASE_REPO = "jbax-and-his-ai-pals/019-z2-barba"
+
+
+def load_release_manifest(path: Path = RELEASE_MANIFEST_PATH) -> dict[str, Any]:
+    if path.is_file():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return data
+        except (OSError, json.JSONDecodeError):
+            pass
+    return {
+        "repo": DEFAULT_RELEASE_REPO,
+        "tag": "",
+        "published": False,
+        "collections": [],
+        "patches": [],
+    }
+
+
+def _fmt_bytes(size: int | None) -> str:
+    if not size:
+        return ""
+    if size >= 1024 * 1024:
+        return f"{size / (1024 * 1024):.2f} MB"
+    return f"{max(1, round(size / 1024))} KB"
+
+
+def _release_asset_url(repo: str, tag: str, filename: str) -> str:
+    return f"https://github.com/{repo}/releases/download/{tag}/{filename}"
+
+
+def render_release_sections(
+    manifest: dict[str, Any], is_local: bool
+) -> tuple[str, str, str]:
+    """Return (notice_html, downloads_html, local_note_html) for the Overview tab."""
+    repo = str(manifest.get("repo") or DEFAULT_RELEASE_REPO)
+    tag = str(manifest.get("tag") or "")
+    published = bool(manifest.get("published")) and bool(tag)
+    collections = manifest.get("collections") or []
+    patches = manifest.get("patches") or []
+
+    if published:
+        bnum = manifest.get("build_number")
+        btxt = f" (Build #{bnum})" if bnum is not None else ""
+        notice_html = (
+            '<div class="overview-notice" style="background:rgba(46, 204, 113, 0.10);'
+            'border-color:rgba(46, 204, 113, 0.42);">'
+            f'<strong style="color:#6ee7b7;">Current Release: <code>{html.escape(tag)}</code>{html.escape(btxt)}</strong> '
+            "&mdash; Download individual <code>.bps</code> patches or a collection <code>.zip</code> below, "
+            "and apply to a clean headered USA ROM using a BPS patcher (e.g. Flips or RomPatcher.js).</div>"
+        )
+    else:
+        staged_hint = (
+            f" Staged target tag: <code>{html.escape(tag)}</code>."
+            if tag
+            else ""
+        )
+        notice_html = (
+            '<div class="overview-notice">'
+            "<strong>Latest Barba 2.0 release not yet built/uploaded:</strong> "
+            "The <code>v1.05</code> GitHub Release is the earlier MMC1-only build. The current Barba 2.0 development build "
+            "(NES 2.0 Mapper 176 combined ROM + 5 active subgames) hasn&apos;t been packaged into a GitHub Release yet &mdash; "
+            f"upload the staged files below to GitHub Releases or build locally from source.{staged_hint}"
+            "</div>"
+        )
+
+    parts: list[str] = []
+    if collections:
+        parts.append('<div class="release-subhead">Collection Zips</div>')
+        parts.append('<div class="release-zips-grid">')
+        for col in collections:
+            fname = str(col.get("filename") or "")
+            title = html.escape(str(col.get("title") or fname))
+            desc = html.escape(str(col.get("description") or ""))
+            fcount = col.get("file_count")
+            size_txt = _fmt_bytes(col.get("size_bytes"))
+            meta_bits = [f"<code>{html.escape(fname)}</code>"]
+            if fcount:
+                meta_bits.append(f"{int(fcount)} patches")
+            if size_txt:
+                meta_bits.append(size_txt)
+            if published and fname:
+                url = html.escape(_release_asset_url(repo, tag, fname))
+                btn = f'<a class="btn-link primary" href="{url}" style="align-self:flex-start;">Download .zip &darr;</a>'
+            else:
+                btn = '<span class="btn-link is-pending" aria-disabled="true" title="Upload release assets to enable direct download" style="align-self:flex-start;">Pending Upload</span>'
+            parts.append(
+                '<div class="release-zip-card">'
+                f"<div><h3>{title}</h3><p>{desc}</p></div>"
+                f'<div class="release-meta">{" &middot; ".join(meta_bits)}</div>'
+                f"{btn}"
+                "</div>"
+            )
+        parts.append("</div>")
+
+    if patches:
+        tier_labels = [
+            ("main", "Mainline Combined ROM (.bps)"),
+            ("subgames", "Standalone Subgames &mdash; Flagship (.bps)"),
+            ("compat", "Standalone Subgames &mdash; MMC3 Compat (.bps)"),
+        ]
+        parts.append('<div class="release-subhead">Individual ROM Patches (.bps)</div>')
+        parts.append('<div class="release-bps-groups">')
+        for tier_key, tier_title in tier_labels:
+            group = [p for p in patches if p.get("tier") == tier_key]
+            if not group:
+                continue
+            parts.append(f'<div><div class="release-bps-group-title">{tier_title}</div>')
+            parts.append('<div class="release-bps-list">')
+            for p in group:
+                fname = str(p.get("filename") or "")
+                title = html.escape(str(p.get("title") or fname))
+                mapper = html.escape(str(p.get("mapper") or ""))
+                base_rom = html.escape(str(p.get("base_rom") or ""))
+                size_txt = _fmt_bytes(p.get("size_bytes"))
+                sub_parts = [f"<code>{html.escape(fname)}</code>"]
+                if size_txt:
+                    sub_parts.append(size_txt)
+                if mapper:
+                    sub_parts.append(mapper)
+                base_line = f"<span>Base: {base_rom}</span>" if base_rom else ""
+                if published and fname:
+                    url = html.escape(_release_asset_url(repo, tag, fname))
+                    btn = f'<a class="btn-link" href="{url}" style="white-space:nowrap;">.bps &darr;</a>'
+                else:
+                    btn = '<span class="btn-link is-pending" aria-disabled="true" title="Upload release assets to enable direct download" style="white-space:nowrap;">Pending</span>'
+                parts.append(
+                    '<div class="release-bps-row">'
+                    '<div class="release-bps-info">'
+                    f"<strong>{title}</strong>"
+                    f'<span>{" &middot; ".join(sub_parts)}</span>'
+                    f"{base_line}"
+                    "</div>"
+                    f"{btn}"
+                    "</div>"
+                )
+            parts.append("</div></div>")
+        parts.append("</div>")
+
+    downloads_html = "\n".join(parts)
+
+    if is_local:
+        tag_hint = html.escape(tag or "v2.0.0")
+        local_note_html = (
+            '<div class="local-only-banner" id="overview-local-release" style="flex-direction:column;align-items:flex-start;gap:4px;">'
+            '<span><strong>Local Release Packaging:</strong> <span class="local-sub">'
+            '1) Stage individual <code>.bps</code> + collection <code>.zip</code>s: '
+            f'<code>python tools/package_bps.py --build-number &lt;N&gt; --version {tag_hint} --stage-release --write-manifest</code>'
+            '</span></span>'
+            '<span class="local-sub">'
+            f'2) Upload all files in <code>dist/release-{tag_hint}/</code> to GitHub Release <code>{tag_hint}</code> '
+            f'(e.g. <code>gh release create {tag_hint} dist/release-{tag_hint}/* --title "Barba Edition {tag_hint}"</code>), '
+            'then run <code>python tools/package_bps.py --publish</code> &amp; <code>python tools/build_dashboard.py</code>.'
+            '</span></div>'
+        )
+    else:
+        local_note_html = ""
+
+    return notice_html, downloads_html, local_note_html
+
+
 def render_flavor(
-    template: str, flavor: str, subgames: list[dict[str, Any]] | None = None
+    template: str,
+    flavor: str,
+    subgames: list[dict[str, Any]] | None = None,
+    release_manifest: dict[str, Any] | None = None,
 ) -> str:
     if flavor not in ("public", "local"):
         raise ValueError(f"Unknown flavor: {flavor}")
     is_local = flavor == "local"
+    manifest = load_release_manifest() if release_manifest is None else release_manifest
+    release_notice, release_downloads, overview_local_note = render_release_sections(
+        manifest, is_local
+    )
 
     replacements = {
         "{{FLAVOR}}": flavor,
@@ -350,6 +525,9 @@ def render_flavor(
             else "Visual showcase of graphics, gameplay features, audio, title screens, and subgame changes — Vanilla Z2 vs. Barba Edition"
         ),
         "{{LOCAL_STATE_BAR}}": LOCAL_STATE_BAR_HTML if is_local else "",
+        "{{RELEASE_NOTICE}}": release_notice,
+        "{{RELEASE_DOWNLOADS}}": release_downloads,
+        "{{OVERVIEW_LOCAL_NOTE}}": overview_local_note,
         "{{FE_TAB_LABEL}}": "Barba Enterprise (Flags &amp; Seed)" if is_local else "Zelda 2",
         "{{TITLES_TAB_LABEL}}": "Title Screen Review" if is_local else "All Title Screens",
         "{{WORKSPACE_TABS}}": render_workspace_tabs_html(flavor, games=subgames),
@@ -402,6 +580,7 @@ def build_flavors(
         written.extend(title_dashboard.write_title_review_data_js(out_dir=target_dir, flavor=flavor))
         if flavor in ("local", "all"):
             written.append(z2_strings_dashboard.write_z2_strings_data_js(out_dir=target_dir))
+            written.append(ow_tiles_dashboard.write_ow_tiles_data_js(out_dir=target_dir))
     template = TEMPLATE_PATH.read_text(encoding="utf-8")
 
     if flavor in ("public", "all"):

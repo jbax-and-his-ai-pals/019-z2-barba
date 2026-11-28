@@ -21,34 +21,34 @@ local function finish()
     emu.stop(errors == 0 and 0 or 1)
 end
 
--- Cases: smb twice (to verify re-entry changes RNG), plus waldo inside Barba's Arcade ($1C).
+-- Cases: dk twice (to verify re-entry changes RNG), plus waldo inside Barba's Arcade ($1C).
 local cases = {
-    {id='smb_1',    town=0, room=0x1C, page=1, x=0x70, nmi=0x7800},
-    {id='smb_2',    town=0, room=0x1C, page=1, x=0x70, nmi=0x7800, reuse=true},
-    {id='waldo',    town=0, room=0x1C, page=0, x=0x50, nmi=0xF603},
+    {id='dk_1',     town=0, room=0x1C, page=1, x=0x20, nmi=0x7840},
+    {id='dk_2',     town=0, room=0x1C, page=1, x=0x20, nmi=0x7840, reuse=true},
+    {id='waldo',    town=0, room=0x1C, page=0, x=0x50, nmi=0xF8FB},
 }
 
 local frame = 0
 local idx = 1
 local phase = 'boot'
 local phaseStart = 0
-local smbSeed1 = nil
-local smbBoot1 = nil
-local smbBoot2 = nil
+local dkSeed1 = nil
+local dkBoot1 = nil
+local dkBoot2 = nil
 
--- Capture subgame RNG immediately after boot RNG seeder returns ($803C SMB / $E09D Waldo)
-local smbBootSeed = nil
+-- Capture subgame RNG immediately after boot RNG seeder returns ($C7C5 DK / $E09D Waldo)
+local dkBootSeed = nil
 local waldoBootSeed = nil
 
 emu.addMemoryCallback(function()
     if phase == 'enter' or phase == 'guest' then
         local c = cases[idx]
         local nmi = read(0xFFFA) + read(0xFFFB) * 256
-        if c and (c.id == 'smb_1' or c.id == 'smb_2') and nmi == c.nmi and not smbBootSeed then
-            smbBootSeed = {read(0x07A7), read(0x07A8), read(0x07A9), read(0x07AA), read(0x07AB), read(0x07AC), read(0x07AD)}
+        if c and (c.id == 'dk_1' or c.id == 'dk_2') and nmi == c.nmi and not dkBootSeed then
+            dkBootSeed = {read(0x18), read(0x19), read(0x1A), read(0x1B), read(0x1C), read(0x1D), read(0x1E), read(0x1F)}
         end
     end
-end, emu.callbackType.exec, 0x803C)
+end, emu.callbackType.exec, 0xC7C5)
 
 emu.addMemoryCallback(function()
     if phase == 'enter' or phase == 'guest' then
@@ -61,6 +61,8 @@ emu.addMemoryCallback(function()
 end, emu.callbackType.exec, 0xE09D)
 
 local function warpToArcade()
+    write(0x6806, 0xFF)
+    write(0x6807, 0x03)
     write(0x707, 1)
     write(0x706, 0)
     write(0x056B, 0)
@@ -82,6 +84,8 @@ emu.addEventCallback(function()
     elseif phase == 'enter_arcade' then
         local ef = frame - phaseStart
         emu.setInput({up = (ef >= 10 and ef < 14)}, 0)
+    elseif phase == 'step_off' then
+        emu.setInput({left = true}, 0)
     elseif phase == 'walk' then
         local c = cases[idx]
         local curPage = read(0x3B)
@@ -95,13 +99,12 @@ emu.addEventCallback(function()
         end
     elseif phase == 'enter' then
         local ef = frame - phaseStart
-        emu.setInput({up = (ef >= 10 and ef < 15), b = (ef >= 250 and ef < 254)}, 0)
+        emu.setInput({up = (ef >= 10 and ef < 16), b = (ef >= 240 and ef < 246)}, 0)
     elseif phase == 'guest' then
         local gf = frame - phaseStart
         emu.setInput({start = (gf >= 80), select = (gf >= 80)}, 0)
     elseif phase == 'return' then
-        local rf = frame - phaseStart
-        emu.setInput({b = (rf >= 250 and rf < 254)}, 0)
+        emu.setInput({}, 0)
     else
         emu.setInput({}, 0)
     end
@@ -131,11 +134,16 @@ emu.addEventCallback(function()
             check(false, 'Timed out entering Arcade')
             finish()
         end
+    elseif phase == 'step_off' then
+        if read(0x4D) <= 0x14 then
+            phase = 'walk'
+            phaseStart = frame
+        end
     elseif phase == 'walk' then
         for s = 0, 5 do write(0xB6 + s, 0) end
         if read(0x3B) == c.page and math.abs(read(0x4D) - c.x) <= 4 and read(0x29) == 0xB0 then
             write(0x70, 0)
-            smbBootSeed = nil
+            dkBootSeed = nil
             waldoBootSeed = nil
             phase = 'enter'
             phaseStart = frame
@@ -146,34 +154,34 @@ emu.addEventCallback(function()
     elseif phase == 'enter' then
         local ef = frame - phaseStart
         local nmi = read(0xFFFA) + read(0xFFFB) * 256
-        if ef > 250 and nmi == c.nmi and (smbBootSeed ~= nil or waldoBootSeed ~= nil) then
+        if ef > 250 and nmi == c.nmi and (dkBootSeed ~= nil or waldoBootSeed ~= nil) then
             -- Sample WRAM seed ($7FF0..$7FF7) and captured boot RNG
             local wseed = {}
             for i = 0, 7 do wseed[i + 1] = read(0x7FF0 + i) end
-            if c.id == 'smb_1' then
-                local r0, r1 = smbBootSeed[1], smbBootSeed[2]
+            if c.id == 'dk_1' then
+                local r0, r1 = dkBootSeed[1], dkBootSeed[2]
                 local any_diff = false
-                for i = 2, 7 do
-                    if smbBootSeed[i] ~= 0 then any_diff = true end
+                for i = 2, 8 do
+                    if dkBootSeed[i] ~= 0 then any_diff = true end
                 end
-                smbSeed1 = string.format('%02X%02X', wseed[1], wseed[2])
-                smbBoot1 = string.format('%02X%02X', r0, r1)
-                check(wseed[1] ~= 0, 'smb_1: host wrote non-zero seed to $7FF0 (' .. smbSeed1 .. ')')
-                check(r0 == wseed[1], string.format('smb_1: $07A7 seeded from $7FF0 ($%02X == $%02X)', r0, wseed[1]))
-                check(any_diff, 'smb_1: $07A8-$07AD seeded beyond hardcoded $A5/00')
-            elseif c.id == 'smb_2' then
-                local r0, r1 = smbBootSeed[1], smbBootSeed[2]
+                dkSeed1 = string.format('%02X%02X', wseed[1], wseed[2])
+                dkBoot1 = string.format('%02X%02X', r0, r1)
+                check(wseed[1] ~= 0, 'dk_1: host wrote non-zero seed to $7FF0 (' .. dkSeed1 .. ')')
+                check(r0 == wseed[1], string.format('dk_1: $18 seeded from $7FF0 ($%02X == $%02X)', r0, wseed[1]))
+                check(any_diff, 'dk_1: $19-$1F seeded from host')
+            elseif c.id == 'dk_2' then
+                local r0, r1 = dkBootSeed[1], dkBootSeed[2]
                 local seed2 = string.format('%02X%02X', wseed[1], wseed[2])
-                smbBoot2 = string.format('%02X%02X', r0, r1)
-                check(seed2 ~= smbSeed1, 'smb_2: WRAM seed changed on re-entry (' .. smbSeed1 .. ' -> ' .. seed2 .. ')')
-                check(smbBoot2 ~= smbBoot1, 'smb_2: guest RNG $07A7/$07A8 changed on re-entry (' .. smbBoot1 .. ' -> ' .. smbBoot2 .. ')')
+                dkBoot2 = string.format('%02X%02X', r0, r1)
+                check(seed2 ~= dkSeed1, 'dk_2: WRAM seed changed on re-entry (' .. dkSeed1 .. ' -> ' .. seed2 .. ')')
+                check(dkBoot2 ~= dkBoot1, 'dk_2: guest RNG $18/$19 changed on re-entry (' .. dkBoot1 .. ' -> ' .. dkBoot2 .. ')')
             elseif c.id == 'waldo' then
                 check(waldoBootSeed[1] == wseed[1] and waldoBootSeed[2] == wseed[2],
                     string.format('waldo: $0200/$0201 seeded from $7FF0/$7FF1 ($%02X%02X)', waldoBootSeed[1], waldoBootSeed[2]))
             end
             phase = 'guest'
             phaseStart = frame
-        elseif ef > 340 then
+        elseif ef > 380 then
             check(false, string.format('%s: timed out entering guest (nmi=$%04X)', c.id, nmi))
             finish()
         end
@@ -189,13 +197,13 @@ emu.addEventCallback(function()
         end
     elseif phase == 'return' then
         local rf = frame - phaseStart
-        if rf > 260 and read(0x74C) == 0 then
+        if rf > 80 and read(0x74C) == 0 and read(0xDE) == 0 and read(0x726) == 0 then
             idx = idx + 1
             if idx > #cases then
                 finish()
             else
-                -- Stay inside Barba's Arcade ($1C) and walk to the next booth
-                phase = 'walk'
+                -- Step off the door to clear PORTAL_DEBOUNCE before re-entering dk_2
+                phase = (cases[idx].reuse and 'step_off' or 'walk')
                 phaseStart = frame
             end
         elseif rf > 320 then

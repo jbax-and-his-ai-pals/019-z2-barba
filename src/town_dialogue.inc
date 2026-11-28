@@ -7,6 +7,10 @@
             .byte $F4
         .elseif .strat(text, character) = '.'
             .byte $CF
+        .elseif .strat(text, character) = '/'
+            .byte $CE
+        .elseif .strat(text, character) = ','   ; comma (TEXT_GLYPHS, bank-7 tile $33)
+            .byte $33
         .elseif .strat(text, character) = '!'
             .byte $36
         .elseif .strat(text, character) = $3F   ; '?' (vanilla font, bank-7 tile $34)
@@ -15,6 +19,8 @@
             .byte $35
         .elseif .strat(text, character) >= 'A' .and .strat(text, character) <= 'Z'
             .byte .strat(text, character) - 'A' + $DA
+        .elseif .strat(text, character) >= '0' .and .strat(text, character) <= '9'
+            .byte .strat(text, character) - '0' + $D0
         .else
             .error "Unsupported town dialogue character"
         .endif
@@ -49,7 +55,7 @@ TownFearText:
     TownLine "TOWN! RUN", $FD
     TownLine "FOR YOUR LIFE!", $FF
 TownFearHide:
-    TownLine "A REAL DRAGON!", $FD
+    TownLine "IT'S BARBA!", $FD
     TownLine "QUICK! GET", $FD
     TownLine "INSIDE A", $FD
     TownLine "HOUSE NOW!", $FF
@@ -60,11 +66,11 @@ TownFearLeaving:
 TownFearPlea:
     TownLine "PLEASE DON'T", $FD
     TownLine "EAT ME! I", $FD
-    TownLine "TASTE TERRIBLE", $FF
+    TownLine "TASTE LIKE OLD", $FD
+    TownLine "MAN!", $FF
 TownFearBarbaAlert:
     TownLine "IT'S BARBA!", $FD
-    TownLine "LOCK YOUR", $FD
-    TownLine "DOORS AND", $FD
+    TownLine "EVERYONE", $FD
     TownLine "GET INSIDE!", $FF
 TownFearBarbaLoose:
     TownLine "BARBA IS LOOSE", $FD
@@ -85,15 +91,14 @@ TownWiseManText:
     TownLine "AND SPARE", $FD
     TownLine "MY LIFE!", $FF
 TownHealerText:
-    TownLine "OH NO! DON'T", $FD
-    TownLine "BURN ME! I CAN", $FD
-    TownLine "HEAL YOUR", $FD
-    TownLine "WOUNDS BARBA!", $FF
+    TownLine "MY RUB DOWNS", $FD
+    TownLine "RESTORE HEALTH", $FD
+    TownLine "AND VITALITY.", $FF
 TownMagicText:
-    TownLine "FILL YOUR", $FD
-    TownLine "MAGIC BAR!", $FD
-    TownLine "NOW PLEASE GO", $FD
-    TownLine "IN PEACE!", $FF
+    TownLine "STICK THIS IN", $FD
+    TownLine "YOUR MOUTH FOR", $FD
+    TownLine "A BIT. THERE.", $FD
+    TownLine "MAGIC'S BACK.", $FF
 SignChar:
     TownLine "COMPLETELY", $FD
     TownLine "CHARRED. YOU", $FD
@@ -109,19 +114,16 @@ SignAshPile:
     TownLine "PILE OF ASH.", $FF
 SignWhatLeft:
     TownLine "WELCOME TO", $FD
-    TownLine "WHATEVER IS", $FD
-    TownLine "LEFT OF IT.", $FF
+    TownLine "WHATEVER THIS", $FD
+    TownLine "IS.", $FF
 SignDidThat:
     TownLine "THE SIGN IS", $FD
     TownLine "ASH NOW.", $FD
     TownLine "YOU DID THAT.", $FF
 SignWasSign:
     TownLine "THIS USED TO", $FD
-    TownLine "BE A SIGN.", $FD
-    TownLine "THANKS BARBA.", $FF
+    TownLine "BE A SIGN.", $FF
 ErrorAshText:
-    TownLine "I AM", $FD
-    TownLine "ERROR'S", $FD
-    TownLine "ASH PILE.", $FF
+    TownLine "I AM ASH PILE.", $FF
 
 .segment "TOWN"

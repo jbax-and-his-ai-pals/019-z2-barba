@@ -18,6 +18,7 @@
   function loadSheetImage(src) {
     if (!imgCache.has(src)) {
       const img = new Image();
+      img.decoding = 'async';
       img.src = src;
       imgCache.set(src, img);
     }
@@ -25,12 +26,11 @@
   }
 
   function createAnimCanvas(src, w, h, frames, fps, tabKey) {
-    const targetW = 512;
-    const targetH = Math.round(h * (targetW / w));
     const cv = document.createElement('canvas');
     cv.className = 'nes-canvas';
-    cv.width = targetW;
-    cv.height = targetH;
+    cv.width = w;
+    cv.height = h;
+    cv.style.width = '512px';
     cv._vis = !canvasObserver;
     if (canvasObserver) canvasObserver.observe(cv);
     const ctx = cv.getContext('2d');
@@ -92,7 +92,6 @@
       item.drawnIdx = item.idx;
 
       const ctx = item.ctx;
-      ctx.imageSmoothingEnabled = false;
       ctx.clearRect(0, 0, item.cv.width, item.cv.height);
       const cols = Math.max(1, Math.floor(item.img.naturalWidth / item.w));
       const rows = Math.max(1, Math.floor(item.img.naturalHeight / item.h));
@@ -184,6 +183,76 @@
     }
     container.appendChild(header);
 
+    if (!isPublic && gameId === 'wheel') {
+      const audioCard = document.createElement('section');
+      audioCard.className = 'card local-only-card';
+      audioCard.style.marginBottom = '16px';
+      audioCard.innerHTML = `
+        <div class="flag-head" style="border-bottom:1px solid var(--border);padding-bottom:8px;">
+          <h2 style="border:none;padding:0;margin:0;">Title Audio Prototypes — "Wheel of Barba"</h2>
+          <span class="badge b-local">Local Only · 7-bit $4011 PCM (12.3 kHz)</span>
+        </div>
+        <div class="flag-desc">
+          A/B test replacing the original <code>"FORTUNE"</code> clip in Bank 3 with spectral-matched, broadcast-compressed, 7-bit quantized <code>"BARBA"</code> prototypes stitched onto the real <code>"WHEEL"</code> and <code>"OF"</code> ROM samples.
+        </div>
+      `;
+      const bar = document.createElement('div');
+      bar.className = 'audio-bar';
+      bar.style.flexWrap = 'wrap';
+      bar.style.gap = '8px';
+
+      let activeAudio = null;
+      const statusEl = document.createElement('span');
+      statusEl.className = 'subtitle';
+      statusEl.style.marginLeft = '6px';
+      statusEl.textContent = 'Click any clip to audition.';
+
+      const clips = [
+        { label: 'Original: "Wheel of Fortune"', src: 'previews/subgames/wheel_orig_full.wav', orig: true },
+        { label: 'Proto 8A: 7D + Tinny (680Hz) & Air', src: 'previews/subgames/wheel_barba_p1_mark_eq.wav' },
+        { label: 'Proto 8B: 7D + Stronger Tinny (760Hz) + Air', src: 'previews/subgames/wheel_barba_p2_david_eq.wav' },
+        { label: 'Proto 8C: 7D + Tiny Speaker (820Hz) 8.2kHz Air', src: 'previews/subgames/wheel_barba_p3_mark_bright_punch.wav' },
+        { label: 'Proto 8D: 7D + 3-Voice Crowd Tinny/Airy', src: 'previews/subgames/wheel_barba_p4_dragon_layer.wav' },
+      ];
+
+      const btns = [];
+      for (const clip of clips) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'audio-btn' + (clip.orig ? '' : ' is-active');
+        btn.textContent = `▶ ${clip.label}`;
+        btn.onclick = () => {
+          if (activeAudio) { activeAudio.pause(); activeAudio = null; }
+          btns.forEach(b => b.style.outline = '');
+          const el = new Audio(clip.src);
+          activeAudio = el;
+          btn.style.outline = '2px solid var(--gold)';
+          statusEl.textContent = `Playing: ${clip.label}`;
+          el.onended = () => {
+            btn.style.outline = '';
+            statusEl.textContent = `Finished: ${clip.label}`;
+          };
+          el.play().catch(err => { statusEl.textContent = `Error: ${err.message}`; });
+        };
+        btns.push(btn);
+        bar.appendChild(btn);
+      }
+
+      const stopBtn = document.createElement('button');
+      stopBtn.type = 'button';
+      stopBtn.className = 'audio-btn';
+      stopBtn.textContent = '■ Stop';
+      stopBtn.onclick = () => {
+        if (activeAudio) { activeAudio.pause(); activeAudio = null; }
+        btns.forEach(b => b.style.outline = '');
+        statusEl.textContent = 'Stopped.';
+      };
+      bar.appendChild(stopBtn);
+      bar.appendChild(statusEl);
+      audioCard.appendChild(bar);
+      container.appendChild(audioCard);
+    }
+
     const grid = document.createElement('main');
     grid.className = 'grid';
 
@@ -236,7 +305,6 @@
   function handleTabChange(tab) {
     const prevTab = activeSubTab;
     if (typeof tab === 'string' && tab.startsWith('sub-')) {
-      const gid = tab.slice(4);
       if (prevTab && prevTab !== tab) {
         imgCache.clear();
         for (const item of activeCanvases) {
@@ -247,7 +315,7 @@
         }
       }
       activeSubTab = tab;
-      renderSubgame(gid);
+      renderSubgame(tab.slice(4));
       ensureTicking();
     } else {
       activeSubTab = null;

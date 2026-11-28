@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 
+from nes import CHR_OFFSET, decode_tile
 import assets
 import boss_art
 from asm6502 import Asm6502
@@ -108,9 +109,10 @@ def extract_barba_frames(z2_bytes: bytes) -> dict[str, bytes]:
 
 def apply_art_patches_bank0(b0: bytearray) -> None:
     """Theme Bank 0 palettes for Barba and Palace VI stage floor."""
-    # Title BG palette ($8801-$8810): swap magenta/pink for crimson & gold
+    # Title BG palette ($8801-$8810): keep BG0 (0F 16 25 20) at vanilla pink for the Screen 2 marquee,
+    # swap BG1-BG2 for crimson & gold, and keep BG3 (0F 00 15 10) at vanilla magenta/grey for the Big Wheel.
     b0[0x8801 - 0x8000 : 0x8811 - 0x8000] = bytes.fromhex(
-        '0f 16 27 30  0f 00 16 27  0f 06 16 30  0f 00 10 27'
+        '0f 16 25 20  0f 00 16 27  0f 06 16 30  0f 00 15 10'
     )
     # Main Board / Menu BG palette ($8811-$8820):
     #   BG0: gold/brown stage arch (0F 17 28 07)
@@ -140,6 +142,12 @@ def apply_art_patches_bank1(b1: bytearray, z2_bytes: bytes) -> None:
     for i in range(34):
         b1[tbl_off + i * 2] = dummy_addr & 0xFF
         b1[tbl_off + i * 2 + 1] = dummy_addr >> 8
+
+    # Keep Barba facing the board in Bank 1 idle state 1 (1:900A..1:9017):
+    # Original 1:9010..1:9011 is 40 80 (64 frames with bit 7 flipped), which turns
+    # Barba left while standing at the far left ($04=$12) and clips him off-screen.
+    assert b1[0x9010 - 0x8000 : 0x9012 - 0x8000] == bytes([0x40, 0x80])
+    b1[0x9011 - 0x8000] = 0x00
 
     # Slow Barba walking in Bank 1 (1:90D8..1:90EA): 2 px/frame
     # Original 1:90DE..1:90EA: A9 04 85 9A C6 04 B0 04 E6 04 E6 04 60
@@ -442,7 +450,7 @@ def patch_s2_wheel_barba(b1: bytearray, b2: bytearray) -> None:
                     if 0 <= gx < 8 and 0 <= gy < 8 and g[gy][gx] == '1':
                         face[ly][lx] = True
 
-    # Drop shadow (+2, +2) color 1, orange 1px outline color 3, grey fill color 2
+    # Drop shadow (+2, +2) color 1 ($00), light-grey 1px outline color 3 ($10), magenta fill color 2 ($15)
     for ly in range(90, h):
         for lx in range(w):
             if face[ly][lx] and ly + 2 < h and lx + 2 < w and not face[ly + 2][lx + 2]:
@@ -550,3 +558,438 @@ def apply_art_patches_bank2(b2: bytearray) -> None:
     for i in range(34):
         off = 0xDE10 - 0x8000 + i * 2
         b2[off : off + 2] = tuple_addr.to_bytes(2, 'little')
+
+
+# ---------------------------------------------------------------------------
+# Bonus Round ("BARBA TREASURE") 6-Prize Artworks (80x48 = 10x6 tiles each)
+# ---------------------------------------------------------------------------
+
+WHEEL_PRIZE_SPECS: list[dict[str, object]] = [
+    {
+        'name': 'PALACE 6 CRYSTAL',
+        'bg_pal': (0x11, 0x21, 0x30),
+        'spr_pal': (0x27, 0x38, 0x30),
+    },
+    {
+        'name': 'EAST HYRULE CRUISE',
+        'bg_pal': (0x11, 0x27, 0x30),
+        'spr_pal': (0x11, 0x27, 0x30),
+    },
+    {
+        'name': 'HYRULE ITEM HOARD',
+        'bg_pal': (0x16, 0x27, 0x30),
+        'spr_pal': (0x16, 0x27, 0x30),
+    },
+    {
+        'name': 'APRIL IN RAURU',
+        'bg_pal': (0x20, 0x19, 0x12),
+        'spr_pal': (0x20, 0x19, 0x12),
+    },
+    {
+        'name': 'THIS COOL BOULDER',
+        'bg_pal': (0x07, 0x17, 0x27),
+        'spr_pal': (0x07, 0x17, 0x27),
+    },
+    {
+        'name': 'PIECE OF PALACE 4',
+        'bg_pal': (0x02, 0x12, 0x30),
+        'spr_pal': (0x02, 0x12, 0x30),
+    },
+]
+
+
+def _new_canvas(w: int = 80, h: int = 48) -> list[list[int]]:
+    return [[0] * w for _ in range(h)]
+
+
+def _pset(g: list[list[int]], x: int, y: int, c: int) -> None:
+    if 0 <= y < len(g) and 0 <= x < len(g[0]):
+        g[y][x] = c
+
+
+def _fill_rect(g: list[list[int]], x0: int, y0: int, w: int, h: int, c: int) -> None:
+    for y in range(y0, y0 + h):
+        for x in range(x0, x0 + w):
+            _pset(g, x, y, c)
+
+
+def _draw_sparkle(g: list[list[int]], cx: int, cy: int, r: int = 3, c: int = 3) -> None:
+    _pset(g, cx, cy, c)
+    for d in range(1, r + 1):
+        _pset(g, cx - d, cy, c)
+        _pset(g, cx + d, cy, c)
+        _pset(g, cx, cy - d, c)
+        _pset(g, cx, cy + d, c)
+
+
+def _blit_z2_tile(
+    g: list[list[int]],
+    z2_bytes: bytes,
+    bank4k: int,
+    tile_idx: int,
+    dx: int,
+    dy: int,
+    *,
+    transparent_zero: bool = True,
+) -> None:
+    off = CHR_OFFSET + bank4k * 4096 + tile_idx * 16
+    tile = decode_tile(z2_bytes[off : off + 16])
+    for py in range(8):
+        for px in range(8):
+            c = tile[py][px]
+            if transparent_zero and c == 0:
+                continue
+            _pset(g, dx + px, dy + py, c)
+
+
+def _grid_to_60_tiles(g: list[list[int]]) -> bytes:
+    assert len(g) == 48 and len(g[0]) == 80
+    out = bytearray()
+    for ty in range(6):
+        for tx in range(10):
+            sub = [[g[ty * 8 + y][tx * 8 + x] for x in range(8)] for y in range(8)]
+            out.extend(_encode_tile_2bpp(sub))
+    assert len(out) == 60 * 16
+    return bytes(out)
+
+
+def _draw_crystal_prize() -> list[list[int]]:
+    g = _new_canvas()
+    # Palace VI stepped pedestal
+    _fill_rect(g, 20, 44, 40, 3, 1)
+    _fill_rect(g, 24, 41, 32, 3, 2)
+    _fill_rect(g, 28, 39, 24, 2, 3)
+    _fill_rect(g, 25, 41, 30, 1, 3)
+    # Faceted crystal (y=5..36, center x=40)
+    for y in range(5, 37):
+        if y < 14:
+            half = 1 + (y - 5) * 12 // 9
+        elif y <= 27:
+            half = 13
+        else:
+            half = max(1, 13 - (y - 27) * 12 // 9)
+        for x in range(40 - half, 40 + half + 1):
+            if x in (40 - half, 40 + half) or y in (5, 36):
+                c = 1
+            elif x < 37 and y < 23:
+                c = 3
+            elif x > 43 or y > 28:
+                c = 1
+            elif abs(x - 40) <= 3 and 12 <= y <= 25:
+                c = 3
+            else:
+                c = 2
+            _pset(g, x, y, c)
+    # Inner facet lines
+    for y in range(9, 32):
+        _pset(g, 34, y, 3 if y < 22 else 2)
+        _pset(g, 45, y, 1)
+    # Radiating sparkles
+    _draw_sparkle(g, 15, 11, 3, 3)
+    _draw_sparkle(g, 64, 13, 3, 3)
+    _draw_sparkle(g, 18, 28, 2, 2)
+    _draw_sparkle(g, 61, 29, 2, 3)
+    return g
+
+
+def _draw_cruise_prize() -> list[list[int]]:
+    g = _new_canvas()
+    # Sun (top right)
+    for y in range(3, 16):
+        for x in range(56, 70):
+            d2 = (x - 63) ** 2 + (y - 9) ** 2
+            if d2 <= 25:
+                _pset(g, x, y, 2 if d2 > 9 else 3)
+    # Clouds
+    for cx, cy in ((16, 8), (34, 6)):
+        _fill_rect(g, cx - 6, cy, 13, 4, 3)
+        _fill_rect(g, cx - 3, cy - 2, 7, 2, 3)
+    # Raft mast & billowing sail
+    _fill_rect(g, 38, 9, 2, 18, 2)
+    for y in range(10, 25):
+        w = (y - 9) * 11 // 15
+        _fill_rect(g, 40, y, max(1, w), 1, 3)
+        _pset(g, 40 + max(1, w) - 1, y, 2)
+    # Pennant at mast top
+    _fill_rect(g, 34, 9, 4, 2, 2)
+    # Wooden log raft deck (x=23..56, y=26..31)
+    _fill_rect(g, 24, 26, 31, 5, 2)
+    for lx in range(25, 55, 5):
+        _fill_rect(g, lx, 26, 1, 5, 1)
+    _fill_rect(g, 24, 28, 31, 1, 3)
+    # Tiny dragon passenger at prow
+    _fill_rect(g, 29, 21, 5, 5, 2)
+    _pset(g, 30, 22, 3)
+    _pset(g, 28, 22, 2)
+    # Layered NES ocean waves (y=31..47)
+    for y in range(31, 48):
+        for x in range(80):
+            wave_y = 32 + ((x + (y // 5) * 4) % 12 < 6) * 1
+            if y < 32:
+                continue
+            if (y - 32) % 5 == 0 and ((x + y) % 8 < 5):
+                _pset(g, x, y, 3)
+            elif (y - 32) % 5 == 1 and ((x + y) % 8 < 3):
+                _pset(g, x, y, 3)
+            else:
+                _pset(g, x, y, 1)
+    return g
+
+
+def _draw_rauru_town_house(g: list[list[int]]) -> None:
+    """Draw peaked-roof Rauru Town house on the left side of the April in Rauru card."""
+    for i in range(9):
+        _fill_rect(g, 6 + (8 - i), 15 + i, 2 + i * 2, 1, 1 if i % 2 == 0 else 3)
+    _fill_rect(g, 6, 24, 19, 22, 3)
+    _fill_rect(g, 6, 24, 19, 2, 1)
+    _fill_rect(g, 9, 28, 4, 4, 0)
+    _fill_rect(g, 18, 28, 4, 4, 0)
+    _fill_rect(g, 13, 35, 5, 11, 0)
+    _fill_rect(g, 5, 45, 21, 2, 1)
+
+
+def _draw_april_rauru_prize(wheel_bytes: bytes) -> list[list[int]]:
+    """Start from vanilla April in Paris (Slot 3) and swap Eiffel Tower + 'Paris' -> Rauru Town House + 'Rauru'."""
+    g = _april_paris_base(wheel_bytes)
+    _draw_rauru_town_house(g)
+    return g
+
+
+def _draw_item_hoard_prize(z2_bytes: bytes) -> list[list[int]]:
+    g = _new_canvas()
+    # Two display shelves
+    for sy in (21, 43):
+        _fill_rect(g, 4, sy, 72, 2, 2)
+        _fill_rect(g, 6, sy + 2, 68, 2, 1)
+    # Top shelf (y=5): P-Bag, Magic Candle, Magic Hammer, Water Boots
+    top_items = [
+        (12, (0x72, 0x73)),
+        (28, (0x8C, 0x8D)),
+        (44, (0x98, 0x99)),
+        (60, (0x92, 0x93)),
+    ]
+    # Bottom shelf (y=27): Mystic Flute, Cross, Magic Key
+    bot_items = [
+        (12, (0x94, 0x95)),
+        (28, (0x96, 0x97)),
+        (44, (0x9A, 0x9B)),
+    ]
+    for dx, (t_top, t_bot) in top_items:
+        _blit_z2_tile(g, z2_bytes, 4, t_top, dx, 5)
+        _blit_z2_tile(g, z2_bytes, 4, t_bot, dx, 13)
+    for dx, (t_top, t_bot) in bot_items:
+        _blit_z2_tile(g, z2_bytes, 4, t_top, dx, 27)
+        _blit_z2_tile(g, z2_bytes, 4, t_bot, dx, 35)
+    # 8th item: Elixir / Water of Life bottle ($8A)
+    _blit_z2_tile(g, z2_bytes, 4, 0x8A, 60, 32)
+    return g
+
+
+def _draw_boulder_prize(z2_bytes: bytes) -> list[list[int]]:
+    g = _new_canvas()
+    # Showcase pedestal
+    _fill_rect(g, 18, 43, 44, 4, 1)
+    _fill_rect(g, 22, 40, 36, 3, 2)
+    _fill_rect(g, 23, 40, 34, 1, 3)
+    # Z2 Overworld 16x16 boulder metatile (CHR bank 17: top-left=$56, bot-left=$57, top-right=$58, bot-right=$59)
+    # at crisp 2x (32x32). Palette map: 2=outside/bg -> 0, 1=highlight -> 3, 3=body -> 2, 0=shadow -> 1.
+    ow_boulder_map = {2: 0, 1: 3, 3: 2, 0: 1}
+    for ti, qx, qy in ((0x56, 0, 0), (0x57, 0, 8), (0x58, 8, 0), (0x59, 8, 8)):
+        off_ow = CHR_OFFSET + 17 * 4096 + ti * 16
+        tile_ow = decode_tile(z2_bytes[off_ow : off_ow + 16])
+        for py in range(8):
+            for px in range(8):
+                c = ow_boulder_map[tile_ow[py][px]]
+                if c:
+                    _fill_rect(g, 24 + (qx + px) * 2, 8 + (qy + py) * 2, 2, 2, c)
+    _draw_sparkle(g, 15, 13, 3, 3)
+    _draw_sparkle(g, 63, 16, 2, 3)
+    return g
+
+
+def _draw_palace4_prize(z2_bytes: bytes) -> list[list[int]]:
+    g = _new_canvas()
+    # Showcase base
+    _fill_rect(g, 16, 43, 48, 4, 1)
+    _fill_rect(g, 20, 40, 40, 3, 2)
+    _fill_rect(g, 21, 40, 38, 1, 3)
+    # Tile Palace 4 brick & pillar tiles from Z2 CHR bank 11
+    for ty in range(1, 5):
+        for tx in range(2, 8):
+            t_id = 0x5E if tx in (3, 6) else 0x5C
+            _blit_z2_tile(g, z2_bytes, 11, t_id, tx * 8, ty * 8, transparent_zero=False)
+    # Carve a jagged broken-off ruin silhouette
+    for y in range(8, 40):
+        left_cut = 20 + max(0, (24 - y) // 2) + ((y * 3) % 4 if y < 24 else 0)
+        right_cut = 59 - max(0, (32 - y) // 2) - ((y * 5) % 5 if y < 30 else 0)
+        for x in range(16, 64):
+            if x < left_cut or x > right_cut or (y < 14 and x > 44):
+                _pset(g, x, y, 0)
+            elif x in (left_cut, right_cut):
+                _pset(g, x, y, 3 if x == left_cut else 1)
+    # Fallen rubble pebbles on base
+    _fill_rect(g, 22, 38, 4, 2, 2)
+    _fill_rect(g, 53, 37, 5, 3, 2)
+    _pset(g, 54, 37, 3)
+    return g
+
+
+def build_wheel_prize_assets(z2_bytes: bytes, wheel_bytes: bytes) -> dict[str, object]:
+    """Build 6x60-tile Bonus Prize graphics, tilemaps, and palettes for Wheel of Barba."""
+    grids = [
+        _draw_crystal_prize(),
+        _draw_cruise_prize(),
+        _draw_item_hoard_prize(z2_bytes),
+        _draw_april_rauru_prize(wheel_bytes),
+        _draw_boulder_prize(z2_bytes),
+        _draw_palace4_prize(z2_bytes),
+    ]
+    chr_chunks = [_grid_to_60_tiles(g) for g in grids]
+    identity_tm = bytes(range(60))
+    return {
+        'specs': WHEEL_PRIZE_SPECS,
+        'chr_chunks': chr_chunks,
+        'tilemap': identity_tm,
+    }
+
+
+def apply_prize_art_patches_bank0(b0: bytearray) -> None:
+    """Patch Bank 0 Bonus Prize palettes, 10x6 tilemaps, OAM overlay, and Bank 2 CHR pointers."""
+    # 1. BG2 palettes ($C1E1-$C1F2, 6 x 3 bytes) and SPR0 palettes ($C1CF-$C1E0, 6 x 3 bytes)
+    bg_blob = bytes(c for spec in WHEEL_PRIZE_SPECS for c in spec['bg_pal'])  # type: ignore[union-attr]
+    spr_blob = bytes(c for spec in WHEEL_PRIZE_SPECS for c in spec['spr_pal'])  # type: ignore[union-attr]
+    assert len(bg_blob) == 18 and len(spr_blob) == 18
+    b0[0xC1E1 - 0x8000 : 0xC1F3 - 0x8000] = bg_blob
+    b0[0xC1CF - 0x8000 : 0xC1E1 - 0x8000] = spr_blob
+
+    # 2. 10x6 identity tilemaps ($C77A-$C8E1, 6 x 60 bytes)
+    tm = bytes(range(60))
+    for i in range(6):
+        off = 0xC77A - 0x8000 + i * 60
+        b0[off : off + 60] = tm
+
+    # 3. Disable Slot 0's vanilla Emerald Necklace OAM overlay ($CAF5 -> $CB4A empty list)
+    assert b0[0xCAF5 - 0x8000 : 0xCAF7 - 0x8000] == bytes([0x13, 0xCB])
+    b0[0xCAF5 - 0x8000 : 0xCAF7 - 0x8000] = bytes([0x4A, 0xCB])
+
+    # 4. Relocated MMC3 Bank 2 CHR pointers ($E124-$E12F, 6 x 2 bytes at $8162 + i * $3C0)
+    ptrs = bytearray()
+    for i in range(6):
+        addr = 0x8162 + i * 0x3C0
+        ptrs.extend((addr & 0xFF, addr >> 8))
+    b0[0xE124 - 0x8000 : 0xE130 - 0x8000] = ptrs
+
+
+# ---------------------------------------------------------------------------
+# Candidate Preview Generator for Dashboard Iteration (April in Rauru & Boulder)
+# ---------------------------------------------------------------------------
+
+def _draw_paris_matched_rauru(g: list[list[int]]) -> None:
+    """Draw 'Rauru' at x=28..76, y=24..44 matching vanilla 'Paris' height & serif style."""
+    # Clear 'Paris' ('P' x=31..48 y=23..45 including right loop at 47..48, 'aris' x=46..77 y=31..45)
+    # while preserving 'April' (y<=22) and 'in' (x>=51).
+    _fill_rect(g, 28, 23, 22, 23, 2)
+    _fill_rect(g, 46, 31, 32, 15, 2)
+
+    def draw_glyph(ox: int, oy: int, rows: list[str]) -> None:
+        for dy, row in enumerate(rows):
+            for dx, ch in enumerate(row):
+                if ch == '#':
+                    _pset(g, ox + dx + 1, oy + dy + 1, 0)
+        for dy, row in enumerate(rows):
+            for dx, ch in enumerate(row):
+                if ch == '#':
+                    _pset(g, ox + dx, oy + dy, 1)
+
+    # 21px-tall calligraphic 'R' matching vanilla 22px 'P'
+    glyph_R = [
+        '##########....',
+        '.###.....###..',
+        '.##........##.',
+        '.##........##.',
+        '.##........##.',
+        '.##........##.',
+        '.##.......##..',
+        '.##......##...',
+        '.#########....',
+        '.##....###....',
+        '.##.....##....',
+        '.##......##...',
+        '.##......##...',
+        '.##.......##..',
+        '.##.......##..',
+        '.##........##.',
+        '.##........##.',
+        '.##........##.',
+        '.##........##.',
+        '.##........##.',
+        '####.......###',
+    ]
+    # 13px-tall lowercase glyphs matching vanilla 'aris'
+    glyph_a = [
+        '..#####.',
+        '.##...##',
+        '......##',
+        '......##',
+        '..######',
+        '.##...##',
+        '##....##',
+        '##....##',
+        '##....##',
+        '##...###',
+        '.####.##',
+        '........',
+        '........',
+    ]
+    glyph_u = [
+        '###..###',
+        '.##...##',
+        '.##...##',
+        '.##...##',
+        '.##...##',
+        '.##...##',
+        '.##...##',
+        '.##...##',
+        '.##...##',
+        '.##..###',
+        '..###.##',
+        '........',
+        '........',
+    ]
+    glyph_r = [
+        '###.###',
+        '.###.##',
+        '.##..##',
+        '.##....',
+        '.##....',
+        '.##....',
+        '.##....',
+        '.##....',
+        '.##....',
+        '.##....',
+        '####...',
+        '.......',
+        '.......',
+    ]
+    draw_glyph(28, 24, glyph_R)
+    draw_glyph(43, 32, glyph_a)
+    draw_glyph(52, 32, glyph_u)
+    draw_glyph(61, 32, glyph_r)
+    draw_glyph(68, 32, glyph_u)
+
+
+def _april_paris_base(wheel_bytes: bytes) -> list[list[int]]:
+    b0 = wheel_bytes[16 : 16 + 32768]
+    tm = b0[0xC82E - 0x8000 : 0xC82E - 0x8000 + 60]
+    chr_off = 0xE162 - 0x8000
+    g = _new_canvas()
+    for ty in range(6):
+        for tx in range(10):
+            t_idx = tm[ty * 10 + tx]
+            tile = decode_tile(b0[chr_off + t_idx * 16 : chr_off + (t_idx + 1) * 16])
+            for py in range(8):
+                for px in range(8):
+                    g[ty * 8 + py][tx * 8 + px] = tile[py][px]
+    _fill_rect(g, 2, 1, 28, 46, 2)
+    _draw_paris_matched_rauru(g)
+    return g

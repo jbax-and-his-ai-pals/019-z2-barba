@@ -7,6 +7,7 @@ on:
       - 'web/**'
       - 'tools/build_dashboard.py'
       - 'tools/dashboard_template.html'
+      - 'tools/release_manifest.json'
       - 'tools/fe_catalog.py'
       - 'tools/capture_subgame_previews.py'
       - 'tools/title_dashboard.py'

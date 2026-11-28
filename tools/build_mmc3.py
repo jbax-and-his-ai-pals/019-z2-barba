@@ -48,10 +48,6 @@ def build_game_mmc3(game: str, out_dir: Path = DEFAULT_OUT_DIR) -> Path:
     elif game == 'duck':
         import pack_duck
         pack_duck.build_standalone(out_path, ROOT / 'roms/duck.nes', ROOT / 'roms/z2.nes', mapper='mmc3', build_number=build_number)
-    elif game == 'f13':
-        import f13_build
-        built = f13_build.build(count_build=False, build_number=build_number, write_play=False)
-        shutil.copyfile(built, out_path)
     elif game == 'feud':
         import pack_feud
         pack_feud.build_standalone(
@@ -62,22 +58,10 @@ def build_game_mmc3(game: str, out_dir: Path = DEFAULT_OUT_DIR) -> Path:
             mapper='mmc3',
             build_number=build_number,
         )
-    elif game == 'mm2':
-        import pack_mm2
-        pack_mm2.build_standalone(out_path, ROOT / 'roms/mm2.nes', mapper='mmc3', build_number=build_number)
-    elif game == 'mtpo':
-        import pack_mtpo
-        pack_mtpo.build_standalone(out_path, ROOT / 'roms/mtpo.nes', ROOT / 'roms/z2.nes', mapper='mmc3', build_number=build_number)
-    elif game == 'smb':
-        import pack_smb
-        pack_smb.build_standalone(out_path, ROOT / 'roms/smb.nes', ROOT / 'roms/z2.nes', mapper='mmc3', build_number=build_number)
     elif game == 'waldo':
         import build_waldo
         built = build_waldo.build(count_build=False, build_number=build_number, write_play=False)
         shutil.copyfile(built, out_path)
-    elif game == 'zelda':
-        import pack_zelda
-        pack_zelda.build_standalone(out_path, ROOT / 'roms/zelda.nes', ROOT / 'roms/z2.nes', mapper='mmc3', build_number=build_number)
 
     rom = out_path.read_bytes()
     mapper_num = (rom[6] >> 4) | (rom[7] & 0xF0)

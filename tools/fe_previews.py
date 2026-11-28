@@ -45,7 +45,6 @@ PAL_CLOUD: list[RGBA] = [TRANSPARENT, (188, 224, 255, 255), (228, 244, 255, 255)
 def write_rgba_png(path: Path, pixels: list[list[RGBA]]) -> None:
     height = len(pixels)
     width = len(pixels[0])
-    raw = b"".join(b"\0" + b"".join(bytes(px) for px in row) for row in pixels)
 
     def chunk(kind: bytes, payload: bytes) -> bytes:
         return (
@@ -55,7 +54,38 @@ def write_rgba_png(path: Path, pixels: list[list[RGBA]]) -> None:
             + struct.pack(">I", zlib.crc32(kind + payload) & 0xFFFFFFFF)
         )
 
+    palette: list[RGBA] = []
+    pal_idx: dict[RGBA, int] = {}
+    can_index = True
+    for row in pixels:
+        for px in row:
+            if px not in pal_idx:
+                if len(palette) >= 256:
+                    can_index = False
+                    break
+                pal_idx[px] = len(palette)
+                palette.append(px)
+        if not can_index:
+            break
+
     path.parent.mkdir(parents=True, exist_ok=True)
+    if can_index and palette:
+        plte = b"".join(bytes(c[:3]) for c in palette)
+        trns_bytes = bytes(c[3] for c in palette).rstrip(b"\xff")
+        idx_raw = b"".join(b"\0" + bytes(pal_idx[px] for px in row) for row in pixels)
+        chunks = [
+            b"\x89PNG\r\n\x1a\n",
+            chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 3, 0, 0, 0)),
+            chunk(b"PLTE", plte),
+        ]
+        if trns_bytes:
+            chunks.append(chunk(b"tRNS", trns_bytes))
+        chunks.append(chunk(b"IDAT", zlib.compress(idx_raw, 9)))
+        chunks.append(chunk(b"IEND", b""))
+        path.write_bytes(b"".join(chunks))
+        return
+
+    raw = b"".join(b"\0" + b"".join(bytes(px) for px in row) for row in pixels)
     path.write_bytes(
         b"\x89PNG\r\n\x1a\n"
         + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0))

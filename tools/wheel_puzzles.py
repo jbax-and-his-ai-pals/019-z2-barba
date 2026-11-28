@@ -5,101 +5,129 @@ from __future__ import annotations
 # 12 category 8-byte NUL-terminated slots at Bank 0 $911C-$917B.
 # Category 3 prints slot 3 + slot 10; Category 9 prints slot 9 + slot 11.
 WHEEL_BARBA_CATEGORIES: list[str] = [
-    'PALACE',    # 0
+    'PLACE',     # 0
     'BOSS',      # 1
     'ITEM',      # 2
-    'BARBA',     # 3 -> "BARBA EDITION"
+    'PLACE',     # 3 (unused compound slot)
     'PHRASE',    # 4
-    'ITEMS',     # 5
-    'TOWN',      # 6
-    'ENEMIES',   # 7
+    'ITEM',      # 5 (unused)
+    'PLACE',     # 6 (unused)
+    'ENEMY',     # 7
     'SPELL',     # 8
-    'DARK',      # 9 -> "DARK LINK"
-    'EDITION',   # 10 (suffix for cat 3)
-    'LINK',      # 11 (suffix for cat 9)
+    'ENEMY',     # 9 (unused compound slot)
+    'PLACE',     # 10 (unused suffix for cat 3)
+    'ENEMY',     # 11 (unused suffix for cat 9)
 ]
 
-# 64 curated Zelda II & Barba Universe puzzles (all lines <= 12 chars so any row fits cleanly).
-# Category IDs: 0=PALACE, 1=BOSS, 2=ITEM, 3=BARBA EDITION, 4=PHRASE, 5=ITEMS,
-#               6=TOWN, 7=ENEMIES, 8=SPELL, 9=DARK LINK
+# 97 curated Zelda II puzzles (all lines <= 12 chars, all puzzles >= 4 letters).
+# Active Category IDs: 0=PLACE, 1=BOSS, 2=ITEM, 4=PHRASE, 7=ENEMY, 8=SPELL
 WHEEL_BARBA_PUZZLES: list[tuple[int, list[str]]] = [
-    # 0: PALACE (8)
+    # 0: PLACE (20)
     (0, ['PARAPA', 'PALACE']),
     (0, ['MIDORO', 'PALACE']),
     (0, ['ISLAND', 'PALACE']),
     (0, ['MAZE ISLAND', 'PALACE']),
-    (0, ['OCEAN', 'PALACE']),
+    (0, ['OCEAN PALACE']),
     (0, ['THREE-EYE', 'ROCK PALACE']),
     (0, ['THE GREAT', 'PALACE']),
     (0, ['DEATH', 'MOUNTAIN']),
-    # 1: BOSS (7)
+    (0, ['TOWN OF', 'RAURU']),
+    (0, ['TOWN OF', 'RUTO']),
+    (0, ['TOWN OF', 'SARIA']),
+    (0, ['TOWN OF', 'MIDO']),
+    (0, ['TOWN OF', 'NABOORU']),
+    (0, ['TOWN OF', 'DARUNIA']),
+    (0, ['NEW KASUTO']),
+    (0, ['OLD KASUTO']),
+    (0, ['BAGUS CABIN']),
+    (0, ['MORUGE SWAMP']),
+    (0, ['SPECTACLE', 'ROCK']),
+    (0, ['KINGS TOMB']),
+    # 1: BOSS (8)
     (1, ['HORSEHEAD']),
     (1, ['HELMETHEAD']),
     (1, ['REBONACK']),
     (1, ['CAROCK']),
     (1, ['GOOMA']),
-    (1, ['BARBA THE', 'FIRE DRAGON']),
+    (1, ['BARBA']),
     (1, ['THUNDERBIRD']),
-    # 2: ITEM (8)
+    (1, ['DARK LINK']),
+    # 7: ENEMY (40)
+    (7, ['ORANGE', 'IRONKNUCKLE']),
+    (7, ['RED', 'IRONKNUCKLE']),
+    (7, ['BLUE', 'IRONKNUCKLE']),
+    (7, ['ORANGE', 'MOBLIN']),
+    (7, ['RED MOBLIN']),
+    (7, ['BLUE MOBLIN']),
+    (7, ['ORANGE', 'GORIYA']),
+    (7, ['RED GORIYA']),
+    (7, ['BLUE GORIYA']),
+    (7, ['ORANGE DAIRA']),
+    (7, ['RED DAIRA']),
+    (7, ['ORANGE GERU']),
+    (7, ['RED GERU']),
+    (7, ['BLUE GERU']),
+    (7, ['RED OCTOROK']),
+    (7, ['BLUE OCTOROK']),
+    (7, ['RED STALFOS']),
+    (7, ['BLUE STALFOS']),
+    (7, ['RED DEELER']),
+    (7, ['BLUE DEELER']),
+    (7, ['RED MOA']),
+    (7, ['BLUE MOA']),
+    (7, ['ORANGE', 'WIZZROBE']),
+    (7, ['RED FOKKA']),
+    (7, ['BLUE FOKKA']),
+    (7, ['FOKKERU']),
+    (7, ['BAGO-BAGO']),
+    (7, ['FIRE', 'BAGO-BAGO']),
+    (7, ['GELDARM']),
+    (7, ['TEKTITE']),
+    (7, ['LEEVER']),
+    (7, ['LOWDER']),
+    (7, ['ACHE']),
+    (7, ['ACHEMAN']),
+    (7, ['BUBBLE']),
+    (7, ['MOBY']),
+    (7, ['PARUTAMU']),
+    (7, ['ANERU']),
+    (7, ['MAGO']),
+    (7, ['KOBOLD']),
+    # 2: ITEM (12)
     (2, ['HANDY GLOVE']),
-    (2, ['MAGIC', 'CANDLE']),
+    (2, ['MAGIC CANDLE']),
     (2, ['CROSSING', 'RAFT']),
     (2, ['WATER BOOTS']),
-    (2, ['MYSTIC', 'FLUTE']),
-    (2, ['MAGIC', 'HAMMER']),
-    (2, ['TRIFORCE OF', 'COURAGE']),
+    (2, ['MYSTIC FLUTE']),
+    (2, ['MAGIC HAMMER']),
+    (2, ['MAGIC KEY']),
+    (2, ['CROSS']),
     (2, ['HEART', 'CONTAINER']),
-    # 3: BARBA EDITION (7)
-    (3, ["BARBA'S", 'FIERY LAIR']),
-    (3, ['INFERNO', 'BREATH']),
-    (3, ['METEOR', 'VOLLEY']),
-    (3, ['DRAGON', 'SCALES']),
-    (3, ['PALACE SIX', 'DRAGON']),
-    (3, ['SIX CRYSTAL', 'PALACES']),
-    (3, ['PRINCESS', 'ZELDA']),
-    # 4: PHRASE (7)
-    (4, ['I AM', 'ERROR']),
+    (2, ['MAGIC', 'CONTAINER']),
+    (2, ['LINK DOLL']),
+    (2, ['RED POTION']),
+    # 8: SPELL (7)
+    (8, ['SHIELD']),
+    (8, ['JUMP']),
+    (8, ['LIFE']),
+    (8, ['FAIRY']),
+    (8, ['FIRE']),
+    (8, ['REFLECT']),
+    (8, ['THUNDER']),
+    # 4: PHRASE (10)
+    (4, ['I AM ERROR']),
     (4, ['RETURN OF', 'GANON']),
+    (4, ['THE', 'ADVENTURE', 'OF LINK']),
+    (4, ['BAGU IS MY', 'NAME']),
+    (4, ['EASTMOST', 'PENNINSULA']),
+    (4, ['THANKS A', 'MILLION']),
     (4, ['DOWNWARD', 'THRUST']),
     (4, ['UPWARD', 'THRUST']),
-    (4, ['AWAKEN', 'ZELDA']),
-    (4, ['IT IS A', 'SECRET']),
-    (4, ['GAME OVER']),
-    # 5: ITEMS (5)
-    (5, ['P-BAGS AND', 'RED JARS']),
-    (5, ['FAIRY AND', 'MAGIC JAR']),
-    (5, ['LINK DOLL', 'EXTRA LIFE']),
-    (5, ['MAGIC KEY', 'AND CROSS']),
-    (5, ['CRYSTAL', 'STATUES']),
-    # 6: TOWN (7)
-    (6, ['TOWN OF', 'RAURU']),
-    (6, ['TOWN OF', 'RUTO']),
-    (6, ['TOWN OF', 'SARIA']),
-    (6, ['TOWN OF', 'MIDO']),
-    (6, ['NABOORU', 'TOWN']),
-    (6, ['DARUNIA', 'TOWN']),
-    (6, ['NEW KASUTO', 'TOWN']),
-    # 7: ENEMIES (5)
-    (7, ['BLUE', 'IRONKNUCKLE']),
-    (7, ['ORANGE', 'WIZZROBE']),
-    (7, ['FIRE', 'LIZALFOS']),
-    (7, ['DESERT', 'GELDARM']),
-    (7, ['FOKKA', 'GUARDIAN']),
-    # 8: SPELL (6)
-    (8, ['SHIELD', 'SPELL']),
-    (8, ['JUMP', 'SPELL']),
-    (8, ['LIFE', 'SPELL']),
-    (8, ['FAIRY', 'SPELL']),
-    (8, ['REFLECT', 'SPELL']),
-    (8, ['THUNDER', 'SPELL']),
-    # 9: DARK LINK (4)
-    (9, ['DARK LINK', 'DUEL']),
-    (9, ['VILLAINOUS', 'LINK']),
-    (9, ['SHADOW IN', 'THE PALACE']),
-    (9, ['LAVA LINK', 'REMATCH']),
+    (4, ['TRIFORCE OF', 'COURAGE']),
+    (4, ['AWAKEN', 'PRINCESS', 'ZELDA']),
 ]
 
-assert len(WHEEL_BARBA_PUZZLES) == 64
+assert len(WHEEL_BARBA_PUZZLES) == 97
 
 WHEEL_BARBA_CONTESTANTS: list[str] = [
     'DARK LINK ',
@@ -132,8 +160,8 @@ def _encode_cat_tile(text: str) -> bytes:
     return bs + b'\x00' * (8 - len(bs))
 
 
-def _encode_msg_tile(text: str, *, space: int = 0xD4) -> bytes:
-    """Encode Wheel Bank 0 tile string ('A'-'Z'->$E5..$FE, space->$D4 or $00, '0'-'9'->$D5..$DE)."""
+def _encode_msg_tile(text: str, *, space: int = 0xD4, digit_base: int = 0xD5) -> bytes:
+    """Encode Wheel Bank 0 tile string ('A'-'Z'->$E5..$FE, space->$D4 or $00, '0'-'9'->digit_base)."""
     out = bytearray()
     for ch in text:
         if ch == ' ':
@@ -141,7 +169,7 @@ def _encode_msg_tile(text: str, *, space: int = 0xD4) -> bytes:
         elif 'A' <= ch <= 'Z':
             out.append(0xE5 + ord(ch) - ord('A'))
         elif '0' <= ch <= '9':
-            out.append(0xD5 + ord(ch) - ord('0'))
+            out.append(digit_base + ord(ch) - ord('0'))
         elif ch == '?':
             out.append(0xDA)
         elif ch == '!':
@@ -297,6 +325,27 @@ def apply_puzzle_patches_bank0(b0: bytearray) -> None:
     # 6. Bonus Win text: "3 FABULOUS PRIZE 3" ($CA6F-$CA86) -> "3 BARBA TREASURE 3"
     patch(0xCA71, _encode_msg_tile('BARBA TREASURE', space=0x00), _encode_msg_tile('FABULOUS PRIZE', space=0x00))
 
+    # 6b. Bonus Prize names ($C641-$C6AC, 6 x 18 bytes)
+    prize_names = [
+        ' PALACE 6 CRYSTAL ',
+        'EAST HYRULE CRUISE',
+        ' HYRULE ITEM HOARD',
+        '  APRIL IN RAURU  ',
+        'THIS COOL BOULDER ',
+        'PIECE OF PALACE 4 ',
+    ]
+    orig_prizes = (
+        ' EMERALD NECKLACE '
+        ' CARIBBEAN CRUISE '
+        '   BEACH  HOUSE   '
+        '  APRIL IN PARIS  '
+        'CONCORDE TO LONDON'
+        '      BENTLEY     '
+    )
+    new_prize_blob = b''.join(_encode_msg_tile(n, space=0x00, digit_base=0xDB) for n in prize_names)
+    assert len(new_prize_blob) == 108
+    patch(0xC641, new_prize_blob, _encode_msg_tile(orig_prizes, space=0x00))
+
     # 7. Title marquee ("WHEEL" at $8EC4 and $8F70): replace "FORTUNE" ($8F75) -> " BARBA "
     #    Wait: $8F6A..$8F7E had: <F4><F7><ED><F4><F2><ED><B6><FA><F3><FB><E9><F0><B6><F7><F3><F0><FA><E9>
     #    Let's replace only exact matches in marquee safely:
@@ -340,7 +389,7 @@ def apply_puzzle_patches_bank2(b2: bytearray) -> None:
             )
         b2[off : off + len(new)] = new
 
-    # 1. Encode 64 puzzles at $8FDF.. and fill ALL 1090 pointer slots at $875A..$8FDE
+    # 1. Encode all puzzles at $8FDF.. and fill ALL 1090 pointer slots at $875A..$8FDE
     #    so no original Wheel of Fortune puzzle can ever be referenced.
     pool = bytearray()
     ptrs = bytearray()
@@ -351,19 +400,20 @@ def apply_puzzle_patches_bank2(b2: bytearray) -> None:
         pool.extend(_encode_puzzle(cat_id, lines))
 
     # Original table spans $875A..$8FDF (2181 bytes), original pool spans $8FDF..$DAE0
-    assert len(ptrs) == 128
+    assert len(ptrs) == 2 * len(WHEEL_BARBA_PUZZLES)
     assert len(pool) <= 0x4B00, f'Puzzle pool too large: {len(pool)}'
     tiled_ptrs = (bytes(ptrs) * ((0x8FDF - 0x875A) // len(ptrs) + 1))[: 0x8FDF - 0x875A]
     patch(0x875A, tiled_ptrs)
     padded_pool = bytes(pool) + b'\x00' * (0xDAE0 - 0x8FDF - len(pool))
     patch(0x8FDF, padded_pool)
 
-    # 2. Patch Bank 2 puzzle selector ($8018-$80BF) to cover exactly 64 puzzles (8 bytes $0770-$0777).
+    # 2. Patch Bank 2 puzzle selector ($8018-$80BF) to cover 128 tiled slots (16 bytes $0770-$077F)
+    #    spanning all 97 unique puzzles.
     # Original $8018-$802A (19 bytes):
     #   a5 0b e5 0c 29 7f 85 18 a5 0b 29 80 4a 4a 4a 4a 65 18 aa
-    # New (19 bytes): pick X uniformly in 0..7 -> puzzles 0..63.
+    # New (19 bytes): pick X uniformly in 0..15 -> 128 tiled puzzle slots.
     fast_pick = bytes.fromhex(
-        'a5 0b e5 0c 29 07 '                    # LDA $0B; SBC $0C; AND #$07
+        'a5 0b e5 0c 29 0f '                    # LDA $0B; SBC $0C; AND #$0F
         'ea ea ea ea ea ea ea ea ea ea ea ea '  # NOP x12
         'aa'                                    # TAX
     )
@@ -375,15 +425,15 @@ def apply_puzzle_patches_bank2(b2: bytearray) -> None:
     )
     # Original $8061-$807D (29 bytes):
     #   ad f8 07 c9 c0 d0 16  a2 88 bd 6f 07 c9 ff d0 0d  ca d0 f6 a9 00 9d 70 07 e8 e0 89 d0 f8
-    # New (29 bytes): check $0770..$0777 == $FF; if all $FF, clear $0770..$0777 = $00.
+    # New (29 bytes): check $0770..$077F == $FF; if all $FF, clear $0770..$077F = $00.
     sel_check = bytes.fromhex(
-        'a2 07 '        # $8061: LDX #$07
+        'a2 0f '        # $8061: LDX #$0F
         'bd 70 07 '     # $8063: LDA $0770,X
         'c9 ff '        # $8066: CMP #$FF
         'd0 14 '        # $8068: BNE $807E
         'ca '           # $806A: DEX
         '10 f6 '        # $806B: BPL $8063
-        'a2 07 '        # $806D: LDX #$07
+        'a2 0f '        # $806D: LDX #$0F
         'a9 00 '        # $806F: LDA #$00
         '9d 70 07 '     # $8071: STA $0770,X
         'ca '           # $8074: DEX
@@ -402,13 +452,13 @@ def apply_puzzle_patches_bank2(b2: bytearray) -> None:
     #   bd 70 07 c9 ff d0 09 e8 e0 89 d0 f4 a2 00 f0 f0 (16B: scan X 0..136)
     #   85 14 e0 88 d0 04 c9 c0 d0 ed              (10B: $07F8 == $C0 special case)
     sel_pick = bytes.fromhex(
-        'a5 0b 29 07 aa '           # $8098: LDA $0B; AND #$07; TAX (random byte 0..7)
+        'a5 0b 29 0f aa '           # $8098: LDA $0B; AND #$0F; TAX (random byte 0..15)
         'ea ea ea ea ea ea ea ea ea '  # $809D-$80A5: NOP x9
         'bd 70 07 '                 # $80A6: LDA $0770,X
         'c9 ff '                    # $80A9: CMP #$FF
         'd0 09 '                    # $80AB: BNE $80B6
         'e8 '                       # $80AD: INX
-        'e0 08 '                    # $80AE: CPX #$08
+        'e0 10 '                    # $80AE: CPX #$10
         'd0 f4 '                    # $80B0: BNE $80A6
         'a2 00 '                    # $80B2: LDX #$00
         'f0 f0 '                    # $80B4: BEQ $80A6

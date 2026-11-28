@@ -12,7 +12,62 @@ import re
 from pathlib import Path
 from typing import Any
 
+import assets  # noqa: E402
+
 ROOT = Path(__file__).resolve().parent.parent
+
+NES_PALETTE_HEX = {
+    "black": "#000000",
+    "white": "#ECEEEC",
+    "blue": "#3032EC",
+    "red": "#982220",
+    "sky": "#787CEC",
+}
+
+
+def _decode_chr_tile(rom: bytes, chr_off: int, bank: int, tile_id: int) -> list[str]:
+    """Decode an 8x8 2bpp NES CHR tile into 8 rows of '0'..'3'."""
+    off = chr_off + bank * 4096 + tile_id * 16
+    rows: list[str] = []
+    for y in range(8):
+        p0 = rom[off + y]
+        p1 = rom[off + 8 + y]
+        rows.append(
+            "".join(
+                str(((p0 >> (7 - x)) & 1) | (((p1 >> (7 - x)) & 1) << 1))
+                for x in range(8)
+            )
+        )
+    return rows
+
+
+def _extract_nes_font_tiles(root: Path) -> dict[str, list[str]]:
+    """Extract Zelda II's 8x8 CHR font and box border tiles from roms/z2.nes + TEXT_GLYPHS."""
+    rom_path = root / "roms" / "z2.nes"
+    if not rom_path.exists():
+        return {}
+    rom = rom_path.read_bytes()
+    chr_off = 16 + 131072  # 16-byte iNES header + 128KB PRG
+    if len(rom) < chr_off + 8 * 4096:
+        return {}
+
+    tiles: dict[str, list[str]] = {}
+    for i in range(10):
+        tiles[str(i)] = _decode_chr_tile(rom, chr_off, 7, 0xD0 + i)
+    for i in range(26):
+        tiles[chr(ord("A") + i)] = _decode_chr_tile(rom, chr_off, 7, 0xDA + i)
+    tiles[" "] = _decode_chr_tile(rom, chr_off, 7, 0xF4)
+    tiles["."] = _decode_chr_tile(rom, chr_off, 7, 0xCF)
+    tiles["/"] = _decode_chr_tile(rom, chr_off, 7, 0xCE)
+    tiles["?"] = _decode_chr_tile(rom, chr_off, 7, 0x34)
+    tiles["!"] = _decode_chr_tile(rom, chr_off, 7, 0x36)
+    tiles[","] = list(assets.TEXT_GLYPHS[0x33])
+    tiles["'"] = list(assets.TEXT_GLYPHS[0x35])
+    tiles["@"] = _decode_chr_tile(rom, chr_off, 1, 0x0E)
+    tiles["border_corner"] = _decode_chr_tile(rom, chr_off, 7, 0xCA)
+    tiles["border_horiz"] = _decode_chr_tile(rom, chr_off, 7, 0xCB)
+    tiles["border_vert"] = _decode_chr_tile(rom, chr_off, 7, 0xCC)
+    return tiles
 
 _MACRO_LINE_RE = re.compile(r'^\s*(?:TownLine|WaldoLine)\s+"([^"]*)"\s*,\s*\$([0-9A-Fa-f]{2})\b')
 _LABEL_RE = re.compile(r'^([A-Za-z_][A-Za-z0-9_]*):\s*(?:;.*)?$')
@@ -177,6 +232,7 @@ def _make_entry(
     includes_terminator_in_bytes: bool = True,
     vanilla_text: str | None = None,
     notes: str = "",
+    preview_kind: str = "town_box_outdoor",
 ) -> dict[str, Any]:
     return {
         "id": sid,
@@ -187,6 +243,7 @@ def _make_entry(
         "location": location,
         "text": text,
         "vanilla_text": vanilla_text,
+        "preview_kind": preview_kind,
         "constraints": {
             "max_line_len": max_line_len,
             "exact_line_len": exact_line_len,
@@ -211,12 +268,12 @@ def build_z2_strings_payload(root: Path = ROOT) -> dict[str, Any]:
     sage_blocks = _parse_macro_blocks(root / "src" / "sage_basement.inc")
     waldo_blocks = _parse_macro_blocks(root / "src" / "waldo_portal.inc")
 
-    town_macro_chars = "A-Z space . ! ? ' newline"
-    town_macro_regex = r"^[A-Z .!?\'\n]+$"
-    waldo_macro_chars = "A-Z 0-9 space . ! ? ' newline"
-    waldo_macro_regex = r"^[A-Z0-9 .!?\'\n]+$"
-    inplace_chars = "A-Z space . ! newline"
-    inplace_regex = r"^[A-Z .!\n]+$"
+    town_macro_chars = "A-Z 0-9 space . , / ! ? ' newline"
+    town_macro_regex = r"^[A-Z0-9 .,/!?\'\n]+$"
+    waldo_macro_chars = "A-Z 0-9 space . , / ! ? ' newline"
+    waldo_macro_regex = r"^[A-Z0-9 .,/!?\'\n]+$"
+    inplace_chars = "A-Z 0-9 space . , / ! ? ' newline"
+    inplace_regex = r"^[A-Z0-9 .,/!?\'\n]+$"
 
     # 1. Title Screen & Game Over
     entries.append(
@@ -238,6 +295,7 @@ def build_z2_strings_payload(root: Path = ROOT) -> dict[str, Any]:
             allowed_regex=r"^[A-Z0-9 .,@\n]+$",
             wrap_mode="fixed_row",
             notes="Each of the 13 rows must be padded with spaces to exact 28 chars.",
+            preview_kind="title_story",
         )
     )
     entries.append(
@@ -259,20 +317,21 @@ def build_z2_strings_payload(root: Path = ROOT) -> dict[str, Any]:
             allowed_regex=r"^[A-Z ]+$",
             wrap_mode="single",
             notes="In-place 15-byte replacement over RETURN OF GANON.",
+            preview_kind="game_over_banner",
         )
     )
 
     # 2. In-place Town Dialogue Replacements (tools/build.py)
     inplace_meta = {
-        "Mido downstab": ("Mido", "Downstab Knight", "Mido — Downstab Knight"),
-        "Darunia upstab": ("Darunia", "Upstab Knight", "Darunia — Upstab Knight"),
-        "Saria mirror lady": ("Saria", "Mirror Lady", "Saria — Mirror Lady"),
-        "Saria bridge guard": ("Saria", "River Guard", "Saria — River Guard"),
-        "Bagu note": ("Bagu's Cabin", "Bagu", "Bagu — Note to Guard"),
-        "Bagu location": ("Saria", "Bagu's Brother", "Saria — Bagu's Brother"),
+        "Mido downstab": ("Mido", "Downstab Knight", "Mido — Downstab Knight", "town_box_indoor"),
+        "Darunia upstab": ("Darunia", "Upstab Knight", "Darunia — Upstab Knight", "town_box_indoor"),
+        "Saria mirror lady": ("Saria", "Mirror Lady", "Saria — Mirror Lady", "town_box_outdoor"),
+        "Saria bridge guard": ("Saria", "River Guard", "Saria — River Guard", "town_box_indoor"),
+        "Bagu note": ("Bagu's Cabin", "Bagu", "Bagu — Note to Guard", "town_box_indoor"),
+        "Bagu location": ("Saria", "Bagu's Brother", "Saria — Bagu's Brother", "town_box_outdoor"),
     }
     for addr, name, original, dialogue in build_data["in_place_town"]:
-        area, char, label = inplace_meta.get(name, ("Towns (In-Place)", name, name))
+        area, char, label, pkind = inplace_meta.get(name, ("Towns (In-Place)", name, name, "town_box_outdoor"))
         orig_lines = original.splitlines()
         entries.append(
             _make_entry(
@@ -292,6 +351,7 @@ def build_z2_strings_payload(root: Path = ROOT) -> dict[str, Any]:
                 allowed_regex=inplace_regex,
                 wrap_mode="newline",
                 notes=f"In-place Bank 3 replacement; max {len(original)} chars + $FF ({len(orig_lines)} lines).",
+                preview_kind=pkind,
             )
         )
 
@@ -338,6 +398,7 @@ def build_z2_strings_payload(root: Path = ROOT) -> dict[str, Any]:
                 allowed_chars=town_macro_chars,
                 allowed_regex=town_macro_regex,
                 notes="Post-SCALES basement sequence; plays automatically as Barba leaves.",
+                preview_kind="town_box_indoor",
             )
         )
 
@@ -363,6 +424,7 @@ def build_z2_strings_payload(root: Path = ROOT) -> dict[str, Any]:
         ("ErrorAshText", "Ruto", "Error", "Error's Ash Pile"),
     ]
     for lbl, area, char, nice_label in town_dlg_meta:
+        pkind = "town_box_indoor" if lbl in ("TownWiseManText", "TownHealerText", "TownMagicText") else "town_box_outdoor"
         entries.append(
             _make_entry(
                 sid=f"town_{lbl.lower()}",
@@ -378,6 +440,7 @@ def build_z2_strings_payload(root: Path = ROOT) -> dict[str, Any]:
                 allowed_chars=town_macro_chars,
                 allowed_regex=town_macro_regex,
                 notes="Copied into ARCADE_DLG_BUF ($63C0-$63FF, 64-byte limit).",
+                preview_kind=pkind,
             )
         )
 
@@ -412,6 +475,7 @@ def build_z2_strings_payload(root: Path = ROOT) -> dict[str, Any]:
                 allowed_chars=waldo_macro_chars,
                 allowed_regex=waldo_macro_regex,
                 notes="Displayed when inspecting an arcade cabinet in Rauru's Arcade.",
+                preview_kind="town_box_indoor",
             )
         )
 
@@ -468,6 +532,7 @@ def build_z2_strings_payload(root: Path = ROOT) -> dict[str, Any]:
             allowed_regex=r"^[A-Z \n]+$",
             wrap_mode="fixed_row",
             notes="3 fixed 14-tile rows drawn directly to nametable when returning to non-town rooms.",
+            preview_kind="nontown_win_box",
         )
     )
 
@@ -488,6 +553,7 @@ def build_z2_strings_payload(root: Path = ROOT) -> dict[str, Any]:
                 allowed_chars=waldo_macro_chars,
                 allowed_regex=waldo_macro_regex,
                 notes="Dialogue for NPCs hanging out inside the Rauru Arcade.",
+                preview_kind="town_box_indoor",
             )
         )
 
@@ -511,6 +577,7 @@ def build_z2_strings_payload(root: Path = ROOT) -> dict[str, Any]:
             allowed_regex=r"^[A-Z \n]+$",
             wrap_mode="fixed_row",
             notes="26-tile header row split into left (Hyrule) and right (Arcade) columns.",
+            preview_kind="pause_menu_box",
         )
     )
 
@@ -534,6 +601,7 @@ def build_z2_strings_payload(root: Path = ROOT) -> dict[str, Any]:
                 allowed_regex=r"^[A-Z.]+$",
                 wrap_mode="single",
                 notes="Fixed 7-char slot padded with '.' ($CF) dot leaders.",
+                preview_kind="pause_menu_box",
             )
         )
 
@@ -557,6 +625,7 @@ def build_z2_strings_payload(root: Path = ROOT) -> dict[str, Any]:
                 allowed_regex=r"^[A-Z.]+$",
                 wrap_mode="single",
                 notes="Fixed 6-char slot padded with '.' ($CF) dot leaders.",
+                preview_kind="pause_menu_box",
             )
         )
 
@@ -580,6 +649,7 @@ def build_z2_strings_payload(root: Path = ROOT) -> dict[str, Any]:
                 allowed_regex=r"^[A-Z ]+$",
                 wrap_mode="single",
                 notes="Fixed 4-char slot in the pause menu gear tray.",
+                preview_kind="pause_menu_box",
             )
         )
 
@@ -604,6 +674,7 @@ def build_z2_strings_payload(root: Path = ROOT) -> dict[str, Any]:
             allowed_regex=r"^[A-Z !?.\n]+$",
             wrap_mode="fixed_row",
             notes="Wraps every 15 chars with no $FD byte; pad each line to 15 chars with spaces.",
+            preview_kind="ending_wakeup",
         )
     )
 
@@ -634,16 +705,19 @@ def build_z2_strings_payload(root: Path = ROOT) -> dict[str, Any]:
                 allowed_regex=r"^[A-Z .\n]+$",
                 wrap_mode="fixed_row",
                 notes="All credit packets combined must fit in Bank 5 $9259-$93FF (423 bytes).",
+                preview_kind="ending_credits",
             )
         )
 
     areas = list(dict.fromkeys(e["area"] for e in entries))
     characters = list(dict.fromkeys(e["character"] for e in entries))
     return {
-        "version": 1,
+        "version": 2,
         "count": len(entries),
         "areas": areas,
         "characters": characters,
+        "palettes": NES_PALETTE_HEX,
+        "tiles": _extract_nes_font_tiles(root),
         "strings": entries,
     }
 

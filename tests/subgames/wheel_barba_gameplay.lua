@@ -181,6 +181,7 @@ local phase = 'nav_to_board'
 local phaseStart = 0
 local checkedMenu = false
 local checkedBoard = false
+local sawFarLeftTurnLeft = false
 
 emu.addEventCallback(function()
     if done then return end
@@ -230,6 +231,9 @@ emu.addEventCallback(function()
 
     elseif phase == 'verify_board' then
         inp = {}
+        if read(0x0004) == 0x12 and (read(0x0003) & 0x80) ~= 0 then
+            sawFarLeftTurnLeft = true
+        end
         if frame == phaseStart + 40 and not checkedBoard then
             checkedBoard = true
             local puzText = readAsciiRange(0x03D1, 64)
@@ -267,6 +271,8 @@ emu.addEventCallback(function()
             check(read(0x7FFB) == 1, string.format('Main Board Vertical-mirroring NT XOR active ($7FFB=%02X)', read(0x7FFB)))
 
             savePng('wheel_barba_board.png')
+        elseif frame == phaseStart + 125 then
+            check(not sawFarLeftTurnLeft, 'Barba stays facing right when standing at far left ($04=$12)')
             -- Trigger Barba Vanna walk to target X=$A0 and unveil row 1 ($B4=$09)
             write(0x009D, 0x12)
             write(0x00AC, 0x00)

@@ -294,7 +294,7 @@ Bank2SpellHi:
     .byte >(ArcadeLuckyDrop2 - 1)
     .byte >(LevelUpInit2 - 1)
 
-.segment "BANK1_SPELLS"
+.segment "BANK1_SOULS"
 ; Populate Level-Up Pane template rows $789A..$7917 (9x14 bytes: $CC, 12x$F4, $CC;
 ; $D0 at $78C8, $78D6, $78E4), replacing vanilla $A347 copy from $9CB4..$9D31.
 LevelUpInit2:
@@ -528,6 +528,7 @@ ArcadeCast2:
     lda #$00
 @afford:
     sta $0773
+    jsr ClearArcadeActive2  ; single-active-Arcade-spell exclusivity
     tya
     sec
     sbc #$08
@@ -2289,16 +2290,16 @@ HyruleSpellCostTbl:
     .byte $F0,$E0,$C0,$A0,$60,$40,$30,$20 ; 6: SPELL
     .byte $F0,$F0,$F0,$F0,$F0,$F0,$C8,$80 ; 7: INFERNO
 ArcadeSpellCostTbl:
-    .byte 16,14,12,10, 8, 8, 6, 6  ; 8:  DECOY
-    .byte 24,20,18,16,14,12,10, 8  ; 9:  AXE
-    .byte 32,28,24,22,20,18,16,14  ; 10: DOUBLE
-    .byte 32,28,24,20,18,16,14,12  ; 11: BARREL
-    .byte 48,44,40,36,32,28,24,20  ; 12: STAR
-    .byte 24,22,20,18,16,14,12,10  ; 13: LOCK
-    .byte 40,36,32,28,24,22,20,18  ; 14: BLADE
-    .byte 24,20,18,16,14,12,10, 8  ; 15: LUCKY
-    .byte 56,52,48,44,40,36,32,28  ; 16: CLOCK
-    .byte 48,44,40,36,32,28,24,20  ; 17: HEAVY
+    .byte 32,28,24,20,18,16,14,12  ; 8:  DECOY  (16..6 MP)
+    .byte 24,20,18,16,14,12,10, 8  ; 9:  AXE    (archived post-2.0)
+    .byte 48,44,40,36,32,28,24,20  ; 10: DOUBLE (24..10 MP)
+    .byte 40,36,32,28,24,22,20,18  ; 11: BARREL (20..9 MP)
+    .byte 48,44,40,36,32,28,24,20  ; 12: STAR   (archived post-2.0)
+    .byte 56,50,44,40,36,32,28,24  ; 13: LOCK   (28..12 MP)
+    .byte 40,36,32,28,24,22,20,18  ; 14: BLADE  (archived post-2.0)
+    .byte 48,44,40,36,32,28,24,20  ; 15: LUCKY  (24..10 MP; > 1 Blue Jar 16 raw)
+    .byte 56,52,48,44,40,36,32,28  ; 16: CLOCK  (archived post-2.0)
+    .byte 48,44,40,36,32,28,24,20  ; 17: HEAVY  (archived post-2.0)
 
 .segment "BANK1_SOULS"
 MenuHeaderRow26:
@@ -2641,3 +2642,18 @@ GearCheckAB1:
     inc $0524
 @ret:
     jmp $FFC5
+
+.segment "BANK1_SPELLS"
+; Clear all active Arcade spell bits, timers, and OAM slots (preserves Y).
+ClearArcadeActive2:
+    lda #$00
+    ldx #$10
+:   sta $6680,x
+    dex
+    bpl :-
+    lda #$F8
+    sta $02DC
+    sta $02E0
+    sta $02E4
+    sta $02E8
+    rts

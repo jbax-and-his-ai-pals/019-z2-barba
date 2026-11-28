@@ -1530,6 +1530,57 @@ local phase = 'title_s1'
 local phaseStart = 0
 local savedMenu = false
 local inp = {}
+local prizeIdx = 0
+local prizeStep = 0
+
+local function startPrizeSetup()
+    if phase == 'prize_setup' and prizeStep == 0 then
+        prizeStep = 1
+        w(0x00BF, 0x02)
+        w(0x00CB, prizeIdx)
+        w(0x00CA, prizeIdx)
+        w(0x00AD, 0x10)
+        w(0x0062, 0x00)
+        w(0x0505, 0x00)
+        w(0x000E, 0x16)
+        w(0x000F, 0xC2)
+        w(0x01FF, 0xC4)
+        w(0x01FE, 0xEF)
+        emu.setState({['cpu.sp'] = 0xFD, ['cpu.pc'] = 0xC4B3})
+    end
+end
+
+emu.addMemoryCallback(startPrizeSetup, emu.callbackType.exec, 0x927A)
+emu.addMemoryCallback(startPrizeSetup, emu.callbackType.exec, 0xC216)
+
+emu.addMemoryCallback(function()
+    if phase == 'prize_setup' and prizeStep == 1 then
+        prizeStep = 2
+        w(0x01FF, 0xC4)
+        w(0x01FE, 0xEF)
+        emu.setState({['cpu.sp'] = 0xFD, ['cpu.pc'] = 0xC536})
+    elseif phase == 'prize_setup' and prizeStep == 2 then
+        prizeStep = 3
+        w(0x01FF, 0xC4)
+        w(0x01FE, 0xEF)
+        emu.setState({['cpu.sp'] = 0xFD, ['cpu.x'] = 0x80, ['cpu.y'] = 0xA0, ['cpu.pc'] = 0x87C1})
+    elseif phase == 'prize_setup' and prizeStep == 3 then
+        prizeStep = 4
+        w(0x01FF, 0xC4)
+        w(0x01FE, 0xEF)
+        emu.setState({['cpu.sp'] = 0xFD, ['cpu.x'] = 0x00, ['cpu.pc'] = 0x89C8})
+    elseif phase == 'prize_setup' and prizeStep == 4 then
+        prizeStep = 5
+        w(0x01FF, 0xC4)
+        w(0x01FE, 0xEF)
+        emu.setState({['cpu.sp'] = 0xFD, ['cpu.pc'] = 0xE130})
+    elseif phase == 'prize_setup' and prizeStep == 5 then
+        prizeStep = 6
+        phase = 'prize_wait'
+        phaseStart = frame
+        emu.setState({['cpu.pc'] = 0xC2E9})
+    end
+end, emu.callbackType.exec, 0xC4F0)
 
 emu.addEventCallback(function()
     emu.setInput(inp, 0)
@@ -1594,6 +1645,22 @@ emu.addEventCallback(function()
         if dt >= 2 and (dt % 2 == 0) and (counts.barba_walk or 0) < 32 then
             dumpCrop('barba_walk', 0, 8, 256, 224)
             if counts.barba_walk >= 32 then
+                prizeIdx = 0
+                prizeStep = 0
+                phase = 'prize_setup'
+                phaseStart = frame
+            end
+        end
+
+    elseif phase == 'prize_wait' then
+        if dt == 12 then
+            dumpCrop('prize_' .. prizeIdx, 0, 8, 256, 224)
+            prizeIdx = prizeIdx + 1
+            if prizeIdx < 6 then
+                prizeStep = 0
+                phase = 'prize_setup'
+                phaseStart = frame
+            else
                 closeAll()
                 emu.stop(0)
             end
@@ -1943,6 +2010,12 @@ SUBGAMES: list[dict[str, Any]] = [
             ("menu", "Game Setup Menu", "Setup board themed to WHEEL OF BARBA EDITION.", 256, 224, 24, 12, "Vanilla Setup Menu", "WHEEL OF BARBA EDITION"),
             ("board", "Main Puzzle Board (Barba & Dark Link)", "Main board with full-body Barba host, DARK LINK contestant, and custom Zelda II puzzles.", 256, 224, 32, 15, "Vanilla Board & Vanna", "Barba, Dark Link & Z2 Puzzle"),
             ("barba_walk", "Barba Unveiling Letters", "Full-body Barba striding briskly across the puzzle stage to turn letters.", 256, 224, 32, 15, "Vanilla Hostess Walk", "Full-Body Barba Walk"),
+            ("prize_0", "Bonus Prize 1: Palace 6 Crystal", "Replaces Emerald Necklace with a faceted, glowing Palace 6 Crystal on a Palace VI pedestal.", 256, 224, 1, 1, "Emerald Necklace", "PALACE 6 CRYSTAL"),
+            ("prize_1", "Bonus Prize 2: East Hyrule Cruise", "Replaces Caribbean Cruise with the Crossing Raft sailing across East Hyrule waves.", 256, 224, 1, 1, "Caribbean Cruise", "EAST HYRULE CRUISE"),
+            ("prize_2", "Bonus Prize 3: Hyrule Item Hoard", "Replaces Beach House with a two-tier showcase of real Zelda II items (P-Bag, Candle, Hammer, Boots, Flute, Cross, Key, Elixir).", 256, 224, 1, 1, "Beach House", "HYRULE ITEM HOARD"),
+            ("prize_3", "Bonus Prize 4: April in Rauru", "Replaces April in Paris by swapping the Eiffel Tower and Paris script for a Rauru Town house and Paris-matched Rauru script.", 256, 224, 1, 1, "April in Paris", "APRIL IN RAURU"),
+            ("prize_4", "Bonus Prize 5: This Cool Boulder", "Replaces Concorde to London with a 2x Zelda II overworld boulder on a velvet showcase pedestal.", 256, 224, 1, 1, "Concorde to London", "THIS COOL BOULDER"),
+            ("prize_5", "Bonus Prize 6: Piece of Palace 4", "Replaces Bentley with a broken-off chunk of Maze Island Palace 4 stone and pillar.", 256, 224, 1, 1, "Bentley", "PIECE OF PALACE 4"),
         ],
     },
     {
@@ -2182,6 +2255,7 @@ def _unpack_scene(scene: tuple[Any, ...] | dict[str, Any]) -> dict[str, Any]:
             "vanilla_label": scene["vanilla_label"],
             "modded_label": scene["modded_label"],
             "visibility": scene.get("visibility", "public"),
+            "target": scene.get("target"),
         }
     if len(scene) == 9:
         sc_id, title, desc, w, h, n_frames, fps, v_lbl, m_lbl = scene
@@ -2201,6 +2275,7 @@ def _unpack_scene(scene: tuple[Any, ...] | dict[str, Any]) -> dict[str, Any]:
         "vanilla_label": v_lbl,
         "modded_label": m_lbl,
         "visibility": meta.get("visibility", "public"),
+        "target": meta.get("target"),
     }
 
 
@@ -2293,6 +2368,8 @@ def build_subgames_payload(
             }
             if sc_vis == "local":
                 sc_entry["visibility"] = "local"
+            if sc.get("target"):
+                sc_entry["target"] = sc["target"]
             scenes_payload.append(sc_entry)
 
         if not include_local and not scenes_payload:

@@ -570,6 +570,108 @@ window.BARBA_SUBGAMES_DATA = {
             "label": "Full-Body Barba Walk",
             "img": "previews/subgames/wheel_barba_walk_modded.png"
           }
+        },
+        {
+          "id": "prize_0",
+          "title": "Bonus Prize 1: Palace 6 Crystal",
+          "description": "Replaces Emerald Necklace with a faceted, glowing Palace 6 Crystal on a Palace VI pedestal.",
+          "w": 256,
+          "h": 224,
+          "frames": 1,
+          "fps": 1,
+          "vanilla": {
+            "label": "Emerald Necklace",
+            "img": "previews/subgames/wheel_prize_0_vanilla.png"
+          },
+          "modded": {
+            "label": "PALACE 6 CRYSTAL",
+            "img": "previews/subgames/wheel_prize_0_modded.png"
+          }
+        },
+        {
+          "id": "prize_1",
+          "title": "Bonus Prize 2: East Hyrule Cruise",
+          "description": "Replaces Caribbean Cruise with the Crossing Raft sailing across East Hyrule waves.",
+          "w": 256,
+          "h": 224,
+          "frames": 1,
+          "fps": 1,
+          "vanilla": {
+            "label": "Caribbean Cruise",
+            "img": "previews/subgames/wheel_prize_1_vanilla.png"
+          },
+          "modded": {
+            "label": "EAST HYRULE CRUISE",
+            "img": "previews/subgames/wheel_prize_1_modded.png"
+          }
+        },
+        {
+          "id": "prize_2",
+          "title": "Bonus Prize 3: Hyrule Item Hoard",
+          "description": "Replaces Beach House with a two-tier showcase of real Zelda II items (P-Bag, Candle, Hammer, Boots, Flute, Cross, Key, Elixir).",
+          "w": 256,
+          "h": 224,
+          "frames": 1,
+          "fps": 1,
+          "vanilla": {
+            "label": "Beach House",
+            "img": "previews/subgames/wheel_prize_2_vanilla.png"
+          },
+          "modded": {
+            "label": "HYRULE ITEM HOARD",
+            "img": "previews/subgames/wheel_prize_2_modded.png"
+          }
+        },
+        {
+          "id": "prize_3",
+          "title": "Bonus Prize 4: April in Rauru",
+          "description": "Replaces April in Paris by swapping the Eiffel Tower and Paris script for a Rauru Town house and Paris-matched Rauru script.",
+          "w": 256,
+          "h": 224,
+          "frames": 1,
+          "fps": 1,
+          "vanilla": {
+            "label": "April in Paris",
+            "img": "previews/subgames/wheel_prize_3_vanilla.png"
+          },
+          "modded": {
+            "label": "APRIL IN RAURU",
+            "img": "previews/subgames/wheel_prize_3_modded.png"
+          }
+        },
+        {
+          "id": "prize_4",
+          "title": "Bonus Prize 5: This Cool Boulder",
+          "description": "Replaces Concorde to London with a 2x Zelda II overworld boulder on a velvet showcase pedestal.",
+          "w": 256,
+          "h": 224,
+          "frames": 1,
+          "fps": 1,
+          "vanilla": {
+            "label": "Concorde to London",
+            "img": "previews/subgames/wheel_prize_4_vanilla.png"
+          },
+          "modded": {
+            "label": "THIS COOL BOULDER",
+            "img": "previews/subgames/wheel_prize_4_modded.png"
+          }
+        },
+        {
+          "id": "prize_5",
+          "title": "Bonus Prize 6: Piece of Palace 4",
+          "description": "Replaces Bentley with a broken-off chunk of Maze Island Palace 4 stone and pillar.",
+          "w": 256,
+          "h": 224,
+          "frames": 1,
+          "fps": 1,
+          "vanilla": {
+            "label": "Bentley",
+            "img": "previews/subgames/wheel_prize_5_vanilla.png"
+          },
+          "modded": {
+            "label": "PIECE OF PALACE 4",
+            "img": "previews/subgames/wheel_prize_5_modded.png"
+          }
         }
       ]
     }

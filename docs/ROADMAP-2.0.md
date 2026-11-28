@@ -121,21 +121,20 @@ Current baseline in [`src/arcade_spells.inc`](../src/arcade_spells.inc#L2238-L22
 - [x] Port smooth wipe-in / wipe-out transitions with clean APU mute to the remaining 8 subgames (`feud`, `dk`, `smb`, `duck`, `mm2`, `wheel`, `zelda`, `mtpo`). *(Unified 30-frame wavy transition & `$4015=0 / $4011=0 / $E000=0 / $4017=$40` APU mute in `tools/portal_transitions.py`, combined-only `enable_transitions=True` keeping standalone MMC3/compat builds untouched.)*
 - [x] Replace hardcoded `WaldoReturnText` with context-aware return UX (celebration + unlock message on milestone win; silent clean return on `Start+Select`) and booth completion indicators. *(Per-game `$6804` `RA_LAST_WIN_GAME` celebration messages in towns, `ShowNonTownWinBox8` in `EH $07`, and silent clean return on `Start+Select`.)*
 
-### Phase 4 — Balance Pass (Zelda II Parity + Arcade Spells + Milestones)
-- [ ] Rebalance `ArcadeSpellCostTbl`, break `LUCKY` infinite MP, tune `HEAVY`/`STAR`/`CLOCK`/`AXE`/`LOCK`/`BLADE`, and evaluate single-active-Arcade-spell exclusivity.
+### Phase 4 — Balance Pass (Zelda II Parity + Arcade Spells + Milestones) *(Build #826, `50d47d9f9a4a`)*
+- [x] Rebalance `ArcadeSpellCostTbl`, break `LUCKY` infinite MP, tune active spells (`DECOY`/`DOUBLE`/`BARREL`/`LOCK`/`LUCKY`), and implement single-active-Arcade-spell exclusivity (`ClearArcadeActive2` in `src/arcade_spells.inc`; `AXE`/`STAR`/`BLADE`/`CLOCK`/`HEAVY` archived post-2.0 in Build #825).
 - [x] Revisit all Zelda II hack strings (`town_dialogue.inc`, `sign.inc`, `sage_basement.inc`, `waldo_portal.inc`, `build.py` in-place lines) for the expanded 14×4 message box and ensure a 1-character border of space on all four sides (top/left/bottom/right), including `ShowNonTownWinBox8`. *(Build #824 `51cf1b3fe838`: offloaded town/sign/Error strings to `PORTAL_BANK` via `CopyTownDlg8`/`LoadTownDlg3` -> `ARCADE_DLG_BUF`, expanded all panic/service/sign/portal strings to 14×4, restored vanilla `A STRANGER.` / `THE CASTLE.`, and expanded `ShowNonTownWinBox8` to 7×18 with 1-tile padding on all 4 sides.)*
-- [ ] Playtest Palaces 1–6, Death Mountain, Valley of Death, and Great Palace to verify vanilla Zelda II difficulty parity.
-- [ ] Define and tune 1–2 curated portal milestones per subgame while guaranteeing 100% full-game playability.
+- [ ] Playtest Palaces 1–6, Death Mountain, Valley of Death, and Great Palace to verify vanilla Zelda II difficulty parity. *(Automated boss/palace/combat/perf regressions pass on Build #826; human F-key playtest ready via `play/Test Barba.cmd`.)*
+- [x] Define and tune 1–2 curated portal milestones per active subgame while guaranteeing 100% full-game playability (`waldo` Moon, `feud` Fast Money `$A964`, `dk` Loop 1 100m `$C8B3`, `duck` Round 1 `$D39B`, `wheel` Bonus Round `$C988`; standalone ROMs remain 100% playable).
 
-### Phase 5 — Subgame 2.0 Polish (All 10 Crossovers)
-- [ ] **Tier 1 (Biggest Lift):** `zelda` (title, dragon breath, Z2 enemy/item/audio theming, fix 97-frame `roar_hold` freeze, milestones) & `mm2` (title, fireball weapon feel, Z2 stage/enemy/boss theming, milestones).
-- [ ] **Tier 2 (Medium Lift):** `mtpo` (Evil Link/title rework, full-roster MMC3 scanline IRQ hardening, milestones) & `wheel` (multi-screen title alignment, polish, milestones).
-- [ ] **Tier 3 (Final Shine & Title Sign-Off):** `smb`, `f13`, `dk`, `duck`, `feud`, `waldo` (remaining title sign-offs, edge-case QA, milestones).
+### Phase 5 — Subgame 2.0 Polish (5 Active Crossovers: `waldo`, `feud`, `dk`, `duck`, `wheel`)
+*(Note: `zelda`, `mm2`, `mtpo`, `smb`, and `f13` were archived to `archive/subgames/` in Build #825 for post-2.0.)*
+- [ ] **Tier 1 (Wheel & Feud):** `wheel` (multi-screen title alignment, polish, 97-puzzle roster QA) & `feud` (final polish & MMC3 lineup QA).
+- [ ] **Tier 2 (Final Shine & Title Sign-Off):** `waldo`, `dk`, `duck` (remaining title sign-offs, edge-case QA).
 
 ### Phase 6 — MMC3 Parity, QA & Release Packaging
 - [ ] Port `wheel` from AxROM/FK23C to standard Mapper 4 (MMC3) standalone build.
-- [ ] Switch standalone MMC3 `mm2` and `zelda` builds from 32 KB -> 8 KB CHR-RAM (iNES 1.0 compatible, or CHR-ROM if upgraded).
-- [ ] Verify standalone `barba-z2-mmc3.nes` and all 10 `play/nes/*-mmc3.nes` ROMs against flagship FK23C builds via automated Mesen tests.
+- [ ] Verify standalone `barba-z2-mmc3.nes` and all 5 active `play/compat/nes/*-compat.nes` ROMs against flagship FK23C builds via automated Mesen tests.
 - [ ] Finalize per-game `.bps` patches and public multi-ROM patcher packaging (zero third-party ROM literals in public patches).
 
 ### Phase 7 — RetroAchievements (Freeze & Ship)

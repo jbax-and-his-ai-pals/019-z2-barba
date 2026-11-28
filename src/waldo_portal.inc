@@ -29,6 +29,10 @@ ARCADE_SIGN_ROOM = $6362   ; 1 byte: last room ($0561) drawn by UpdateArcadeSign
             .byte $F4
         .elseif .strat(text, character) = '.'
             .byte $CF
+        .elseif .strat(text, character) = '/'
+            .byte $CE
+        .elseif .strat(text, character) = ','   ; comma (TEXT_GLYPHS, bank-7 tile $33)
+            .byte $33
         .elseif .strat(text, character) = '!'
             .byte $36
         .elseif .strat(text, character) = $3F   ; '?' (vanilla font, bank-7 tile $34)
@@ -53,6 +57,10 @@ ARCADE_SIGN_ROOM = $6362   ; 1 byte: last room ($0561) drawn by UpdateArcadeSign
             .byte $F4
         .elseif .strat(text, character) = '.'
             .byte $CF
+        .elseif .strat(text, character) = '/'
+            .byte $CE
+        .elseif .strat(text, character) = ','   ; comma (TEXT_GLYPHS, bank-7 tile $33)
+            .byte $33
         .elseif .strat(text, character) = '!'
             .byte $36
         .elseif .strat(text, character) = $3F
@@ -1365,56 +1373,58 @@ UpdateArcadeSigns8:
     rts
 
 ArcadeName00:
-    WaldoLine "INSERT COIN!", $FD
-    WaldoLine "WHERES BARBA?", $FF
+    WaldoLine "THERE'S BARBA!", $FD
+    WaldoLine "INSERT COIN!", $FF
 ArcadeName01:
-    WaldoLine "INSERT COIN!", $FD
-    WaldoLine "FRIDAY 13TH", $FF
+    WaldoLine "FRIDAY THE ", $FD
+    WaldoLine "   13TH", $FD
+    WaldoLine "CAMP BARBA", $FD
+    WaldoLine "INSERT COIN!", $FF
 ArcadeName02:
-    WaldoLine "INSERT COIN!", $FD
-    WaldoLine "BARBA'S BEEF", $FF
+    WaldoLine "BARBA'S BEEF", $FD
+    WaldoLine "INSERT COIN!", $FF
 ArcadeName03:
-    WaldoLine "INSERT COIN!", $FD
-    WaldoLine "BARBA KONG", $FF
+    WaldoLine "BARBA KONG", $FD
+    WaldoLine "INSERT COIN!", $FF
 ArcadeName04:
-    WaldoLine "INSERT COIN!", $FD
-    WaldoLine "SUPER BARBA", $FF
+    WaldoLine "SUPER BARBA", $FD
+    WaldoLine "   BROS.", $FD
+    WaldoLine "INSERT COIN!", $FF
 ArcadeName05:
-    WaldoLine "INSERT COIN!", $FD
-    WaldoLine "MONSTER HUNT", $FF
+    WaldoLine "BARBA'S HUNT", $FD
+    WaldoLine "INSERT COIN!", $FF
 ArcadeName07:
-    WaldoLine "INSERT COIN!", $FD
-    WaldoLine "BARBA MAN 2", $FF
+    WaldoLine "MEGA BARBA 2", $FD
+    WaldoLine "INSERT COIN!", $FF
 ArcadeName08:
-    WaldoLine "INSERT COIN!", $FD
     WaldoLine "WHEEL OF", $FD
-    WaldoLine "BARBA", $FF
+    WaldoLine "   BARBA", $FD
+    WaldoLine "INSERT COIN!", $FF
 ArcadeName09:
-    WaldoLine "INSERT COIN!", $FD
     WaldoLine "LEGEND OF", $FD
-    WaldoLine "BARBA", $FF
+    WaldoLine "   BARBA", $FD
+    WaldoLine "INSERT COIN!", $FF
 ArcadeName10:
-    WaldoLine "INSERT COIN!", $FD
-    WaldoLine "BARBA", $FD
-    WaldoLine "PUNCH OUT!!", $FF
+    WaldoLine "BARBA'S", $FD
+    WaldoLine "PUNCH OUT!!", $FD
+    WaldoLine "INSERT COIN!", $FF
 ArcadeNameDefault:
     WaldoLine "SOMETHING'S", $FD
-    WaldoLine "NOT", $FD
-    WaldoLine "RIGHT...", $FF
+    WaldoLine "NOT RIGHT...", $FF
 
 OutOfOrderText:
-    WaldoLine "OUT OF ORDER!", $FD
-    WaldoLine "FIND THIS GAME", $FD
-    WaldoLine "OUT IN HYRULE.", $FF
+    WaldoLine "OUT OF ORDER!", $FF
 
 WinReturnText01:
     WaldoLine "WHERE'S BARBA?", $FD
     WaldoLine "CLEARED! GOT", $FD
-    WaldoLine "DECOY AND HAT!", $FF
+    WaldoLine "DECOY SPELL", $FD
+    WaldoLine "AND A HAT!", $FF
 WinReturnText02:
     WaldoLine "FRIDAY 13TH", $FD
     WaldoLine "CLEARED! GOT", $FD
-    WaldoLine "AXE AND MASK!", $FF
+    WaldoLine "AXE SPELL AND", $FD
+    WaldoLine "MASK!", $FF
 WinReturnText03:
     WaldoLine "BARBA'S BEEF", $FD
     WaldoLine "CLEARED! GOT", $FD
@@ -1422,19 +1432,21 @@ WinReturnText03:
 WinReturnText04:
     WaldoLine "BARBA KONG", $FD
     WaldoLine "CLEARED! GOT", $FD
-    WaldoLine "BARREL AND TIE", $FF
+    WaldoLine "BARREL SPELL", $FD
+    WaldoLine "AND TIE!", $FF
 WinReturnText05:
     WaldoLine "SUPER BARBA", $FD
     WaldoLine "CLEARED! GOT", $FD
     WaldoLine "STAR SPELL!", $FF
 WinReturnText06:
-    WaldoLine "MONSTER HUNT", $FD
+    WaldoLine "BARBA'S HUNT", $FD
     WaldoLine "CLEARED! GOT", $FD
     WaldoLine "LOCK SPELL!", $FF
 WinReturnText07:
-    WaldoLine "BARBA MAN 2", $FD
+    WaldoLine "MEGA BARBA 2", $FD
     WaldoLine "CLEARED! GOT", $FD
-    WaldoLine "BLADE AND HELM", $FF
+    WaldoLine "BLADE AND", $FD
+    WaldoLine "HELM!", $FF
 WinReturnText08:
     WaldoLine "WHEEL OF BARBA", $FD
     WaldoLine "CLEARED! GOT", $FD
@@ -1854,7 +1866,7 @@ NonTownLinePtrHi:
 NonTownWinL1:
     .byte $EC,$EE,$E9,$DE,$EB,$F4,$DB,$DA,$EB,$DB,$DA,$F4,$F4,$F4  ; "SUPER BARBA   "
 NonTownWinL2:
-    .byte $DC,$E5,$DE,$DA,$EB,$DE,$DD,$F4,$E2,$ED,$F4,$E0,$E8,$ED  ; "CLEARED IT GOT"
+    .byte $DC,$E5,$DE,$DA,$EB,$DE,$DD,$F4,$F4,$F4,$E0,$E8,$ED,$F4  ; "CLEARED   GOT "
 NonTownWinL3:
     .byte $ED,$E1,$DE,$F4,$EC,$ED,$DA,$EB,$F4,$EC,$E9,$DE,$E5,$E5  ; "THE STAR SPELL"
 

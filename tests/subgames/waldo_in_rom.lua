@@ -127,12 +127,12 @@ emu.addEventCallback(function()
         local ef = frame - enterStart
         if ef == 15 then
             check(read(0x74C) == 0x02, 'Door opened enter message box ($074C=2)')
-            check(read(0xFFFA) ~= 0x03, 'Message box runs before wavy transition to Waldo')
+            check(read(0xFFFA) ~= 0xFB, 'Message box runs before wavy transition to Waldo')
         elseif ef == 240 then
             check(read(0x524) == 0x09 and read(0x766) == 0x01, 'Enter message box finished typing and awaits B')
             screenshot('waldo-enter-msg')
-        elseif ef > 250 and read(0xFFFA) == 0x03 and read(0xFFFB) == 0xF6 then
-            check(true, 'Rauru door switched in-ROM to Waldo ($FFFA=$F603)')
+        elseif ef > 250 and read(0xFFFA) == 0xFB and read(0xFFFB) == 0xF8 then
+            check(true, 'Rauru door switched in-ROM to Waldo ($FFFA=$F8FB)')
             phase = 'waldo'
             waldoStart = frame
         elseif ef > 320 then
@@ -144,7 +144,7 @@ emu.addEventCallback(function()
         if wf == 1280 then
             screenshot('waldo-in-rom')
         end
-        if read(0xFFFA) ~= 0x03 or read(0xFFFB) ~= 0xF6 then
+        if read(0xFFFA) ~= 0xFB or read(0xFFFB) ~= 0xF8 then
             check(true, 'Waldo Start+Select returned in-ROM to Barba')
             check(meltStarts == 1, 'Wave-out started once while Start+Select was held')
             check(countValues(meltScroll) >= 5, 'Wave-out varied horizontal scroll')
@@ -160,7 +160,7 @@ emu.addEventCallback(function()
             check(countValues(wipeScroll) >= 5, 'Wave-in varied horizontal scroll')
             local arrival = location()
             check(arrival == departure, 'Exact Rauru return: ' .. arrival .. ' == ' .. departure)
-            check(read(0xFFFA) ~= 0x03, 'Held Up did not reopen the portal')
+            check(read(0xFFFA) ~= 0xFB, 'Held Up did not reopen the portal')
             check(read(0x74C) == 0x00 and read(0x524) == 0x00 and read(0xDE) == 0x00,
                 'Start+Select returned silently with no dialogue box')
             check(read(0x6804) == 0x00, 'Start+Select left $6804=0')

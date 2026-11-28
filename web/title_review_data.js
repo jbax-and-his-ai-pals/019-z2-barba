@@ -139,8 +139,8 @@ window.TITLE_REVIEW_DATA = {
       "id": "wheel",
       "name": "Wheel of Barba",
       "original": "Wheel of Fortune (GameTek)",
-      "build_number": 14,
-      "status_label": "Build #14",
+      "build_number": 28,
+      "status_label": "Build #28",
       "summary": "Screen 1 WHEEL of BARBA credits with bottom-right build number, plus Screen 2 curved BARBA wheel and marquee.",
       "screens": [
         {
@@ -152,7 +152,7 @@ window.TITLE_REVIEW_DATA = {
             "caption": "Vanilla WHEEL OF FORTUNE credits screen"
           },
           "ours": {
-            "label": "Build #14",
+            "label": "Build #28",
             "img": "previews/titles/wheel_modded_s1.png",
             "caption": "WHEEL of BARBA credits screen with build number"
           }
@@ -166,7 +166,7 @@ window.TITLE_REVIEW_DATA = {
             "caption": "Vanilla WHEEL OF FORTUNE big wheel"
           },
           "ours": {
-            "label": "Build #14",
+            "label": "Build #28",
             "img": "previews/titles/wheel_modded_s2.png",
             "caption": "Curved BARBA big wheel and marquee ticker"
           }

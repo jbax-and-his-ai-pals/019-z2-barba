@@ -207,6 +207,153 @@
       `<span>Edited Locally: <strong style="color:var(--cyan);">${modCount}</strong></span>`;
   }
 
+  function getPreviewSpec(item) {
+    const pal = data.palettes || {
+      black: '#000000',
+      white: '#ECEEEC',
+      blue: '#3032EC',
+      red: '#982220',
+      sky: '#787CEC',
+    };
+    const kind = item.preview_kind || 'town_box_outdoor';
+    const c = item.constraints;
+    switch (kind) {
+      case 'town_box_outdoor':
+        return {
+          label: 'In-Game Preview · Extended 18×12 Box (Outdoor)',
+          cols: 18, rows: 12, textCol: 2, textRow: 2, rowStep: 2,
+          bordered: true, bg: pal.sky, c1: pal.white, c2: pal.blue, c3: pal.red,
+        };
+      case 'town_box_indoor':
+        return {
+          label: 'In-Game Preview · Extended 18×12 Box (Indoor)',
+          cols: 18, rows: 12, textCol: 2, textRow: 2, rowStep: 2,
+          bordered: true, bg: pal.black, c1: pal.white, c2: pal.blue, c3: pal.red,
+        };
+      case 'nontown_win_box':
+        return {
+          label: 'In-Game Preview · 18×9 Clear Banner',
+          cols: 18, rows: 9, textCol: 2, textRow: 2, rowStep: 2,
+          bordered: true, bg: pal.black, c1: pal.white, c2: pal.blue, c3: pal.red,
+        };
+      case 'title_story':
+        return {
+          label: 'In-Game Preview · Title Story Scroll (28×13)',
+          cols: 30, rows: 15, textCol: 1, textRow: 1, rowStep: 1,
+          bordered: false, bg: pal.black, c1: pal.white, c2: pal.blue, c3: pal.red,
+        };
+      case 'game_over_banner':
+        return {
+          label: 'In-Game Preview · Game Over Screen',
+          cols: 19, rows: 3, textCol: 2, textRow: 1, rowStep: 1,
+          bordered: false, bg: pal.red, c1: pal.white, c2: pal.black, c3: pal.white,
+        };
+      case 'pause_menu_box':
+        return {
+          label: 'In-Game Preview · Pause / Spell Menu',
+          cols: Math.max(8, c.max_line_len + 4),
+          rows: Math.max(5, c.max_lines + 4),
+          textCol: 2, textRow: 2, rowStep: 1,
+          bordered: true, bg: pal.black, c1: pal.white, c2: pal.blue, c3: pal.red,
+        };
+      case 'ending_wakeup':
+        return {
+          label: 'In-Game Preview · Ending Cutscene',
+          cols: 17, rows: 6, textCol: 1, textRow: 1, rowStep: 1,
+          bordered: false, bg: pal.black, c1: pal.white, c2: pal.blue, c3: pal.red,
+        };
+      case 'ending_credits':
+      default: {
+        const doubleSpaced = c.max_lines === 2;
+        return {
+          label: 'In-Game Preview · Ending Credits',
+          cols: 22,
+          rows: doubleSpaced ? 5 : Math.max(3, c.max_lines + 2),
+          textCol: 1, textRow: 1, rowStep: doubleSpaced ? 2 : 1,
+          bordered: false, bg: pal.black, c1: pal.white, c2: pal.blue, c3: pal.red,
+        };
+      }
+    }
+  }
+
+  function drawChrTile(ctx, tileRows, px, py, scale, colors) {
+    if (!tileRows) return;
+    for (let y = 0; y < 8; y++) {
+      const row = tileRows[y];
+      for (let x = 0; x < 8; x++) {
+        const v = row[x];
+        if (v === '0') continue;
+        ctx.fillStyle = colors[v];
+        ctx.fillRect(px + x * scale, py + y * scale, scale, scale);
+      }
+    }
+  }
+
+  function renderNesPreview(canvas, item, text) {
+    if (!canvas) return;
+    const tiles = data.tiles || {};
+    const spec = getPreviewSpec(item);
+    const scale = 2;
+    const tilePx = 8 * scale;
+    canvas.width = spec.cols * tilePx;
+    canvas.height = spec.rows * tilePx;
+
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = spec.bg;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const colors = { '1': spec.c1, '2': spec.c2, '3': spec.c3 };
+
+    if (spec.bordered) {
+      const corner = tiles.border_corner;
+      const horiz = tiles.border_horiz;
+      const vert = tiles.border_vert;
+      for (let c = 1; c < spec.cols - 1; c++) {
+        drawChrTile(ctx, horiz, c * tilePx, 0, scale, colors);
+        drawChrTile(ctx, horiz, c * tilePx, (spec.rows - 1) * tilePx, scale, colors);
+      }
+      for (let r = 1; r < spec.rows - 1; r++) {
+        drawChrTile(ctx, vert, 0, r * tilePx, scale, colors);
+        drawChrTile(ctx, vert, (spec.cols - 1) * tilePx, r * tilePx, scale, colors);
+      }
+      drawChrTile(ctx, corner, 0, 0, scale, colors);
+      drawChrTile(ctx, corner, (spec.cols - 1) * tilePx, 0, scale, colors);
+      drawChrTile(ctx, corner, 0, (spec.rows - 1) * tilePx, scale, colors);
+      drawChrTile(ctx, corner, (spec.cols - 1) * tilePx, (spec.rows - 1) * tilePx, scale, colors);
+    }
+
+    const lines = text.split('\n');
+    const maxCols = item.constraints.max_line_len;
+    const maxLines = item.constraints.max_lines;
+
+    for (let li = 0; li < lines.length; li++) {
+      const tr = spec.textRow + li * spec.rowStep;
+      if (tr < 0 || tr >= spec.rows) continue;
+      const line = lines[li];
+      for (let ci = 0; ci < line.length; ci++) {
+        const tc = spec.textCol + ci;
+        if (tc < 0 || tc >= spec.cols) continue;
+        const ch = line[ci];
+        const px = tc * tilePx;
+        const py = tr * tilePx;
+        const glyph = tiles[ch];
+        const overBounds = li >= maxLines || ci >= maxCols;
+        if (glyph) {
+          drawChrTile(ctx, glyph, px, py, scale, colors);
+        } else {
+          ctx.fillStyle = 'rgba(255, 80, 60, 0.5)';
+          ctx.fillRect(px, py, tilePx, tilePx);
+          drawChrTile(ctx, tiles['?'], px, py, scale, colors);
+        }
+        if (overBounds) {
+          ctx.fillStyle = 'rgba(255, 60, 60, 0.35)';
+          ctx.fillRect(px, py, tilePx, tilePx);
+        }
+      }
+    }
+  }
+
   function buildCard(entry) {
     const { item, text, report, modified } = entry;
     const c = item.constraints;
@@ -229,6 +376,7 @@
     const ruler = Array.from({ length: rulerWidth }, (_, i) => ((i + 1) % 10)).join('');
 
     const rows = Math.max(1, Math.min(14, Math.max(c.max_lines, report.lineCount)));
+    const previewSpec = getPreviewSpec(item);
 
     card.innerHTML = `
       <div class="z2str-card-head">
@@ -244,6 +392,12 @@
           ${modified ? '<span class="badge b-built">Modified</span>' : ''}
           <span class="badge ${statusCls}" data-role="status-badge">${statusLabel}</span>
           ${modified ? `<button type="button" class="feud-mini-btn" data-action="reset">Reset</button>` : ''}
+        </div>
+      </div>
+      <div class="z2str-preview-wrap">
+        <div class="z2str-preview-label">${escapeHtml(previewSpec.label)}</div>
+        <div class="z2str-canvas-scroll">
+          <canvas class="z2str-nes-canvas"></canvas>
         </div>
       </div>
       <div class="z2str-editor-wrap">
@@ -262,6 +416,8 @@
       ${item.notes ? `<div class="z2str-notes">${escapeHtml(item.notes)}</div>` : ''}
     `;
 
+    const canvas = card.querySelector('.z2str-nes-canvas');
+    renderNesPreview(canvas, item, text);
     renderCardReport(card, item, report, modified);
 
     const ta = card.querySelector('.z2str-textarea');
@@ -273,6 +429,7 @@
       const nextReport = analyzeString(item, val);
       const nextMod = isModified(item);
       card.className = `z2str-card st-${nextReport.status}` + (nextMod ? ' is-modified' : '');
+      renderNesPreview(canvas, item, val);
       renderCardReport(card, item, nextReport, nextMod);
       refreshSummaryOnly();
     });

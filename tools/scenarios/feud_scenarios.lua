@@ -46,7 +46,7 @@ local FM_ANS1 = {
 }
 local FM_ANS2 = {
     [0]='METEOR', [1]='100', [2]='RED', [3]='MIRROR', [4]='MAGIC',
-    [5]='OCTOROK', [6]='EAST HYRULE', [7]='9000 EXP', [8]='BLUE', [9]='WATER',
+    [5]='OCTOROK', [6]='EAST HYRULE', [7]='XP', [8]='BLUE', [9]='WATER',
     [10]='MAGIC', [11]='LAVA', [12]='LINK', [13]='FIRE', [14]='UP STAB',
     [15]='RAURU', [16]='DARUNIA', [17]='9', [18]='VILLAGERS', [19]='BAGU',
     [20]='DOWN', [21]='LAVA', [22]='CAROCK', [23]='BLUE', [24]='MAGIC',

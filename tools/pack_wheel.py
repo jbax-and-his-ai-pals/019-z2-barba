@@ -13,6 +13,7 @@ from portal_transitions import TransitionAsm, build_return_helper, emit_clean_ap
 import roar_sample
 import wheel_art
 import wheel_puzzles
+import wheel_title_audio
 
 
 # Fixed entry points in guest WRAM bank ($7800-$7BFF)
@@ -42,6 +43,7 @@ WHEEL_PRIZE_BANK     = 0x02    # Unused 8KB MMC3 bank 2 inside Block 0
 WHEEL_BANK0_R6       = 0x1C    # Wheel Bank 0 $8000-$9FFF MMC3 bank index
 
 # Guest WRAM state bytes (in guest WRAM bank)
+WHEEL_MARQUEE_TOP    = 0x7FF4  # Scratch byte for Screen 2 marquee top tile mirrored to NT1
 WHEEL_TR_FRAME       = 0x7FF5
 WHEEL_TR_CUT         = 0x7FF6
 WHEEL_TR_BAND        = 0x7FF7
@@ -420,7 +422,7 @@ def make_wheel_wram_code(
         a_tb.branch(0xD0, 'tb_skip')
         a_tb.emit(0x2C, 0x02, 0x20)
         a_tb.emit(0xA9, 0x23, 0x8D, 0x06, 0x20)
-        a_tb.emit(0xA9, 0x9A, 0x8D, 0x06, 0x20)
+        a_tb.emit(0xA9, 0x7A, 0x8D, 0x06, 0x20)
         for ch_byte in tb_tiles:
             a_tb.emit(0xA9, ch_byte, 0x8D, 0x07, 0x20)
         a_tb.emit(0xA9, 0x00, 0x8D, 0x06, 0x20, 0x8D, 0x06, 0x20)
@@ -489,12 +491,18 @@ def make_wheel_boot_bank0(
     return bytes(bank0)
 
 
-def build_wheel_prize_bank(wheel_bytes: bytes) -> bytes:
-    """Extract Bank 0 Bonus Prize pictures ($E162-$F57F) into an 8KB MMC3 bank ($8000-$9FFF)."""
-    b0 = wheel_bytes[16 : 16 + 32768]
+def build_wheel_prize_bank(wheel_bytes: bytes, z2_bytes: bytes | None = None) -> bytes:
+    """Build 8KB MMC3 Bank 2 ($8000-$9FFF) holding the 6x60-tile Bonus Prize artworks."""
+    if z2_bytes is None:
+        root_dir = Path(__file__).resolve().parent.parent
+        z2_bytes = (root_dir / 'roms' / 'z2.nes').read_bytes()
+    assets_dict = wheel_art.build_wheel_prize_assets(z2_bytes, wheel_bytes)
     bank = bytearray(b'\xFF' * 8192)
-    start, end = 0xE162 - 0x8000, 0xF580 - 0x8000
-    bank[start - 0x6000 : end - 0x6000] = b0[start:end]
+    base_off = 0x8162 - 0x8000
+    for i, chunk in enumerate(assets_dict['chr_chunks']):  # type: ignore[arg-type]
+        off = base_off + i * 0x3C0
+        assert off + len(chunk) <= 8192
+        bank[off : off + len(chunk)] = chunk
     return bytes(bank)
 
 
@@ -594,11 +602,35 @@ def patch_wheel(
                     bytes([0x20, WHEEL_PPUSCROLL_NT0 & 0xFF, WHEEL_PPUSCROLL_NT0 >> 8]),
                     bytes([0x8D, 0x05, 0x20]),
                 )
-            # 5b2. Compensate Sprite-0 -> $2000=$18 delay loops ($939F, $B794: LDX #$30 -> #$27)
+            # 5b2. Compensate Sprite-0 -> $2000=$18 delay loops ($939F, $B794: LDX #$30 -> #$28)
             #      for the ~48 cycles added by two JSR WHEEL_PPUCTRL_A calls so the split lands
-            #      in SL=137 HBlank instead of SL=138 visible pixels (flickering white line).
+            #      centered in SL=137 HBlank (dot ~272..292) instead of SL=138 visible pixels.
             for addr in (0x93A0, 0xB795):
-                patch(addr, bytes([0x27]), bytes([0x30]))
+                patch(addr, bytes([0x28]), bytes([0x30]))
+            # 5b3. Fast unrolled $B911 bottom-box writer ($B67C when $52 >= 8) using a 128B lookup
+            #      table at $FE80..$FEFF (saves ~370+ cycles so $B67C + $0505 turn banner fits in VBlank).
+            b911_tbl = bytes(
+                0xD4 if c == 0x00 else (0xD5 if c == 0x27 else (0xD7 if c < 0x40 else (c + 0xA4) & 0xFF))
+                for c in range(128)
+            )
+            patch(0xFE80, b911_tbl, b'\xFF' * 128)
+            a_b9 = Asm6502(0xFD00)
+            for i in range(13):
+                addr_lo = (0x0525 + i) & 0xFF
+                addr_hi = (0x0525 + i) >> 8
+                a_b9.emit(0xBC, addr_lo, addr_hi)                       # LDY $0525+i,X
+                a_b9.branch(0x30, f'hi_{i}')                            # BMI hi_i
+                a_b9.emit(0xB9, 0x80, 0xFE)                             # LDA $FE80,Y
+                a_b9.branch(0x30, f'wr_{i}')                            # BMI wr_i (always >= $80)
+                a_b9.label(f'hi_{i}')
+                a_b9.emit(0xA9, 0xC5)                                   # LDA #$C5
+                a_b9.label(f'wr_{i}')
+                a_b9.emit(0x8D, 0x07, 0x20)                             # STA $2007
+            a_b9.emit(0x60)                                             # RTS
+            b911_fast = a_b9.finish()
+            assert len(b911_fast) <= 0x114, f'b911_fast too large: {len(b911_fast)}'
+            patch(0xFD00, b911_fast, b'\xFF' * len(b911_fast))
+            patch(0xB911, bytes([0x4C, 0x00, 0xFD]), bytes([0xA0, 0x0D, 0xBD]))
             # 5c. Fast Bank0->Bank1($8CC8)->Bank0 VBlank CHR helper for $917C (saves ~130 cycles before SL=-1 dot 304)
             fast_b0 = Asm6502(0xFE24)
             fast_b0.emit(0xA9, 0x01, 0x8D, WHEEL_AX_SHADOW & 0xFF, WHEEL_AX_SHADOW >> 8)
@@ -613,13 +645,9 @@ def patch_wheel(
             patch(b0_resume_addr, bytes([0xA9, 0xA3, 0x8D, 0x01, 0xA0, 0x60]), b'\xFF' * 6)
             patch(0x917C, bytes([0x20, 0x24, 0xFE]), bytes([0x20, 0xE0, 0xFF]))
 
-            # 5d. Relocate Bonus Prize pictures ($E162-$F57F) to MMC3 Bank 2 ($8162-$957F)
+            # 5d. Relocate Bonus Prize pictures to MMC3 Bank 2 ($8162-$97E1)
             #     so Bank 0 $E200-$F531 holds roar.dmc in fixed $E000-$FFFF space.
-            for p_off in range(0, 10, 2):
-                hi_addr = 0xE124 + p_off + 1
-                orig_hi = prg[hi_addr - 0x8000]
-                assert 0xE1 <= orig_hi <= 0xF5
-                prg[hi_addr - 0x8000] = orig_hi - 0x60
+            wheel_art.apply_prize_art_patches_bank0(prg)
 
             # Embed roar.dmc at $E200 in Bank 0
             dmc_off = WHEEL_ROAR_DMC_ADDR - 0x8000
@@ -671,15 +699,58 @@ def patch_wheel(
             a_b0.branch(0xD0, 'p_tile')
             a_b0.emit(0xA9, 0x06, 0x8D, 0x00, 0x80, 0xA9, WHEEL_BANK0_R6, 0x8D, 0x01, 0x80)
             a_b0.emit(0x60)                                             # RTS
+            # Prize-selection streaming copy ($C262 -> $FCC2): swap R6=2, copy 7x16B, restore R6=$1C, JMP $C2D4
+            prize_stream_addr = a_b0.base + len(a_b0.buf)
+            a_b0.emit(0xA9, 0x06, 0x8D, 0x00, 0x80, 0xA9, WHEEL_PRIZE_BANK, 0x8D, 0x01, 0x80)
+            a_b0.emit(0xA2, 0x07)                                       # LDX #$07
+            a_b0.label('ps_tile')
+            a_b0.emit(0xA0, 0x00)                                       # LDY #$00
+            a_b0.label('ps_byte')
+            a_b0.emit(0xB1, 0xD0, 0x8D, 0x07, 0x20, 0xC8)               # LDA ($D0),Y; STA $2007; INY
+            a_b0.emit(0xC0, 0x10)                                       # CPY #$10
+            a_b0.branch(0xD0, 'ps_byte')                                # BNE ps_byte
+            a_b0.emit(0xA5, 0xD0, 0x18, 0x69, 0x10, 0x85, 0xD0)         # LDA $D0; CLC; ADC #$10; STA $D0
+            a_b0.emit(0xA5, 0xD1, 0x69, 0x00, 0x85, 0xD1)               # LDA $D1; ADC #$00; STA $D1
+            a_b0.emit(0xCA)                                             # DEX
+            a_b0.branch(0xD0, 'ps_tile')                                # BNE ps_tile
+            a_b0.emit(0xA9, 0x06, 0x8D, 0x00, 0x80, 0xA9, WHEEL_BANK0_R6, 0x8D, 0x01, 0x80)
+            a_b0.emit(0x4C, 0xD4, 0xC2)                                 # JMP $C2D4
             b0_helpers = a_b0.finish()
             patch(WHEEL_PLAY_ROAR, b0_helpers, b'\xFF' * len(b0_helpers))
             patch(0xE130, bytes([0x4C, WHEEL_PRIZE_COPY & 0xFF, WHEEL_PRIZE_COPY >> 8]), bytes.fromhex('a5 ca 0a'))
+            patch(0xC264, bytes([0x4C, prize_stream_addr & 0xFF, prize_stream_addr >> 8]), bytes.fromhex('a2 07 a0'))
 
             # 5e. Roar triggers on Puzzle Solve ($9750, $9A9D), Round/Match Win ($999B), and Big Spin ($A660)
             patch(0x9750, bytes([0x4C, WHEEL_ROAR_SOLVE & 0xFF, WHEEL_ROAR_SOLVE >> 8]), bytes.fromhex('4c 41 f5'))
             patch(0x9A9D, bytes([0x20, WHEEL_ROAR_SOLVE & 0xFF, WHEEL_ROAR_SOLVE >> 8]), bytes.fromhex('20 41 f5'))
             patch(0x999B, bytes([0x20, WHEEL_ROAR_SOLVE & 0xFF, WHEEL_ROAR_SOLVE >> 8]), bytes.fromhex('20 41 f5'))
             patch(0xA660, bytes([0x20, WHEEL_BIG_SPIN_ROAR & 0xFF, WHEEL_BIG_SPIN_ROAR >> 8]), bytes.fromhex('20 c9 aa'))
+
+            # 5e2. Mirror Screen 2 marquee column writes ($820B/$821D) to NT1 ($2760+col)
+            #      so Vertical mirroring wraps horizontally just like AxROM 1-screen mirroring.
+            marquee_base = 0xFFA0
+            a_mq = Asm6502(marquee_base)
+            a_mq.label('save_top')
+            a_mq.emit(0x8D, 0x07, 0x20)                                 # STA $2007 (NT0 top)
+            a_mq.emit(0x8D, WHEEL_MARQUEE_TOP & 0xFF, WHEEL_MARQUEE_TOP >> 8)
+            a_mq.emit(0x60)                                             # RTS
+            a_mq.label('mirror_nt1')
+            a_mq.emit(0x8D, 0x07, 0x20)                                 # STA $2007 (NT0 bottom)
+            a_mq.emit(0xA8)                                             # TAY (bottom tile)
+            a_mq.emit(0xA9, 0x27, 0x8D, 0x06, 0x20)                     # LDA #$27; STA $2006
+            a_mq.emit(0xA5, 0x0A, 0x4A, 0x4A, 0x4A, 0x09, 0x60)         # LDA $0A; LSR x3; ORA #$60
+            a_mq.emit(0x8D, 0x06, 0x20)                                 # STA $2006 ($2760 + col)
+            a_mq.emit(0xAD, WHEEL_MARQUEE_TOP & 0xFF, WHEEL_MARQUEE_TOP >> 8)
+            a_mq.emit(0x8D, 0x07, 0x20)                                 # STA $2007 (NT1 top)
+            a_mq.emit(0x8C, 0x07, 0x20)                                 # STY $2007 (NT1 bottom)
+            a_mq.emit(0x60)                                             # RTS
+            mq_bytes = a_mq.finish()
+            assert len(mq_bytes) <= 0x40, f'mq_bytes too large: {len(mq_bytes)}'
+            patch(marquee_base, mq_bytes, b'\xFF' * len(mq_bytes))
+            save_top_addr = marquee_base + a_mq.labels['save_top'] - marquee_base
+            mirror_nt1_addr = marquee_base + a_mq.labels['mirror_nt1'] - marquee_base
+            patch(0x820B, bytes([0x20, save_top_addr & 0xFF, save_top_addr >> 8]), bytes([0x8D, 0x07, 0x20]))
+            patch(0x821D, bytes([0x20, mirror_nt1_addr & 0xFF, mirror_nt1_addr >> 8]), bytes([0x8D, 0x07, 0x20]))
 
             # 5f. Apply Zelda II / Barba puzzles, categories, contestants, palettes, and UI text in Bank 0
             wheel_puzzles.apply_puzzle_patches_bank0(prg)
@@ -699,6 +770,45 @@ def patch_wheel(
             assert len(fast_b1) == 23
             patch(b1_start, fast_b1, b'\xFF' * len(fast_b1))
 
+            # Fast 2x-unrolled $8CFC puzzle-letter CHR uploader ($8CDA/$8CEE, saves 80 cycles in $917C)
+            # Header + d23_2x fit in-place at $8CFC..$8DAF (180B); d6b_2x sits at $FE4A (leaves $FECE..$FF7F free).
+            b1_d6b_2x = 0xFE4A
+            a_d6b = Asm6502(b1_d6b_2x)
+            for sub in range(2):
+                base_a3 = 0xA361 + sub * 8
+                for k in range(8):
+                    a_d6b.emit(0xB9, (base_a3 + k) & 0xFF, (base_a3 + k) >> 8)
+                    if k <= 4:
+                        eor_addr = 0x04CF + k
+                        a_d6b.emit(0x5D, eor_addr & 0xFF, eor_addr >> 8)
+                    a_d6b.emit(0x8D, 0x07, 0x20)
+            a_d6b.emit(0x98, 0x18, 0x69, 0x10, 0xA8, 0x60)              # TYA; CLC; ADC #$10; TAY; RTS
+            d6b_bytes = a_d6b.finish()
+            assert b1_d6b_2x + len(d6b_bytes) <= 0xFF40, f'd6b_bytes overflow: ${b1_d6b_2x + len(d6b_bytes):04X}'
+            patch(b1_d6b_2x, d6b_bytes, b'\xFF' * len(d6b_bytes))
+
+            a_chr = Asm6502(0x8CFC)
+            a_chr.abs_ref(0x20, 'd23_2x')                               # JSR d23_2x (2x $8D23)
+            a_chr.emit(0x8A, 0x18, 0x69, 0x0B, 0xAA)                    # TXA; CLC; ADC #$0B; TAX
+            a_chr.abs_ref(0x20, 'd23_2x')                               # JSR d23_2x (2x $8D23)
+            a_chr.emit(0x8A, 0x38, 0xE9, 0x05, 0xAA)                    # TXA; SEC; SBC #$05; TAX
+            a_chr.emit(0x20, b1_d6b_2x & 0xFF, b1_d6b_2x >> 8)          # JSR d6b_2x (2x $8D6B)
+            a_chr.emit(0x8A, 0x18, 0x69, 0x0B, 0xAA)                    # TXA; CLC; ADC #$0B; TAX
+            a_chr.emit(0x4C, b1_d6b_2x & 0xFF, b1_d6b_2x >> 8)          # JMP d6b_2x (2x $8D6B)
+            a_chr.label('d23_2x')
+            for sub in range(2):
+                base_a3 = 0xA361 + sub * 8
+                for k in range(8):
+                    a_chr.emit(0xB9, (base_a3 + k) & 0xFF, (base_a3 + k) >> 8)
+                    if k >= 2:
+                        eor_addr = 0x04CF + (k - 2)
+                        a_chr.emit(0x5D, eor_addr & 0xFF, eor_addr >> 8)
+                    a_chr.emit(0x8D, 0x07, 0x20)
+            a_chr.emit(0x98, 0x18, 0x69, 0x10, 0xA8, 0x60)              # TYA; CLC; ADC #$10; TAY; RTS
+            chr_bytes = a_chr.finish()
+            assert 0x8CFC + len(chr_bytes) <= 0x8DB0, f'chr_bytes overflow: ${0x8CFC + len(chr_bytes):04X}'
+            prg[0x8CFC - 0x8000 : 0x8CFC - 0x8000 + len(chr_bytes)] = chr_bytes
+
             # Replace Vanna CHR frames ($8FB6 / $C1B1+) with Barba + Villainous Link and mirror roar.dmc
             wheel_art.apply_art_patches_bank1(prg, z2_bytes)
             dmc_off = WHEEL_ROAR_DMC_ADDR - 0x8000
@@ -706,6 +816,16 @@ def patch_wheel(
         elif b == 2:
             wheel_puzzles.apply_puzzle_patches_bank2(prg)
             wheel_art.apply_art_patches_bank2(prg)
+        elif b == 3:
+            import hashlib
+            clip_off = wheel_title_audio.CLIP2_ADDR - 0x8000
+            clip_end = clip_off + wheel_title_audio.CLIP2_PACKED_LEN
+            assert hashlib.sha256(prg[clip_off:clip_end]).hexdigest() == wheel_title_audio.ORIG_FORTUNE_SHA256, (
+                'Unexpected Wheel Bank 3 $CD48 title audio bytes'
+            )
+            title_wav = root_dir / 'assets' / 'wheel_barba_title.wav'
+            if title_wav.exists():
+                prg[clip_off:clip_end] = wheel_title_audio.build_barba_title_packed(title_wav)
 
         banks.append(prg)
 
@@ -739,7 +859,7 @@ def patch_wheel_for_combined(
         enable_transitions=enable_transitions,
         game_id=game_id,
     )
-    prg1024[WHEEL_PRIZE_BANK * 8192 : (WHEEL_PRIZE_BANK + 1) * 8192] = build_wheel_prize_bank(wheel_bytes)
+    prg1024[WHEEL_PRIZE_BANK * 8192 : (WHEEL_PRIZE_BANK + 1) * 8192] = build_wheel_prize_bank(wheel_bytes, z2_bytes=z2_bytes)
     for b in range(4):
         base = b * (256 * 1024) + 28 * 8192
         prg1024[base : base + 32768] = banks[b]
@@ -808,7 +928,7 @@ def build_standalone(
         standalone_stub=True,
         build_number=build_number,
     )
-    prg1024[WHEEL_PRIZE_BANK * 8192 : (WHEEL_PRIZE_BANK + 1) * 8192] = build_wheel_prize_bank(wheel_bytes)
+    prg1024[WHEEL_PRIZE_BANK * 8192 : (WHEEL_PRIZE_BANK + 1) * 8192] = build_wheel_prize_bank(wheel_bytes, z2_bytes=z2_bytes)
     for b in range(4):
         base = b * (256 * 1024) + 28 * 8192
         prg1024[base : base + 32768] = banks[b]

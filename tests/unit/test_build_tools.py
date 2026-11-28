@@ -254,6 +254,45 @@ class StampPlayArtifactsTests(unittest.TestCase):
             self.assertFalse((play / 'barba-b100.nes').exists())
             self.assertEqual((play / 'barba-b101.nes').read_bytes(), b'b100')
 
+    def test_stage_release_assets_creates_individual_bps_and_collection_zips(self) -> None:
+        import zipfile
+        from package_bps import stage_release_assets
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            play = root / 'play'
+            (play / 'bps').mkdir(parents=True)
+            (play / 'compat' / 'bps').mkdir(parents=True)
+            (play / 'barba-b825.bps').write_bytes(b'barba')
+            (play / 'bps' / 'dk-b27.bps').write_bytes(b'dk')
+            (play / 'compat' / 'bps' / 'dk-compat-b27.bps').write_bytes(b'dkc')
+
+            out_dir, manifest = stage_release_assets(
+                root,
+                version='v2.0.0',
+                build_number=825,
+                published=False,
+            )
+            self.assertEqual(manifest['tag'], 'v2.0.0')
+            self.assertFalse(manifest['published'])
+            self.assertEqual([c['filename'] for c in manifest['collections']], [
+                'barba-bps-v2.0.0-b825.zip',
+                'barba-subgames-bps-v2.0.0-b825.zip',
+                'barba-compat-bps-v2.0.0-b825.zip',
+            ])
+            self.assertEqual([p['filename'] for p in manifest['patches']], [
+                'barba-b825.bps',
+                'dk-b27.bps',
+                'dk-compat-b27.bps',
+            ])
+            for name in ('barba-b825.bps', 'dk-b27.bps', 'dk-compat-b27.bps'):
+                self.assertTrue((out_dir / name).is_file())
+            with zipfile.ZipFile(out_dir / 'barba-bps-v2.0.0-b825.zip') as zf:
+                self.assertEqual(sorted(zf.namelist()), ['barba-b825.bps', 'dk-b27.bps', 'dk-compat-b27.bps'])
+            with zipfile.ZipFile(out_dir / 'barba-subgames-bps-v2.0.0-b825.zip') as zf:
+                self.assertEqual(zf.namelist(), ['dk-b27.bps'])
+            with zipfile.ZipFile(out_dir / 'barba-compat-bps-v2.0.0-b825.zip') as zf:
+                self.assertEqual(zf.namelist(), ['dk-compat-b27.bps'])
+
 
 class PlayCmdLaunchersTests(unittest.TestCase):
     def test_all_play_cmd_launchers_valid_and_in_sync(self) -> None:

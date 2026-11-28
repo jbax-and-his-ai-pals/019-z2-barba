@@ -195,8 +195,8 @@ local function tick()
             check(readBoxTile(17,10)==0xCD and readBoxTile(17,11)==0xFC and readBoxTile(17,12)==0xD2,'crystals counter Crystal x2')
             check(readBoxTile(3,10)==0xCF and readBoxTile(3,11)==0xD1 and readBoxTile(3,12)==0xD6,'SCALES cost 16 at Mag 6')
             check(readBoxTile(10,10)==0xD1 and readBoxTile(10,11)==0xD2 and readBoxTile(10,12)==0xD0,'INFERNO cost 120 at Mag 6')
-            check(readBoxTile(3,22)==0xCF and readBoxTile(3,23)==0xCF and readBoxTile(3,24)==0xD4,'DECOY cost 4 at Mag 6')
-            check(readBoxTile(10,22)==0xCF and readBoxTile(10,23)==0xCF and readBoxTile(10,24)==0xD6,'LUCKY cost 6 at Mag 6')
+            check(readBoxTile(3,22)==0xCF and readBoxTile(3,23)==0xCF and readBoxTile(3,24)==0xD8,'DECOY cost 8 at Mag 6')
+            check(readBoxTile(10,22)==0xCF and readBoxTile(10,23)==0xD1 and readBoxTile(10,24)==0xD4,'LUCKY cost 14 at Mag 6')
             local badPal=0
             for mr=1,10 do
                 for mc=0,12 do
